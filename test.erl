@@ -45,3 +45,25 @@ collect_specs([]) -> [].
 
 parse_specs(File) ->
     collect_specs(lists:map(fun ({ok,Form}) -> Form end, parse(File))).
+
+% Should the type any() be the same as being untyped? Probably yes.
+-type type() :: integer | float | boolean | {singleton, atom()}
+	      | {range, integer(), integer() }
+	      | {tuple, list(type())}
+	      | {list, type()}
+	      | {function, list(type()), type()}
+	      | {union, list(type())}
+	      | {intersection, list(type())}
+	      | untyped
+	      .
+
+-type schema() :: { list(variable()) % parameters
+		  , list(variable()) % forall quantified
+		  , type()
+		  , list(clause()) }.
+
+-type variable() :: integer(). % This will work for now.
+
+-type clause() :: { type () , type() }.
+
+
