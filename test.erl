@@ -46,7 +46,6 @@ collect_specs([]) -> [].
 parse_specs(File) ->
     collect_specs(lists:map(fun ({ok,Form}) -> Form end, parse(File))).
 
-% Should the type any() be the same as being untyped? Probably yes.
 -type type() :: integer | float | boolean | {singleton, atom()}
 	      | {range, integer(), integer() }
 	      | {tuple, list(type())}
@@ -65,5 +64,9 @@ parse_specs(File) ->
 -type variable() :: integer(). % This will work for now.
 
 -type clause() :: { type () , type() }.
-
+  % We will interpret clauses as subtyping constraints.
+  % One option would be to interpret clauses on the form X :: type as
+  % type equality, but that wouldn't be very consistent. We can alway
+  % recover equality by adding type :: X as a constraint.
+  % Perhaps we can argue for a new form of syntax.
 
