@@ -23,6 +23,8 @@
   require some kind of abstraction on top of the mailbox in order to make
   it manageable.
 
+* No blame calculus in the first iteration of the type system.
+
 # Notes on how to represent types
 
 * The type any() should NOT be the same as untyped. The type any() is the
@@ -38,3 +40,16 @@
 I should implement Gradual Typing for Objects in order to understand the
 relationship between gradual types and subtyping better.
 
+# Future work
+
+* Cross-process blame. It'd be interesting to develop a blame calculus that
+  can be used as a compilation target on top of erlang. Blame can be sent
+  as messages. That will go agains the open world assumption and requires
+  that all nodes be compiled via the blame calculus.
+
+  This will be an interesting alternative to session types.
+
+* Ultimately it would be nice to change the compilation of erlang to
+  take advantage of the type information. That is a long way away
+  though, especially since it is an unsolved problem how to compile casts in
+  the blame calculus efficiently.
