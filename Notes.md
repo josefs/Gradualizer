@@ -37,8 +37,21 @@
 
 # How to process
 
-I should implement Gradual Typing for Objects in order to understand the
-relationship between gradual types and subtyping better.
+It getting harder and harder to avoid formalizing some kind of type
+system for erlang. Core erlang is an obvious candidate to start
+with. Though I will have to add types to it. The implementation of
+core erlang has a field for annotations and I suppose I could use that
+to insert type information in the right places.
+
+I should start small. The type system fragment I should start with should be
+roughly the STLC. Then I can work my way up from there.
+
+Eventually I'd like to support plt files. That means that gradualizer should
+be able to read plt files written by dialyzer. However, that might cause a
+problem. If dialyzer infers types for untyped functions then gradualizer might
+report errors even though it shouldn't. It depends on whether it is possible
+to determine from the plt file whether the type was present in the source
+file or inferred.
 
 # Future work
 
@@ -48,6 +61,8 @@ relationship between gradual types and subtyping better.
   that all nodes be compiled via the blame calculus.
 
   This will be an interesting alternative to session types.
+
+  Thanks to Alejandro for suggestion I think about this.
 
 * Ultimately it would be nice to change the compilation of erlang to
   take advantage of the type information. That is a long way away
