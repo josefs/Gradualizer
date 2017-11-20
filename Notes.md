@@ -44,7 +44,9 @@ core erlang has a field for annotations and I suppose I could use that
 to insert type information in the right places.
 
 I should start small. The type system fragment I should start with should be
-roughly the STLC. Then I can work my way up from there.
+roughly the STLC. Then I can work my way up from there. It seems to me that
+"Abstracting Gradual Types" is a good model for how to incorporate new 
+type system features.
 
 Eventually I'd like to support plt files. That means that gradualizer should
 be able to read plt files written by dialyzer. However, that might cause a
