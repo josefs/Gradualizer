@@ -1,7 +1,7 @@
 module GTLC where
 
 {- An implementation of the gradually typed lambda calculus from the
-   original gradial types paper:
+   original gradual types paper:
    http://scheme2006.cs.uchicago.edu/13-siek.pdf
 -}
 
