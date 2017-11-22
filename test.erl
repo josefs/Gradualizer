@@ -51,21 +51,29 @@ type_check_fun(FEnv, _VEnv, {remote, _, {atom,_,Module}, {atom,_,Fun}}) ->
     maps:get(FEnv,{Module,Fun});
 type_check_fun(FEnv, VEnv, Expr) ->
     type_check_expr(FEnv, VEnv, Expr).
-    
+
 
 type_check_clauses(_FEnv, _VEnv, _Clauses) ->
     foo.
 
+infer_clauses(FEnv, VEnv, Clauses) ->
+    merge_types(lists:map(fun (Clause) ->
+				  infer_clause(FEnv, VEnv, Clause)
+			  end, Clauses)).
+
+infer_clause(FEnv, VEnv, {clause, _, Args, _, Expr}) ->
+    apa.
+
 type_check_function(FEnv, {function,_, Name, NArgs, Clauses}) ->
-    case maps:get(FEnv, Name) of
+    case maps:find(Name, FEnv) of
 	{ok, Type} -> apa;
 	error ->
 	    Types = type_check_clauses(FEnv, #{}, Clauses),
 	    merge_types(Types)
     end.
-    
+
 type_check_file(File) ->
-    Forms = epp:parse_forms(File,[]),
+    {ok, Forms} = epp:parse_file(File,[]),
     {Specs, Funs} = collect_specs_and_functions(Forms),
     FEnv = create_fenv(Specs),
     lists:map(fun (Function) ->
@@ -86,9 +94,8 @@ merge_types(apa) ->
     error.
 
 create_fenv([{{Name,_},[Type]}|Specs]) ->
-    (create_fenv(Specs))#{Name => Type};
+    (create_fenv(Specs))#{ Name => Type };
 create_fenv([{{Name,_},_}|_]) ->
     throw({multiple_types_not_supported,Name});
 create_fenv([]) ->
     #{}.
-
