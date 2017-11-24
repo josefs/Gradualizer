@@ -76,6 +76,14 @@ file or inferred.
   
   https://www.microsoft.com/en-us/research/publication/gadts-meet-their-match-pattern-matching-warnings-that-account-for-gadts-guards-and-laziness/
 
+* Since the existing type system supports union types and a restricted form
+  of intersection types, the following paper seems to provide the way to deal
+  with integrating these features in a gradual type system:
+  "Gradual Typing with Union and Intersection Types"
+  
+  http://www.dptinfo.ens-cachan.fr/~vlanvin/Papers/icfp17.pdf
+  
+
 * Ultimately it would be nice to change the compilation of erlang to
   take advantage of the type information. That is a long way away
   though, especially since it is an unsolved problem how to compile casts in
