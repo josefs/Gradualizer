@@ -40,7 +40,11 @@ type_check_expr(FEnv, VEnv, {call, _, Name, Args}) ->
 		false ->
 		    throw(type_error)
 	    end
-    end.
+    end;
+type_check_expr(FEnv, VEnv, {block, _, Block}) ->
+    type_check_block(FEnv, VEnv, Block).
+
+
 
 type_check_fun(FEnv, _VEnv, {atom, _, Name}) ->
     maps:get(FEnv, Name);
@@ -49,33 +53,33 @@ type_check_fun(FEnv, _VEnv, {remote, _, {atom,_,Module}, {atom,_,Fun}}) ->
 type_check_fun(FEnv, VEnv, Expr) ->
     type_check_expr(FEnv, VEnv, Expr).
 
-type_check_body(FEnv, VEnv, [Expr]) ->
+type_check_block(FEnv, VEnv, [Expr]) ->
     type_check_expr(FEnv, VEnv, Expr);
-type_check_body(FEnv, VEnv, [Expr | Exprs]) ->
+type_check_block(FEnv, VEnv, [Expr | Exprs]) ->
     type_check_expr(FEnv, VEnv, Expr),
-    type_check_body(FEnv, VEnv, Exprs).
+    type_check_block(FEnv, VEnv, Exprs).
 
 infer_clauses(FEnv, VEnv, Clauses) ->
     merge_types(lists:map(fun (Clause) ->
 				  infer_clause(FEnv, VEnv, Clause)
 			  end, Clauses)).
 
-infer_clause(FEnv, VEnv, {clause, _, Args, [], Body}) -> % We don't accept guards right now.
+infer_clause(FEnv, VEnv, {clause, _, Args, [], Block}) -> % We don't accept guards right now.
     VEnvNew = add_any_types_pats(Args, VEnv),
-    type_check_body(FEnv, VEnvNew, Body).
+    type_check_block(FEnv, VEnvNew, Block).
 
 check_clauses(FEnv, VEnv, ArgsTy, Clauses) ->
     merge_types(lists:map(fun (Clause) ->
 				  check_clause(FEnv, VEnv, ArgsTy, Clause)
 			  end, Clauses)).
 
-check_clause(FEnv, VEnv, ArgsTy, {clause, _, Args, [], Body}) ->
+check_clause(FEnv, VEnv, ArgsTy, {clause, _, Args, [], Block}) ->
     case length(ArgsTy) =:= length(Args) of
 	false ->
 	    throw(argument_length_mismatch);
 	true ->
 	    VEnvNew = add_types_pats(Args, ArgsTy, VEnv),
-	    type_check_body(FEnv, VEnvNew, Body)
+	    type_check_block(FEnv, VEnvNew, Block)
     end.
 	    
 
