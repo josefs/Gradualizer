@@ -2,13 +2,41 @@
 
 -compile([export_all]).
 
+compatible({type, _, untyped}, _) ->
+  true;
+compatible(_, {type, _, untyped}) ->
+  true;
+compatible({type, _, 'fun', Args1, Res1},{type, _, 'fun', Args2, Res2}) ->
+    length(Args1) =:= length(Args2) andalso
+	lists:all(fun ({Arg1,Arg2}) ->
+			  compatible(Arg1,Arg2) end
+		 ,lists:zip(Args1,Args2)) andalso
+	compatible(Res1, Res2);
+compatible({type, _, tuple, Tys1}, {type, _, tuple, Tys2}) ->
+    length(Tys1) =:= length(Tys2) andalso
+	lists:all(fun ({Ty1,Ty2}) ->
+			  compatible(Ty1,Ty2) end
+		 ,lists:zip(Tys1,Tys2));
+compatible({user_type, _, Name1, Args1}, {user_type, _, Name2, Args2}) ->
+    Name1 =:= Name2 andalso
+	length(Args1) =:= length(Args2) andalso
+	lists:all(fun ({Ty1,Ty2}) ->
+			  compatible(Ty1,Ty2) end
+		 ,lists:zip(Args1, Args2)).
+
+
 -spec type_check_expr(#{},#{},any()) -> any().
 type_check_expr(_FEnv, VEnv, {var, _, Var}) ->
     maps:get(Var, VEnv);
 type_check_expr(FEnv, VEnv, {tuple, _, [TS]}) ->
     [ type_check_expr(FEnv, VEnv, Expr) || Expr <- TS ];
-type_check_expr(FEnv, VEnv, {call, _, Name, _Args}) ->
-    type_check_fun(FEnv, VEnv, Name).
+type_check_expr(FEnv, VEnv, {call, _, Name, Args}) ->
+    ArgTys = [ type_check_expr(FEnv, VEnv, Arg) || Arg <- Args],
+    case type_check_fun(FEnv, VEnv, Name) of
+	{type, _, 'fun', TyArgs, ResTy} ->
+	    apa
+    end.
+
 
 type_check_fun(FEnv, _VEnv, {atom, _, Name}) ->
     maps:get(FEnv, Name);
