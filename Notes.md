@@ -25,7 +25,7 @@
 
 * No blame calculus in the first iteration of the type system.
 
-# How to process
+# How to proceed
 
 It getting harder and harder to avoid formalizing some kind of type
 system for erlang. Core erlang is an obvious candidate to start
@@ -44,6 +44,31 @@ problem. If dialyzer infers types for untyped functions then gradualizer might
 report errors even though it shouldn't. It depends on whether it is possible
 to determine from the plt file whether the type was present in the source
 file or inferred.
+
+# TODO
+
+* [ ] Formalize the properties of gradual type systems as QuickCheck/Proper
+      properties. This will need good generators of Erlang programs.
+
+      The properties of gradual type systems are listed in the paper
+      "Refined Criteria for Gradual Typing":
+
+      http://drops.dagstuhl.de/opus/volltexte/2015/5031/pdf/21.pdf
+
+      The following paper shows how to generate well-typed terms:
+
+      http://users.eecs.northwestern.edu/~baf111/random-judgments/random-judgments-esop15.pdf
+
+* [ ] Support for plt-files.
+
+* [ ] Better error messages.
+
+* [ ] Warn about unsupported types.
+      Unsupported types should be converted to any().
+
+* [ ] Make it a standalone program.
+
+* [ ] Extend support for all of Erlang.
 
 # Future work
 
