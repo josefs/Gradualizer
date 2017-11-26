@@ -13,7 +13,10 @@ compatible({type, _, tuple, Tys1}, {type, _, tuple, Tys2}) ->
     compatible_lists(Tys1, Tys2);
 compatible({user_type, _, Name1, Args1}, {user_type, _, Name2, Args2}) ->
     Name1 =:= Name2 andalso
-	compatible_lists(Args1, Args2).
+	compatible_lists(Args1, Args2);
+compatible(_, _) ->
+    false.
+
 
 
 compatible_lists(TyList1,TyList2) ->
@@ -33,7 +36,7 @@ type_check_expr(FEnv, VEnv, {call, _, Name, Args}) ->
     case type_check_fun(FEnv, VEnv, Name) of
 	{type, _, any, []} ->
 	    {type, 0, any, []};
-	{type, _, 'fun', TyArgs, ResTy} ->
+	{type, _, 'fun', [{type, _, product, TyArgs}, ResTy]} ->
 	    case compatible_lists(TyArgs, ArgTys) of
 		true ->
 		    ResTy;
@@ -52,9 +55,9 @@ type_check_expr(_FEnv, _VEnv, {nil, _}) ->
 
 
 type_check_fun(FEnv, _VEnv, {atom, _, Name}) ->
-    maps:get(FEnv, Name);
+    maps:get(Name, FEnv);
 type_check_fun(FEnv, _VEnv, {remote, _, {atom,_,Module}, {atom,_,Fun}}) ->
-    maps:get(FEnv,{Module,Fun});
+    maps:get({Module,Fun}, FEnv);
 type_check_fun(FEnv, VEnv, Expr) ->
     type_check_expr(FEnv, VEnv, Expr).
 
