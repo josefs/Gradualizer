@@ -42,7 +42,12 @@ type_check_expr(FEnv, VEnv, {call, _, Name, Args}) ->
 	    end
     end;
 type_check_expr(FEnv, VEnv, {block, _, Block}) ->
-    type_check_block(FEnv, VEnv, Block).
+    type_check_block(FEnv, VEnv, Block);
+type_check_expr(_FEnv, _VEnv, {string, _, _}) ->
+    {usertype, 0, string, []};
+type_check_expr(_FEnv, _VEnv, {nil, _}) ->
+    {type, 0, nil, []}.
+
 
 
 
