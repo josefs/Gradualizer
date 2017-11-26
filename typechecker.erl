@@ -26,7 +26,7 @@ compatible_lists(TyList1,TyList2) ->
 		  end
 		 ,lists:zip(TyList1, TyList2)).
 
--spec type_check_expr(#{},#{},any()) -> any().
+-spec type_check_expr(#{ any() => any() },#{ any() => any() },any()) -> any().
 type_check_expr(_FEnv, VEnv, {var, _, Var}) ->
     maps:get(Var, VEnv);
 type_check_expr(FEnv, VEnv, {tuple, _, [TS]}) ->
