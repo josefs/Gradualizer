@@ -25,16 +25,6 @@
 
 * No blame calculus in the first iteration of the type system.
 
-# Notes on how to represent types
-
-* The type any() should NOT be the same as untyped. The type any() is the
-  supertype of all other types, but it is not a subtype of any type. This
-  subtyping relationship needs to hold in our type system as well. Hence
-  we need a separate type which is untyped.
-
-* How should I deal with improper lists? They're kind of a supertype of
-  ordinary lists so maybe I can deal with them using subtyping.
-
 # How to process
 
 It getting harder and harder to avoid formalizing some kind of type
