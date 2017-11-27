@@ -26,20 +26,28 @@ compatible_lists(TyList1,TyList2) ->
 		  end
 		 ,lists:zip(TyList1, TyList2)).
 
--spec type_check_expr(#{ any() => any() },#{ any() => any() },any()) -> any().
+% Arguments: An environment for functions, an environment for variables
+% and the expression to type check.
+% Returns the type of the expression and a collection of variables bound in
+% the expression together with their type.
+-spec type_check_expr(#{ any() => any() },#{ any() => any() }, any()) ->
+			     { any(), #{ any() => any()} }.
 type_check_expr(_FEnv, VEnv, {var, _, Var}) ->
-    maps:get(Var, VEnv);
+    return(maps:get(Var, VEnv));
 type_check_expr(FEnv, VEnv, {tuple, _, [TS]}) ->
-    [ type_check_expr(FEnv, VEnv, Expr) || Expr <- TS ];
+    { Tys, VarBinds } = [ type_check_expr(FEnv, VEnv, Expr) || Expr <- TS ],
+    { {type, 0, tuple, Tys}, union_var_binds(VarBinds) };
 type_check_expr(FEnv, VEnv, {call, _, Name, Args}) ->
-    ArgTys = [ type_check_expr(FEnv, VEnv, Arg) || Arg <- Args],
+    { ArgTys, VarBinds} = 
+	lists:unzip([ type_check_expr(FEnv, VEnv, Arg) || Arg <- Args]),
+    VarBind = union_var_binds(VarBinds),
     case type_check_fun(FEnv, VEnv, Name) of
 	{type, _, any, []} ->
-	    {type, 0, any, []};
+	    { {type, 0, any, []}, VarBind };
 	{type, _, 'fun', [{type, _, product, TyArgs}, ResTy]} ->
 	    case compatible_lists(TyArgs, ArgTys) of
 		true ->
-		    ResTy;
+		    {ResTy, VarBind};
 		false ->
 		    throw(type_error)
 	    end
@@ -47,9 +55,9 @@ type_check_expr(FEnv, VEnv, {call, _, Name, Args}) ->
 type_check_expr(FEnv, VEnv, {block, _, Block}) ->
     type_check_block(FEnv, VEnv, Block);
 type_check_expr(_FEnv, _VEnv, {string, _, _}) ->
-    {usertype, 0, string, []};
+    return({usertype, 0, string, []});
 type_check_expr(_FEnv, _VEnv, {nil, _}) ->
-    {type, 0, nil, []}.
+    return({type, 0, nil, []}).
 
 
 
@@ -64,8 +72,8 @@ type_check_fun(FEnv, VEnv, Expr) ->
 type_check_block(FEnv, VEnv, [Expr]) ->
     type_check_expr(FEnv, VEnv, Expr);
 type_check_block(FEnv, VEnv, [Expr | Exprs]) ->
-    type_check_expr(FEnv, VEnv, Expr),
-    type_check_block(FEnv, VEnv, Exprs).
+    {_, VarBinds} = type_check_expr(FEnv, VEnv, Expr),
+    type_check_block(FEnv, add_var_binds(VEnv, VarBinds), Exprs).
 
 infer_clauses(FEnv, VEnv, Clauses) ->
     merge_types(lists:map(fun (Clause) ->
@@ -165,7 +173,28 @@ add_any_types_pat({var, _,'_'}, VEnv) ->
 add_any_types_pat({var, _,A}, VEnv) ->
     VEnv#{ A => {type, 0, any, []} }.
 
+%%% Helper functions
 
+return(X) ->
+    { X, #{} }.
 
+union_var_binds([]) ->
+    #{};
+union_var_binds([ VarBind | VarBinds ]) ->
+    merge(fun glb_types/2, VarBind, union_var_binds(VarBinds)).
 
+add_var_binds(VEnv, VarBinds) ->
+    merge(fun glb_types/2, VEnv, VarBinds).
 
+merge(F, M1, M2) ->
+    maps:fold(fun (K, V1, M) ->
+                 maps:update_with(K, fun (V2) -> F(K, V1, V2) end, V1, M)
+         end, M2, M1).
+
+% TODO: improve
+% Is this the right function to use or should I always just return any()?
+glb_types({type, _, N, Args1}, {type, _, N, Args2}) ->
+    Args = [ glb_types(Arg1, Arg2) || {Arg1, Arg2} <- lists:zip(Args1, Args2) ],
+    {type, 0, N, Args};
+glb_types(_, _) ->
+    {type, 0, any, []}.
