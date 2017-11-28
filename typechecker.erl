@@ -57,7 +57,10 @@ type_check_expr(FEnv, VEnv, {block, _, Block}) ->
 type_check_expr(_FEnv, _VEnv, {string, _, _}) ->
     return({usertype, 0, string, []});
 type_check_expr(_FEnv, _VEnv, {nil, _}) ->
-    return({type, 0, nil, []}).
+    return({type, 0, nil, []});
+type_check_expr(FEnv, VEnv, {'fun', _, {clauses, Clauses}}) ->
+    infer_clauses(FEnv, VEnv, Clauses).
+
 
 
 
@@ -133,7 +136,7 @@ aux([_|Forms], Specs, Funs) ->
 merge_types([Ty]) ->
     Ty;
 merge_types(apa) ->
-    error.
+    {apa,bepa}.
 
 create_fenv([{{Name,_},[Type]}|Specs]) ->
     (create_fenv(Specs))#{ Name => Type };
