@@ -38,7 +38,7 @@ type_check_expr(FEnv, VEnv, {tuple, _, [TS]}) ->
     { Tys, VarBinds } = [ type_check_expr(FEnv, VEnv, Expr) || Expr <- TS ],
     { {type, 0, tuple, Tys}, union_var_binds(VarBinds) };
 type_check_expr(FEnv, VEnv, {call, _, Name, Args}) ->
-    { ArgTys, VarBinds} = 
+    { ArgTys, VarBinds} =
 	lists:unzip([ type_check_expr(FEnv, VEnv, Arg) || Arg <- Args]),
     VarBind = union_var_binds(VarBinds),
     case type_check_fun(FEnv, VEnv, Name) of
@@ -97,15 +97,15 @@ check_clause(FEnv, VEnv, ArgsTy, {clause, _, Args, [], Block}) ->
 	    VEnvNew = add_types_pats(Args, ArgsTy, VEnv),
 	    type_check_block(FEnv, VEnvNew, Block)
     end.
-	    
+
 
 type_check_function(FEnv, {function,_, Name, _NArgs, Clauses}) ->
     case maps:find(Name, FEnv) of
 	{ok, {type, _, 'fun', [{type, _, product, ArgsTy}, ResTy]}} ->
-	    Ty = check_clauses(FEnv, #{}, ArgsTy, Clauses),
+	    {Ty, _} = check_clauses(FEnv, #{}, ArgsTy, Clauses),
 	    case compatible(Ty, ResTy) of
 		true -> ResTy;
-		false -> throw(result_type_mismatch)
+		false -> throw({result_type_mismatch, Ty, ResTy})
 	    end;
 	error ->
 	    Types = infer_clauses(FEnv, #{}, Clauses),
@@ -188,8 +188,8 @@ add_var_binds(VEnv, VarBinds) ->
 
 merge(F, M1, M2) ->
     maps:fold(fun (K, V1, M) ->
-                 maps:update_with(K, fun (V2) -> F(K, V1, V2) end, V1, M)
-         end, M2, M1).
+		 maps:update_with(K, fun (V2) -> F(K, V1, V2) end, V1, M)
+	 end, M2, M1).
 
 % TODO: improve
 % Is this the right function to use or should I always just return any()?
