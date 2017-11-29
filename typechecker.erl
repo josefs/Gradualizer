@@ -63,7 +63,27 @@ type_check_expr(FEnv, VEnv, {'fun', _, {clauses, Clauses}}) ->
     infer_clauses(FEnv, VEnv, Clauses).
 
 
-
+type_check_expr_in(FEnv, VEnv, {type, _, any, []}, Expr) ->
+    type_check_expr(FEnv, VEnv, Expr);
+type_check_expr_in(_FEnv, VEnv, Ty, {var, LINE, Var}) ->
+    VarTy = maps:get(Var, VEnv),
+    case compatible(VarTy, Ty) of
+	true ->
+	    return(VarTy);
+	false ->
+	    throw({type_error, tyVar, LINE})
+    end;
+type_check_expr_in(FEnv, VEnv, {type, _, tuple, Tys}, {tuple, _LINE, TS}) ->
+    {ResTys, VarBinds} =
+	lists:unzip(
+	  lists:map(fun ({Ty, Expr}) -> type_check_expr_in(FEnv, VEnv, Ty, Expr)
+		    end,
+		    lists:zip(Tys,TS))),
+    {{type, 0, tuple, ResTys}, VarBinds};
+type_check_expr_in(FEnv, VEnv, _Ty, {'case', _, Expr, Clauses}) ->
+    {ExprTy, VarBinds} = type_check_expr(FEnv, VEnv, Expr),
+    VEnv2 = add_var_binds(VEnv, VarBinds),
+    check_clauses(FEnv, VEnv2, ExprTy, Clauses).
 
 
 type_check_fun(FEnv, _VEnv, {atom, _, Name}) ->
@@ -90,6 +110,8 @@ infer_clause(FEnv, VEnv, {clause, _, Args, [], Block}) -> % We don't accept guar
     VEnvNew = add_any_types_pats(Args, VEnv),
     type_check_block(FEnv, VEnvNew, Block).
 
+% TODO: This function needs an extra argument; a type which is the result
+% type of the clauses.
 check_clauses(FEnv, VEnv, ArgsTy, Clauses) ->
     {Tys, _VarBinds} =
 	lists:unzip(lists:map(fun (Clause) ->
