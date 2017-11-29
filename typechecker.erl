@@ -34,8 +34,9 @@ compatible_lists(TyList1,TyList2) ->
 			     { any(), #{ any() => any()} }.
 type_check_expr(_FEnv, VEnv, {var, _, Var}) ->
     return(maps:get(Var, VEnv));
-type_check_expr(FEnv, VEnv, {tuple, _, [TS]}) ->
-    { Tys, VarBinds } = [ type_check_expr(FEnv, VEnv, Expr) || Expr <- TS ],
+type_check_expr(FEnv, VEnv, {tuple, _, TS}) ->
+    { Tys, VarBinds } = lists:unzip([ type_check_expr(FEnv, VEnv, Expr)
+				    || Expr <- TS ]),
     { {type, 0, tuple, Tys}, union_var_binds(VarBinds) };
 type_check_expr(FEnv, VEnv, {call, _, Name, Args}) ->
     { ArgTys, VarBinds} =
@@ -79,18 +80,22 @@ type_check_block(FEnv, VEnv, [Expr | Exprs]) ->
     type_check_block(FEnv, add_var_binds(VEnv, VarBinds), Exprs).
 
 infer_clauses(FEnv, VEnv, Clauses) ->
-    merge_types(lists:map(fun (Clause) ->
+    {Tys, _VarBinds} =
+	lists:unzip(lists:map(fun (Clause) ->
 				  infer_clause(FEnv, VEnv, Clause)
-			  end, Clauses)).
+			  end, Clauses)),
+    merge_types(Tys).
 
 infer_clause(FEnv, VEnv, {clause, _, Args, [], Block}) -> % We don't accept guards right now.
     VEnvNew = add_any_types_pats(Args, VEnv),
     type_check_block(FEnv, VEnvNew, Block).
 
 check_clauses(FEnv, VEnv, ArgsTy, Clauses) ->
-    merge_types(lists:map(fun (Clause) ->
+    {Tys, _VarBinds} =
+	lists:unzip(lists:map(fun (Clause) ->
 				  check_clause(FEnv, VEnv, ArgsTy, Clause)
-			  end, Clauses)).
+			  end, Clauses)),
+    merge_types(Tys).
 
 check_clause(FEnv, VEnv, ArgsTy, {clause, _, Args, [], Block}) ->
     case length(ArgsTy) =:= length(Args) of
@@ -105,14 +110,13 @@ check_clause(FEnv, VEnv, ArgsTy, {clause, _, Args, [], Block}) ->
 type_check_function(FEnv, {function,_, Name, _NArgs, Clauses}) ->
     case maps:find(Name, FEnv) of
 	{ok, {type, _, 'fun', [{type, _, product, ArgsTy}, ResTy]}} ->
-	    {Ty, _} = check_clauses(FEnv, #{}, ArgsTy, Clauses),
+	    Ty = check_clauses(FEnv, #{}, ArgsTy, Clauses),
 	    case compatible(Ty, ResTy) of
 		true -> ResTy;
 		false -> throw({result_type_mismatch, Ty, ResTy})
 	    end;
 	error ->
-	    Types = infer_clauses(FEnv, #{}, Clauses),
-	    merge_types(Types)
+	    infer_clauses(FEnv, #{}, Clauses)
     end.
 
 type_check_file(File) ->
@@ -153,7 +157,15 @@ add_types_pats([Pat | Pats], [Ty | Tys], VEnv) ->
 add_type_pat({var, _, '_'}, _Ty, VEnv) ->
     VEnv;
 add_type_pat({var, _, A}, Ty, VEnv) ->
-    VEnv#{ A => Ty }.
+    VEnv#{ A => Ty };
+add_type_pat({tuple, _, Pats}, {type, _, tuple, Tys}, VEnv) ->
+    add_type_pat_list(Pats, Tys, VEnv).
+
+add_type_pat_list([Pat|Pats], [Ty|Tys], VEnv) ->
+    VEnv2 = add_type_pat(Pat, Ty, VEnv),
+    add_type_pat_list(Pats, Tys, VEnv2);
+add_type_pat_list([], [], VEnv) ->
+    VEnv.
 
 
 add_any_types_pats([], VEnv) ->
