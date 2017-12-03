@@ -80,10 +80,30 @@ type_check_expr_in(FEnv, VEnv, {type, _, tuple, Tys}, {tuple, _LINE, TS}) ->
 		    end,
 		    lists:zip(Tys,TS))),
     {{type, 0, tuple, ResTys}, VarBinds};
-type_check_expr_in(FEnv, VEnv, _Ty, {'case', _, Expr, Clauses}) ->
+type_check_expr_in(FEnv, VEnv, ResTy, {'case', _, Expr, Clauses}) ->
     {ExprTy, VarBinds} = type_check_expr(FEnv, VEnv, Expr),
     VEnv2 = add_var_binds(VEnv, VarBinds),
-    check_clauses(FEnv, VEnv2, ExprTy, Clauses).
+    check_clauses(FEnv, VEnv2, ExprTy, ResTy, Clauses);
+type_check_expr_in(FEnv, VEnv, ResTy, {call, _, Name, Args}) ->
+    case type_check_fun(FEnv, VEnv, Name) of
+	{type, _, any, []} ->
+	    {_, VarBinds} =
+		lists:unzip([ type_check_expr(FEnv, VEnv, Arg) || Arg <- Args]),
+	        
+	    VarBind = union_var_binds(VarBinds),
+	    { {type, 0, any, []}, VarBind };
+	{type, _, 'fun', [{type, _, product, TyArgs}, FunResTy]} ->
+	    {_, VarBinds} =
+		lists:unzip([ type_check_expr_in(FEnv, VEnv, TyArg, Arg)
+			      || {TyArg, Arg} <- lists:zip(TyArgs, Args) ]),
+	    case compatible(ResTy, FunResTy) of
+		true ->
+		    VarBind = union_var_binds(VarBinds),
+		    {ResTy, VarBind};
+		_ ->
+		    throw(type_error)
+	    end
+    end.
 
 
 type_check_fun(FEnv, _VEnv, {atom, _, Name}) ->
@@ -99,6 +119,13 @@ type_check_block(FEnv, VEnv, [Expr | Exprs]) ->
     {_, VarBinds} = type_check_expr(FEnv, VEnv, Expr),
     type_check_block(FEnv, add_var_binds(VEnv, VarBinds), Exprs).
 
+type_check_block_in(FEnv, VEnv, ResTy, [Expr]) ->
+    type_check_expr_in(FEnv, VEnv, ResTy, Expr);
+type_check_block_in(FEnv, VEnv, ResTy, [Expr | Exprs]) ->
+    {_, VarBinds} = type_check_expr(FEnv, VEnv, Expr),
+    type_check_block_in(FEnv, add_var_binds(VEnv, VarBinds), ResTy, Exprs).
+
+
 infer_clauses(FEnv, VEnv, Clauses) ->
     {Tys, _VarBinds} =
 	lists:unzip(lists:map(fun (Clause) ->
@@ -112,27 +139,27 @@ infer_clause(FEnv, VEnv, {clause, _, Args, [], Block}) -> % We don't accept guar
 
 % TODO: This function needs an extra argument; a type which is the result
 % type of the clauses.
-check_clauses(FEnv, VEnv, ArgsTy, Clauses) ->
+check_clauses(FEnv, VEnv, ArgsTy, ResTy, Clauses) ->
     {Tys, _VarBinds} =
 	lists:unzip(lists:map(fun (Clause) ->
-				  check_clause(FEnv, VEnv, ArgsTy, Clause)
+				  check_clause(FEnv, VEnv, ArgsTy, ResTy, Clause)
 			  end, Clauses)),
     merge_types(Tys).
 
-check_clause(FEnv, VEnv, ArgsTy, {clause, _, Args, [], Block}) ->
+check_clause(FEnv, VEnv, ArgsTy, ResTy, {clause, _, Args, [], Block}) ->
     case length(ArgsTy) =:= length(Args) of
 	false ->
 	    throw(argument_length_mismatch);
 	true ->
 	    VEnvNew = add_types_pats(Args, ArgsTy, VEnv),
-	    type_check_block(FEnv, VEnvNew, Block)
+	    type_check_block_in(FEnv, VEnvNew, ResTy, Block)
     end.
 
 
 type_check_function(FEnv, {function,_, Name, _NArgs, Clauses}) ->
     case maps:find(Name, FEnv) of
 	{ok, {type, _, 'fun', [{type, _, product, ArgsTy}, ResTy]}} ->
-	    Ty = check_clauses(FEnv, #{}, ArgsTy, Clauses),
+	    Ty = check_clauses(FEnv, #{}, ArgsTy, ResTy, Clauses),
 	    case compatible(Ty, ResTy) of
 		true -> ResTy;
 		false -> throw({result_type_mismatch, Ty, ResTy})
