@@ -73,6 +73,20 @@ type_check_expr_in(_FEnv, VEnv, Ty, {var, LINE, Var}) ->
 	false ->
 	    throw({type_error, tyVar, LINE})
     end;
+type_check_expr_in(_FEnv, _VEnv, Ty, {integer, LINE, _Int}) ->
+    case compatible(Ty, {type, 0, integer, []}) of
+	true ->
+	    return({type, 0, integer, []});
+	false ->
+	    throw({type_error, int, LINE})
+    end;
+type_check_expr_in(_FEnv, _VEnv, Ty, {float, LINE, _Int}) ->
+    case compatible(Ty, {type, 0, float, []}) of
+	true ->
+	    return({type, 0, float, []});
+	false ->
+	    throw({type_error, int, LINE})
+    end;
 type_check_expr_in(FEnv, VEnv, {type, _, tuple, Tys}, {tuple, _LINE, TS}) ->
     {ResTys, VarBinds} =
 	lists:unzip(
@@ -207,6 +221,8 @@ add_type_pat({var, _, '_'}, _Ty, VEnv) ->
     VEnv;
 add_type_pat({var, _, A}, Ty, VEnv) ->
     VEnv#{ A => Ty };
+add_type_pat({integer, _, _}, _Ty, VEnv) ->
+    VEnv;
 add_type_pat({tuple, _, Pats}, {type, _, tuple, Tys}, VEnv) ->
     add_type_pat_list(Pats, Tys, VEnv).
 
@@ -223,6 +239,8 @@ add_any_types_pats([Pat|Pats], VEnv) ->
     add_any_types_pats(Pats, add_any_types_pat(Pat, VEnv)).
 
 add_any_types_pat(A, VEnv) when is_atom(A) ->
+    VEnv;
+add_any_types_pat({integer, _, _}, VEnv) ->
     VEnv;
 add_any_types_pat({match, _, P1, P2}, VEnv) ->
     add_any_types_pats([P1, P2], VEnv);
