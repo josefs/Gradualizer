@@ -117,8 +117,9 @@ type_check_expr_in(FEnv, VEnv, ResTy, {call, _, Name, Args}) ->
 		_ ->
 		    throw(type_error)
 	    end
-    end.
-
+    end;
+type_check_expr_in(FEnv, VEnv, ResTy, {'receive', _, Clauses}) ->
+    check_clauses(FEnv, VEnv, [{type, 0, any, []}], ResTy, Clauses).
 
 type_check_fun(FEnv, _VEnv, {atom, _, Name}) ->
     maps:get(Name, FEnv);
