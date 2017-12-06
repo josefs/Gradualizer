@@ -71,6 +71,14 @@ file or inferred.
 * [ ] Extend support for all of Erlang.
 
   * [ ] Message passing constructs
+  * [ ] Exception constructs
+  * [ ] Guards
+  * [ ] Binary syntax
+  * [ ] Records
+  * [ ] List comprehensions
+  * [ ] If expressions
+  * [ ] Maps
+  * [ ] An initial environment for the erlang module
 
 # Future work
 
