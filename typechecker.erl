@@ -143,7 +143,14 @@ type_check_expr_in(FEnv, VEnv, ResTy, {call, _, Name, Args}) ->
 	    end
     end;
 type_check_expr_in(FEnv, VEnv, ResTy, {'receive', _, Clauses}) ->
-    check_clauses(FEnv, VEnv, [{type, 0, any, []}], ResTy, Clauses).
+    check_clauses(FEnv, VEnv, [{type, 0, any, []}], ResTy, Clauses);
+type_check_expr_in(FEnv, VEnv, ResTy, {op, _, '!', Arg1, Arg2}) ->
+    % The first argument should be a pid.
+    {_, VarBinds1} = type_check_expr(FEnv, VEnv, Arg1),
+    {Ty, VarBinds2} = type_check_expr_in(FEnv, VEnv, ResTy, Arg2),
+    {Ty, union_var_binds([VarBinds1,VarBinds2])}.
+    
+
 
 type_check_fun(FEnv, _VEnv, {atom, _, Name}) ->
     maps:get(Name, FEnv);
