@@ -70,6 +70,16 @@ file or inferred.
 
 * [ ] Extend support for all of Erlang.
 
+  * [ ] Message passing constructs
+  * [ ] Exception constructs
+  * [ ] Guards
+  * [ ] Binary syntax
+  * [ ] Records
+  * [ ] List comprehensions
+  * [ ] If expressions
+  * [ ] Maps
+  * [ ] An initial environment for the erlang module
+
 # Future work
 
 * Cross-process blame. It'd be interesting to develop a blame calculus that
@@ -81,15 +91,9 @@ file or inferred.
 
   Thanks to Alejandro for suggestion I think about this.
 
-* The existing type system for Erlang supports equi-recursive types. On order
+* The existing type system for Erlang supports equi-recursive types. In order
   to deal with them properly I should look into using the algorithms from:
   "On Subtyping-Relation Completeness, with an Application to Iso-Recursive Types"
-  
-* The type checker should also check clause coverage. One issue is how to deal
-  with guards. The paper "GADTs meet their match: pattern-matching warnings 
-  that account for GADTs, guards, and laziness" should be of interest.
-  
-  https://www.microsoft.com/en-us/research/publication/gadts-meet-their-match-pattern-matching-warnings-that-account-for-gadts-guards-and-laziness/
 
 * Since the existing type system supports union types and a restricted form
   of intersection types, the following paper seems to provide the way to deal
@@ -98,7 +102,6 @@ file or inferred.
   
   http://www.dptinfo.ens-cachan.fr/~vlanvin/Papers/icfp17.pdf
   
-
 * Ultimately it would be nice to change the compilation of erlang to
   take advantage of the type information. That is a long way away
   though, especially since it is an unsolved problem how to compile casts in

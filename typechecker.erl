@@ -34,6 +34,23 @@ compatible_lists(TyList1,TyList2) ->
 			     { any(), #{ any() => any()} }.
 type_check_expr(_FEnv, VEnv, {var, _, Var}) ->
     return(maps:get(Var, VEnv));
+type_check_expr(FEnv, VEnv, {match, _, {var, _, Var}, Expr}) ->
+    {Ty, VarBinds} = type_check_expr(FEnv, VEnv, Expr),
+    case maps:find(Var, VEnv) of
+    	% It would be possible to push the type of the variable
+	% in to the expression here. But it would be complicated to
+	% scale up in case of more complicated patterns.
+        {ok, _} ->
+	  {Ty, VarBinds};
+	error   ->
+	  case maps:find(Var, VarBinds) of
+	    {ok, _} ->
+	      % Any need to refine the type here?
+	      {Ty, VarBinds};
+	    error ->
+	      {Ty, VarBinds#{Var => Ty}}
+	  end
+    end;
 type_check_expr(FEnv, VEnv, {tuple, _, TS}) ->
     { Tys, VarBinds } = lists:unzip([ type_check_expr(FEnv, VEnv, Expr)
 				    || Expr <- TS ]),
@@ -124,8 +141,9 @@ type_check_expr_in(FEnv, VEnv, ResTy, {call, _, Name, Args}) ->
 		_ ->
 		    throw(type_error)
 	    end
-    end.
-
+    end;
+type_check_expr_in(FEnv, VEnv, ResTy, {'receive', _, Clauses}) ->
+    check_clauses(FEnv, VEnv, [{type, 0, any, []}], ResTy, Clauses).
 
 type_check_fun(FEnv, _VEnv, {atom, _, Name}) ->
     maps:get(Name, FEnv);
