@@ -36,7 +36,6 @@ type_check_expr(_FEnv, VEnv, {var, _, Var}) ->
     return(maps:get(Var, VEnv));
 type_check_expr(FEnv, VEnv, {match, _, {var, _, Var}, Expr}) ->
     {Ty, VarBinds} = type_check_expr(FEnv, VEnv, Expr),
-    % TODO: Check if Var is in VarBinds
     case maps:find(Var, VEnv) of
     	% It would be possible to push the type of the variable
 	% in to the expression here. But it would be complicated to
