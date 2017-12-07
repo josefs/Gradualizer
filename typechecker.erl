@@ -87,13 +87,20 @@ type_check_expr_in(_FEnv, _VEnv, Ty, {float, LINE, _Int}) ->
 	false ->
 	    throw({type_error, int, LINE})
     end;
-type_check_expr_in(FEnv, VEnv, {type, _, tuple, Tys}, {tuple, _LINE, TS}) ->
-    {ResTys, VarBinds} =
-	lists:unzip(
-	  lists:map(fun ({Ty, Expr}) -> type_check_expr_in(FEnv, VEnv, Ty, Expr)
-		    end,
-		    lists:zip(Tys,TS))),
-    {{type, 0, tuple, ResTys}, VarBinds};
+type_check_expr_in(FEnv, VEnv, ResTy, {tuple, _LINE, TS}) ->
+    case ResTy of
+      {type, _, tuple, Tys} ->
+	    {ResTys, VarBinds} =
+		lists:unzip(
+		  lists:map(fun ({Ty, Expr}) -> type_check_expr_in(FEnv, VEnv, Ty, Expr)
+			    end,
+			    lists:zip(Tys,TS))),
+	    {{type, 0, tuple, ResTys}, union_var_binds(VarBinds)};
+	{type, _, any, []} ->
+	    {ResTys, VarBinds} =
+		lists:unzip([type_check_expr(FEnv, VEnv, Expr) || Expr <- TS]),
+	    {{type, 0, tuple, ResTys}, union_var_binds(VarBinds)}
+    end;
 type_check_expr_in(FEnv, VEnv, ResTy, {'case', _, Expr, Clauses}) ->
     {ExprTy, VarBinds} = type_check_expr(FEnv, VEnv, Expr),
     VEnv2 = add_var_binds(VEnv, VarBinds),
