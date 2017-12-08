@@ -157,7 +157,8 @@ type_check_expr_in(FEnv, VEnv, ResTy, {op, _, Op, Arg1, Arg2}) ->
              Op == 'band' orelse Op == 'bor' orelse Op == 'bxor' orelse
 	     Op == 'bsl'  orelse Op == 'bsr' ->
 	type_check_int_op(FEnv, VEnv, ResTy, Op, Arg1, Arg2);
-      _ when Op == 'and' orelse Op == 'or' orelse Op == 'xor' ->
+      _ when Op == 'and' orelse Op == 'or' orelse Op == 'xor' orelse
+             Op == 'andalso' orelse Op == 'orelse' ->
         type_check_logic_op(FEnv, VEnv, ResTy, Op, Arg1, Arg2)
     end.
 
