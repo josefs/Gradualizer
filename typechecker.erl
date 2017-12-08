@@ -148,8 +148,62 @@ type_check_expr_in(FEnv, VEnv, ResTy, {op, _, '!', Arg1, Arg2}) ->
     % The first argument should be a pid.
     {_, VarBinds1} = type_check_expr(FEnv, VEnv, Arg1),
     {Ty, VarBinds2} = type_check_expr_in(FEnv, VEnv, ResTy, Arg2),
-    {Ty, union_var_binds([VarBinds1,VarBinds2])}.
-    
+    {Ty, union_var_binds([VarBinds1,VarBinds2])};
+type_check_expr_in(FEnv, VEnv, ResTy, {op, _, Op, Arg1, Arg2}) ->
+    case Op of
+      _ when Op == '+' orelse Op == '-' orelse Op == '*' orelse Op == '/' ->
+        type_check_arith_op(FEnv, VEnv, ResTy, Op, Arg1, Arg2);
+      _ when Op == 'bnot' orelse Op == 'div' orelse Op == 'rem' orelse
+             Op == 'band' orelse Op == 'bor' orelse Op == 'bxor' orelse
+	     Op == 'bsl'  orelse Op == 'bsr' ->
+	type_check_int_op(FEnv, VEnv, ResTy, Op, Arg1, Arg2);
+      _ when Op == 'and' orelse Op == 'or' orelse Op == 'xor' ->
+        type_check_logic_op(FEnv, VEnv, ResTy, Op, Arg1, Arg2)
+    end.
+
+type_check_arith_op(FEnv, VEnv, ResTy, _Op, Arg1, Arg2) ->
+    case ResTy of
+        {type, _, 'integer', []} ->
+	  {_, VarBinds1} = type_check_expr_in(FEnv, VEnv, ResTy, Arg1),
+	  {_, VarBinds2} = type_check_expr_in(FEnv, VEnv, ResTy, Arg2),
+	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
+	{type, _, 'float', []} ->
+	  {_, VarBinds1} = type_check_expr_in(FEnv, VEnv, ResTy, Arg1),
+	  {_, VarBinds2} = type_check_expr_in(FEnv, VEnv, ResTy, Arg2),
+	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
+	{type, _, any, []} ->
+	  {_, VarBinds1} = type_check_expr_in(FEnv, VEnv, ResTy, Arg1),
+	  {_, VarBinds2} = type_check_expr_in(FEnv, VEnv, ResTy, Arg2),
+	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
+	_ ->
+	  throw({arithmetic_type_error})
+    end.
+type_check_int_op(FEnv, VEnv, ResTy, _Op, Arg1, Arg2) ->
+    case ResTy of
+        {type, _, 'integer', []} ->
+	  {_, VarBinds1} = type_check_expr_in(FEnv, VEnv, ResTy, Arg1),
+	  {_, VarBinds2} = type_check_expr_in(FEnv, VEnv, ResTy, Arg2),
+	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
+	{type, _, any, []} ->
+	  {_, VarBinds1} = type_check_expr_in(FEnv, VEnv, ResTy, Arg1),
+	  {_, VarBinds2} = type_check_expr_in(FEnv, VEnv, ResTy, Arg2),
+	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
+	_ ->
+	  throw({arithmetic_type_error})
+    end.
+type_check_logic_op(FEnv, VEnv, ResTy, _Op, Arg1, Arg2) ->
+    case ResTy of
+        {type, _, 'boolean', []} ->
+	  {_, VarBinds1} = type_check_expr_in(FEnv, VEnv, ResTy, Arg1),
+	  {_, VarBinds2} = type_check_expr_in(FEnv, VEnv, ResTy, Arg2),
+	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
+	{type, _, any, []} ->
+	  {_, VarBinds1} = type_check_expr_in(FEnv, VEnv, ResTy, Arg1),
+	  {_, VarBinds2} = type_check_expr_in(FEnv, VEnv, ResTy, Arg2),
+	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
+	_ ->
+	  throw({arithmetic_type_error})
+    end.
 
 
 type_check_fun(FEnv, _VEnv, {atom, _, Name}) ->
