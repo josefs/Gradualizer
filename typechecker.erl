@@ -166,15 +166,8 @@ type_check_expr_in(FEnv, VEnv, ResTy, {op, _, Op, Arg1, Arg2}) ->
 
 type_check_arith_op(FEnv, VEnv, ResTy, _Op, Arg1, Arg2) ->
     case ResTy of
-        {type, _, 'integer', []} ->
-	  {_, VarBinds1} = type_check_expr_in(FEnv, VEnv, ResTy, Arg1),
-	  {_, VarBinds2} = type_check_expr_in(FEnv, VEnv, ResTy, Arg2),
-	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
-	{type, _, 'float', []} ->
-	  {_, VarBinds1} = type_check_expr_in(FEnv, VEnv, ResTy, Arg1),
-	  {_, VarBinds2} = type_check_expr_in(FEnv, VEnv, ResTy, Arg2),
-	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
-	{type, _, any, []} ->
+        {type, _, Ty, []} when Ty == 'integer' orelse Ty == 'float' orelse
+	                       Ty == 'any' ->
 	  {_, VarBinds1} = type_check_expr_in(FEnv, VEnv, ResTy, Arg1),
 	  {_, VarBinds2} = type_check_expr_in(FEnv, VEnv, ResTy, Arg2),
 	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
@@ -183,11 +176,7 @@ type_check_arith_op(FEnv, VEnv, ResTy, _Op, Arg1, Arg2) ->
     end.
 type_check_int_op(FEnv, VEnv, ResTy, _Op, Arg1, Arg2) ->
     case ResTy of
-        {type, _, 'integer', []} ->
-	  {_, VarBinds1} = type_check_expr_in(FEnv, VEnv, ResTy, Arg1),
-	  {_, VarBinds2} = type_check_expr_in(FEnv, VEnv, ResTy, Arg2),
-	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
-	{type, _, any, []} ->
+        {type, _, Ty, []} when Ty == 'integer' orelse Ty == 'any' ->
 	  {_, VarBinds1} = type_check_expr_in(FEnv, VEnv, ResTy, Arg1),
 	  {_, VarBinds2} = type_check_expr_in(FEnv, VEnv, ResTy, Arg2),
 	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
@@ -196,11 +185,7 @@ type_check_int_op(FEnv, VEnv, ResTy, _Op, Arg1, Arg2) ->
     end.
 type_check_logic_op(FEnv, VEnv, ResTy, _Op, Arg1, Arg2) ->
     case ResTy of
-        {type, _, 'boolean', []} ->
-	  {_, VarBinds1} = type_check_expr_in(FEnv, VEnv, ResTy, Arg1),
-	  {_, VarBinds2} = type_check_expr_in(FEnv, VEnv, ResTy, Arg2),
-	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
-	{type, _, any, []} ->
+        {type, _, Ty, []} when Ty == 'boolean' orelse Ty == 'any' ->
 	  {_, VarBinds1} = type_check_expr_in(FEnv, VEnv, ResTy, Arg1),
 	  {_, VarBinds2} = type_check_expr_in(FEnv, VEnv, ResTy, Arg2),
 	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
