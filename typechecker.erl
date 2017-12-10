@@ -9,7 +9,7 @@ compatible(_, {type, _, any, []}) ->
 compatible({type, _, 'fun', Args1, Res1},{type, _, 'fun', Args2, Res2}) ->
     compatible_lists(Args1, Args2) andalso
 	compatible(Res1, Res2);
-compatible({type, _, tuple, Tys1}, {type, _, tuple, Tys2}) ->
+compatible({type, _, Ty, Tys1}, {type, _, Ty, Tys2}) ->
     compatible_lists(Tys1, Tys2);
 compatible({user_type, _, Name1, Args1}, {user_type, _, Name2, Args2}) ->
     Name1 =:= Name2 andalso
@@ -37,10 +37,10 @@ type_check_expr(_FEnv, VEnv, {var, _, Var}) ->
 type_check_expr(FEnv, VEnv, {match, _, {var, _, Var}, Expr}) ->
     {Ty, VarBinds} = type_check_expr(FEnv, VEnv, Expr),
     case maps:find(Var, VEnv) of
-    	% It would be possible to push the type of the variable
+	% It would be possible to push the type of the variable
 	% in to the expression here. But it would be complicated to
 	% scale up in case of more complicated patterns.
-        {ok, _} ->
+	{ok, _} ->
 	  {Ty, VarBinds};
 	error   ->
 	  case maps:find(Var, VarBinds) of
@@ -88,7 +88,7 @@ type_check_expr_in(_FEnv, VEnv, Ty, {var, LINE, Var}) ->
 	true ->
 	    return(VarTy);
 	false ->
-	    throw({type_error, tyVar, LINE})
+	    throw({type_error, tyVar, LINE, Var, VarTy, Ty})
     end;
 type_check_expr_in(_FEnv, _VEnv, Ty, {integer, LINE, _Int}) ->
     case compatible(Ty, {type, 0, integer, []}) of
@@ -127,7 +127,7 @@ type_check_expr_in(FEnv, VEnv, ResTy, {call, _, Name, Args}) ->
 	{type, _, any, []} ->
 	    {_, VarBinds} =
 		lists:unzip([ type_check_expr(FEnv, VEnv, Arg) || Arg <- Args]),
-	        
+
 	    VarBind = union_var_binds(VarBinds),
 	    { {type, 0, any, []}, VarBind };
 	{type, _, 'fun', [{type, _, product, TyArgs}, FunResTy]} ->
@@ -152,22 +152,22 @@ type_check_expr_in(FEnv, VEnv, ResTy, {op, _, '!', Arg1, Arg2}) ->
 type_check_expr_in(FEnv, VEnv, ResTy, {op, _, Op, Arg1, Arg2}) ->
     case Op of
       _ when Op == '+' orelse Op == '-' orelse Op == '*' orelse Op == '/' ->
-        type_check_arith_op(FEnv, VEnv, ResTy, Op, Arg1, Arg2);
+	type_check_arith_op(FEnv, VEnv, ResTy, Op, Arg1, Arg2);
       _ when Op == 'bnot' orelse Op == 'div' orelse Op == 'rem' orelse
-             Op == 'band' orelse Op == 'bor' orelse Op == 'bxor' orelse
+	     Op == 'band' orelse Op == 'bor' orelse Op == 'bxor' orelse
 	     Op == 'bsl'  orelse Op == 'bsr' ->
 	type_check_int_op(FEnv, VEnv, ResTy, Op, Arg1, Arg2);
       _ when Op == 'and' orelse Op == 'or' orelse Op == 'xor' orelse
-             Op == 'andalso' orelse Op == 'orelse' ->
-        type_check_logic_op(FEnv, VEnv, ResTy, Op, Arg1, Arg2);
+	     Op == 'andalso' orelse Op == 'orelse' ->
+	type_check_logic_op(FEnv, VEnv, ResTy, Op, Arg1, Arg2);
       _ when Op == '++' orelse Op == '--' ->
-        type_check_list_op(FEnv, VEnv, ResTy, Op, Arg1, Arg2)
+	type_check_list_op(FEnv, VEnv, ResTy, Op, Arg1, Arg2)
     end.
 
 type_check_arith_op(FEnv, VEnv, ResTy, _Op, Arg1, Arg2) ->
     case ResTy of
-        {type, _, Ty, []} when Ty == 'integer' orelse Ty == 'float' orelse
-	                       Ty == 'any' ->
+	{type, _, Ty, []} when Ty == 'integer' orelse Ty == 'float' orelse
+			       Ty == 'any' ->
 	  {_, VarBinds1} = type_check_expr_in(FEnv, VEnv, ResTy, Arg1),
 	  {_, VarBinds2} = type_check_expr_in(FEnv, VEnv, ResTy, Arg2),
 	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
@@ -176,7 +176,7 @@ type_check_arith_op(FEnv, VEnv, ResTy, _Op, Arg1, Arg2) ->
     end.
 type_check_int_op(FEnv, VEnv, ResTy, _Op, Arg1, Arg2) ->
     case ResTy of
-        {type, _, Ty, []} when Ty == 'integer' orelse Ty == 'any' ->
+	{type, _, Ty, []} when Ty == 'integer' orelse Ty == 'any' ->
 	  {_, VarBinds1} = type_check_expr_in(FEnv, VEnv, ResTy, Arg1),
 	  {_, VarBinds2} = type_check_expr_in(FEnv, VEnv, ResTy, Arg2),
 	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
@@ -185,7 +185,7 @@ type_check_int_op(FEnv, VEnv, ResTy, _Op, Arg1, Arg2) ->
     end.
 type_check_logic_op(FEnv, VEnv, ResTy, _Op, Arg1, Arg2) ->
     case ResTy of
-        {type, _, Ty, []} when Ty == 'boolean' orelse Ty == 'any' ->
+	{type, _, Ty, []} when Ty == 'boolean' orelse Ty == 'any' ->
 	  {_, VarBinds1} = type_check_expr_in(FEnv, VEnv, ResTy, Arg1),
 	  {_, VarBinds2} = type_check_expr_in(FEnv, VEnv, ResTy, Arg2),
 	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
@@ -194,7 +194,7 @@ type_check_logic_op(FEnv, VEnv, ResTy, _Op, Arg1, Arg2) ->
     end.
 type_check_list_op(FEnv, VEnv, ResTy, _Op, Arg1, Arg2) ->
     case ResTy of
-        {type, _, 'list', [_Ty]} ->
+	{type, _, 'list', [_Ty]} ->
 	  {_, VarBinds1} = type_check_expr_in(FEnv, VEnv, ResTy, Arg1),
 	  {_, VarBinds2} = type_check_expr_in(FEnv, VEnv, ResTy, Arg2),
 	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
@@ -228,24 +228,22 @@ type_check_block_in(FEnv, VEnv, ResTy, [Expr | Exprs]) ->
 
 
 infer_clauses(FEnv, VEnv, Clauses) ->
-    {Tys, _VarBinds} =
+    {Tys, VarBinds} =
 	lists:unzip(lists:map(fun (Clause) ->
 				  infer_clause(FEnv, VEnv, Clause)
 			  end, Clauses)),
-    merge_types(Tys).
+    {merge_types(Tys), VarBinds}.
 
 infer_clause(FEnv, VEnv, {clause, _, Args, [], Block}) -> % We don't accept guards right now.
     VEnvNew = add_any_types_pats(Args, VEnv),
     type_check_block(FEnv, VEnvNew, Block).
 
-% TODO: This function needs an extra argument; a type which is the result
-% type of the clauses.
 check_clauses(FEnv, VEnv, ArgsTy, ResTy, Clauses) ->
-    {Tys, _VarBinds} =
+    {Tys, VarBinds} =
 	lists:unzip(lists:map(fun (Clause) ->
 				  check_clause(FEnv, VEnv, ArgsTy, ResTy, Clause)
 			  end, Clauses)),
-    merge_types(Tys).
+    {merge_types(Tys), VarBinds}.
 
 check_clause(FEnv, VEnv, ArgsTy, ResTy, {clause, _, Args, [], Block}) ->
     case length(ArgsTy) =:= length(Args) of
@@ -260,44 +258,16 @@ check_clause(FEnv, VEnv, ArgsTy, ResTy, {clause, _, Args, [], Block}) ->
 type_check_function(FEnv, {function,_, Name, _NArgs, Clauses}) ->
     case maps:find(Name, FEnv) of
 	{ok, {type, _, 'fun', [{type, _, product, ArgsTy}, ResTy]}} ->
-	    Ty = check_clauses(FEnv, #{}, ArgsTy, ResTy, Clauses),
-	    case compatible(Ty, ResTy) of
-		true -> ResTy;
-		false -> throw({result_type_mismatch, Ty, ResTy})
-	    end;
+	    {_, VarBinds} = check_clauses(FEnv, #{}, ArgsTy, ResTy, Clauses),
+	    {ResTy, VarBinds};
 	error ->
 	    infer_clauses(FEnv, #{}, Clauses)
     end.
-
-type_check_file(File) ->
-    {ok, Forms} = epp:parse_file(File,[]),
-    {Specs, Funs} = collect_specs_and_functions(Forms),
-    FEnv = create_fenv(Specs),
-    lists:map(fun (Function) ->
-		      type_check_function(FEnv, Function) end, Funs).
-
-collect_specs_and_functions(Forms) ->
-    aux(Forms,[],[]).
-aux([], Specs, Funs) ->
-    {Specs, Funs};
-aux([Fun={function, _, _, _, _} | Forms], Specs, Funs) ->
-    aux(Forms, Specs, [Fun | Funs]);
-aux([{attribute, _, spec, Spec} | Forms], Specs, Funs) ->
-    aux(Forms, [Spec | Specs], Funs);
-aux([_|Forms], Specs, Funs) ->
-    aux(Forms, Specs, Funs).
 
 merge_types([Ty]) ->
     Ty;
 merge_types(apa) ->
     {apa,bepa}.
-
-create_fenv([{{Name,_},[Type]}|Specs]) ->
-    (create_fenv(Specs))#{ Name => Type };
-create_fenv([{{Name,_},_}|_]) ->
-    throw({multiple_types_not_supported,Name});
-create_fenv([]) ->
-    #{}.
 
 add_types_pats([], [], VEnv) ->
     VEnv;
@@ -367,3 +337,58 @@ glb_types({type, _, N, Args1}, {type, _, N, Args2}) ->
     {type, 0, N, Args};
 glb_types(_, _) ->
     {type, 0, any, []}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Main entry pont
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+type_check_file(File) ->
+    {ok, Forms} = epp:parse_file(File,[]),
+    {Specs, Funs} = collect_specs_and_functions(Forms),
+    FEnv = create_fenv(Specs),
+    lists:map(fun (Function) ->
+		      try  type_check_function(FEnv, Function) of
+			   {_Ty, _VarBinds} ->
+			      ok
+		      catch
+			  Throw ->
+			      handle_type_error(Throw)
+		      end
+	      end, Funs).
+
+create_fenv([{{Name,_},[Type]}|Specs]) ->
+    (create_fenv(Specs))#{ Name => Type };
+create_fenv([{{Name,_},_}|_]) ->
+    throw({multiple_types_not_supported,Name});
+create_fenv([]) ->
+    #{}.
+
+collect_specs_and_functions(Forms) ->
+    aux(Forms,[],[]).
+aux([], Specs, Funs) ->
+    {Specs, Funs};
+aux([Fun={function, _, _, _, _} | Forms], Specs, Funs) ->
+    aux(Forms, Specs, [Fun | Funs]);
+aux([{attribute, _, spec, Spec} | Forms], Specs, Funs) ->
+    aux(Forms, [Spec | Specs], Funs);
+aux([_|Forms], Specs, Funs) ->
+    aux(Forms, Specs, Funs).
+
+handle_type_error({type_error, tyVar, LINE, Var, VarTy, Ty}) ->
+    io:format("The variable ~p on line ~p has type ~s "
+	      "but is expected to have type ~s",
+	      [Var, LINE, pp_type(VarTy), pp_type(Ty)]).
+
+pp_type({type, _, tuple, Args}) ->
+  "{" ++ intercalate(", ", lists:map(fun pp_type/1, Args)) ++ "}";
+pp_type({type, _, Name, Args}) ->
+    atom_to_list(Name) ++ "(" ++
+	intercalate(", ", lists:map(fun pp_type/1, Args)) ++ ")".
+
+intercalate(_Sep, [Str]) ->
+    Str;
+intercalate(_Sep, []) ->
+    [];
+intercalate(Sep, [Str|Strs]) ->
+    Str ++ Sep ++ intercalate(Sep, Strs).
