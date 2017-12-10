@@ -70,7 +70,7 @@ file or inferred.
 
 * [ ] Extend support for all of Erlang.
 
-  * [ ] Message passing constructs
+  * [x] Message passing constructs
   * [ ] Exception constructs
   * [ ] Guards
   * [ ] Binary syntax
