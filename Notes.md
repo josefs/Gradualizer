@@ -68,6 +68,8 @@ file or inferred.
 
 * [ ] Make it a standalone program.
 
+* [ ] Test suite
+
 * [ ] Extend support for all of Erlang.
 
   * [x] Message passing constructs
