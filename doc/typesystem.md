@@ -1,14 +1,15 @@
 ---
 title: The Gradualizer
 author: Josef Svenningsson
+date: A long time ago, in a galaxy far, far away...
 header-includes: |
     \usepackage{proof}
 ---
 
 # Introduction
 
-The Gradualizer is a new gradual type system for Erlang, and also a tool which
-checks types of Erlang programs.
+This document describes an new gradual type system for Erlang, and The
+Gradualizer, which is a tool which checks types for Erlang programs.
 
 # Type System
 
