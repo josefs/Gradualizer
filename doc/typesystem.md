@@ -40,6 +40,16 @@ typechecking algorithm, and $T$ and $\Delta$ as outputs.
 	{\Gamma \vdash E : T \dashv \Delta}
 \end{math}
 
+## Subtyping
+
+\begin{math}
+\infer{T \sqsubseteq T}{}
+\\
+\infer{T_1 | \dots | T_n \sqsubseteq S}{\forall i . T_i \sqsubseteq S}
+\\
+\infer{T \sqsubseteq S_1 | \dots | S_n}{\exists i . T \sqsubseteq S_i}
+\end{math}
+
 # Gradual Type System
 
 In gradual type systems there is particular type which means
@@ -47,7 +57,7 @@ In gradual type systems there is particular type which means
 program should not be statically typed. In Erlang there is the type
 $any()$ which already has this role, in the sense that any expression
 has the type $any()$. So we will reuse $any()$ in our gradual type
-system to mean that an expression (or variable) is untyped.
+system to mean that an expression is untyped.
 
 ## Compatibility relation
 
