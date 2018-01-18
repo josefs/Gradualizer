@@ -61,6 +61,11 @@ file or inferred.
 
 * [ ] Support for plt-files.
 
+      This is going to be a bit harder than I expected. The types in
+      plt-files uses a very different representation. Also, there
+      doesn't seem to be any way of extracting all types from a
+      plt-file.
+
 * [ ] Better error messages.
 
 * [ ] Warn about unsupported types.
