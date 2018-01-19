@@ -98,9 +98,13 @@ file or inferred.
 
   Thanks to Alejandro for suggestion I think about this.
 
-* The existing type system for Erlang supports equi-recursive types. In order
-  to deal with them properly I should look into using the algorithms from:
-  "On Subtyping-Relation Completeness, with an Application to Iso-Recursive Types"
+* The existing type system for Erlang supports equi-recursive types. The
+  following blog posts have interesting things to say about subtyping
+  recursive types:
+  
+  http://whiley.org/2011/02/16/minimising-recursive-data-types/
+  http://whiley.org/2011/03/07/implementing-structural-types/
+  http://whiley.org/2011/08/30/simplification-vs-minimisation-of-types-in-whiley/
 
 * Since the existing type system supports union types and a restricted form
   of intersection types, the following paper seems to provide the way to deal
