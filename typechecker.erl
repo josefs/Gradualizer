@@ -347,15 +347,27 @@ type_check_file(File) ->
     {ok, Forms} = epp:parse_file(File,[]),
     {Specs, Funs} = collect_specs_and_functions(Forms),
     FEnv = create_fenv(Specs),
-    lists:map(fun (Function) ->
-		      try  type_check_function(FEnv, Function) of
-			   {_Ty, _VarBinds} ->
-			      ok
-		      catch
-			  Throw ->
-			      handle_type_error(Throw)
-		      end
-	      end, Funs).
+%    lists:map(fun (Function) ->
+%		      try  type_check_function(FEnv, Function) of
+%			   {_Ty, _VarBinds} ->
+%			      ok
+%		      catch
+%			  Throw ->
+%			      handle_type_error(Throw)
+%		      end
+%	      end, Funs).
+    lists:foldr(fun (Function, ok) ->
+                        try type_check_function(FEnv, Funcion) of
+                            {_Ty, _VarBinds} ->
+                                ok
+                        catch
+                            Throw ->
+                                handle_type_error(Exception),
+                                nok
+                        end;
+                    (_Function, Err) ->
+                        Err
+                end, ok, Funs).
 
 create_fenv([{{Name,_},[Type]}|Specs]) ->
     (create_fenv(Specs))#{ Name => Type };
