@@ -112,7 +112,15 @@ file or inferred.
   "Gradual Typing with Union and Intersection Types"
   
   http://www.dptinfo.ens-cachan.fr/~vlanvin/Papers/icfp17.pdf
+
+* It'd be nice to be able to give interface types to atoms so that we can type check
+  calls to `apply`. We can reuse *behaviours* for this purpose. A behaviour 
+  essentially defines an interface. But we could also infer interfaces based on
+  export lists.
   
+  The typing rule for `apply` will require that the `Module` argument is a subtype
+  of the interface containing the `Function` with the type of its `Arguments`.
+
 * Ultimately it would be nice to change the compilation of erlang to
   take advantage of the type information. That is a long way away
   though, especially since it is an unsolved problem how to compile casts in
