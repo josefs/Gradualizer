@@ -50,21 +50,21 @@ file or inferred.
 * [ ] Formalize the properties of gradual type systems as QuickCheck/Proper
       properties. This will need good generators of Erlang programs.
 
-      The properties of gradual type systems are listed in the paper
-      "Refined Criteria for Gradual Typing":
+  The properties of gradual type systems are listed in the paper
+  "Refined Criteria for Gradual Typing":
 
-      http://drops.dagstuhl.de/opus/volltexte/2015/5031/pdf/21.pdf
+  http://drops.dagstuhl.de/opus/volltexte/2015/5031/pdf/21.pdf
 
-      The following paper shows how to generate well-typed terms:
+  The following paper shows how to generate well-typed terms:
 
-      http://users.eecs.northwestern.edu/~baf111/random-judgments/random-judgments-esop15.pdf
+  http://users.eecs.northwestern.edu/~baf111/random-judgments/random-judgments-esop15.pdf
 
 * [ ] Support for plt-files.
 
-      This is going to be a bit harder than I expected. The types in
-      plt-files uses a very different representation. Also, there
-      doesn't seem to be any way of extracting all types from a
-      plt-file.
+  This is going to be a bit harder than I expected. The types in
+  plt-files uses a very different representation. Also, there
+  doesn't seem to be any way of extracting all types from a
+  plt-file.
 
 * [ ] Better error messages.
 
