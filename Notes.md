@@ -59,7 +59,7 @@ file or inferred.
 
   http://users.eecs.northwestern.edu/~baf111/random-judgments/random-judgments-esop15.pdf
 
-* [ ] Support for plt-files.
+* [ ] ~Support for plt-files~.
 
   This is going to be a bit harder than I expected. The types in
   plt-files uses a very different representation. Also, there
@@ -69,7 +69,7 @@ file or inferred.
 * [ ] Better error messages.
 
 * [ ] Warn about unsupported types.
-      Unsupported types should be converted to any().
+      Unsupported types should be converted to `any()`.
 
 * [ ] Make it a standalone program.
 
@@ -86,6 +86,16 @@ file or inferred.
   * [ ] If expressions
   * [ ] Maps
   * [ ] An initial environment for the erlang module
+  
+* [ ] New representation of types which supports
+      subtyping of recursive types. This requires that
+      each subtree in a type has a unique identity so that
+      we can keep track of cycles. It's not hard but it
+      needs to be done.
+      
+  It make sense to at the same time implement support for
+  mangling types and converting them to `any()` if they
+  are unsupported.
 
 # Future work
 
