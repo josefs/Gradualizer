@@ -26,6 +26,78 @@ compatible_lists(TyList1,TyList2) ->
 		  end
 		 ,lists:zip(TyList1, TyList2)).
 
+
+% Subtyping compatibility
+% The first argument is a "compatible subtype" of the second.
+% This function throws an exception in case of a type error
+
+%compat({Id1, Ty1},{Id2,Ty2}, A, TEnv) ->
+compat(Ty1, Ty2, A, TEnv) ->
+    sets:is_element({Ty1, Ty2}, A) orelse
+	compat_ty(Ty1, Ty2, sets:add_element({Ty1, Ty2}, A), TEnv).
+
+compat_ty({type, _, any, []}, _, A, _TEnv) ->
+    A;
+compat_ty(_, {type, _, any ,[]}, A, _TEnv) ->
+    A;
+% There are several kinds of fun types. I will have to support them all eventually
+compat_ty({type, _, 'fun', {type, _, product, Args1}, Res1},
+	  {type, _, 'fun', {type, _, product, Args2}, Res2},
+	  A, TEnv) ->
+    Ap = compat_tys(Args2, Args1, A, TEnv),
+    compat(Res1, Res2, Ap, TEnv);
+% Integer types
+compat_ty({type, _, integer, []}, {type, _, integer, []}, A, _TEnv) ->
+    A;
+compat_ty({type, _, range, _}, {type, _, integer, []}, A, _TEnv) ->
+    A;
+compat_ty({type, _, range, [{integer, _, I11},{integer, _, I12}]},
+	  {type, _, range, [{integer, _, I21},{integer, _, I22}]},
+	  A, _TEnv) when
+      I11 >= I21 andalso I12 =< I22 ->
+    A;
+compat_ty({type, _, integer, I}, {type, _, integer, I}, A, _TEnv) ->
+    A;
+compat_ty({type, _, integer, _I}, {type, _, integer, []}, A, _TEnv) ->
+    A;
+compat_ty({type, _, integer, I}, {type, _, range, [{integer, _,I1},
+						   {integer, _, I2}]}, A, _TEnv)
+  when I >= I1 andalso I =< I2 ->
+    A;
+
+compat_ty({atom, _, Atom}, {atom, _, Atom}, A, _TEnv) ->
+    A;
+
+compat_ty({type, _, float, []}, {type, _, float, []}, A, _TEnv) ->
+    A;
+
+compat_ty({type, _, bool, []}, {type, _, bool, []}, A, _TEnv) ->
+    A;
+compat_ty({atom, _, true}, {type, _, bool, []}, A, _TEnv) ->
+    A;
+compat_ty({atom, _, false}, {type, _, bool, []}, A, _TEnv) ->
+    A;
+
+compat_ty({type, _, tuple, Args1}, {type, _, tuple, Args2}, A, TEnv) ->
+    compat_tys(Args1, Args2, A, TEnv);
+compat_ty({user_type, _, Name, Args}, Ty, A, TEnv) ->
+    compat(unfold_user_type(Name, Args, TEnv), Ty, A, TEnv);
+compat_ty(Ty, {user_type, _, Name, Args}, A, TEnv) ->
+    compat(Ty, unfold_user_type(Name, Args, TEnv), A, TEnv);
+compat_ty(_,_,_,_) ->
+    throw(type_error).
+
+
+compat_tys([], [], A, _TEnv) ->
+    A;
+compat_tys([Ty1|Tys1], [Ty2|Tys2], A, TEnv) ->
+    Ap = compat(Ty1 ,Ty2, A, TEnv),
+    compat_tys(Tys1, Tys2, Ap, TEnv).
+
+unfold_user_type(_Name, _Args, _TEnv) ->
+    unimplemented. %maps:find(Name, TEnv)
+
+
 % Arguments: An environment for functions, an environment for variables
 % and the expression to type check.
 % Returns the type of the expression and a collection of variables bound in
