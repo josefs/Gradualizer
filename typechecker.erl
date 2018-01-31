@@ -281,7 +281,12 @@ add_type_pat({var, _, A}, Ty, VEnv) ->
 add_type_pat({integer, _, _}, _Ty, VEnv) ->
     VEnv;
 add_type_pat({tuple, _, Pats}, {type, _, tuple, Tys}, VEnv) ->
-    add_type_pat_list(Pats, Tys, VEnv).
+    add_type_pat_list(Pats, Tys, VEnv);
+add_type_pat({atom, _, Bool}, {type, _, bool, []}, VEnv)
+  when Bool == true orelse Bool == false ->
+    VEnv.
+
+
 
 add_type_pat_list([Pat|Pats], [Ty|Tys], VEnv) ->
     VEnv2 = add_type_pat(Pat, Ty, VEnv),
