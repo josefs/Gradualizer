@@ -167,14 +167,21 @@ type_check_expr_in(_FEnv, _VEnv, Ty, {integer, LINE, _Int}) ->
 	true ->
 	    return({type, 0, integer, []});
 	false ->
-	    throw({type_error, int, LINE})
+	    throw({type_error, int, LINE, Ty})
     end;
 type_check_expr_in(_FEnv, _VEnv, Ty, {float, LINE, _Int}) ->
     case compatible(Ty, {type, 0, float, []}) of
 	true ->
 	    return({type, 0, float, []});
 	false ->
-	    throw({type_error, int, LINE})
+	    throw({type_error, float, LINE, Ty})
+    end;
+type_check_expr_in(_FEnv, _VEnv, Ty, Atom = {atom, LINE, _}) ->
+    case compatible(Ty, Atom) of
+	true ->
+	    return(Atom);
+	false ->
+	    throw({type_error, Atom, LINE, Ty})
     end;
 type_check_expr_in(FEnv, VEnv, ResTy, {tuple, _LINE, TS}) ->
     case ResTy of
@@ -422,7 +429,8 @@ glb_types(_, _) ->
 
 type_check_file(File) ->
     {ok, Forms} = epp:parse_file(File,[]),
-    {Specs, Funs} = collect_specs_and_functions(Forms),
+    {Specs, _Types, _Opaques, Funs} =
+	collect_specs_types_opaques_and_functions(Forms),
     FEnv = create_fenv(Specs),
 %    lists:map(fun (Function) ->
 %		      try  type_check_function(FEnv, Function) of
@@ -453,21 +461,29 @@ create_fenv([{{Name,_},_}|_]) ->
 create_fenv([]) ->
     #{}.
 
-collect_specs_and_functions(Forms) ->
-    aux(Forms,[],[]).
-aux([], Specs, Funs) ->
-    {Specs, Funs};
-aux([Fun={function, _, _, _, _} | Forms], Specs, Funs) ->
-    aux(Forms, Specs, [Fun | Funs]);
-aux([{attribute, _, spec, Spec} | Forms], Specs, Funs) ->
-    aux(Forms, [Spec | Specs], Funs);
-aux([_|Forms], Specs, Funs) ->
-    aux(Forms, Specs, Funs).
+collect_specs_types_opaques_and_functions(Forms) ->
+    aux(Forms,[],[],[],[]).
+aux([], Specs, Types, Opaques, Funs) ->
+    {Specs, Types, Opaques, Funs};
+aux([Fun={function, _, _, _, _} | Forms], Specs, Types, Opaques, Funs) ->
+    aux(Forms, Specs, Types, Opaques, [Fun | Funs]);
+aux([{attribute, _, spec, Spec} | Forms], Specs, Types, Opaques, Funs) ->
+    aux(Forms, [Spec | Specs], Types, Opaques, Funs);
+aux([{attribute, _, type, Type} | Forms], Specs, Types, Opaques, Funs) ->
+    aux(Forms, Specs, [Type | Types], Opaques, Funs);
+aux([{attribute, _, opaque, Opaque} | Forms], Specs, Types, Opaques, Funs) ->
+    aux(Forms, Specs, Types, [Opaque|Opaques], Funs);
+aux([_|Forms], Specs, Types, Opaques, Funs) ->
+    aux(Forms, Specs, Types, Opaques, Funs).
 
 handle_type_error({type_error, tyVar, LINE, Var, VarTy, Ty}) ->
     io:format("The variable ~p on line ~p has type ~s "
 	      "but is expected to have type ~s",
-	      [Var, LINE, pp_type(VarTy), pp_type(Ty)]).
+	      [Var, LINE, pp_type(VarTy), pp_type(Ty)]);
+handle_type_error({type_error, {atom, _, A}, LINE, Ty}) ->
+    io:format("The atom ~p on line ~p does not have type ~p~n",
+	      [A, LINE, Ty]).
+
 
 pp_type({type, _, tuple, Args}) ->
   "{" ++ intercalate(", ", lists:map(fun pp_type/1, Args)) ++ "}";
