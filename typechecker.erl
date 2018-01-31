@@ -497,3 +497,18 @@ intercalate(_Sep, []) ->
     [];
 intercalate(Sep, [Str|Strs]) ->
     Str ++ Sep ++ intercalate(Sep, Strs).
+
+-spec gen_partition(integer(), list(tuple()), fun((tuple()) -> {integer(), term()} | false)) ->
+			   tuple().
+
+gen_partition(N,List, Fun) ->
+    paux(List, Fun, erlang:list_to_tuple(lists:duplicate(N,[]))).
+paux([], _Fun, Tuple) ->
+    Tuple;
+paux([Elem|List], Fun, Tuple) ->
+    case Fun(Elem) of
+	{I, Item} ->
+	    paux(List, Fun, erlang:setelement(I, [Item | erlang:element(I,Tuple)], Tuple));
+	false ->
+	    paux(List, Fun, Tuple)
+    end.
