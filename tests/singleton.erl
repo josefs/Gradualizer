@@ -1,6 +1,6 @@
 -module(singleton).
 
--export([sing/1]).
+-export([sing/1, atom/1]).
 
 -spec sing(0|1) -> 10..12.
 sing(0) ->
