@@ -357,12 +357,12 @@ type_check_file(File) ->
 %		      end
 %	      end, Funs).
     lists:foldr(fun (Function, ok) ->
-                        try type_check_function(FEnv, Funcion) of
+                        try type_check_function(FEnv, Function) of
                             {_Ty, _VarBinds} ->
                                 ok
                         catch
                             Throw ->
-                                handle_type_error(Exception),
+                                handle_type_error(Throw),
                                 nok
                         end;
                     (_Function, Err) ->
