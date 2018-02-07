@@ -485,6 +485,10 @@ handle_type_error({type_error, {atom, _, A}, LINE, Ty}) ->
 	      [A, LINE, Ty]).
 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Pretty printing
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 pp_type({type, _, tuple, Args}) ->
   "{" ++ intercalate(", ", lists:map(fun pp_type/1, Args)) ++ "}";
 pp_type({type, _, Name, Args}) ->
