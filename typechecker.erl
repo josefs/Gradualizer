@@ -514,7 +514,11 @@ pp_type({type, _, tuple, Args}) ->
   "{" ++ intercalate(", ", lists:map(fun pp_type/1, Args)) ++ "}";
 pp_type({type, _, Name, Args}) ->
     atom_to_list(Name) ++ "(" ++
+	intercalate(", ", lists:map(fun pp_type/1, Args)) ++ ")";
+pp_type({user_type, _, Name, Args}) ->
+    atom_to_list(Name) ++ "(" ++
 	intercalate(", ", lists:map(fun pp_type/1, Args)) ++ ")".
+
 
 intercalate(_Sep, [Str]) ->
     Str;
