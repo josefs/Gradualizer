@@ -29,6 +29,14 @@ compatible_lists(TyList1,TyList2) ->
 
 % Subtyping compatibility
 % The first argument is a "compatible subtype" of the second.
+
+subtype(Ty1, Ty2) ->
+    R = begin
+	    catch
+		compat(remove_pos(Ty1),remove_pos(Ty2), sets:new(), maps:new())
+		end,
+    sets:is_set(R).
+
 % This function throws an exception in case of a type error
 
 %compat({Id1, Ty1},{Id2,Ty2}, A, TEnv) ->
@@ -36,53 +44,53 @@ compat(Ty1, Ty2, A, TEnv) ->
     sets:is_element({Ty1, Ty2}, A) orelse
 	compat_ty(Ty1, Ty2, sets:add_element({Ty1, Ty2}, A), TEnv).
 
-compat_ty({type, _, any, []}, _, A, _TEnv) ->
+compat_ty({type, any, []}, _, A, _TEnv) ->
     A;
-compat_ty(_, {type, _, any ,[]}, A, _TEnv) ->
+compat_ty(_, {type, any ,[]}, A, _TEnv) ->
     A;
 % There are several kinds of fun types. I will have to support them all eventually
-compat_ty({type, _, 'fun', {type, _, product, Args1}, Res1},
-	  {type, _, 'fun', {type, _, product, Args2}, Res2},
+compat_ty({type, 'fun', {type, product, Args1}, Res1},
+	  {type, 'fun', {type, product, Args2}, Res2},
 	  A, TEnv) ->
     Ap = compat_tys(Args2, Args1, A, TEnv),
     compat(Res1, Res2, Ap, TEnv);
 % Integer types
-compat_ty({type, _, integer, []}, {type, _, integer, []}, A, _TEnv) ->
+compat_ty({type, integer, []}, {type, integer, []}, A, _TEnv) ->
     A;
-compat_ty({type, _, range, _}, {type, _, integer, []}, A, _TEnv) ->
+compat_ty({type, range, _}, {type, integer, []}, A, _TEnv) ->
     A;
-compat_ty({type, _, range, [{integer, _, I11},{integer, _, I12}]},
-	  {type, _, range, [{integer, _, I21},{integer, _, I22}]},
+compat_ty({type, range, [{integer, I11},{integer, I12}]},
+	  {type, range, [{integer, I21},{integer, I22}]},
 	  A, _TEnv) when
       I11 >= I21 andalso I12 =< I22 ->
     A;
-compat_ty({type, _, integer, I}, {type, _, integer, I}, A, _TEnv) ->
+compat_ty({type, integer, I}, {type, integer, I}, A, _TEnv) ->
     A;
-compat_ty({type, _, integer, _I}, {type, _, integer, []}, A, _TEnv) ->
+compat_ty({type, integer, _I}, {type, integer, []}, A, _TEnv) ->
     A;
-compat_ty({type, _, integer, I}, {type, _, range, [{integer, _,I1},
-						   {integer, _, I2}]}, A, _TEnv)
+compat_ty({type, integer, I}, {type, range, [{integer,I1},
+					     {integer, I2}]}, A, _TEnv)
   when I >= I1 andalso I =< I2 ->
     A;
 
-compat_ty({atom, _, Atom}, {atom, _, Atom}, A, _TEnv) ->
+compat_ty({atom, Atom}, {atom, Atom}, A, _TEnv) ->
     A;
 
-compat_ty({type, _, float, []}, {type, _, float, []}, A, _TEnv) ->
+compat_ty({type, float, []}, {type, float, []}, A, _TEnv) ->
     A;
 
-compat_ty({type, _, bool, []}, {type, _, bool, []}, A, _TEnv) ->
+compat_ty({type, bool, []}, {type, bool, []}, A, _TEnv) ->
     A;
-compat_ty({atom, _, true}, {type, _, bool, []}, A, _TEnv) ->
+compat_ty({atom, true}, {type, bool, []}, A, _TEnv) ->
     A;
-compat_ty({atom, _, false}, {type, _, bool, []}, A, _TEnv) ->
+compat_ty({atom, false}, {type, bool, []}, A, _TEnv) ->
     A;
 
-compat_ty({type, _, tuple, Args1}, {type, _, tuple, Args2}, A, TEnv) ->
+compat_ty({type, tuple, Args1}, {type, tuple, Args2}, A, TEnv) ->
     compat_tys(Args1, Args2, A, TEnv);
-compat_ty({user_type, _, Name, Args}, Ty, A, TEnv) ->
+compat_ty({user_type, Name, Args}, Ty, A, TEnv) ->
     compat(unfold_user_type(Name, Args, TEnv), Ty, A, TEnv);
-compat_ty(Ty, {user_type, _, Name, Args}, A, TEnv) ->
+compat_ty(Ty, {user_type, Name, Args}, A, TEnv) ->
     compat(Ty, unfold_user_type(Name, Args, TEnv), A, TEnv);
 compat_ty(_,_,_,_) ->
     throw(type_error).
@@ -97,6 +105,16 @@ compat_tys([Ty1|Tys1], [Ty2|Tys2], A, TEnv) ->
 unfold_user_type(_Name, _Args, _TEnv) ->
     unimplemented. %maps:find(Name, TEnv)
 
+remove_pos({atom, _Pos, Atom}) ->
+    {atom, Atom};
+remove_pos({type, _Pos, Type, Args}) when is_list(Args) ->
+    {type, Type, lists:map(fun remove_pos/1, Args)};
+remove_pos({user_type, _Pos, Type, Args}) when is_list(Args) ->
+    {user_type, Type, lists:map(fun remove_pos/1, Args)};
+remove_pos({type, _Pos, 'fun', Args}) ->
+    {type, 'fun', remove_pos(Args)};
+remove_pos({Type, _Pos, Foo}) ->
+    {Type, Foo}.
 
 % Arguments: An environment for functions, an environment for variables
 % and the expression to type check.
@@ -149,35 +167,38 @@ type_check_expr(_FEnv, _VEnv, {string, _, _}) ->
 type_check_expr(_FEnv, _VEnv, {nil, _}) ->
     return({type, 0, nil, []});
 type_check_expr(FEnv, VEnv, {'fun', _, {clauses, Clauses}}) ->
-    infer_clauses(FEnv, VEnv, Clauses).
+    infer_clauses(FEnv, VEnv, Clauses);
+type_check_expr(_FEnv, _VEnv, P={atom, _, _Atom}) ->
+    return(P).
+
 
 
 type_check_expr_in(FEnv, VEnv, {type, _, any, []}, Expr) ->
     type_check_expr(FEnv, VEnv, Expr);
 type_check_expr_in(_FEnv, VEnv, Ty, {var, LINE, Var}) ->
     VarTy = maps:get(Var, VEnv),
-    case compatible(VarTy, Ty) of
+    case subtype(VarTy, Ty) of
 	true ->
 	    return(VarTy);
 	false ->
 	    throw({type_error, tyVar, LINE, Var, VarTy, Ty})
     end;
 type_check_expr_in(_FEnv, _VEnv, Ty, {integer, LINE, _Int}) ->
-    case compatible(Ty, {type, 0, integer, []}) of
+    case subtype(Ty, {type, 0, integer, []}) of
 	true ->
 	    return({type, 0, integer, []});
 	false ->
 	    throw({type_error, int, LINE, Ty})
     end;
 type_check_expr_in(_FEnv, _VEnv, Ty, {float, LINE, _Int}) ->
-    case compatible(Ty, {type, 0, float, []}) of
+    case subtype(Ty, {type, 0, float, []}) of
 	true ->
 	    return({type, 0, float, []});
 	false ->
 	    throw({type_error, float, LINE, Ty})
     end;
 type_check_expr_in(_FEnv, _VEnv, Ty, Atom = {atom, LINE, _}) ->
-    case compatible(Ty, Atom) of
+    case subtype(Ty, Atom) of
 	true ->
 	    return(Atom);
 	false ->
@@ -213,7 +234,7 @@ type_check_expr_in(FEnv, VEnv, ResTy, {call, _, Name, Args}) ->
 	    {_, VarBinds} =
 		lists:unzip([ type_check_expr_in(FEnv, VEnv, TyArg, Arg)
 			      || {TyArg, Arg} <- lists:zip(TyArgs, Args) ]),
-	    case compatible(ResTy, FunResTy) of
+	    case subtype(ResTy, FunResTy) of
 		true ->
 		    VarBind = union_var_binds(VarBinds),
 		    {ResTy, VarBind};
