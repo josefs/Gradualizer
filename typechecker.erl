@@ -499,7 +499,7 @@ aux([_|Forms], Specs, Types, Opaques, Funs) ->
 
 handle_type_error({type_error, tyVar, LINE, Var, VarTy, Ty}) ->
     io:format("The variable ~p on line ~p has type ~s "
-	      "but is expected to have type ~s",
+	      "but is expected to have type ~s~n",
 	      [Var, LINE, pp_type(VarTy), pp_type(Ty)]);
 handle_type_error({type_error, {atom, _, A}, LINE, Ty}) ->
     io:format("The atom ~p on line ~p does not have type ~p~n",
