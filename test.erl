@@ -2,37 +2,27 @@
 
 -compile([export_all]).
 
--spec collect_specs([any()]) -> [any()].
-collect_specs([{attribute,_,spec,Spec}|Forms]) ->
-    [Spec|collect_specs(Forms)];
-collect_specs([_|Forms]) ->
-    collect_specs(Forms);
-collect_specs([]) -> [].
+run_tests() ->
+    should_pass(),
+    should_fail().
 
-get_specs(File) ->
-    {ok, Erl} = epp:parse_file(File,[]),
-    collect_specs(Erl).
+should_pass() ->
+    {ok, Files} = file:list_dir("tests/should_pass"),
+    Fs = lists:map(fun (File) -> "tests/should_pass/" ++ File end, Files),
+    lists:foreach(fun typechecker:type_check_file/1, Fs).
 
--type type() :: integer | float | boolean | {singleton, atom()}
-	      | {range, integer(), integer() }
-	      | {tuple, list(type())}
-	      | {list, type()}
-	      | {function, list(type()), type()}
-	      | {union, list(type())}
-	      | {intersection, list(type())}
-	      | untyped
-	      .
+should_fail() ->
+    {ok, Files} = file:list_dir("tests/should_fail"),
+    Fs = lists:map(fun (File) -> "tests/should_fail/" ++ File end, Files),
+    lists:foreach(fun (File) ->
+      case typechecker:type_check_file(File) of
+	nok ->
+	      ok;
+	ok ->
+	      io:format("Typechecking of ~s succeeded but was expected to fail.~n", File),
+	      nok
+        end
+      end,
+      Fs).
 
--type schema() :: { list(variable()) % parameters
-		  , list(variable()) % forall quantified
-		  , type()
-		  , list(clause()) }.
-
--type variable() :: integer(). % This will work for now.
-
--type clause() :: { type () , type() }.
-  % We will interpret clauses as subtyping constraints.
-  % One option would be to interpret clauses on the form X :: type as
-  % type equality, but that wouldn't be very consistent. We can alway
-  % recover equality by adding type :: X as a constraint.
-  % Perhaps we can argue for a new form of syntax.
+				  

@@ -2,6 +2,6 @@
 
 -compile([export_all]).
 
--spec f(int()) -> int().
+-spec f(integer()) -> integer().
 f(N) ->
     N.
