@@ -511,13 +511,13 @@ handle_type_error({type_error, {atom, _, A}, LINE, Ty}) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 pp_type({type, _, tuple, Args}) ->
-  "{" ++ string:join(", ", lists:map(fun pp_type/1, Args)) ++ "}";
+  "{" ++ string:join(lists:map(fun pp_type/1, Args), ", ") ++ "}";
 pp_type({type, _, Name, Args}) ->
     atom_to_list(Name) ++ "(" ++
-	string:join(", ", lists:map(fun pp_type/1, Args)) ++ ")";
+	string:join(lists:map(fun pp_type/1, Args), ", ") ++ ")";
 pp_type({user_type, _, Name, Args}) ->
     atom_to_list(Name) ++ "(" ++
-	string:join(", ", lists:map(fun pp_type/1, Args)) ++ ")".
+	string:join(lists:map(fun pp_type/1, Args), ", ") ++ ")".
 
 
 -spec gen_partition(integer(), list(tuple()), fun((tuple()) -> {integer(), term()} | false)) ->
