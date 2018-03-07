@@ -92,10 +92,16 @@ file or inferred.
       each subtree in a type has a unique identity so that
       we can keep track of cycles. It's not hard but it
       needs to be done.
-      
+
   It make sense to at the same time implement support for
   mangling types and converting them to `any()` if they
   are unsupported.
+
+  I've postponed this and simply compare whole types for equality,
+  rather than comparing unique identifiers. It's less efficient but
+  much easier to implement. If it turns out to be a big bottleneck
+  then we'll have to roll up our sleeves and have a more sophisticated
+  representation.
 
 # Future work
 

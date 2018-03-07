@@ -48,7 +48,7 @@ compat_ty({type, any, []}, _, A, _TEnv) ->
     A;
 compat_ty(_, {type, any ,[]}, A, _TEnv) ->
     A;
-% TODO: There are several kinds of fun types. 
+% TODO: There are several kinds of fun types.
 % Add support for them all eventually
 compat_ty({type, 'fun', {type, product, Args1}, Res1},
 	  {type, 'fun', {type, product, Args2}, Res2},
