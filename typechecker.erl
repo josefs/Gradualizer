@@ -390,12 +390,17 @@ type_check_function(FEnv, {function,_, Name, _NArgs, Clauses}) ->
 	{ok, {type, _, 'fun', [{type, _, product, ArgsTy}, ResTy]}} ->
 	    {_, VarBinds} = check_clauses(FEnv, #{}, ArgsTy, ResTy, Clauses),
 	    {ResTy, VarBinds};
+	{ok, {type, _, any, []}} ->
+	    infer_clauses(FEnv, #{}, Clauses);
 	error ->
+	    % TODO: This should be an error now.
 	    infer_clauses(FEnv, #{}, Clauses)
     end.
 
 merge_types([Ty]) ->
     Ty;
+merge_types([Any={type, _, any, []} | _]) ->
+    Any;
 merge_types(apa) ->
     {apa,bepa}.
 
