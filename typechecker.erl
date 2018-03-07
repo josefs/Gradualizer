@@ -148,7 +148,7 @@ type_check_expr(FEnv, VEnv, {tuple, _, TS}) ->
     { {type, 0, tuple, Tys}, union_var_binds(VarBinds) };
 type_check_expr(FEnv, VEnv, {cons, _, Head, Tail}) ->
     {Ty1, VEnv2} = type_check_expr(FEnv, VEnv, Head),
-    {Ty2, VEnv3} = type_check_expr(FEnv, VEnv2, Tail),
+    {Ty2, VEnv3} = type_check_expr(FEnv, VEnv, Tail),
     % Should we check the types here?
     case {Ty1, Ty2} of
 	{{type, _, any, []}, _} ->
@@ -158,7 +158,7 @@ type_check_expr(FEnv, VEnv, {cons, _, Head, Tail}) ->
 	{Ty1, TyList = {type, _, list, [Ty]}} ->
 	    case subtype(Ty1, Ty) of
 		true ->
-		    {TyList, VEnv3};
+		    {TyList, union_var_binds([VEnv2, VEnv3])};
 		false ->
 		    throw(type_error)
 	    end;
