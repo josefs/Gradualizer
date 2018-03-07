@@ -424,7 +424,9 @@ add_any_types_pats([], VEnv) ->
 add_any_types_pats([Pat|Pats], VEnv) ->
     add_any_types_pats(Pats, add_any_types_pat(Pat, VEnv)).
 
-add_any_types_pat(A, VEnv) when is_atom(A) ->
+add_any_types_pat(A, VEnv) when is_atom(A) -> % Is this case needed?
+    VEnv;
+add_any_types_pat({atom, _, _}, VEnv) ->
     VEnv;
 add_any_types_pat({integer, _, _}, VEnv) ->
     VEnv;
