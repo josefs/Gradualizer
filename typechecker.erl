@@ -190,7 +190,9 @@ type_check_expr(_FEnv, _VEnv, {nil, _}) ->
 type_check_expr(FEnv, VEnv, {'fun', _, {clauses, Clauses}}) ->
     infer_clauses(FEnv, VEnv, Clauses);
 type_check_expr(_FEnv, _VEnv, P={atom, _, _Atom}) ->
-    return(P).
+    return(P);
+type_check_expr(FEnv, VEnv, {'receive', _, Clauses}) ->
+    infer_clauses(FEnv, VEnv, Clauses).
 
 
 
