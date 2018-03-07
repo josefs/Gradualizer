@@ -48,7 +48,8 @@ compat_ty({type, any, []}, _, A, _TEnv) ->
     A;
 compat_ty(_, {type, any ,[]}, A, _TEnv) ->
     A;
-% There are several kinds of fun types. I will have to support them all eventually
+% TODO: There are several kinds of fun types. 
+% Add support for them all eventually
 compat_ty({type, 'fun', {type, product, Args1}, Res1},
 	  {type, 'fun', {type, product, Args2}, Res2},
 	  A, TEnv) ->
@@ -334,7 +335,7 @@ type_check_fun(FEnv, _VEnv, {atom, _, Name}) ->
     maps:get(Name, FEnv);
 type_check_fun(FEnv, _VEnv, {remote, _, {atom,_,Module}, {atom,_,Fun}}) ->
     maps:get({Module,Fun}, FEnv, {type, 0, any, []});
-    % Once we have interfaces, we should not have the default value above.
+    % TODO: Once we have interfaces, we should not have the default value above.
 type_check_fun(FEnv, VEnv, Expr) ->
     type_check_expr(FEnv, VEnv, Expr).
 
@@ -479,15 +480,6 @@ type_check_file(File) ->
     {Specs, _Types, _Opaques, Funs} =
 	collect_specs_types_opaques_and_functions(Forms),
     FEnv = create_fenv(Specs),
-%    lists:map(fun (Function) ->
-%		      try  type_check_function(FEnv, Function) of
-%			   {_Ty, _VarBinds} ->
-%			      ok
-%		      catch
-%			  Throw ->
-%			      handle_type_error(Throw)
-%		      end
-%	      end, Funs).
     lists:foldr(fun (Function, ok) ->
                         try type_check_function(FEnv, Function) of
                             {_Ty, _VarBinds} ->
