@@ -484,7 +484,8 @@ type_check_file(File) ->
     {ok, Forms} = epp:parse_file(File,[]),
     {Specs, _Types, _Opaques, Funs} =
 	collect_specs_types_opaques_and_functions(Forms),
-    FEnv = create_fenv(Specs),
+    FEnv = create_fenv(Specs, Funs),
+    io:format("Initial environment : ~p~n", [FEnv]),
     lists:foldr(fun (Function, ok) ->
                         try type_check_function(FEnv, Function) of
                             {_Ty, _VarBinds} ->
@@ -498,12 +499,28 @@ type_check_file(File) ->
                         Err
                 end, ok, Funs).
 
-create_fenv([{{Name,_},[Type]}|Specs]) ->
-    (create_fenv(Specs))#{ Name => Type };
-create_fenv([{{Name,_},_}|_]) ->
-    throw({multiple_types_not_supported,Name});
-create_fenv([]) ->
-    #{}.
+create_fenv(Specs, Funs) ->
+% We're taking advantage of the fact that if a key occurrs more than once
+% in the list then it right-most occurrence will take precedence. In this
+% case it will mean that if there is a spec, then that will take precedence
+% over the default type any().
+    maps:from_list([ {Name, {type, 0, any, []}}
+		     || {function,_, Name, _NArgs, _Clauses} <- Funs
+		   ] ++
+		   [ {Name, Type} || {{Name, _}, [Type]} <- Specs
+		   ] ++
+		       % Built in functions
+		   [ {spawn, {type, 0, 'fun',[{type, 0, product, [{type, 0, any, []}]}
+					     ,{type, 0, any, []}] }}
+		   ]
+		  ).
+
+%% create_fenv([{{Name,_},[Type]}|Specs]) ->
+%%     (create_fenv(Specs))#{ Name => Type };
+%% create_fenv([{{Name,_},_}|_]) ->
+%%     throw({multiple_types_not_supported,Name});
+%% create_fenv([]) ->
+%%     #{}.
 
 collect_specs_types_opaques_and_functions(Forms) ->
     aux(Forms,[],[],[],[]).
