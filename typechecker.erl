@@ -333,7 +333,8 @@ type_check_list_op(FEnv, VEnv, ResTy, _Op, Arg1, Arg2) ->
 type_check_fun(FEnv, _VEnv, {atom, _, Name}) ->
     maps:get(Name, FEnv);
 type_check_fun(FEnv, _VEnv, {remote, _, {atom,_,Module}, {atom,_,Fun}}) ->
-    maps:get({Module,Fun}, FEnv);
+    maps:get({Module,Fun}, FEnv, {type, 0, any, []});
+    % Once we have interfaces, we should not have the default value above.
 type_check_fun(FEnv, VEnv, Expr) ->
     type_check_expr(FEnv, VEnv, Expr).
 
