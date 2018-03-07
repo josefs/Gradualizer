@@ -190,11 +190,16 @@ type_check_expr(_FEnv, _VEnv, {nil, _}) ->
     return({type, 0, nil, []});
 type_check_expr(FEnv, VEnv, {'fun', _, {clauses, Clauses}}) ->
     infer_clauses(FEnv, VEnv, Clauses);
+type_check_expr(FEnv, _VEnv, {'fun', _, {function, Name, _Arity}}) ->
+    return(maps:get(Name, FEnv));
 type_check_expr(_FEnv, _VEnv, P={atom, _, _Atom}) ->
     return(P);
 type_check_expr(FEnv, VEnv, {'receive', _, Clauses}) ->
-    infer_clauses(FEnv, VEnv, Clauses).
-
+    infer_clauses(FEnv, VEnv, Clauses);
+type_check_expr(FEnv, VEnv, {op, _, '!', Proc, Val}) ->
+    {_, VB1} = type_check_expr(FEnv, VEnv, Proc),
+    {_, VB2} = type_check_expr(FEnv, VEnv, Val),
+    {{type, 0, any, []}, union_var_binds([VB1, VB2])}.
 
 
 type_check_expr_in(FEnv, VEnv, {type, _, any, []}, Expr) ->
