@@ -145,6 +145,27 @@ type_check_expr(FEnv, VEnv, {tuple, _, TS}) ->
     { Tys, VarBinds } = lists:unzip([ type_check_expr(FEnv, VEnv, Expr)
 				    || Expr <- TS ]),
     { {type, 0, tuple, Tys}, union_var_binds(VarBinds) };
+type_check_expr(FEnv, VEnv, {cons, _, Head, Tail}) ->
+    {Ty1, VEnv2} = type_check_expr(FEnv, VEnv, Head),
+    {Ty2, VEnv3} = type_check_expr(FEnv, VEnv2, Tail),
+    % Should we check the types here?
+    case {Ty1, Ty2} of
+	{{type, _, any, []}, _} ->
+	    {{type, 0, any, {}}, VEnv3};
+	{_, {type, _, any, []}} ->
+	    {{type, 0, any, {}}, VEnv3};
+	{Ty1, TyList = {type, _, list, [Ty]}} ->
+	    case subtype(Ty1, Ty) of
+		true ->
+		    {TyList, VEnv3};
+		false ->
+		    throw(type_error)
+	    end;
+	{_, _} ->
+	    throw(type_error)
+		% We throw a type error here because Tail is not of type list
+		% (nor is it of type any()).
+    end;
 type_check_expr(FEnv, VEnv, {call, _, Name, Args}) ->
     { ArgTys, VarBinds} =
 	lists:unzip([ type_check_expr(FEnv, VEnv, Arg) || Arg <- Args]),
