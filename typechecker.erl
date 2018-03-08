@@ -204,7 +204,7 @@ type_check_expr(FEnv, VEnv, {op, _, BoolOp, Arg1, Arg2}) when
       (BoolOp == 'andalso') or (BoolOp == 'and') or
       (BoolOp == 'orelse')  or (BoolOp == 'or') ->
     UnionVarBindsSecondArg =
-	fun (VEnv, VB1) -> 
+	fun (VEnv, VB1) ->
 		if (BoolOp == 'and') or (BoolOp == 'or') ->
 			VEnv;
 		   true ->
@@ -233,7 +233,7 @@ type_check_expr(FEnv, VEnv, {op, _, BoolOp, Arg1, Arg2}) when
 	{_, _} ->
 	    throw(type_error)
     end.
-						  
+
 
 
 
@@ -527,17 +527,17 @@ type_check_file(File) ->
     FEnv = create_fenv(Specs, Funs),
     io:format("Initial environment : ~p~n", [FEnv]),
     lists:foldr(fun (Function, ok) ->
-                        try type_check_function(FEnv, Function) of
-                            {_Ty, _VarBinds} ->
-                                ok
-                        catch
-                            Throw ->
-                                handle_type_error(Throw),
-                                nok
-                        end;
-                    (_Function, Err) ->
-                        Err
-                end, ok, Funs).
+			try type_check_function(FEnv, Function) of
+			    {_Ty, _VarBinds} ->
+				ok
+			catch
+			    Throw ->
+				handle_type_error(Throw),
+				nok
+			end;
+		    (_Function, Err) ->
+			Err
+		end, ok, Funs).
 
 create_fenv(Specs, Funs) ->
 % We're taking advantage of the fact that if a key occurrs more than once
