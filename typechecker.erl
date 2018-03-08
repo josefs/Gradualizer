@@ -200,10 +200,20 @@ type_check_expr(FEnv, VEnv, {op, _, '!', Proc, Val}) ->
     {_, VB1} = type_check_expr(FEnv, VEnv, Proc),
     {_, VB2} = type_check_expr(FEnv, VEnv, Val),
     {{type, 0, any, []}, union_var_binds([VB1, VB2])};
-type_check_expr(FEnv, VEnv, {op, _, 'andalso', Arg1, Arg2}) ->
+type_check_expr(FEnv, VEnv, {op, _, BoolOp, Arg1, Arg2}) when
+      (BoolOp == 'andalso') or (BoolOp == 'and') or
+      (BoolOp == 'orelse')  or (BoolOp == 'or') ->
+    UnionVarBindsSecondArg =
+	fun (VEnv, VB1) -> 
+		if (BoolOp == 'and') or (BoolOp == 'or') ->
+			VEnv;
+		   true ->
+			union_var_binds([VEnv, VB1])
+		end
+	end,
     case type_check_expr(FEnv, VEnv, Arg1) of
 	{{type, _, any, []}, VB1} ->
-	    case type_check_expr(FEnv, union_var_binds([VEnv,VB1]), Arg2) of
+	    case type_check_expr(FEnv, UnionVarBindsSecondArg(VEnv,VB1), Arg2) of
 		{{type, _, any, []}, VB2} ->
 		    {{type, 0, any, []}, union_var_binds([VB1, VB2])};
 		{Bool = {type, _, bool, []}, VB2} ->
@@ -212,7 +222,7 @@ type_check_expr(FEnv, VEnv, {op, _, 'andalso', Arg1, Arg2}) ->
 		    throw(type_error)
 	    end;
 	{Bool = {type, _, bool, []}, VB1} ->
-	    case type_check_expr(FEnv, union_var_binds([VEnv,VB1]), Arg2) of
+	    case type_check_expr(FEnv, UnionVarBindsSecondArg(VEnv,VB1), Arg2) of
 		{{type, _, any, []}, VB2} ->
 		    {Bool, union_var_binds([VB1, VB2])};
 		{{type, _, bool, []}, VB2} ->
