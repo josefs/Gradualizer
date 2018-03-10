@@ -126,23 +126,9 @@ remove_pos({Type, _Pos, Foo}) ->
 			     { any(), #{ any() => any()} }.
 type_check_expr(_FEnv, VEnv, {var, _, Var}) ->
     return(maps:get(Var, VEnv));
-type_check_expr(FEnv, VEnv, {match, _, {var, _, Var}, Expr}) ->
+type_check_expr(FEnv, VEnv, {match, _, Pat, Expr}) ->
     {Ty, VarBinds} = type_check_expr(FEnv, VEnv, Expr),
-    case maps:find(Var, VEnv) of
-	% It would be possible to push the type of the variable
-	% in to the expression here. But it would be complicated to
-	% scale up in case of more complicated patterns.
-	{ok, _} ->
-	  {Ty, VarBinds};
-	error   ->
-	  case maps:find(Var, VarBinds) of
-	    {ok, _} ->
-	      % Any need to refine the type here?
-	      {Ty, VarBinds};
-	    error ->
-	      {Ty, VarBinds#{Var => Ty}}
-	  end
-    end;
+    {Ty, add_type_pat(Pat, Ty, VarBinds)};
 type_check_expr(FEnv, VEnv, {tuple, _, TS}) ->
     { Tys, VarBinds } = lists:unzip([ type_check_expr(FEnv, VEnv, Expr)
 				    || Expr <- TS ]),
@@ -242,8 +228,11 @@ type_check_expr(FEnv, VEnv, {op, _, BoolOp, Arg1, Arg2}) when
 	{_, _} ->
 	    throw(type_error)
     end;
-type_check_expr(FEnv, VEnv, {op, _, EqOp, Arg1, Arg2}) when
-      (EqOp == '=:=') or (EqOp == '==') ->
+type_check_expr(FEnv, VEnv, {op, _, RelOp, Arg1, Arg2}) when
+      (RelOp == '=:=') or (RelOp == '==') or
+      % It's debatable whether we should allow comparison between any types
+      % but right now it's allowed
+      (RelOp == '>=')  or (RelOp == '=<') ->
     case {type_check_expr(FEnv, VEnv, Arg1)
 	 ,type_check_expr(FEnv, VEnv, Arg2)} of
 	{{Ty1, VB1}, {Ty2, VB2}} ->
@@ -481,6 +470,17 @@ merge_types([Ty={atom, _, A}, {atom, _, A} | Rest]) ->
     merge_types([Ty | Rest]);
 merge_types([{atom, _, _}, {type, _, _, _} | _]) ->
     {type, 0, any, []};
+merge_types([{type, P, tuple, Args1}, {type, _, tuple, Args2} | Rest]) ->
+    case length(Args1) == length(Args2) of
+	false ->
+	    {type, 0, any, []};
+	true  ->
+	    merge_types([{type, P, tuple,
+			  lists:zipwith(fun (A1, A2) ->
+						merge_types([A1,A2]) end,
+					Args1, Args2)}
+			 | Rest])
+    end;
 merge_types(apa) ->
     {apa,bepa}.
 
@@ -495,11 +495,17 @@ add_type_pat({var, _, A}, Ty, VEnv) ->
     VEnv#{ A => Ty };
 add_type_pat({integer, _, _}, _Ty, VEnv) ->
     VEnv;
-add_type_pat({tuple, _, Pats}, {type, _, tuple, Tys}, VEnv) ->
+add_type_pat({tuple, _, Pats}, {type, _, tuple, Tys}, VEnv) when
+      length(Pats) == length(Tys) ->
     add_type_pat_list(Pats, Tys, VEnv);
+add_type_pat({tuple, _, Pats}, {type, _, any, []}, VEnv) ->
+    add_any_types_pats(Pats, VEnv);
 add_type_pat({atom, _, Bool}, {type, _, bool, []}, VEnv)
   when Bool == true orelse Bool == false ->
+    VEnv;
+add_type_pat({atom, _, _}, {type, _, any, []}, VEnv) ->
     VEnv.
+
 
 
 
@@ -599,6 +605,10 @@ create_fenv(Specs, Funs) ->
 					     ,{type, 0, any, []}] }}
 		   , {length, {type, 0, 'fun', [{type, 0, product, [{type, 0, any, []}]}
 						,{type, 0, integer, []}] }}
+		   , {throw, {type, 0, 'fun', [{type, 0, product, [{type, 0, any, []}]}
+					      ,{type, 0, any, []}] }}
+		   , {is_list, {type, 0, 'fun', [{type, 0, product, [{type, 0, any, []}]}
+						,{type, 0, any, []}] }}
 		   ]
 		  ).
 
