@@ -35,7 +35,7 @@ subtype(Ty1, Ty2) ->
     R = begin
 	    catch
 		compat(remove_pos(Ty1),remove_pos(Ty2), sets:new(), maps:new())
-		end,
+	end,
     sets:is_set(R).
 
 % This function throws an exception in case of a type error
@@ -150,7 +150,7 @@ type_check_expr(FEnv, VEnv, {tuple, _, TS}) ->
 type_check_expr(FEnv, VEnv, {cons, _, Head, Tail}) ->
     {Ty1, VEnv2} = type_check_expr(FEnv, VEnv, Head),
     {Ty2, VEnv3} = type_check_expr(FEnv, VEnv, Tail),
-    % Should we check the types here?
+    % TODO: Should we check the types here?
     case {Ty1, Ty2} of
 	{{type, _, any, []}, _} ->
 	    {{type, 0, any, {}}, VEnv3};
@@ -189,14 +189,19 @@ type_check_expr(_FEnv, _VEnv, {string, _, _}) ->
     return({usertype, 0, string, []});
 type_check_expr(_FEnv, _VEnv, {nil, _}) ->
     return({type, 0, nil, []});
+type_check_expr(_FEnv, _VEnv, P={atom, _, _Atom}) ->
+    return(P);
+
+% Functions
 type_check_expr(FEnv, VEnv, {'fun', _, {clauses, Clauses}}) ->
     infer_clauses(FEnv, VEnv, Clauses);
 type_check_expr(FEnv, _VEnv, {'fun', _, {function, Name, _Arity}}) ->
     return(maps:get(Name, FEnv));
-type_check_expr(_FEnv, _VEnv, P={atom, _, _Atom}) ->
-    return(P);
+
 type_check_expr(FEnv, VEnv, {'receive', _, Clauses}) ->
     infer_clauses(FEnv, VEnv, Clauses);
+
+% Operators
 type_check_expr(FEnv, VEnv, {op, _, '!', Proc, Val}) ->
     % Message passing is always untyped, which is why we discard the types
     {_, VB1} = type_check_expr(FEnv, VEnv, Proc),
@@ -251,7 +256,13 @@ type_check_expr(FEnv, VEnv, {op, _, EqOp, Arg1, Arg2}) when
 		false ->
 		    throw(type_error)
 	    end
-    end.
+    end;
+
+% Exception constructs
+% There is no typechecking of exceptions
+type_check_expr(FEnv, VEnv, {'catch', _, Arg}) ->
+    type_check_expr(FEnv, VEnv, Arg).
+
 
 
 
@@ -417,7 +428,7 @@ infer_clauses(FEnv, VEnv, Clauses) ->
 	lists:unzip(lists:map(fun (Clause) ->
 				  infer_clause(FEnv, VEnv, Clause)
 			  end, Clauses)),
-    {merge_types(Tys), VarBinds}.
+    {merge_types(Tys), union_var_binds(VarBinds)}.
 
 infer_clause(FEnv, VEnv, {clause, _, Args, [], Block}) -> % We don't accept guards right now.
     VEnvNew = add_any_types_pats(Args, VEnv),
@@ -456,6 +467,10 @@ merge_types([Ty]) ->
     Ty;
 merge_types([Any={type, _, any, []} | _]) ->
     Any;
+merge_types([Ty={atom, _, A}, {atom, _, A} | Rest]) ->
+    merge_types([Ty | Rest]);
+merge_types([{atom, _, _}, {type, _, _, _} | _]) ->
+    {type, 0, any, []};
 merge_types(apa) ->
     {apa,bepa}.
 
@@ -572,6 +587,8 @@ create_fenv(Specs, Funs) ->
 		       % Built in functions
 		   [ {spawn, {type, 0, 'fun',[{type, 0, product, [{type, 0, any, []}]}
 					     ,{type, 0, any, []}] }}
+		   , {length, {type, 0, 'fun', [{type, 0, product, [{type, 0, any, []}]}
+						,{type, 0, integer, []}] }}
 		   ]
 		  ).
 
