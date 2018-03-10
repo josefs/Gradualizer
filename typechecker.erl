@@ -430,8 +430,16 @@ infer_clauses(FEnv, VEnv, Clauses) ->
 			  end, Clauses)),
     {merge_types(Tys), union_var_binds(VarBinds)}.
 
-infer_clause(FEnv, VEnv, {clause, _, Args, [], Block}) -> % We don't accept guards right now.
+infer_clause(FEnv, VEnv, {clause, _, Args, Guards, Block}) ->
     VEnvNew = add_any_types_pats(Args, VEnv),
+    % TODO: Can there be variable bindings in a guard? Right now we just
+    % discard them.
+    % TODO: Should we check that guards return boolean()?
+    lists:map(fun (GuardConj) ->
+		      lists:map(fun (Guard) ->
+					type_check_expr(FEnv, VEnvNew, Guard)
+				end, GuardConj)
+	      end, Guards),
     type_check_block(FEnv, VEnvNew, Block).
 
 check_clauses(FEnv, VEnv, ArgsTy, ResTy, Clauses) ->
