@@ -30,6 +30,7 @@ compatible_lists(TyList1,TyList2) ->
 % Subtyping compatibility
 % The first argument is a "compatible subtype" of the second.
 
+-spec subtype(any(), any()) -> boolean().
 subtype(Ty1, Ty2) ->
     R = begin
 	    catch
@@ -197,18 +198,21 @@ type_check_expr(_FEnv, _VEnv, P={atom, _, _Atom}) ->
 type_check_expr(FEnv, VEnv, {'receive', _, Clauses}) ->
     infer_clauses(FEnv, VEnv, Clauses);
 type_check_expr(FEnv, VEnv, {op, _, '!', Proc, Val}) ->
+    % Message passing is always untyped, which is why we discard the types
     {_, VB1} = type_check_expr(FEnv, VEnv, Proc),
     {_, VB2} = type_check_expr(FEnv, VEnv, Val),
     {{type, 0, any, []}, union_var_binds([VB1, VB2])};
 type_check_expr(FEnv, VEnv, {op, _, BoolOp, Arg1, Arg2}) when
       (BoolOp == 'andalso') or (BoolOp == 'and') or
       (BoolOp == 'orelse')  or (BoolOp == 'or') ->
+    % Bindings from the first argument are only passed along for
+    % 'andalso' and 'orelse', not 'and' or 'or'.
     UnionVarBindsSecondArg =
-	fun (VEnv, VB1) ->
+	fun (VB1, VB2) ->
 		if (BoolOp == 'and') or (BoolOp == 'or') ->
-			VEnv;
+			VB1;
 		   true ->
-			union_var_binds([VEnv, VB1])
+			union_var_binds([VB1, VB2])
 		end
 	end,
     case type_check_expr(FEnv, VEnv, Arg1) of
@@ -232,7 +236,23 @@ type_check_expr(FEnv, VEnv, {op, _, BoolOp, Arg1, Arg2}) when
 	    end;
 	{_, _} ->
 	    throw(type_error)
+    end;
+type_check_expr(FEnv, VEnv, {op, _, EqOp, Arg1, Arg2}) when
+      (EqOp == '=:=') or (EqOp == '==') ->
+    case {type_check_expr(FEnv, VEnv, Arg1)
+	 ,type_check_expr(FEnv, VEnv, Arg2)} of
+	{{Ty1, VB1}, {Ty2, VB2}} ->
+	    case subtype(Ty1, Ty2) andalso subtype(Ty2, Ty1) of
+		true ->
+		    % TODO: Should we return boolean() here in some cases?
+		    % If both Ty1 and Ty2 are not any() then one could
+		    % plausably return boolean().
+		    {{type, 0, any, []}, union_var_binds([VB1, VB2])};
+		false ->
+		    throw(type_error)
+	    end
     end.
+
 
 
 
