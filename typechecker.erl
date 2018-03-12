@@ -169,6 +169,8 @@ type_check_expr(FEnv, VEnv, {call, _, Name, Args}) ->
 		    throw(type_error)
 	    end
     end;
+type_check_expr(FEnv, VEnv, {lc, _, Expr, Qualifiers}) ->
+    type_check_lc(FEnv, VEnv, Expr, Qualifiers);
 type_check_expr(FEnv, VEnv, {block, _, Block}) ->
     type_check_block(FEnv, VEnv, Block);
 type_check_expr(_FEnv, _VEnv, {string, _, _}) ->
@@ -253,6 +255,15 @@ type_check_expr(FEnv, VEnv, {'catch', _, Arg}) ->
     type_check_expr(FEnv, VEnv, Arg).
 
 
+
+type_check_lc(FEnv, VEnv, Expr, []) ->
+    {Ty, VB} = type_check_expr(FEnv, VEnv, Expr),
+    % We're returning any() here because we're in a context that doesn't
+    % care what type we return. It's different for type_check_lc_in.
+    {{type, 0, any, []}, #{}};
+type_check_lc(FEnv, VEnv, Expr, [{generate, _, Pat, Gen} | Quals]) ->
+    {Ty, _} = type_check_expr(FEnv, VEnv, Gen),
+    type_check_lc(FEnv, add_var_binds(Pat, VEnv), Expr, Quals).
 
 
 
