@@ -66,6 +66,12 @@ compat_ty({type, float, []}, {type, float, []}, A, _TEnv) ->
 
 compat_ty({type, bool, []}, {type, bool, []}, A, _TEnv) ->
     A;
+compat_ty({type, boolean, []}, {type, bool, []}, A, _TEnv) ->
+    A;
+compat_ty({type, bool, []}, {type, boolean, []}, A, _TEnv) ->
+    A;
+compat_ty({type, boolean, []}, {type, boolean, []}, A, _TEnv) ->
+    A;
 compat_ty({atom, true}, {type, bool, []}, A, _TEnv) ->
     A;
 compat_ty({atom, false}, {type, bool, []}, A, _TEnv) ->
@@ -77,8 +83,8 @@ compat_ty({user_type, Name, Args}, Ty, A, TEnv) ->
     compat(unfold_user_type(Name, Args, TEnv), Ty, A, TEnv);
 compat_ty(Ty, {user_type, Name, Args}, A, TEnv) ->
     compat(Ty, unfold_user_type(Name, Args, TEnv), A, TEnv);
-compat_ty(_,_,_,_) ->
-    throw(type_error).
+compat_ty(Ty1, Ty2, _, _) ->
+    throw({type_error, compat, 0, Ty1, Ty2}).
 
 
 compat_tys([], [], A, _TEnv) ->
@@ -130,14 +136,14 @@ type_check_expr(FEnv, VEnv, {cons, _, Head, Tail}) ->
 		true ->
 		    {TyList, union_var_binds([VEnv2, VEnv3])};
 		false ->
-		    throw(type_error)
+		    throw({type_error, list, 0, Ty1, Ty})
 	    end;
 	{_, _} ->
-	    throw(type_error)
+	    throw({type_error, list, 0, Ty2})
 		% We throw a type error here because Tail is not of type list
 		% (nor is it of type any()).
     end;
-type_check_expr(FEnv, VEnv, {call, _, Name, Args}) ->
+type_check_expr(FEnv, VEnv, {call, P, Name, Args}) ->
     { ArgTys, VarBinds} =
 	lists:unzip([ type_check_expr(FEnv, VEnv, Arg) || Arg <- Args]),
     VarBind = union_var_binds(VarBinds),
@@ -149,7 +155,7 @@ type_check_expr(FEnv, VEnv, {call, _, Name, Args}) ->
 		true ->
 		    {ResTy, VarBind};
 		false ->
-		    throw(type_error)
+		    throw({type_error, call, P, Name, TyArgs, ArgTys})
 	    end
     end;
 type_check_expr(FEnv, VEnv, {lc, _, Expr, Qualifiers}) ->
@@ -178,7 +184,7 @@ type_check_expr(FEnv, VEnv, {op, _, '!', Proc, Val}) ->
     {_, VB1} = type_check_expr(FEnv, VEnv, Proc),
     {_, VB2} = type_check_expr(FEnv, VEnv, Val),
     {{type, 0, any, []}, union_var_binds([VB1, VB2])};
-type_check_expr(FEnv, VEnv, {op, _, BoolOp, Arg1, Arg2}) when
+type_check_expr(FEnv, VEnv, {op, P, BoolOp, Arg1, Arg2}) when
       (BoolOp == 'andalso') or (BoolOp == 'and') or
       (BoolOp == 'orelse')  or (BoolOp == 'or') ->
     % Bindings from the first argument are only passed along for
@@ -192,26 +198,22 @@ type_check_expr(FEnv, VEnv, {op, _, BoolOp, Arg1, Arg2}) when
 		end
 	end,
     case type_check_expr(FEnv, VEnv, Arg1) of
-	{{type, _, any, []}, VB1} ->
-	    case type_check_expr(FEnv, UnionVarBindsSecondArg(VEnv,VB1), Arg2) of
-		{{type, _, any, []}, VB2} ->
-		    {{type, 0, any, []}, union_var_binds([VB1, VB2])};
-		{Bool = {type, _, bool, []}, VB2} ->
-		    {Bool, union_var_binds([VB1, VB2])};
-		{_, _} ->
-		    throw(type_error)
-	    end;
-	{Bool = {type, _, bool, []}, VB1} ->
-	    case type_check_expr(FEnv, UnionVarBindsSecondArg(VEnv,VB1), Arg2) of
-		{{type, _, any, []}, VB2} ->
-		    {Bool, union_var_binds([VB1, VB2])};
-		{{type, _, bool, []}, VB2} ->
-		    {Bool, union_var_binds([VB1, VB2])};
-		{_, _} ->
-		    throw(type_error)
-	    end;
-	{_, _} ->
-	    throw(type_error)
+	{Ty1, VB1} ->
+	    case subtype(Ty1, {type, 0, bool, []}) of
+		false ->
+		    throw({type_error, boolop, BoolOp, P, Ty1});
+		true ->
+		    case type_check_expr(FEnv, UnionVarBindsSecondArg(VEnv,VB1), Arg2) of
+			{Ty2, VB2} ->
+			    case subtype(Ty2, {type, 0, bool, []}) of
+				false ->
+				    throw({type_error, boolop, BoolOp, P, Ty1});
+				true ->
+				    {merge_types([Ty1, Ty2])
+				    ,union_var_binds([VB1, VB2])}
+			    end
+		    end
+	    end
     end;
 type_check_expr(FEnv, VEnv, {op, _, RelOp, Arg1, Arg2}) when
       (RelOp == '=:=') or (RelOp == '==') or
@@ -577,6 +579,7 @@ type_check_file(File) ->
 				ok
 			catch
 			    Throw ->
+				erlang:display(erlang:get_stacktrace()),
 				handle_type_error(Throw),
 				nok
 			end;
@@ -592,7 +595,7 @@ create_fenv(Specs, Funs) ->
     maps:from_list([ {Name, {type, 0, any, []}}
 		     || {function,_, Name, _NArgs, _Clauses} <- Funs
 		   ] ++
-		   [ {Name, Type} || {{Name, _}, [Type]} <- Specs
+		   [ {Name, Type} || {{Name, _NArgs}, [Type]} <- Specs
 		   ] ++
 		       % Built in functions
 		   [ {spawn, {type, 0, 'fun',[{type, 0, product, [{type, 0, any, []}]}
@@ -634,7 +637,23 @@ handle_type_error({type_error, tyVar, LINE, Var, VarTy, Ty}) ->
 	      [Var, LINE, pp_type(VarTy), pp_type(Ty)]);
 handle_type_error({type_error, {atom, _, A}, LINE, Ty}) ->
     io:format("The atom ~p on line ~p does not have type ~p~n",
-	      [A, LINE, Ty]).
+	      [A, LINE, Ty]);
+handle_type_error({type_error, compat, _LINE, Ty1, Ty2}) ->
+    io:format("The type ~p is not compatible with type ~p~n", [Ty1, Ty2]);
+handle_type_error({type_error, list, _, Ty1, Ty}) ->
+    io:format("The type ~p cannot be an element of a list of type ~p~n",
+	      [Ty1, Ty]);
+handle_type_error({type_error, list, _, Ty}) ->
+    io:format("The type ~p is not a list type~n", [Ty]);
+handle_type_error({type_error, call, P, Name, TyArgs, ArgTys}) ->
+    io:format("The function ~p expects arguments of type ~p but is given "
+              "arguments of type ~p", [Name, TyArgs, ArgTys]);
+handle_type_error({type_error, boolop, BoolOp, P, Ty}) ->
+    io:format("The operator ~p on line ~p is given a non-boolean argument "
+	      " of type ~p~n", [BoolOp, P, Ty]);
+handle_type_error(type_error) ->
+    io:format("TYPE ERROR~n").
+
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
