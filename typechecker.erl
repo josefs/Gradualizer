@@ -118,6 +118,8 @@ type_check_expr(_FEnv, VEnv, {var, _, Var}) ->
 type_check_expr(FEnv, VEnv, {match, _, Pat, Expr}) ->
     {Ty, VarBinds} = type_check_expr(FEnv, VEnv, Expr),
     {Ty, add_type_pat(Pat, Ty, VarBinds)};
+type_check_expr(_FEnv, _VEnv, {integer, _, _N}) ->
+    return({type, 0, any, []});
 type_check_expr(FEnv, VEnv, {tuple, _, TS}) ->
     { Tys, VarBinds } = lists:unzip([ type_check_expr(FEnv, VEnv, Expr)
 				    || Expr <- TS ]),
@@ -174,8 +176,8 @@ type_check_expr(_FEnv, _VEnv, P={atom, _, _Atom}) ->
 % Functions
 type_check_expr(FEnv, VEnv, {'fun', _, {clauses, Clauses}}) ->
     infer_clauses(FEnv, VEnv, Clauses);
-type_check_expr(FEnv, _VEnv, {'fun', _, {function, Name, _Arity}}) ->
-    return(maps:get(Name, FEnv));
+type_check_expr(FEnv, _VEnv, {'fun', _, {function, Name, Arity}}) ->
+    return(maps:get({Name, Arity}, FEnv));
 
 type_check_expr(FEnv, VEnv, {'receive', _, Clauses}) ->
     infer_clauses(FEnv, VEnv, Clauses);
