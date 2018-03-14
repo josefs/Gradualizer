@@ -240,12 +240,12 @@ type_check_expr(FEnv, VEnv, {'catch', _, Arg}) ->
 
 
 type_check_lc(FEnv, VEnv, Expr, []) ->
-    {Ty, VB} = type_check_expr(FEnv, VEnv, Expr),
+    {_Ty, _VB} = type_check_expr(FEnv, VEnv, Expr),
     % We're returning any() here because we're in a context that doesn't
     % care what type we return. It's different for type_check_lc_in.
     {{type, 0, any, []}, #{}};
 type_check_lc(FEnv, VEnv, Expr, [{generate, _, Pat, Gen} | Quals]) ->
-    {Ty, _} = type_check_expr(FEnv, VEnv, Gen),
+    {_Ty, _} = type_check_expr(FEnv, VEnv, Gen),
     type_check_lc(FEnv, add_var_binds(Pat, VEnv), Expr, Quals).
 
 
