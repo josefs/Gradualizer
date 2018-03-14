@@ -456,8 +456,7 @@ type_check_function(FEnv, {function,_, Name, NArgs, Clauses}) ->
 	{ok, {type, _, any, []}} ->
 	    infer_clauses(FEnv, #{}, Clauses);
 	error ->
-	    % TODO: This should be an error now.
-	    infer_clauses(FEnv, #{}, Clauses)
+	    throw({internal_error, missing_type_spec, Name, NArgs})
     end.
 
 merge_types([Ty]) ->
@@ -478,9 +477,7 @@ merge_types([{type, P, tuple, Args1}, {type, _, tuple, Args2} | Rest]) ->
 						merge_types([A1,A2]) end,
 					Args1, Args2)}
 			 | Rest])
-    end;
-merge_types(apa) ->
-    {apa,bepa}.
+    end.
 
 add_types_pats([], [], VEnv) ->
     VEnv;
