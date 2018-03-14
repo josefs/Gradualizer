@@ -2,30 +2,6 @@
 
 -compile([export_all]).
 
-compatible({type, _, any, []}, _) ->
-  true;
-compatible(_, {type, _, any, []}) ->
-  true;
-compatible({type, _, 'fun', Args1, Res1},{type, _, 'fun', Args2, Res2}) ->
-    compatible_lists(Args1, Args2) andalso
-	compatible(Res1, Res2);
-compatible({type, _, Ty, Tys1}, {type, _, Ty, Tys2}) ->
-    compatible_lists(Tys1, Tys2);
-compatible({user_type, _, Name1, Args1}, {user_type, _, Name2, Args2}) ->
-    Name1 =:= Name2 andalso
-	compatible_lists(Args1, Args2);
-compatible(_, _) ->
-    false.
-
-
-
-compatible_lists(TyList1,TyList2) ->
-    length(TyList1) =:= length(TyList2) andalso
-	lists:all(fun ({Ty1, Ty2}) ->
-			  compatible(Ty1, Ty2)
-		  end
-		 ,lists:zip(TyList1, TyList2)).
-
 
 % Subtyping compatibility
 % The first argument is a "compatible subtype" of the second.
@@ -37,6 +13,13 @@ subtype(Ty1, Ty2) ->
 		compat(remove_pos(Ty1),remove_pos(Ty2), sets:new(), maps:new())
 	end,
     sets:is_set(R).
+
+subtypes([], []) ->
+    true;
+subtypes([Ty1|Tys1], [Ty2|Tys2]) ->
+    subtype(Ty1, Ty2) andalso subtypes(Tys1, Tys2).
+
+
 
 % This function throws an exception in case of a type error
 
@@ -162,7 +145,7 @@ type_check_expr(FEnv, VEnv, {call, _, Name, Args}) ->
 	{type, _, any, []} ->
 	    { {type, 0, any, []}, VarBind };
 	{type, _, 'fun', [{type, _, product, TyArgs}, ResTy]} ->
-	    case compatible_lists(TyArgs, ArgTys) of
+	    case subtypes(TyArgs, ArgTys) of
 		true ->
 		    {ResTy, VarBind};
 		false ->
