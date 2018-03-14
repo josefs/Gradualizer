@@ -147,10 +147,12 @@ type_check_expr(FEnv, VEnv, {call, P, Name, Args}) ->
     { ArgTys, VarBinds} =
 	lists:unzip([ type_check_expr(FEnv, VEnv, Arg) || Arg <- Args]),
     VarBind = union_var_binds(VarBinds),
-    case type_check_fun(FEnv, VEnv, Name) of
+    case type_check_fun(FEnv, VEnv, Name, length(Args)) of
 	{type, _, any, []} ->
 	    { {type, 0, any, []}, VarBind };
 	{type, _, 'fun', [{type, _, product, TyArgs}, ResTy]} ->
+	    % TODO: Push types inwards here, rather than inferring and
+	    % checking
 	    case subtypes(TyArgs, ArgTys) of
 		true ->
 		    {ResTy, VarBind};
@@ -303,7 +305,7 @@ type_check_expr_in(FEnv, VEnv, ResTy, {'case', _, Expr, Clauses}) ->
     VEnv2 = add_var_binds(VEnv, VarBinds),
     check_clauses(FEnv, VEnv2, ExprTy, ResTy, Clauses);
 type_check_expr_in(FEnv, VEnv, ResTy, {call, _, Name, Args}) ->
-    case type_check_fun(FEnv, VEnv, Name) of
+    case type_check_fun(FEnv, VEnv, Name, length(Args)) of
 	{type, _, any, []} ->
 	    {_, VarBinds} =
 		lists:unzip([ type_check_expr(FEnv, VEnv, Arg) || Arg <- Args]),
@@ -389,12 +391,12 @@ type_check_list_op(FEnv, VEnv, ResTy, _Op, Arg1, Arg2) ->
     end.
 
 
-type_check_fun(FEnv, _VEnv, {atom, _, Name}) ->
-    maps:get(Name, FEnv);
-type_check_fun(FEnv, _VEnv, {remote, _, {atom,_,Module}, {atom,_,Fun}}) ->
-    maps:get({Module,Fun}, FEnv, {type, 0, any, []});
+type_check_fun(FEnv, _VEnv, {atom, _, Name}, Arity) ->
+    maps:get({Name, Arity}, FEnv);
+type_check_fun(FEnv, _VEnv, {remote, _, {atom,_,Module}, {atom,_,Fun}}, Arity) ->
+    maps:get({Module,Fun, Arity}, FEnv, {type, 0, any, []});
     % TODO: Once we have interfaces, we should not have the default value above.
-type_check_fun(FEnv, VEnv, Expr) ->
+type_check_fun(FEnv, VEnv, Expr, _Arity) ->
     type_check_expr(FEnv, VEnv, Expr).
 
 type_check_block(FEnv, VEnv, [Expr]) ->
@@ -446,8 +448,8 @@ check_clause(FEnv, VEnv, ArgsTy, ResTy, {clause, _, Args, [], Block}) ->
     end.
 
 
-type_check_function(FEnv, {function,_, Name, _NArgs, Clauses}) ->
-    case maps:find(Name, FEnv) of
+type_check_function(FEnv, {function,_, Name, NArgs, Clauses}) ->
+    case maps:find({Name, NArgs}, FEnv) of
 	{ok, {type, _, 'fun', [{type, _, product, ArgsTy}, ResTy]}} ->
 	    {_, VarBinds} = check_clauses(FEnv, #{}, ArgsTy, ResTy, Clauses),
 	    {ResTy, VarBinds};
@@ -592,20 +594,20 @@ create_fenv(Specs, Funs) ->
 % in the list then it right-most occurrence will take precedence. In this
 % case it will mean that if there is a spec, then that will take precedence
 % over the default type any().
-    maps:from_list([ {Name, {type, 0, any, []}}
-		     || {function,_, Name, _NArgs, _Clauses} <- Funs
+    maps:from_list([ {{Name, NArgs}, {type, 0, any, []}}
+		     || {function,_, Name, NArgs, _Clauses} <- Funs
 		   ] ++
-		   [ {Name, Type} || {{Name, _NArgs}, [Type]} <- Specs
+		   [ {{Name, NArgs}, Type} || {{Name, NArgs}, [Type]} <- Specs
 		   ] ++
 		       % Built in functions
-		   [ {spawn, {type, 0, 'fun',[{type, 0, product, [{type, 0, any, []}]}
-					     ,{type, 0, any, []}] }}
-		   , {length, {type, 0, 'fun', [{type, 0, product, [{type, 0, any, []}]}
-						,{type, 0, integer, []}] }}
-		   , {throw, {type, 0, 'fun', [{type, 0, product, [{type, 0, any, []}]}
-					      ,{type, 0, any, []}] }}
-		   , {is_list, {type, 0, 'fun', [{type, 0, product, [{type, 0, any, []}]}
-						,{type, 0, any, []}] }}
+		   [ {{spawn, 1}, {type, 0, 'fun',[{type, 0, product, [{type, 0, any, []}]}
+						  ,{type, 0, any, []}] }}
+		   , {{length, 1}, {type, 0, 'fun', [{type, 0, product, [{type, 0, any, []}]}
+						    ,{type, 0, integer, []}] }}
+		   , {{throw, 1}, {type, 0, 'fun', [{type, 0, product, [{type, 0, any, []}]}
+						   ,{type, 0, any, []}] }}
+		   , {{is_list, 1}, {type, 0, 'fun', [{type, 0, product, [{type, 0, any, []}]}
+						     ,{type, 0, any, []}] }}
 		   ]
 		  ).
 
