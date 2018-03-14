@@ -461,22 +461,28 @@ type_check_function(FEnv, {function,_, Name, NArgs, Clauses}) ->
 
 merge_types([Ty]) ->
     Ty;
-merge_types([Any={type, _, any, []} | _]) ->
-    Any;
-merge_types([Ty={atom, _, A}, {atom, _, A} | Rest]) ->
-    merge_types([Ty | Rest]);
-merge_types([{atom, _, _}, {type, _, _, _} | _]) ->
-    {type, 0, any, []};
-merge_types([{type, P, tuple, Args1}, {type, _, tuple, Args2} | Rest]) ->
-    case length(Args1) == length(Args2) of
-	false ->
-	    {type, 0, any, []};
-	true  ->
-	    merge_types([{type, P, tuple,
-			  lists:zipwith(fun (A1, A2) ->
-						merge_types([A1,A2]) end,
-					Args1, Args2)}
-			 | Rest])
+merge_types(Tys) ->
+    case lists:keyfind(any, 3, Tys) of
+	Any = {type, _, any, []} ->
+	    Any;
+	_ ->
+	    case Tys of
+		[Ty={atom, _, A}, {atom, _, A} | Rest] ->
+		    merge_types([Ty | Rest]);
+		[{atom, _, _}, {type, _, _, _} | _] ->
+		    {type, 0, any, []};
+		[{type, P, tuple, Args1}, {type, _, tuple, Args2} | Rest] ->
+		    case length(Args1) == length(Args2) of
+			false ->
+			    {type, 0, any, []};
+			true  ->
+			    merge_types([{type, P, tuple,
+					  lists:zipwith(fun (A1, A2) ->
+								merge_types([A1,A2]) end,
+							Args1, Args2)}
+					 | Rest])
+		    end
+	    end
     end.
 
 add_types_pats([], [], VEnv) ->
@@ -646,7 +652,7 @@ handle_type_error({type_error, list, _, Ty}) ->
     io:format("The type ~p is not a list type~n", [Ty]);
 handle_type_error({type_error, call, P, Name, TyArgs, ArgTys}) ->
     io:format("The function ~p expects arguments of type ~p but is given "
-              "arguments of type ~p", [Name, TyArgs, ArgTys]);
+	      "arguments of type ~p", [Name, TyArgs, ArgTys]);
 handle_type_error({type_error, boolop, BoolOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-boolean argument "
 	      " of type ~p~n", [BoolOp, P, Ty]);
