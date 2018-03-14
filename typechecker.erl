@@ -83,6 +83,23 @@ compat_ty({user_type, Name, Args}, Ty, A, TEnv) ->
     compat(unfold_user_type(Name, Args, TEnv), Ty, A, TEnv);
 compat_ty(Ty, {user_type, Name, Args}, A, TEnv) ->
     compat(Ty, unfold_user_type(Name, Args, TEnv), A, TEnv);
+
+compat_ty({type, map, []}, {type, map, []}, A, _TEnv) ->
+    A;
+compat_ty({type, map, []}, {type, map, _Assocs}, A, _TEnv) ->
+    A;
+%% TODO: Should we have this rule?
+compat_ty({type, map, _Assocs}, {type, map, []}, A, _TEnv) ->
+    A;
+compat_ty({type, map, Assocs1}, {type, map, Assocs2}, A, TEnv) ->
+    lists:foldl(fun (Assoc2, As) ->
+			any_type(Assoc2, Assocs1, As, TEnv)
+		end, A, Assocs2);
+compat_ty({type, map_field_assoc, [Key1, Val1]},
+	  {type, map_field_assoc, [Key2, Val2]}, A, TEnv) ->
+    A2 = compat_ty(Key2, Key1, A, TEnv),
+    compat_ty(Val1, Val2, A2, TEnv);
+
 compat_ty(Ty1, Ty2, _, _) ->
     throw({type_error, compat, 0, Ty1, Ty2}).
 
@@ -92,6 +109,16 @@ compat_tys([], [], A, _TEnv) ->
 compat_tys([Ty1|Tys1], [Ty2|Tys2], A, TEnv) ->
     Ap = compat(Ty1 ,Ty2, A, TEnv),
     compat_tys(Tys1, Tys2, Ap, TEnv).
+
+any_type(Ty, [], _A, _TEnv) ->
+    throw({type_error, no_type_matching});
+any_type(Ty, [Ty1|Tys], A, TEnv) ->
+    try
+	compat_ty(Ty, Ty1, A, TEnv)
+    catch
+	_ ->
+	    any_type(Ty, Tys, A, TEnv)
+    end.
 
 unfold_user_type(_Name, _Args, _TEnv) ->
     unimplemented. %maps:find(Name, TEnv)
@@ -646,18 +673,19 @@ handle_type_error({type_error, {atom, _, A}, LINE, Ty}) ->
     io:format("The atom ~p on line ~p does not have type ~p~n",
 	      [A, LINE, Ty]);
 handle_type_error({type_error, compat, _LINE, Ty1, Ty2}) ->
-    io:format("The type ~p is not compatible with type ~p~n", [Ty1, Ty2]);
+    io:format("The type ~p is not compatible with type ~p~n"
+	     ,[pp_type(Ty1), pp_type(Ty2)]);
 handle_type_error({type_error, list, _, Ty1, Ty}) ->
     io:format("The type ~p cannot be an element of a list of type ~p~n",
-	      [Ty1, Ty]);
+	      [pp_type(Ty1), pp_type(Ty)]);
 handle_type_error({type_error, list, _, Ty}) ->
-    io:format("The type ~p is not a list type~n", [Ty]);
-handle_type_error({type_error, call, P, Name, TyArgs, ArgTys}) ->
-    io:format("The function ~p expects arguments of type ~p but is given "
-	      "arguments of type ~p", [Name, TyArgs, ArgTys]);
+    io:format("The type ~p is not a list type~n", [pp_type(Ty)]);
+handle_type_error({type_error, call, _P, Name, TyArgs, ArgTys}) ->
+    io:format("The function ~p expects arguments of type~n~p~n but is given "
+	      "arguments of type~n~p~n", [Name, TyArgs, ArgTys]);
 handle_type_error({type_error, boolop, BoolOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-boolean argument "
-	      " of type ~p~n", [BoolOp, P, Ty]);
+	      " of type ~p~n", [BoolOp, P, pp_type(Ty)]);
 handle_type_error(type_error) ->
     io:format("TYPE ERROR~n").
 
