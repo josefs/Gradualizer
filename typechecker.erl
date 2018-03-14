@@ -110,7 +110,7 @@ compat_tys([Ty1|Tys1], [Ty2|Tys2], A, TEnv) ->
     Ap = compat(Ty1 ,Ty2, A, TEnv),
     compat_tys(Tys1, Tys2, Ap, TEnv).
 
-any_type(Ty, [], _A, _TEnv) ->
+any_type(_Ty, [], _A, _TEnv) ->
     throw({type_error, no_type_matching});
 any_type(Ty, [Ty1|Tys], A, TEnv) ->
     try
@@ -268,7 +268,19 @@ type_check_expr(FEnv, VEnv, {op, _, RelOp, Arg1, Arg2}) when
 % Exception constructs
 % There is no typechecking of exceptions
 type_check_expr(FEnv, VEnv, {'catch', _, Arg}) ->
-    type_check_expr(FEnv, VEnv, Arg).
+    type_check_expr(FEnv, VEnv, Arg);
+% TODO: Unclear why there is a list of expressions in try
+type_check_expr(FEnv, VEnv, {'try', _, [Expr], CaseCs, CatchCs, AfterCs}) ->
+    {Ty,  VB}  = type_check_expr(FEnv, VEnv, Expr),
+    VEnv2 = add_var_binds(VB, VEnv),
+    {TyC, _VB2} = infer_clauses(FEnv, VEnv2, CaseCs),
+    {TyS, _VB3} = infer_clauses(FEnv, VEnv2, CatchCs),
+    {TyA, _VB4} = infer_clauses(FEnv, VEnv2, AfterCs),
+    % TODO: Should we check types against each other instead of
+    % just merging them?
+    % TODO: Check what variable bindings actually should be propagated
+    {merge_types([Ty, TyC, TyS, TyA]), VB}.
+
 
 
 
@@ -278,8 +290,8 @@ type_check_lc(FEnv, VEnv, Expr, []) ->
     % care what type we return. It's different for type_check_lc_in.
     {{type, 0, any, []}, #{}};
 type_check_lc(FEnv, VEnv, Expr, [{generate, _, Pat, Gen} | Quals]) ->
-    {_Ty, _} = type_check_expr(FEnv, VEnv, Gen),
-    type_check_lc(FEnv, add_var_binds(Pat, VEnv), Expr, Quals).
+    {Ty, _} = type_check_expr(FEnv, VEnv, Gen),
+    type_check_lc(FEnv, add_type_pat(Pat, Ty, VEnv), Expr, Quals).
 
 
 
@@ -460,6 +472,11 @@ infer_clause(FEnv, VEnv, {clause, _, Args, Guards, Block}) ->
 	      end, Guards),
     type_check_block(FEnv, VEnvNew, Block).
 
+%% DEBUG
+check_clauses(_FEnv, _VEnv, ArgsTy, ResTy, Clauses) when
+      not is_list(ArgsTy) ->
+    io:format("Error, check_clause: ArgsTy ~p~n"
+	      "ResTy ~p~nClauses ~p~n", [ArgsTy, ResTy, Clauses]);
 check_clauses(FEnv, VEnv, ArgsTy, ResTy, Clauses) ->
     {Tys, VarBinds} =
 	lists:unzip(lists:map(fun (Clause) ->
@@ -488,6 +505,8 @@ type_check_function(FEnv, {function,_, Name, NArgs, Clauses}) ->
 	    throw({internal_error, missing_type_spec, Name, NArgs})
     end.
 
+merge_types([]) ->
+    {type, 0, any, []};
 merge_types([Ty]) ->
     Ty;
 merge_types(Tys) ->
