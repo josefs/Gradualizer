@@ -244,7 +244,8 @@ type_check_expr(Env, {call, P, Name, Args}) ->
     case  FunTy of
 	{type, _, any, []} ->
 	    { {type, 0, any, []}, VarBind };
-	{type, _, 'fun', [{type, _, product, TyArgs}, ResTy]} ->
+	[{type, _, 'fun', [{type, _, product, TyArgs}, ResTy]}] ->
+	    % TODO: Handle multi-clause function types
 	    % TODO: Push types inwards here, rather than inferring and
 	    % checking
 	    case subtypes(TyArgs, ArgTys) of
@@ -374,6 +375,7 @@ type_check_expr(Env, {op, _, RelOp, Arg1, Arg2}) when
 type_check_expr(Env, {'catch', _, Arg}) ->
     type_check_expr(Env, Arg);
 % TODO: Unclear why there is a list of expressions in try
+% This is why: try f(), g() catch _:_ -> x end.
 type_check_expr(Env, {'try', _, [Expr], CaseCs, CatchCs, AfterCs}) ->
     {Ty,  VB}  = type_check_expr(Env, Expr),
     Env2 = Env#env{ venv = add_var_binds(VB, Env#env.venv) },
@@ -469,7 +471,8 @@ type_check_expr_in(Env, ResTy, {call, _, Name, Args}) ->
 
 	    VarBind = union_var_binds([VarBinds1 |  VarBinds2]),
 	    { {type, 0, any, []}, VarBind };
-	{type, _, 'fun', [{type, _, product, TyArgs}, FunResTy]} ->
+	[{type, _, 'fun', [{type, _, product, TyArgs}, FunResTy]}] ->
+	    % TODO: Handle multi-clause function types
 	    {_, VarBinds2} =
 		lists:unzip([ type_check_expr_in(Env, TyArg, Arg)
 			      || {TyArg, Arg} <- lists:zip(TyArgs, Args) ]),
@@ -567,13 +570,26 @@ type_check_assocs(_Env, []) ->
 
 
 
-type_check_fun(Env, {atom, _, Name}, Arity) ->
+type_check_fun(Env, {atom, P, Name}, Arity) ->
     % Local function call
-    {maps:get({Name, Arity}, Env#env.fenv), #{}};
-type_check_fun(Env, {remote, _, {atom,_,Module}, {atom,_,Fun}}, Arity) ->
+    case maps:find({Name, Arity}, Env#env.fenv) of
+	{ok, Types} ->
+	    {Types, #{}};
+	error ->
+	    case erl_internal:bif(Name, Arity) of
+		true ->
+		    {ok, Types} = gradualizer_db:get_spec(erlang, Name, Arity),
+		    {Types, #{}};
+		false ->
+		    throw({call_undef, P, Name, Arity})
+	    end
+    end;
+type_check_fun(_Env, {remote, P, {atom,_,Module}, {atom,_,Fun}}, Arity) ->
     % Module:function call
-    {maps:get({Module,Fun, Arity}, Env#env.fenv, {type, 0, any, []}), #{}};
-    % TODO: Once we have interfaces, we should not have the default value above.
+    case gradualizer_db:get_spec(Module, Fun, Arity) of
+	{ok, Types} -> Types;
+	not_found   -> throw({call_undef, P, Module, Fun, Arity})
+    end;
 type_check_fun(Env, Expr, _Arity) ->
     type_check_expr(Env, Expr).
 
@@ -651,7 +667,8 @@ check_guards(Env, Guards) ->
 
 type_check_function(FEnv, REnv, {function,_, Name, NArgs, Clauses}) ->
     case maps:find({Name, NArgs}, FEnv) of
-	{ok, {type, _, 'fun', [{type, _, product, ArgsTy}, ResTy]}} ->
+	{ok, [{type, _, 'fun', [{type, _, product, ArgsTy}, ResTy]}]} ->
+	    % TODO: Handle multi-clause function types
 	    {_, VarBinds} = check_clauses(#env{ fenv = FEnv, renv = REnv },
 					  ArgsTy, ResTy, Clauses),
 	    {ResTy, VarBinds};
@@ -798,33 +815,27 @@ glb_types(_, _) ->
 
 type_check_file(File) ->
     {ok, Forms} = epp:parse_file(File,[]),
-    CollectedForms = #parsedata{specs     = Specs
-			       ,functions = Funs
-			       ,records   = Records
-			       } =
+    #parsedata{specs     = Specs
+	      ,functions = Funs
+	      ,records   = Records
+	      } =
 	collect_specs_types_opaques_and_functions(Forms),
     FEnv = create_fenv(Specs, Funs),
     REnv = create_renv(Records),
     FEnvWithBuiltins = add_builtin_functions(FEnv),
-    Res = lists:foldr(fun (Function, ok) ->
-			      try type_check_function(FEnvWithBuiltins, REnv, Function) of
-				  {_Ty, _VarBinds} ->
-				      ok
-			      catch
-				  Throw ->
-				      erlang:display(erlang:get_stacktrace()),
-				      handle_type_error(Throw),
-				      nok
-			      end;
-			  (_Function, Err) ->
-			      Err
-		      end, ok, Funs),
-    case Res of
-	ok ->
-	    store_interface_file(FEnv, CollectedForms);
-	nok ->
-	    nok
-    end.
+    lists:foldr(fun (Function, ok) ->
+			try type_check_function(FEnvWithBuiltins, REnv, Function) of
+			    {_Ty, _VarBinds} ->
+				ok
+			catch
+			    Throw ->
+				erlang:display(erlang:get_stacktrace()),
+				handle_type_error(Throw),
+				nok
+			end;
+		    (_Function, Err) ->
+			Err
+		end, ok, Funs).
 
 create_renv(Records) ->
     maps:from_list(lists:map(fun ({Rec,Fields}) ->
@@ -850,24 +861,9 @@ create_fenv(Specs, Funs) ->
     maps:from_list([ {{Name, NArgs}, {type, 0, any, []}}
 		     || {function,_, Name, NArgs, _Clauses} <- Funs
 		   ] ++
-		   [ {{Name, NArgs}, Type} || {{Name, NArgs}, [Type]} <- Specs
+		   [ {{Name, NArgs}, Types} || {{Name, NArgs}, Types} <- Specs
 		   ]
 		  ).
-
-%% Adds builtin functions to an FEnv
-add_builtin_functions(FEnv) ->
-    FEnv#{
-      {spawn, 1} => {type, 0, 'fun',[{type, 0, product, [{type, 0, any, []}]}
-				    ,{type, 0, any, []}] },
-      {length, 1} => {type, 0, 'fun', [{type, 0, product, [{type, 0, any, []}]}
-				      ,{type, 0, integer, []}] },
-      {throw, 1} => {type, 0, 'fun', [{type, 0, product, [{type, 0, any, []}]}
-				     ,{type, 0, any, []}] },
-      {is_list, 1} => {type, 0, 'fun', [{type, 0, product, [{type, 0, any, []}]}
-				       ,{type, 0, any, []}] },
-      {is_atom, 1} => {type, 0, 'fun', [{type, 0, product, [{type, 0, any, []}]}
-				       ,{type, 0, any, []}] }
-     }.
 
 %% Collect the top level parse tree stuff returned by epp:parse_file/2.
 -spec collect_specs_types_opaques_and_functions(Forms :: list()) -> #parsedata{}.
@@ -903,6 +899,12 @@ aux([{attribute, _, compile, CompileOpts} | Forms], Acc) ->
 aux([_|Forms], Acc) ->
     aux(Forms, Acc).
 
+handle_type_error({call_undef, LINE, Func, Arity}) ->
+    io:format("Call to undefined function ~p/~p on line ~p~n",
+              [Func, Arity, LINE]);
+handle_type_error({call_undef, LINE, Module, Func, Arity}) ->
+    io:format("Call to undefined function ~p:~p/~p on line ~p~n",
+              [Module, Func, Arity, LINE]);
 handle_type_error({type_error, tyVar, LINE, Var, VarTy, Ty}) ->
     io:format("The variable ~p on line ~p has type ~s "
 	      "but is expected to have type ~s~n",
