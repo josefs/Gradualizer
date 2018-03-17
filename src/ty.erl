@@ -53,7 +53,7 @@ bit() ->
 
 %%% Typing bitstrings properly would require dependent types.
 
--spec bit1() -> <<_:1>>.
+-spec bit1() -> <<_:8>>.
 bit1() ->
     <<1>>.
 
