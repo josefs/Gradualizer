@@ -2,6 +2,16 @@
 
 -compile([export_all]).
 
+%% Data collected from epp parse tree
+-record(parsedata, {
+	  module :: atom(),
+	  export_all = false :: boolean(),
+	  exports = [] :: [{atom(), integer()}],
+	  specs = [] :: list(),
+	  types = [] :: list(),
+	  opaques = [] :: list(),
+	  functions = [] :: list()
+	 }).
 
 % Subtyping compatibility
 % The first argument is a "compatible subtype" of the second.
@@ -433,8 +443,10 @@ type_check_list_op(FEnv, VEnv, ResTy, _Op, Arg1, Arg2) ->
 
 
 type_check_fun(FEnv, _VEnv, {atom, _, Name}, Arity) ->
+    %% Local function call
     maps:get({Name, Arity}, FEnv);
 type_check_fun(FEnv, _VEnv, {remote, _, {atom,_,Module}, {atom,_,Fun}}, Arity) ->
+    %% Module:function call
     maps:get({Module,Fun, Arity}, FEnv, {type, 0, any, []});
     % TODO: Once we have interfaces, we should not have the default value above.
 type_check_fun(FEnv, VEnv, Expr, _Arity) ->
@@ -622,23 +634,30 @@ glb_types(_, _) ->
 
 type_check_file(File) ->
     {ok, Forms} = epp:parse_file(File,[]),
-    {Specs, _Types, _Opaques, Funs} =
+    CollectedForms = #parsedata{specs = Specs, functions = Funs} =
 	collect_specs_types_opaques_and_functions(Forms),
     FEnv = create_fenv(Specs, Funs),
-    io:format("Initial environment : ~p~n", [FEnv]),
-    lists:foldr(fun (Function, ok) ->
-			try type_check_function(FEnv, Function) of
-			    {_Ty, _VarBinds} ->
-				ok
-			catch
-			    Throw ->
-				erlang:display(erlang:get_stacktrace()),
-				handle_type_error(Throw),
-				nok
-			end;
-		    (_Function, Err) ->
-			Err
-		end, ok, Funs).
+    FEnvWithBuiltins = add_builtin_functions(FEnv),
+    io:format("Initial environment : ~p~n", [FEnvWithBuiltins]),
+    Res = lists:foldr(fun (Function, ok) ->
+			      try type_check_function(FEnvWithBuiltins, Function) of
+				  {_Ty, _VarBinds} ->
+				      ok
+			      catch
+				  Throw ->
+				      erlang:display(erlang:get_stacktrace()),
+				      handle_type_error(Throw),
+				      nok
+			      end;
+			  (_Function, Err) ->
+			      Err
+		      end, ok, Funs),
+    case Res of
+	ok ->
+	    store_interface_file(FEnv, CollectedForms);
+	nok ->
+	    nok
+    end.
 
 create_fenv(Specs, Funs) ->
 % We're taking advantage of the fact that if a key occurrs more than once
@@ -649,18 +668,21 @@ create_fenv(Specs, Funs) ->
 		     || {function,_, Name, NArgs, _Clauses} <- Funs
 		   ] ++
 		   [ {{Name, NArgs}, Type} || {{Name, NArgs}, [Type]} <- Specs
-		   ] ++
-		       % Built in functions
-		   [ {{spawn, 1}, {type, 0, 'fun',[{type, 0, product, [{type, 0, any, []}]}
-						  ,{type, 0, any, []}] }}
-		   , {{length, 1}, {type, 0, 'fun', [{type, 0, product, [{type, 0, any, []}]}
-						    ,{type, 0, integer, []}] }}
-		   , {{throw, 1}, {type, 0, 'fun', [{type, 0, product, [{type, 0, any, []}]}
-						   ,{type, 0, any, []}] }}
-		   , {{is_list, 1}, {type, 0, 'fun', [{type, 0, product, [{type, 0, any, []}]}
-						     ,{type, 0, any, []}] }}
 		   ]
 		  ).
+
+%% Adds builtin functions to an FEnv
+add_builtin_functions(FEnv) ->
+    FEnv#{
+      {spawn, 1} => {type, 0, 'fun',[{type, 0, product, [{type, 0, any, []}]}
+				    ,{type, 0, any, []}] },
+      {length, 1} => {type, 0, 'fun', [{type, 0, product, [{type, 0, any, []}]}
+				      ,{type, 0, integer, []}] },
+      {throw, 1} => {type, 0, 'fun', [{type, 0, product, [{type, 0, any, []}]}
+				     ,{type, 0, any, []}] },
+      {is_list, 1} => {type, 0, 'fun', [{type, 0, product, [{type, 0, any, []}]}
+				       ,{type, 0, any, []}] }
+     }.
 
 %% create_fenv([{{Name,_},[Type]}|Specs]) ->
 %%     (create_fenv(Specs))#{ Name => Type };
@@ -669,20 +691,37 @@ create_fenv(Specs, Funs) ->
 %% create_fenv([]) ->
 %%     #{}.
 
+%% Collect the top level parse tree stuff returned by epp:parse_file/2.
+-spec collect_specs_types_opaques_and_functions(Forms :: list()) -> #parsedata{}.
 collect_specs_types_opaques_and_functions(Forms) ->
-    aux(Forms,[],[],[],[]).
-aux([], Specs, Types, Opaques, Funs) ->
-    {Specs, Types, Opaques, Funs};
-aux([Fun={function, _, _, _, _} | Forms], Specs, Types, Opaques, Funs) ->
-    aux(Forms, Specs, Types, Opaques, [Fun | Funs]);
-aux([{attribute, _, spec, Spec} | Forms], Specs, Types, Opaques, Funs) ->
-    aux(Forms, [Spec | Specs], Types, Opaques, Funs);
-aux([{attribute, _, type, Type} | Forms], Specs, Types, Opaques, Funs) ->
-    aux(Forms, Specs, [Type | Types], Opaques, Funs);
-aux([{attribute, _, opaque, Opaque} | Forms], Specs, Types, Opaques, Funs) ->
-    aux(Forms, Specs, Types, [Opaque|Opaques], Funs);
-aux([_|Forms], Specs, Types, Opaques, Funs) ->
-    aux(Forms, Specs, Types, Opaques, Funs).
+    aux(Forms, #parsedata{}).
+
+%% Helper for collect_specs_types_opaques_and_functions/1
+aux([], Acc) ->
+    Acc;
+aux([Fun={function, _, _, _, _} | Forms], Acc) ->
+    aux(Forms, Acc#parsedata{functions = [Fun | Acc#parsedata.functions]});
+aux([{attribute, _, module, Module} | Forms], Acc) ->
+    aux(Forms, Acc#parsedata{module = Module});
+aux([{attribute, _, spec, Spec} | Forms], Acc) ->
+    aux(Forms, Acc#parsedata{specs = [Spec | Acc#parsedata.specs]});
+aux([{attribute, _, type, Type} | Forms], Acc) ->
+    aux(Forms, Acc#parsedata{types = [Type | Acc#parsedata.types]});
+aux([{attribute, _, opaque, Opaque} | Forms], Acc) ->
+    aux(Forms, Acc#parsedata{opaques = [Opaque | Acc#parsedata.opaques]});
+aux([{attribute, _, export, Exports} | Forms], Acc) ->
+    aux(Forms, Acc#parsedata{exports = Exports ++ Acc#parsedata.exports});
+aux([{attribute, _, compile, CompileOpts} | Forms], Acc) ->
+    Acc1 = lists:foldl(fun (export_all, AccAcc) ->
+			       AccAcc#parsedata{export_all = true};
+			   (_, AccAcc) ->
+			       AccAcc
+		       end,
+		       Acc,
+		       CompileOpts),
+    aux(Forms, Acc1);
+aux([_|Forms], Acc) ->
+    aux(Forms, Acc).
 
 handle_type_error({type_error, tyVar, LINE, Var, VarTy, Ty}) ->
     io:format("The variable ~p on line ~p has type ~s "
@@ -709,6 +748,26 @@ handle_type_error(type_error) ->
     io:format("TYPE ERROR~n").
 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Interface files
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+-spec store_interface_file(FEnv :: map(), #parsedata{}) -> ok | {error, term()}.
+store_interface_file(FEnv, ParseData) ->
+    Filename = io_lib:format("~p.Gr", [ParseData#parsedata.module]),
+    FEnv1 = remove_unexported(FEnv, ParseData),
+    FileContents = io_lib:format("~p.~n", [FEnv1]),
+    file:write_file(Filename, FileContents).
+
+%% Remove unexported function from an FEnv
+-spec remove_unexported(map(), #parsedata{}) -> map().
+remove_unexported(FEnv, #parsedata{export_all = true}) ->
+    FEnv;
+remove_unexported(FEnv, #parsedata{exports = Exports}) ->
+    maps:filter(fun (Key, _Value) ->
+			lists:member(Key, Exports)
+		end,
+		FEnv).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Pretty printing
