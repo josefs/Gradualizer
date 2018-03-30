@@ -130,6 +130,7 @@ any_type(Ty, [Ty1|Tys], A, TEnv) ->
 	    any_type(Ty, Tys, A, TEnv)
     end.
 
+%% TODO: Implement user type unfolding
 unfold_user_type(_Name, _Args, _TEnv) ->
     unimplemented. %maps:find(Name, TEnv)
 
