@@ -498,11 +498,10 @@ infer_clause(FEnv, VEnv, {clause, _, Args, Guards, Block}) ->
 	      end, Guards),
     type_check_block(FEnv, VEnvNew, Block).
 
-%% DEBUG
-check_clauses(_FEnv, _VEnv, ArgsTy, ResTy, Clauses) when
+
+check_clauses(FEnv, VEnv, ArgsTy, ResTy, Clauses) when
       not is_list(ArgsTy) ->
-    io:format("Error, check_clause: ArgsTy ~p~n"
-	      "ResTy ~p~nClauses ~p~n", [ArgsTy, ResTy, Clauses]);
+    check_clauses(FEnv, VEnv, [ArgsTy], ResTy, Clauses);
 check_clauses(FEnv, VEnv, ArgsTy, ResTy, Clauses) ->
     {Tys, VarBinds} =
 	lists:unzip(lists:map(fun (Clause) ->
