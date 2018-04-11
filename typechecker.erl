@@ -56,6 +56,7 @@ compat_ty({type, 'fun', {type, product, Args1}, Res1},
 	  A, TEnv) ->
     Ap = compat_tys(Args2, Args1, A, TEnv),
     compat(Res1, Res2, Ap, TEnv);
+
 % Integer types
 compat_ty({type, integer, []}, {type, integer, []}, A, _TEnv) ->
     A;
