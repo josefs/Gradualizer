@@ -509,15 +509,28 @@ check_clauses(FEnv, VEnv, ArgsTy, ResTy, Clauses) ->
 			  end, Clauses)),
     {merge_types(Tys), VarBinds}.
 
-check_clause(FEnv, VEnv, ArgsTy, ResTy, {clause, _, Args, [], Block}) ->
+check_clause(FEnv, VEnv, ArgsTy, ResTy, {clause, _, Args, Guards, Block}) ->
     case length(ArgsTy) =:= length(Args) of
 	false ->
 	    throw(argument_length_mismatch);
 	true ->
-	    VEnvNew = add_types_pats(Args, ArgsTy, VEnv),
-	    type_check_block_in(FEnv, VEnvNew, ResTy, Block)
+	    VEnvNew    = add_types_pats(Args, ArgsTy, VEnv),
+	    VEnvNewest = check_guards(FEnv, VEnvNew, Guards),
+	    type_check_block_in(FEnv, VEnvNewest, ResTy, Block)
     end.
 
+%% TODO: implement proper checking of guards.
+check_guards(_FEnv, VEnv, Guards) ->
+    union_var_binds(
+      lists:map(fun (GuardSeq) ->
+			union_var_binds(
+			  lists:map(fun (Guard) ->
+					    begin
+						{_Ty, VB} = type_check_expr(FEnv, VEnv, Guard), %% Do we need to thread the VEnv?
+						VB
+					    end
+				    end, GuardSeq))
+		end, Guards)).
 
 type_check_function(FEnv, {function,_, Name, NArgs, Clauses}) ->
     case maps:find({Name, NArgs}, FEnv) of
