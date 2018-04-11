@@ -95,6 +95,11 @@ compat_ty({atom, true}, {type, bool, []}, A, _TEnv) ->
 compat_ty({atom, false}, {type, bool, []}, A, _TEnv) ->
     A;
 
+compat_ty({type, list, [Ty1]}, {type, list, [Ty2]}, A, TEnv) ->
+    compat_ty(Ty1, Ty2, A, TEnv);
+compat_ty({type, nil, []}, {type, list, [_Ty]}, A, _TEnv) ->
+    A;
+
 compat_ty({type, tuple, Args1}, {type, tuple, Args2}, A, TEnv) ->
     compat_tys(Args1, Args2, A, TEnv);
 compat_ty({user_type, Name, Args}, Ty, A, TEnv) ->
