@@ -754,7 +754,8 @@ handle_type_error({type_error, list, _, Ty1, Ty}) ->
     io:format("The type ~p cannot be an element of a list of type ~p~n",
 	      [pp_type(Ty1), pp_type(Ty)]);
 handle_type_error({type_error, list, _, Ty}) ->
-    io:format("The type ~p is not a list type~n", [pp_type(Ty)]);
+    io:format("The type ~p on line ~p is not a list type~n",
+	      [pp_type(Ty), line_no(Ty)]);
 handle_type_error({type_error, call, _P, Name, TyArgs, ArgTys}) ->
     io:format("The function ~p expects arguments of type~n~p~n but is given "
 	      "arguments of type~n~p~n", [Name, TyArgs, ArgTys]);
@@ -799,6 +800,8 @@ pp_type({user_type, _, Name, Args}) ->
     atom_to_list(Name) ++ "(" ++
 	string:join(lists:map(fun pp_type/1, Args), ", ") ++ ")".
 
+line_no(Ty) ->
+    element(2,Ty).
 
 -spec gen_partition(integer(), list(tuple()), fun((tuple()) -> {integer(), term()} | false)) ->
 			   tuple().
