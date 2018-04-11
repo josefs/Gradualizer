@@ -579,7 +579,10 @@ add_type_pat({atom, _, Bool}, {type, _, bool, []}, VEnv)
   when Bool == true orelse Bool == false ->
     VEnv;
 add_type_pat({atom, _, _}, {type, _, any, []}, VEnv) ->
-    VEnv.
+    VEnv;
+add_type_pat({match, _, Pat1, Pat2}, Ty, VEnv) ->
+    add_type_pat(Pat1, Ty, add_type_pat(Pat2, Ty, VEnv)).
+
 
 
 
