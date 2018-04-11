@@ -554,7 +554,10 @@ merge_types(Tys) ->
 								merge_types([A1,A2]) end,
 							Args1, Args2)}
 					 | Rest])
-		    end
+		    end;
+		[{type, _, map, Assocs}, {type, _, map, Assocs}] ->
+		    %% TODO: Figure out how to merge field assocs properly
+		    [{type, 0, map, []}]
 	    end
     end.
 
