@@ -66,6 +66,10 @@ file or inferred.
   doesn't seem to be any way of extracting all types from a
   plt-file.
 
+* [ ] Interface files
+  * [X] Generate interface files
+  * [ ] Read the appropriate interface files and add the definitions to the environment
+
 * [ ] Better error messages.
 
 * [ ] Warn about unsupported types.
@@ -74,6 +78,10 @@ file or inferred.
 * [ ] Make it a standalone program.
 
 * [ ] Test suite
+
+* Type system support
+  * [ ] Polymorphism. This will require contexts with type variables and constraints.
+  * [ ] User written types. The hard part here is unfolding of type definitions.
 
 * [ ] Extend support for all of Erlang.
 
