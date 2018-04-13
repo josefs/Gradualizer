@@ -239,6 +239,14 @@ type_check_expr(FEnv, VEnv, {op, _, '!', Proc, Val}) ->
     {_, VB1} = type_check_expr(FEnv, VEnv, Proc),
     {_, VB2} = type_check_expr(FEnv, VEnv, Val),
     {{type, 0, any, []}, union_var_binds([VB1, VB2])};
+type_check_expr(FEnv, VEnv, {op, P, 'not', Arg}) ->
+    {Ty, VB} = type_check_expr(FEnv, VEnv, Arg),
+    case subtype({type, 0, boolean, []}, Ty) of
+	true ->
+	    {{type, 0, any, []}, VB};
+	false ->
+	    throw({type_error, non_boolean_argument_to_not, P, Ty})
+    end;
 type_check_expr(FEnv, VEnv, {op, P, BoolOp, Arg1, Arg2}) when
       (BoolOp == 'andalso') or (BoolOp == 'and') or
       (BoolOp == 'orelse')  or (BoolOp == 'or') ->
@@ -396,6 +404,13 @@ type_check_expr_in(FEnv, VEnv, ResTy, {op, _, '!', Arg1, Arg2}) ->
     {_, VarBinds1} = type_check_expr(FEnv, VEnv, Arg1),
     {Ty, VarBinds2} = type_check_expr_in(FEnv, VEnv, ResTy, Arg2),
     {Ty, union_var_binds([VarBinds1,VarBinds2])};
+type_check_expr_in(FEnv, VEnv, ResTy, {op, P, 'not', Arg}) ->
+    case subtype({type, 0, boolean, []}, ResTy) of
+	true ->
+	    type_check_expr_in(FEnv, VEnv, ResTy, Arg);
+	false ->
+	    throw({type_error, not_user_with_wrong_type, P, ResTy})
+    end;
 type_check_expr_in(FEnv, VEnv, ResTy, {op, _, Op, Arg1, Arg2}) when
       Op == '+' orelse Op == '-' orelse Op == '*' orelse Op == '/' ->
     type_check_arith_op(FEnv, VEnv, ResTy, Op, Arg1, Arg2);
