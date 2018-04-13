@@ -217,12 +217,20 @@ type_check_expr(FEnv, VEnv, {lc, _, Expr, Qualifiers}) ->
     type_check_lc(FEnv, VEnv, Expr, Qualifiers);
 type_check_expr(FEnv, VEnv, {block, _, Block}) ->
     type_check_block(FEnv, VEnv, Block);
+
+%% Don't return the type of anything other than something
+%% which ultimately comes from a function type spec.
+
 type_check_expr(_FEnv, _VEnv, {string, _, _}) ->
-    return({usertype, 0, string, []});
+    return({type, 0, any, []});
 type_check_expr(_FEnv, _VEnv, {nil, _}) ->
-    return({type, 0, nil, []});
-type_check_expr(_FEnv, _VEnv, P={atom, _, _Atom}) ->
-    return(P);
+    return({type, 0, any, []});
+type_check_expr(_FEnv, _VEnv, {atom, _, _Atom}) ->
+    return({type, 0, any, []});
+
+%% Maps
+type_check_expr(FEnv, VEnv, {map, _, Assocs}) ->
+    type_check_assocs(FEnv, VEnv, Assocs);
 
 % Functions
 type_check_expr(FEnv, VEnv, {'fun', _, {clauses, Clauses}}) ->
