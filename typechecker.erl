@@ -553,12 +553,18 @@ check_clause(FEnv, VEnv, ArgsTy, ResTy, {clause, _, Args, Guards, Block}) ->
 	    throw(argument_length_mismatch);
 	true ->
 	    VEnvNew    = add_types_pats(Args, ArgsTy, VEnv),
-	    VEnvNewest = check_guards(FEnv, VEnvNew, Guards),
+	    VarBinds   = check_guards(FEnv, VEnvNew, Guards),
+	    VEnvNewest = add_var_binds(VEnvNew, VarBinds),
 	    type_check_block_in(FEnv, VEnvNewest, ResTy, Block)
-    end.
+    end;
+%% DEBUG
+check_clause(_FEnv, _VEnv, _ArgsTy, _ResTy, Term) ->
+    io:format("DEBUG: check_clause term: ~p~n", [Term]),
+    throw(check_clause).
+
 
 %% TODO: implement proper checking of guards.
-check_guards(_FEnv, VEnv, Guards) ->
+check_guards(FEnv, VEnv, Guards) ->
     union_var_binds(
       lists:map(fun (GuardSeq) ->
 			union_var_binds(
