@@ -220,7 +220,7 @@ type_check_expr(FEnv, VEnv, {call, P, Name, Args}) ->
 	    % checking
 	    case subtypes(TyArgs, ArgTys) of
 		true ->
-		    {ResTy, VarBind};
+		    {ResTy, union_var_binds([VarBind, VarBind2])};
 		false ->
 		    throw({type_error, call, P, Name, TyArgs, ArgTys})
 	    end
