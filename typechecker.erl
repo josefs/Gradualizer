@@ -753,6 +753,8 @@ add_builtin_functions(FEnv) ->
       {throw, 1} => {type, 0, 'fun', [{type, 0, product, [{type, 0, any, []}]}
 				     ,{type, 0, any, []}] },
       {is_list, 1} => {type, 0, 'fun', [{type, 0, product, [{type, 0, any, []}]}
+				       ,{type, 0, any, []}] },
+      {is_atom, 1} => {type, 0, 'fun', [{type, 0, product, [{type, 0, any, []}]}
 				       ,{type, 0, any, []}] }
      }.
 
