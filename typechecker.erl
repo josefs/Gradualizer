@@ -164,11 +164,22 @@ remove_pos({Type, _Pos, Foo}) ->
 % the expression together with their type.
 -spec type_check_expr(#{ any() => any() },#{ any() => any() }, any()) ->
 			     { any(), #{ any() => any()} }.
-type_check_expr(_FEnv, VEnv, {var, _, Var}) ->
-    return(maps:get(Var, VEnv));
+type_check_expr(_FEnv, VEnv, {var, P, Var}) ->
+    case catch maps:get(Var, VEnv) of
+	{'EXIT', {{badkey, _}, _}} ->
+	    throw({unknown_variable, P, Var});
+	Ty ->
+	    return(Ty)
+    end;
 type_check_expr(FEnv, VEnv, {match, _, Pat, Expr}) ->
     {Ty, VarBinds} = type_check_expr(FEnv, VEnv, Expr),
     {Ty, add_type_pat(Pat, Ty, VarBinds)};
+type_check_expr(FEnv, VEnv, {'if', _, Clauses}) ->
+    infer_clauses(FEnv, VEnv, Clauses);
+type_check_expr(FEnv, VEnv, {'case', _, Expr, Clauses}) ->
+    {_ExprTy, VarBinds} = type_check_expr(FEnv, VEnv, Expr),
+    VEnv2 = add_var_binds(VEnv, VarBinds),
+    infer_clauses(FEnv, VEnv2, Clauses);
 type_check_expr(_FEnv, _VEnv, {integer, _, _N}) ->
     return({type, 0, any, []});
 type_check_expr(FEnv, VEnv, {tuple, _, TS}) ->
@@ -385,21 +396,24 @@ type_check_expr_in(FEnv, VEnv, ResTy, {'case', _, Expr, Clauses}) ->
     {ExprTy, VarBinds} = type_check_expr(FEnv, VEnv, Expr),
     VEnv2 = add_var_binds(VEnv, VarBinds),
     check_clauses(FEnv, VEnv2, ExprTy, ResTy, Clauses);
+type_check_expr_in(FEnv, VEnv, ResTy, {'if', _, Clauses}) ->
+    check_clauses(FEnv, VEnv, {type, 0, any, []}, ResTy, Clauses);
 type_check_expr_in(FEnv, VEnv, ResTy, {call, _, Name, Args}) ->
-    case type_check_fun(FEnv, VEnv, Name, length(Args)) of
+    {FunTy, VarBinds1} = type_check_fun(FEnv, VEnv, Name, length(Args)),
+    case FunTy of
 	{type, _, any, []} ->
-	    {_, VarBinds} =
+	    {_, VarBinds2} =
 		lists:unzip([ type_check_expr(FEnv, VEnv, Arg) || Arg <- Args]),
 
-	    VarBind = union_var_binds(VarBinds),
+	    VarBind = union_var_binds([VarBinds1 |  VarBinds2]),
 	    { {type, 0, any, []}, VarBind };
 	{type, _, 'fun', [{type, _, product, TyArgs}, FunResTy]} ->
-	    {_, VarBinds} =
+	    {_, VarBinds2} =
 		lists:unzip([ type_check_expr_in(FEnv, VEnv, TyArg, Arg)
 			      || {TyArg, Arg} <- lists:zip(TyArgs, Args) ]),
 	    case subtype(ResTy, FunResTy) of
 		true ->
-		    VarBind = union_var_binds(VarBinds),
+		    VarBind = union_var_binds([VarBinds1 | VarBinds2]),
 		    {ResTy, VarBind};
 		_ ->
 		    throw(type_error)
