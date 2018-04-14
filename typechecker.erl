@@ -674,7 +674,7 @@ add_var_binds(VEnv, VarBinds) ->
 
 merge(F, M1, M2) ->
     maps:fold(fun (K, V1, M) ->
-		 maps:update_with(K, fun (V2) -> F(K, V1, V2) end, V1, M)
+		 maps:update_with(K, fun (V2) -> F(V1, V2) end, V1, M)
 	 end, M2, M1).
 
 % TODO: improve
