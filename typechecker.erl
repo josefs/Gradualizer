@@ -819,6 +819,8 @@ handle_type_error({type_error, call, _P, Name, TyArgs, ArgTys}) ->
 handle_type_error({type_error, boolop, BoolOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-boolean argument "
 	      " of type ~p~n", [BoolOp, P, pp_type(Ty)]);
+handle_type_error({unknown_variable, P, Var}) ->
+    io:format("Unknown variable ~p on line ~p.~n", [Var, P]);
 handle_type_error(type_error) ->
     io:format("TYPE ERROR~n").
 
