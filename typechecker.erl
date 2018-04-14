@@ -211,7 +211,8 @@ type_check_expr(FEnv, VEnv, {call, P, Name, Args}) ->
     { ArgTys, VarBinds} =
 	lists:unzip([ type_check_expr(FEnv, VEnv, Arg) || Arg <- Args]),
     VarBind = union_var_binds(VarBinds),
-    case type_check_fun(FEnv, VEnv, Name, length(Args)) of
+    {FunTy, VarBind2} = type_check_fun(FEnv, VEnv, Name, length(Args)),
+    case  FunTy of
 	{type, _, any, []} ->
 	    { {type, 0, any, []}, VarBind };
 	{type, _, 'fun', [{type, _, product, TyArgs}, ResTy]} ->
