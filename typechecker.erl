@@ -158,10 +158,22 @@ remove_pos({type, _Pos, 'fun', Args}) ->
 remove_pos({Type, _Pos, Foo}) ->
     {Type, Foo}.
 
-% Arguments: An environment for functions, an environment for variables
-% and the expression to type check.
-% Returns the type of the expression and a collection of variables bound in
-% the expression together with their type.
+%%% The environment passed around during typechecking.
+
+-record(env, {fenv   = #{}
+	     ,venv   = #{}
+	     ,renv   = #{}
+	     ,tyenv  = #{}
+	     ,tyvenv = #{}
+	     ,cenv   = #{}
+	     }).
+
+
+
+%% Arguments: An environment for functions, an environment for variables
+%% and the expression to type check.
+%% Returns the type of the expression and a collection of variables bound in
+%% the expression together with their type.
 -spec type_check_expr(#{ any() => any() },#{ any() => any() }, any()) ->
 			     { any(), #{ any() => any()} }.
 type_check_expr(_FEnv, VEnv, {var, P, Var}) ->
