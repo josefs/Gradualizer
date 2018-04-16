@@ -261,7 +261,18 @@ type_check_expr(Env, {map, _, Expr, Assocs}) ->
     % TODO: Update the type of the map.
     % TODO: Check the type of the map.
     {Ty, union_var_binds([VBExpr, VBAssocs])};
-	
+
+%% Records
+type_check_expr(Env, {record_field, P, Expr, Record, Field}) ->
+    {ExprTy, VB} = type_check_expr(Env, Expr),
+    case subtype(ExprTy, {record, 0, Record}) of
+	true ->
+	    Rec = maps:get(Record, Env#env.renv),
+	    Ty  = maps:get(Field, Rec),
+	    {Ty, VB};
+	false ->
+	    throw({type_error, record_type, P, ExprTy, Record})
+    end;
 
 %% Functions
 type_check_expr(Env, {'fun', _, {clauses, Clauses}}) ->
