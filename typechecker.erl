@@ -230,9 +230,8 @@ type_check_expr(FEnv, VEnv, {lc, _, Expr, Qualifiers}) ->
 type_check_expr(FEnv, VEnv, {block, _, Block}) ->
     type_check_block(FEnv, VEnv, Block);
 
-%% Don't return the type of anything other than something
-%% which ultimately comes from a function type spec.
-
+% Don't return the type of anything other than something
+% which ultimately comes from a function type spec.
 type_check_expr(_FEnv, _VEnv, {string, _, _}) ->
     return({type, 0, any, []});
 type_check_expr(_FEnv, _VEnv, {nil, _}) ->
@@ -253,7 +252,7 @@ type_check_expr(FEnv, _VEnv, {'fun', _, {function, Name, Arity}}) ->
 type_check_expr(FEnv, VEnv, {'receive', _, Clauses}) ->
     infer_clauses(FEnv, VEnv, Clauses);
 
-% Operators
+%% Operators
 type_check_expr(FEnv, VEnv, {op, _, '!', Proc, Val}) ->
     % Message passing is always untyped, which is why we discard the types
     {_, VB1} = type_check_expr(FEnv, VEnv, Proc),
@@ -317,8 +316,8 @@ type_check_expr(FEnv, VEnv, {op, _, RelOp, Arg1, Arg2}) when
 	    end
     end;
 
-% Exception constructs
-% There is no typechecking of exceptions
+%% Exception constructs
+%% There is no typechecking of exceptions
 type_check_expr(FEnv, VEnv, {'catch', _, Arg}) ->
     type_check_expr(FEnv, VEnv, Arg);
 % TODO: Unclear why there is a list of expressions in try
@@ -570,7 +569,7 @@ check_guards(FEnv, VEnv, Guards) ->
 			union_var_binds(
 			  lists:map(fun (Guard) ->
 					    begin
-						{_Ty, VB} = type_check_expr(FEnv, VEnv, Guard), %% Do we need to thread the VEnv?
+						{_Ty, VB} = type_check_expr(FEnv, VEnv, Guard), % Do we need to thread the VEnv?
 						VB
 					    end
 				    end, GuardSeq))
@@ -613,7 +612,7 @@ merge_types(Tys) ->
 					 | Rest])
 		    end;
 		[{type, _, map, Assocs}, {type, _, map, Assocs}] ->
-		    %% TODO: Figure out how to merge field assocs properly
+		    % TODO: Figure out how to merge field assocs properly
 		    [{type, 0, map, []}]
 	    end
     end.
@@ -707,7 +706,7 @@ glb_types(_, _) ->
     {type, 0, any, []}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Main entry pont
+%%% Main entry pont
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
@@ -833,10 +832,10 @@ handle_type_error(type_error) ->
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Interface files
+%%% Interface files
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
--spec store_interface_file(FEnv :: map(), #parsedata{}) -> ok | {error, term()}.
+-spec store_interface_file(map(), #parsedata{}) -> ok | {error, term()}.
 store_interface_file(FEnv, ParseData) ->
     Filename = io_lib:format("~p.Gr", [ParseData#parsedata.module]),
     FEnv1 = remove_unexported(FEnv, ParseData),
@@ -854,7 +853,7 @@ remove_unexported(FEnv, #parsedata{exports = Exports}) ->
 		FEnv).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Pretty printing
+%%% Pretty printing
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 pp_type({type, _, tuple, Args}) ->
