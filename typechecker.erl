@@ -175,43 +175,43 @@ remove_pos({Type, _Pos, Foo}) ->
 %% and the expression to type check.
 %% Returns the type of the expression and a collection of variables bound in
 %% the expression together with their type.
--spec type_check_expr(#{ any() => any() },#{ any() => any() }, any()) ->
-			     { any(), #{ any() => any()} }.
-type_check_expr(_FEnv, VEnv, {var, P, Var}) ->
-    case catch maps:get(Var, VEnv) of
+%-spec type_check_expr(#{ any() => any() },#{ any() => any() }, any()) ->
+%			     { any(), #{ any() => any()} }.
+type_check_expr(Env, {var, P, Var}) ->
+    case catch maps:get(Var, Env#env.venv) of
 	{'EXIT', {{badkey, _}, _}} ->
 	    throw({unknown_variable, P, Var});
 	Ty ->
 	    return(Ty)
     end;
-type_check_expr(FEnv, VEnv, {match, _, Pat, Expr}) ->
-    {Ty, VarBinds} = type_check_expr(FEnv, VEnv, Expr),
+type_check_expr(Env, {match, _, Pat, Expr}) ->
+    {Ty, VarBinds} = type_check_expr(Env, Expr),
     {Ty, add_type_pat(Pat, Ty, VarBinds)};
-type_check_expr(FEnv, VEnv, {'if', _, Clauses}) ->
-    infer_clauses(FEnv, VEnv, Clauses);
-type_check_expr(FEnv, VEnv, {'case', _, Expr, Clauses}) ->
-    {_ExprTy, VarBinds} = type_check_expr(FEnv, VEnv, Expr),
-    VEnv2 = add_var_binds(VEnv, VarBinds),
-    infer_clauses(FEnv, VEnv2, Clauses);
-type_check_expr(_FEnv, _VEnv, {integer, _, _N}) ->
+type_check_expr(Env, {'if', _, Clauses}) ->
+    infer_clauses(Env, Clauses);
+type_check_expr(Env, {'case', _, Expr, Clauses}) ->
+    {_ExprTy, VarBinds} = type_check_expr(Env, Expr),
+    VEnv = add_var_binds(Env#env.venv, VarBinds),
+    infer_clauses(Env#env{ venv = VEnv}, Clauses);
+type_check_expr(_Env, {integer, _, _N}) ->
     return({type, 0, any, []});
-type_check_expr(FEnv, VEnv, {tuple, _, TS}) ->
-    { Tys, VarBinds } = lists:unzip([ type_check_expr(FEnv, VEnv, Expr)
+type_check_expr(Env, {tuple, _, TS}) ->
+    { Tys, VarBinds } = lists:unzip([ type_check_expr(Env, Expr)
 				    || Expr <- TS ]),
     { {type, 0, tuple, Tys}, union_var_binds(VarBinds) };
-type_check_expr(FEnv, VEnv, {cons, _, Head, Tail}) ->
-    {Ty1, VEnv2} = type_check_expr(FEnv, VEnv, Head),
-    {Ty2, VEnv3} = type_check_expr(FEnv, VEnv, Tail),
+type_check_expr(Env, {cons, _, Head, Tail}) ->
+    {Ty1, VB1} = type_check_expr(Env, Head),
+    {Ty2, VB2} = type_check_expr(Env, Tail),
     % TODO: Should we check the types here?
     case {Ty1, Ty2} of
 	{{type, _, any, []}, _} ->
-	    {{type, 0, any, []}, VEnv3};
+	    {{type, 0, any, []}, VB2};
 	{_, {type, _, any, []}} ->
-	    {{type, 0, any, []}, VEnv3};
+	    {{type, 0, any, []}, VB2};
 	{Ty1, TyList = {type, _, list, [Ty]}} ->
 	    case subtype(Ty1, Ty) of
 		true ->
-		    {TyList, union_var_binds([VEnv2, VEnv3])};
+		    {TyList, union_var_binds([VB1, VB2])};
 		false ->
 		    throw({type_error, list, 0, Ty1, Ty})
 	    end;
@@ -220,11 +220,11 @@ type_check_expr(FEnv, VEnv, {cons, _, Head, Tail}) ->
 		% We throw a type error here because Tail is not of type list
 		% (nor is it of type any()).
     end;
-type_check_expr(FEnv, VEnv, {call, P, Name, Args}) ->
+type_check_expr(Env, {call, P, Name, Args}) ->
     { ArgTys, VarBinds} =
-	lists:unzip([ type_check_expr(FEnv, VEnv, Arg) || Arg <- Args]),
+	lists:unzip([ type_check_expr(Env, Arg) || Arg <- Args]),
     VarBind = union_var_binds(VarBinds),
-    {FunTy, VarBind2} = type_check_fun(FEnv, VEnv, Name, length(Args)),
+    {FunTy, VarBind2} = type_check_fun(Env, Name, length(Args)),
     case  FunTy of
 	{type, _, any, []} ->
 	    { {type, 0, any, []}, VarBind };
@@ -238,54 +238,55 @@ type_check_expr(FEnv, VEnv, {call, P, Name, Args}) ->
 		    throw({type_error, call, P, Name, TyArgs, ArgTys})
 	    end
     end;
-type_check_expr(FEnv, VEnv, {lc, _, Expr, Qualifiers}) ->
-    type_check_lc(FEnv, VEnv, Expr, Qualifiers);
-type_check_expr(FEnv, VEnv, {block, _, Block}) ->
-    type_check_block(FEnv, VEnv, Block);
+type_check_expr(Env, {lc, _, Expr, Qualifiers}) ->
+    type_check_lc(Env, Expr, Qualifiers);
+type_check_expr(Env, {block, _, Block}) ->
+    type_check_block(Env, Block);
 
 % Don't return the type of anything other than something
 % which ultimately comes from a function type spec.
-type_check_expr(_FEnv, _VEnv, {string, _, _}) ->
+type_check_expr(_Env, {string, _, _}) ->
     return({type, 0, any, []});
-type_check_expr(_FEnv, _VEnv, {nil, _}) ->
+type_check_expr(_Env, {nil, _}) ->
     return({type, 0, any, []});
-type_check_expr(_FEnv, _VEnv, {atom, _, _Atom}) ->
+type_check_expr(_Env, {atom, _, _Atom}) ->
     return({type, 0, any, []});
 
 %% Maps
-type_check_expr(FEnv, VEnv, {map, _, Assocs}) ->
-    type_check_assocs(FEnv, VEnv, Assocs);
-type_check_expr(FEnv, VEnv, {map, _, Expr, Assocs}) ->
-    {Ty, VBExpr} = type_check_expr(FEnv, VEnv, Expr),
-    {Ty, VBAssocs} = type_check_assocs(FEnv, VEnv, Assocs),
+type_check_expr(Env, {map, _, Assocs}) ->
+    type_check_assocs(Env, Assocs);
+type_check_expr(Env, {map, _, Expr, Assocs}) ->
+    {Ty, VBExpr} = type_check_expr(Env, Expr),
+    {Ty, VBAssocs} = type_check_assocs(Env, Assocs),
     % TODO: Update the type of the map.
     % TODO: Check the type of the map.
     {Ty, union_var_binds([VBExpr, VBAssocs])};
+	
 
 %% Functions
-type_check_expr(FEnv, VEnv, {'fun', _, {clauses, Clauses}}) ->
-    infer_clauses(FEnv, VEnv, Clauses);
-type_check_expr(FEnv, _VEnv, {'fun', _, {function, Name, Arity}}) ->
-    return(maps:get({Name, Arity}, FEnv));
+type_check_expr(Env, {'fun', _, {clauses, Clauses}}) ->
+    infer_clauses(Env, Clauses);
+type_check_expr(Env, {'fun', _, {function, Name, Arity}}) ->
+    return(maps:get({Name, Arity}, Env#env.fenv));
 
-type_check_expr(FEnv, VEnv, {'receive', _, Clauses}) ->
-    infer_clauses(FEnv, VEnv, Clauses);
+type_check_expr(Env, {'receive', _, Clauses}) ->
+    infer_clauses(Env, Clauses);
 
 %% Operators
-type_check_expr(FEnv, VEnv, {op, _, '!', Proc, Val}) ->
+type_check_expr(Env, {op, _, '!', Proc, Val}) ->
     % Message passing is always untyped, which is why we discard the types
-    {_, VB1} = type_check_expr(FEnv, VEnv, Proc),
-    {_, VB2} = type_check_expr(FEnv, VEnv, Val),
+    {_, VB1} = type_check_expr(Env, Proc),
+    {_, VB2} = type_check_expr(Env, Val),
     {{type, 0, any, []}, union_var_binds([VB1, VB2])};
-type_check_expr(FEnv, VEnv, {op, P, 'not', Arg}) ->
-    {Ty, VB} = type_check_expr(FEnv, VEnv, Arg),
+type_check_expr(Env, {op, P, 'not', Arg}) ->
+    {Ty, VB} = type_check_expr(Env, Arg),
     case subtype({type, 0, boolean, []}, Ty) of
 	true ->
 	    {{type, 0, any, []}, VB};
 	false ->
 	    throw({type_error, non_boolean_argument_to_not, P, Ty})
     end;
-type_check_expr(FEnv, VEnv, {op, P, BoolOp, Arg1, Arg2}) when
+type_check_expr(Env, {op, P, BoolOp, Arg1, Arg2}) when
       (BoolOp == 'andalso') or (BoolOp == 'and') or
       (BoolOp == 'orelse')  or (BoolOp == 'or') ->
     % Bindings from the first argument are only passed along for
@@ -298,13 +299,13 @@ type_check_expr(FEnv, VEnv, {op, P, BoolOp, Arg1, Arg2}) when
 			union_var_binds([VB1, VB2])
 		end
 	end,
-    case type_check_expr(FEnv, VEnv, Arg1) of
+    case type_check_expr(Env, Arg1) of
 	{Ty1, VB1} ->
 	    case subtype(Ty1, {type, 0, bool, []}) of
 		false ->
 		    throw({type_error, boolop, BoolOp, P, Ty1});
 		true ->
-		    case type_check_expr(FEnv, UnionVarBindsSecondArg(VEnv,VB1), Arg2) of
+		    case type_check_expr(Env#env{ venv = UnionVarBindsSecondArg(Env#env.venv,VB1 )}, Arg2) of
 			{Ty2, VB2} ->
 			    case subtype(Ty2, {type, 0, bool, []}) of
 				false ->
@@ -316,13 +317,13 @@ type_check_expr(FEnv, VEnv, {op, P, BoolOp, Arg1, Arg2}) when
 		    end
 	    end
     end;
-type_check_expr(FEnv, VEnv, {op, _, RelOp, Arg1, Arg2}) when
+type_check_expr(Env, {op, _, RelOp, Arg1, Arg2}) when
       (RelOp == '=:=') or (RelOp == '==') or
       % It's debatable whether we should allow comparison between any types
       % but right now it's allowed
       (RelOp == '>=')  or (RelOp == '=<') ->
-    case {type_check_expr(FEnv, VEnv, Arg1)
-	 ,type_check_expr(FEnv, VEnv, Arg2)} of
+    case {type_check_expr(Env, Arg1)
+	 ,type_check_expr(Env, Arg2)} of
 	{{Ty1, VB1}, {Ty2, VB2}} ->
 	    case subtype(Ty1, Ty2) andalso subtype(Ty2, Ty1) of
 		true ->
@@ -337,15 +338,15 @@ type_check_expr(FEnv, VEnv, {op, _, RelOp, Arg1, Arg2}) when
 
 %% Exception constructs
 %% There is no typechecking of exceptions
-type_check_expr(FEnv, VEnv, {'catch', _, Arg}) ->
-    type_check_expr(FEnv, VEnv, Arg);
+type_check_expr(Env, {'catch', _, Arg}) ->
+    type_check_expr(Env, Arg);
 % TODO: Unclear why there is a list of expressions in try
-type_check_expr(FEnv, VEnv, {'try', _, [Expr], CaseCs, CatchCs, AfterCs}) ->
-    {Ty,  VB}  = type_check_expr(FEnv, VEnv, Expr),
-    VEnv2 = add_var_binds(VB, VEnv),
-    {TyC, _VB2} = infer_clauses(FEnv, VEnv2, CaseCs),
-    {TyS, _VB3} = infer_clauses(FEnv, VEnv2, CatchCs),
-    {TyA, _VB4} = infer_clauses(FEnv, VEnv2, AfterCs),
+type_check_expr(Env, {'try', _, [Expr], CaseCs, CatchCs, AfterCs}) ->
+    {Ty,  VB}  = type_check_expr(Env, Expr),
+    Env2 = Env#env{ venv = add_var_binds(VB, Env#env.venv) },
+    {TyC, _VB2} = infer_clauses(Env2, CaseCs),
+    {TyS, _VB3} = infer_clauses(Env2, CatchCs),
+    {TyA, _VB4} = infer_clauses(Env2, AfterCs),
     % TODO: Should we check types against each other instead of
     % just merging them?
     % TODO: Check what variable bindings actually should be propagated
@@ -354,81 +355,81 @@ type_check_expr(FEnv, VEnv, {'try', _, [Expr], CaseCs, CatchCs, AfterCs}) ->
 
 
 
-type_check_lc(FEnv, VEnv, Expr, []) ->
-    {_Ty, _VB} = type_check_expr(FEnv, VEnv, Expr),
+type_check_lc(Env, Expr, []) ->
+    {_Ty, _VB} = type_check_expr(Env, Expr),
     % We're returning any() here because we're in a context that doesn't
     % care what type we return. It's different for type_check_lc_in.
     {{type, 0, any, []}, #{}};
-type_check_lc(FEnv, VEnv, Expr, [{generate, _, Pat, Gen} | Quals]) ->
-    {Ty, _} = type_check_expr(FEnv, VEnv, Gen),
-    type_check_lc(FEnv, add_type_pat(Pat, Ty, VEnv), Expr, Quals).
+type_check_lc(Env, Expr, [{generate, _, Pat, Gen} | Quals]) ->
+    {Ty, _} = type_check_expr(Env, Gen),
+    type_check_lc(Env#env{ venv = add_type_pat(Pat, Ty, Env#env.venv) }, Expr, Quals).
 
 
 
 
-type_check_expr_in(FEnv, VEnv, {type, _, any, []}, Expr) ->
-    type_check_expr(FEnv, VEnv, Expr);
-type_check_expr_in(_FEnv, VEnv, Ty, {var, LINE, Var}) ->
-    VarTy = maps:get(Var, VEnv),
+type_check_expr_in(Env, {type, _, any, []}, Expr) ->
+    type_check_expr(Env, Expr);
+type_check_expr_in(Env, Ty, {var, LINE, Var}) ->
+    VarTy = maps:get(Var, Env#env.venv),
     case subtype(VarTy, Ty) of
 	true ->
 	    return(VarTy);
 	false ->
 	    throw({type_error, tyVar, LINE, Var, VarTy, Ty})
     end;
-type_check_expr_in(_FEnv, _VEnv, Ty, {integer, LINE, _Int}) ->
+type_check_expr_in(_Env, Ty, {integer, LINE, _Int}) ->
     case subtype(Ty, {type, 0, integer, []}) of
 	true ->
 	    return({type, 0, integer, []});
 	false ->
 	    throw({type_error, int, LINE, Ty})
     end;
-type_check_expr_in(_FEnv, _VEnv, Ty, {float, LINE, _Int}) ->
+type_check_expr_in(_Env, Ty, {float, LINE, _Int}) ->
     case subtype(Ty, {type, 0, float, []}) of
 	true ->
 	    return({type, 0, float, []});
 	false ->
 	    throw({type_error, float, LINE, Ty})
     end;
-type_check_expr_in(_FEnv, _VEnv, Ty, Atom = {atom, LINE, _}) ->
+type_check_expr_in(_Env, Ty, Atom = {atom, LINE, _}) ->
     case subtype(Ty, Atom) of
 	true ->
 	    return(Atom);
 	false ->
 	    throw({type_error, Atom, LINE, Ty})
     end;
-type_check_expr_in(FEnv, VEnv, ResTy, {tuple, _LINE, TS}) ->
+type_check_expr_in(Env, ResTy, {tuple, _LINE, TS}) ->
     case ResTy of
       {type, _, tuple, Tys} ->
 	    {ResTys, VarBinds} =
 		lists:unzip(
-		  lists:map(fun ({Ty, Expr}) -> type_check_expr_in(FEnv, VEnv, Ty, Expr)
+		  lists:map(fun ({Ty, Expr}) -> type_check_expr_in(Env, Ty, Expr)
 			    end,
 			    lists:zip(Tys,TS))),
 	    {{type, 0, tuple, ResTys}, union_var_binds(VarBinds)};
 	{type, _, any, []} ->
 	    {ResTys, VarBinds} =
-		lists:unzip([type_check_expr(FEnv, VEnv, Expr) || Expr <- TS]),
+		lists:unzip([type_check_expr(Env, Expr) || Expr <- TS]),
 	    {{type, 0, tuple, ResTys}, union_var_binds(VarBinds)}
     end;
-type_check_expr_in(FEnv, VEnv, ResTy, {'case', _, Expr, Clauses}) ->
-    {ExprTy, VarBinds} = type_check_expr(FEnv, VEnv, Expr),
-    VEnv2 = add_var_binds(VEnv, VarBinds),
-    check_clauses(FEnv, VEnv2, ExprTy, ResTy, Clauses);
-type_check_expr_in(FEnv, VEnv, ResTy, {'if', _, Clauses}) ->
-    check_clauses(FEnv, VEnv, {type, 0, any, []}, ResTy, Clauses);
-type_check_expr_in(FEnv, VEnv, ResTy, {call, _, Name, Args}) ->
-    {FunTy, VarBinds1} = type_check_fun(FEnv, VEnv, Name, length(Args)),
+type_check_expr_in(Env, ResTy, {'case', _, Expr, Clauses}) ->
+    {ExprTy, VarBinds} = type_check_expr(Env, Expr),
+    Env2 = Env#env{ venv = add_var_binds(Env#env.venv, VarBinds) },
+    check_clauses(Env2, ExprTy, ResTy, Clauses);
+type_check_expr_in(Env, ResTy, {'if', _, Clauses}) ->
+    check_clauses(Env, {type, 0, any, []}, ResTy, Clauses);
+type_check_expr_in(Env, ResTy, {call, _, Name, Args}) ->
+    {FunTy, VarBinds1} = type_check_fun(Env, Name, length(Args)),
     case FunTy of
 	{type, _, any, []} ->
 	    {_, VarBinds2} =
-		lists:unzip([ type_check_expr(FEnv, VEnv, Arg) || Arg <- Args]),
+		lists:unzip([ type_check_expr(Env, Arg) || Arg <- Args]),
 
 	    VarBind = union_var_binds([VarBinds1 |  VarBinds2]),
 	    { {type, 0, any, []}, VarBind };
 	{type, _, 'fun', [{type, _, product, TyArgs}, FunResTy]} ->
 	    {_, VarBinds2} =
-		lists:unzip([ type_check_expr_in(FEnv, VEnv, TyArg, Arg)
+		lists:unzip([ type_check_expr_in(Env, TyArg, Arg)
 			      || {TyArg, Arg} <- lists:zip(TyArgs, Args) ]),
 	    case subtype(ResTy, FunResTy) of
 		true ->
@@ -438,168 +439,168 @@ type_check_expr_in(FEnv, VEnv, ResTy, {call, _, Name, Args}) ->
 		    throw(type_error)
 	    end
     end;
-type_check_expr_in(FEnv, VEnv, ResTy, {'receive', _, Clauses}) ->
-    check_clauses(FEnv, VEnv, [{type, 0, any, []}], ResTy, Clauses);
-type_check_expr_in(FEnv, VEnv, ResTy, {op, _, '!', Arg1, Arg2}) ->
+type_check_expr_in(Env, ResTy, {'receive', _, Clauses}) ->
+    check_clauses(Env, [{type, 0, any, []}], ResTy, Clauses);
+type_check_expr_in(Env, ResTy, {op, _, '!', Arg1, Arg2}) ->
     % The first argument should be a pid.
-    {_, VarBinds1} = type_check_expr(FEnv, VEnv, Arg1),
-    {Ty, VarBinds2} = type_check_expr_in(FEnv, VEnv, ResTy, Arg2),
+    {_, VarBinds1} = type_check_expr(Env, Arg1),
+    {Ty, VarBinds2} = type_check_expr_in(Env, ResTy, Arg2),
     {Ty, union_var_binds([VarBinds1,VarBinds2])};
-type_check_expr_in(FEnv, VEnv, ResTy, {op, P, 'not', Arg}) ->
+type_check_expr_in(Env, ResTy, {op, P, 'not', Arg}) ->
     case subtype({type, 0, boolean, []}, ResTy) of
 	true ->
-	    type_check_expr_in(FEnv, VEnv, ResTy, Arg);
+	    type_check_expr_in(Env, ResTy, Arg);
 	false ->
 	    throw({type_error, not_user_with_wrong_type, P, ResTy})
     end;
-type_check_expr_in(FEnv, VEnv, ResTy, {op, _, Op, Arg1, Arg2}) when
+type_check_expr_in(Env, ResTy, {op, _, Op, Arg1, Arg2}) when
       Op == '+' orelse Op == '-' orelse Op == '*' orelse Op == '/' ->
-    type_check_arith_op(FEnv, VEnv, ResTy, Op, Arg1, Arg2);
-type_check_expr_in(FEnv, VEnv, ResTy, {op, _, Op, Arg1, Arg2}) when
+    type_check_arith_op(Env, ResTy, Op, Arg1, Arg2);
+type_check_expr_in(Env, ResTy, {op, _, Op, Arg1, Arg2}) when
       Op == 'bnot' orelse Op == 'div' orelse Op == 'rem' orelse
       Op == 'band' orelse Op == 'bor' orelse Op == 'bxor' orelse
       Op == 'bsl'  orelse Op == 'bsr' ->
-    type_check_int_op(FEnv, VEnv, ResTy, Op, Arg1, Arg2);
-type_check_expr_in(FEnv, VEnv, ResTy, {op, _, Op, Arg1, Arg2}) when
+    type_check_int_op(Env, ResTy, Op, Arg1, Arg2);
+type_check_expr_in(Env, ResTy, {op, _, Op, Arg1, Arg2}) when
       Op == 'and' orelse Op == 'or' orelse Op == 'xor' orelse
       Op == 'andalso' orelse Op == 'orelse' ->
-    type_check_logic_op(FEnv, VEnv, ResTy, Op, Arg1, Arg2);
-type_check_expr_in(FEnv, VEnv, ResTy, {op, _, Op, Arg1, Arg2}) when
+    type_check_logic_op(Env, ResTy, Op, Arg1, Arg2);
+type_check_expr_in(Env, ResTy, {op, _, Op, Arg1, Arg2}) when
       Op == '++' orelse Op == '--' ->
-    type_check_list_op(FEnv, VEnv, ResTy, Op, Arg1, Arg2)
+    type_check_list_op(Env, ResTy, Op, Arg1, Arg2)
 .
 
-type_check_arith_op(FEnv, VEnv, ResTy, _Op, Arg1, Arg2) ->
+type_check_arith_op(Env, ResTy, _Op, Arg1, Arg2) ->
     case ResTy of
 	{type, _, Ty, []} when Ty == 'integer' orelse Ty == 'float' orelse
 			       Ty == 'any' ->
-	  {_, VarBinds1} = type_check_expr_in(FEnv, VEnv, ResTy, Arg1),
-	  {_, VarBinds2} = type_check_expr_in(FEnv, VEnv, ResTy, Arg2),
+	  {_, VarBinds1} = type_check_expr_in(Env, ResTy, Arg1),
+	  {_, VarBinds2} = type_check_expr_in(Env, ResTy, Arg2),
 	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
 	_ ->
 	  throw({arithmetic_type_error})
     end.
-type_check_int_op(FEnv, VEnv, ResTy, _Op, Arg1, Arg2) ->
+type_check_int_op(Env, ResTy, _Op, Arg1, Arg2) ->
     case ResTy of
 	{type, _, Ty, []} when Ty == 'integer' orelse Ty == 'any' ->
-	  {_, VarBinds1} = type_check_expr_in(FEnv, VEnv, ResTy, Arg1),
-	  {_, VarBinds2} = type_check_expr_in(FEnv, VEnv, ResTy, Arg2),
+	  {_, VarBinds1} = type_check_expr_in(Env, ResTy, Arg1),
+	  {_, VarBinds2} = type_check_expr_in(Env, ResTy, Arg2),
 	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
 	_ ->
 	  throw({arithmetic_type_error})
     end.
-type_check_logic_op(FEnv, VEnv, ResTy, _Op, Arg1, Arg2) ->
+type_check_logic_op(Env, ResTy, _Op, Arg1, Arg2) ->
     case ResTy of
 	{type, _, Ty, []} when Ty == 'boolean' orelse Ty == 'any' ->
-	  {_, VarBinds1} = type_check_expr_in(FEnv, VEnv, ResTy, Arg1),
-	  {_, VarBinds2} = type_check_expr_in(FEnv, VEnv, ResTy, Arg2),
+	  {_, VarBinds1} = type_check_expr_in(Env, ResTy, Arg1),
+	  {_, VarBinds2} = type_check_expr_in(Env, ResTy, Arg2),
 	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
 	_ ->
 	  throw({arithmetic_type_error})
     end.
-type_check_list_op(FEnv, VEnv, ResTy, _Op, Arg1, Arg2) ->
+type_check_list_op(Env, ResTy, _Op, Arg1, Arg2) ->
     case ResTy of
 	{type, _, 'list', [_Ty]} ->
-	  {_, VarBinds1} = type_check_expr_in(FEnv, VEnv, ResTy, Arg1),
-	  {_, VarBinds2} = type_check_expr_in(FEnv, VEnv, ResTy, Arg2),
+	  {_, VarBinds1} = type_check_expr_in(Env, ResTy, Arg1),
+	  {_, VarBinds2} = type_check_expr_in(Env, ResTy, Arg2),
 	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
 	{type, _, any, []} ->
-	  {_, VarBinds1} = type_check_expr_in(FEnv, VEnv, ResTy, Arg1),
-	  {_, VarBinds2} = type_check_expr_in(FEnv, VEnv, ResTy, Arg2),
+	  {_, VarBinds1} = type_check_expr_in(Env, ResTy, Arg1),
+	  {_, VarBinds2} = type_check_expr_in(Env, ResTy, Arg2),
 	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
 	_ ->
 	  throw({arithmetic_type_error})
     end.
 
 
-type_check_assocs(FEnv, VEnv, [{Assoc, _, Key, Val}| Assocs])
+type_check_assocs(Env, [{Assoc, _, Key, Val}| Assocs])
   when Assoc == map_field_assoc orelse Assoc == map_field_exact ->
-    {KeyTy, KeyVB} = type_check_expr(FEnv, VEnv, Key),
-    {ValTy, ValVB} = type_check_expr(FEnv, VEnv, Val),
+    {KeyTy, KeyVB} = type_check_expr(Env, Key),
+    {ValTy, ValVB} = type_check_expr(Env, Val),
     % TODO
-    type_check_assocs(FEnv, VEnv, Assocs);
-type_check_assocs(_FEnv, _VEnv, []) ->
+    type_check_assocs(Env, Assocs);
+type_check_assocs(_Env, []) ->
     {{type, 0, any, []}, #{}}.
 
 
 
-type_check_fun(FEnv, _VEnv, {atom, _, Name}, Arity) ->
+type_check_fun(Env, {atom, _, Name}, Arity) ->
     % Local function call
-    {maps:get({Name, Arity}, FEnv), #{}};
-type_check_fun(FEnv, _VEnv, {remote, _, {atom,_,Module}, {atom,_,Fun}}, Arity) ->
+    {maps:get({Name, Arity}, Env#env.fenv), #{}};
+type_check_fun(Env, {remote, _, {atom,_,Module}, {atom,_,Fun}}, Arity) ->
     % Module:function call
-    {maps:get({Module,Fun, Arity}, FEnv, {type, 0, any, []}), #{}};
+    {maps:get({Module,Fun, Arity}, Env#env.fenv, {type, 0, any, []}), #{}};
     % TODO: Once we have interfaces, we should not have the default value above.
-type_check_fun(FEnv, VEnv, Expr, _Arity) ->
-    type_check_expr(FEnv, VEnv, Expr).
+type_check_fun(Env, Expr, _Arity) ->
+    type_check_expr(Env, Expr).
 
-type_check_block(FEnv, VEnv, [Expr]) ->
-    type_check_expr(FEnv, VEnv, Expr);
-type_check_block(FEnv, VEnv, [Expr | Exprs]) ->
-    {_, VarBinds} = type_check_expr(FEnv, VEnv, Expr),
-    type_check_block(FEnv, add_var_binds(VEnv, VarBinds), Exprs).
+type_check_block(Env, [Expr]) ->
+    type_check_expr(Env, Expr);
+type_check_block(Env, [Expr | Exprs]) ->
+    {_, VarBinds} = type_check_expr(Env, Expr),
+    type_check_block(Env#env{ venv = add_var_binds(Env#env.venv, VarBinds) }, Exprs).
 
-type_check_block_in(FEnv, VEnv, ResTy, [Expr]) ->
-    type_check_expr_in(FEnv, VEnv, ResTy, Expr);
-type_check_block_in(FEnv, VEnv, ResTy, [Expr | Exprs]) ->
-    {_, VarBinds} = type_check_expr(FEnv, VEnv, Expr),
-    type_check_block_in(FEnv, add_var_binds(VEnv, VarBinds), ResTy, Exprs).
+type_check_block_in(Env, ResTy, [Expr]) ->
+    type_check_expr_in(Env, ResTy, Expr);
+type_check_block_in(Env, ResTy, [Expr | Exprs]) ->
+    {_, VarBinds} = type_check_expr(Env, Expr),
+    type_check_block_in(Env#env{ venv = add_var_binds(Env#env.venv, VarBinds) }, ResTy, Exprs).
 
 
-infer_clauses(FEnv, VEnv, Clauses) ->
+infer_clauses(Env, Clauses) ->
     {Tys, VarBinds} =
 	lists:unzip(lists:map(fun (Clause) ->
-				  infer_clause(FEnv, VEnv, Clause)
+				  infer_clause(Env, Clause)
 			  end, Clauses)),
     {merge_types(Tys), union_var_binds(VarBinds)}.
 
-infer_clause(FEnv, VEnv, {clause, _, Args, Guards, Block}) ->
-    VEnvNew = add_any_types_pats(Args, VEnv),
+infer_clause(Env, {clause, _, Args, Guards, Block}) ->
+    EnvNew = Env#env{ venv = add_any_types_pats(Args, Env#env.venv) },
     % TODO: Can there be variable bindings in a guard? Right now we just
     % discard them.
     % TODO: Should we check that guards return boolean()?
     lists:map(fun (GuardConj) ->
 		      lists:map(fun (Guard) ->
-					type_check_expr(FEnv, VEnvNew, Guard)
+					type_check_expr(EnvNew, Guard)
 				end, GuardConj)
 	      end, Guards),
-    type_check_block(FEnv, VEnvNew, Block).
+    type_check_block(EnvNew, Block).
 
 
-check_clauses(FEnv, VEnv, ArgsTy, ResTy, Clauses) when
+check_clauses(Env, ArgsTy, ResTy, Clauses) when
       not is_list(ArgsTy) ->
-    check_clauses(FEnv, VEnv, [ArgsTy], ResTy, Clauses);
-check_clauses(FEnv, VEnv, ArgsTy, ResTy, Clauses) ->
+    check_clauses(Env, [ArgsTy], ResTy, Clauses);
+check_clauses(Env, ArgsTy, ResTy, Clauses) ->
     {Tys, VarBinds} =
 	lists:unzip(lists:map(fun (Clause) ->
-				  check_clause(FEnv, VEnv, ArgsTy, ResTy, Clause)
+				  check_clause(Env, ArgsTy, ResTy, Clause)
 			  end, Clauses)),
     {merge_types(Tys), VarBinds}.
 
-check_clause(FEnv, VEnv, ArgsTy, ResTy, {clause, _, Args, Guards, Block}) ->
+check_clause(Env, ArgsTy, ResTy, {clause, _, Args, Guards, Block}) ->
     case length(ArgsTy) =:= length(Args) of
 	false ->
 	    throw(argument_length_mismatch);
 	true ->
-	    VEnvNew    = add_types_pats(Args, ArgsTy, VEnv),
-	    VarBinds   = check_guards(FEnv, VEnvNew, Guards),
-	    VEnvNewest = add_var_binds(VEnvNew, VarBinds),
-	    type_check_block_in(FEnv, VEnvNewest, ResTy, Block)
+	    EnvNew    = Env#env{ venv = add_types_pats(Args, ArgsTy, Env#env.venv) },
+	    VarBinds  = check_guards(EnvNew, Guards),
+	    EnvNewest = EnvNew#env{ venv = add_var_binds(EnvNew#env.venv, VarBinds) },
+	    type_check_block_in(EnvNewest, ResTy, Block)
     end;
 %% DEBUG
-check_clause(_FEnv, _VEnv, _ArgsTy, _ResTy, Term) ->
+check_clause(_Env, _ArgsTy, _ResTy, Term) ->
     io:format("DEBUG: check_clause term: ~p~n", [Term]),
     throw(check_clause).
 
 
 %% TODO: implement proper checking of guards.
-check_guards(FEnv, VEnv, Guards) ->
+check_guards(Env, Guards) ->
     union_var_binds(
       lists:map(fun (GuardSeq) ->
 			union_var_binds(
 			  lists:map(fun (Guard) ->
 					    begin
-						{_Ty, VB} = type_check_expr(FEnv, VEnv, Guard), % Do we need to thread the VEnv?
+						{_Ty, VB} = type_check_expr(Env, Guard), % Do we need to thread the Env?
 						VB
 					    end
 				    end, GuardSeq))
@@ -608,10 +609,10 @@ check_guards(FEnv, VEnv, Guards) ->
 type_check_function(FEnv, {function,_, Name, NArgs, Clauses}) ->
     case maps:find({Name, NArgs}, FEnv) of
 	{ok, {type, _, 'fun', [{type, _, product, ArgsTy}, ResTy]}} ->
-	    {_, VarBinds} = check_clauses(FEnv, #{}, ArgsTy, ResTy, Clauses),
+	    {_, VarBinds} = check_clauses(#env{ fenv = FEnv }, ArgsTy, ResTy, Clauses),
 	    {ResTy, VarBinds};
 	{ok, {type, _, any, []}} ->
-	    infer_clauses(FEnv, #{}, Clauses);
+	    infer_clauses(#env{ fenv = FEnv }, Clauses);
 	error ->
 	    throw({internal_error, missing_type_spec, Name, NArgs})
     end.
