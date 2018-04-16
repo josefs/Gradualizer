@@ -745,7 +745,6 @@ type_check_file(File) ->
 	collect_specs_types_opaques_and_functions(Forms),
     FEnv = create_fenv(Specs, Funs),
     FEnvWithBuiltins = add_builtin_functions(FEnv),
-    io:format("Initial environment : ~p~n", [FEnvWithBuiltins]),
     Res = lists:foldr(fun (Function, ok) ->
 			      try type_check_function(FEnvWithBuiltins, Function) of
 				  {_Ty, _VarBinds} ->
@@ -792,13 +791,6 @@ add_builtin_functions(FEnv) ->
       {is_atom, 1} => {type, 0, 'fun', [{type, 0, product, [{type, 0, any, []}]}
 				       ,{type, 0, any, []}] }
      }.
-
-%% create_fenv([{{Name,_},[Type]}|Specs]) ->
-%%     (create_fenv(Specs))#{ Name => Type };
-%% create_fenv([{{Name,_},_}|_]) ->
-%%     throw({multiple_types_not_supported,Name});
-%% create_fenv([]) ->
-%%     #{}.
 
 %% Collect the top level parse tree stuff returned by epp:parse_file/2.
 -spec collect_specs_types_opaques_and_functions(Forms :: list()) -> #parsedata{}.
