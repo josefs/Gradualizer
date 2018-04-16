@@ -254,8 +254,14 @@ type_check_expr(_FEnv, _VEnv, {atom, _, _Atom}) ->
 %% Maps
 type_check_expr(FEnv, VEnv, {map, _, Assocs}) ->
     type_check_assocs(FEnv, VEnv, Assocs);
+type_check_expr(FEnv, VEnv, {map, _, Expr, Assocs}) ->
+    {Ty, VBExpr} = type_check_expr(FEnv, VEnv, Expr),
+    {Ty, VBAssocs} = type_check_assocs(FEnv, VEnv, Assocs),
+    % TODO: Update the type of the map.
+    % TODO: Check the type of the map.
+    {Ty, union_var_binds([VBExpr, VBAssocs])};
 
-% Functions
+%% Functions
 type_check_expr(FEnv, VEnv, {'fun', _, {clauses, Clauses}}) ->
     infer_clauses(FEnv, VEnv, Clauses);
 type_check_expr(FEnv, _VEnv, {'fun', _, {function, Name, Arity}}) ->
@@ -505,12 +511,23 @@ type_check_list_op(FEnv, VEnv, ResTy, _Op, Arg1, Arg2) ->
     end.
 
 
+type_check_assocs(FEnv, VEnv, [{Assoc, _, Key, Val}| Assocs])
+  when Assoc == map_field_assoc orelse Assoc == map_field_exact ->
+    {KeyTy, KeyVB} = type_check_expr(FEnv, VEnv, Key),
+    {ValTy, ValVB} = type_check_expr(FEnv, VEnv, Val),
+    % TODO
+    type_check_assocs(FEnv, VEnv, Assocs);
+type_check_assocs(_FEnv, _VEnv, []) ->
+    {{type, 0, any, []}, #{}}.
+
+
+
 type_check_fun(FEnv, _VEnv, {atom, _, Name}, Arity) ->
-    %% Local function call
-    maps:get({Name, Arity}, FEnv);
+    % Local function call
+    {maps:get({Name, Arity}, FEnv), #{}};
 type_check_fun(FEnv, _VEnv, {remote, _, {atom,_,Module}, {atom,_,Fun}}, Arity) ->
-    %% Module:function call
-    maps:get({Module,Fun, Arity}, FEnv, {type, 0, any, []});
+    % Module:function call
+    {maps:get({Module,Fun, Arity}, FEnv, {type, 0, any, []}), #{}};
     % TODO: Once we have interfaces, we should not have the default value above.
 type_check_fun(FEnv, VEnv, Expr, _Arity) ->
     type_check_expr(FEnv, VEnv, Expr).
