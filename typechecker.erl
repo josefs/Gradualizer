@@ -4,13 +4,14 @@
 
 %% Data collected from epp parse tree
 -record(parsedata, {
-	  module :: atom(),
+	  module             :: atom(),
 	  export_all = false :: boolean(),
-	  exports = [] :: [{atom(), integer()}],
-	  specs = [] :: list(),
-	  types = [] :: list(),
-	  opaques = [] :: list(),
-	  functions = [] :: list()
+	  exports    = []    :: [{atom(), integer()}],
+	  specs      = []    :: list(),
+	  types      = []    :: list(),
+	  opaques    = []    :: list(),
+	  records    = []    :: list(),
+	  functions  = []    :: list()
 	 }).
 
 % Subtyping compatibility
@@ -810,6 +811,8 @@ aux([{attribute, _, type, Type} | Forms], Acc) ->
     aux(Forms, Acc#parsedata{types = [Type | Acc#parsedata.types]});
 aux([{attribute, _, opaque, Opaque} | Forms], Acc) ->
     aux(Forms, Acc#parsedata{opaques = [Opaque | Acc#parsedata.opaques]});
+aux([{attribute, _, record, Record} | Forms], Acc) ->
+    aux(Forms, Acc#parsedata{records = [Record | Acc#parsedata.records]});
 aux([{attribute, _, export, Exports} | Forms], Acc) ->
     aux(Forms, Acc#parsedata{exports = Exports ++ Acc#parsedata.exports});
 aux([{attribute, _, compile, CompileOpts} | Forms], Acc) ->
