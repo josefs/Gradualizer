@@ -263,7 +263,7 @@ type_check_expr(Env, {map, _, Expr, Assocs}) ->
     {Ty, union_var_binds([VBExpr, VBAssocs])};
 
 %% Records
-type_check_expr(Env, {record_field, P, Expr, Record, Field}) ->
+type_check_expr(Env, {record_field, P, Expr, Record, {atom, _, Field}}) ->
     {ExprTy, VB} = type_check_expr(Env, Expr),
     case subtype(ExprTy, {record, 0, Record}) of
 	true ->
@@ -617,13 +617,14 @@ check_guards(Env, Guards) ->
 				    end, GuardSeq))
 		end, Guards)).
 
-type_check_function(FEnv, {function,_, Name, NArgs, Clauses}) ->
+type_check_function(FEnv, REnv, {function,_, Name, NArgs, Clauses}) ->
     case maps:find({Name, NArgs}, FEnv) of
 	{ok, {type, _, 'fun', [{type, _, product, ArgsTy}, ResTy]}} ->
-	    {_, VarBinds} = check_clauses(#env{ fenv = FEnv }, ArgsTy, ResTy, Clauses),
+	    {_, VarBinds} = check_clauses(#env{ fenv = FEnv, renv = REnv },
+					  ArgsTy, ResTy, Clauses),
 	    {ResTy, VarBinds};
 	{ok, {type, _, any, []}} ->
-	    infer_clauses(#env{ fenv = FEnv }, Clauses);
+	    infer_clauses(#env{ fenv = FEnv, renv = REnv }, Clauses);
 	error ->
 	    throw({internal_error, missing_type_spec, Name, NArgs})
     end.
@@ -683,10 +684,17 @@ add_type_pat({atom, _, Bool}, {type, _, boolean, []}, VEnv)
     VEnv;
 add_type_pat({atom, _, _}, {type, _, any, []}, VEnv) ->
     VEnv;
+add_type_pat({record, _, Record, Fields}, {type, _, record, [{atom, _, RecordName}]}, VEnv) ->
+    % TODO: We need the definitions of records here, to be able to add the
+    % types of the matches in the record.
+    add_type_pat_fields(Fields, {type, 0, any, []}, VEnv);
 add_type_pat({match, _, Pat1, Pat2}, Ty, VEnv) ->
     add_type_pat(Pat1, Ty, add_type_pat(Pat2, Ty, VEnv)).
 
-
+add_type_pat_fields([], _, VEnv) ->
+    VEnv;
+add_type_pat_fields([{record_field, _, Field, Pat}|Fields], Ty, VEnv) ->
+    add_type_pat_fields(Fields, Ty, add_type_pat(Pat, Ty, VEnv)).
 
 
 
@@ -754,12 +762,16 @@ glb_types(_, _) ->
 
 type_check_file(File) ->
     {ok, Forms} = epp:parse_file(File,[]),
-    CollectedForms = #parsedata{specs = Specs, functions = Funs} =
+    CollectedForms = #parsedata{specs     = Specs
+			       ,functions = Funs
+			       ,records   = Records
+			       } =
 	collect_specs_types_opaques_and_functions(Forms),
     FEnv = create_fenv(Specs, Funs),
+    REnv = create_renv(Records),
     FEnvWithBuiltins = add_builtin_functions(FEnv),
     Res = lists:foldr(fun (Function, ok) ->
-			      try type_check_function(FEnvWithBuiltins, Function) of
+			      try type_check_function(FEnvWithBuiltins, REnv, Function) of
 				  {_Ty, _VarBinds} ->
 				      ok
 			      catch
@@ -777,6 +789,22 @@ type_check_file(File) ->
 	nok ->
 	    nok
     end.
+
+create_renv(Records) ->
+    maps:from_list(lists:map(fun ({Rec,Fields}) ->
+				     {Rec, maps:from_list(lists:map(fun create_field/1
+							     ,Fields))}
+			     end, Records)).
+
+create_field({record_field, _, {atom, _, Field}}) ->
+    {Field, {type, 0, any, []}};
+create_field({record_field, _, {atom, _, Field}, _}) ->
+    {Field, {type, 0, any, []}};
+create_field({typed_record_field, {record_field, _, {atom, _, Field}}, Ty}) ->
+    {Field, Ty};
+create_field({typed_record_field, {record_field, _, {atom, _, Field}, _}, Ty}) ->
+    {Field, Ty}.
+
 
 create_fenv(Specs, Funs) ->
 % We're taking advantage of the fact that if a key occurrs more than once
