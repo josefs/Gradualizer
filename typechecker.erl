@@ -661,6 +661,10 @@ merge_types(Tys) ->
 		    merge_types([Ty | Rest]);
 		[{atom, _, _}, {type, _, _, _} | _] ->
 		    {type, 0, any, []};
+		[{type, P, Ty, Args1}, {type, _, Ty, Args2}]
+		  when length(Args1) == length(Args2) ->
+		    {type, P, Ty, lists:zipwith(fun (A,B) -> merge_types([A,B])
+						end, Args1, Args2)};
 		[{type, P, tuple, Args1}, {type, _, tuple, Args2} | Rest] ->
 		    case length(Args1) == length(Args2) of
 			false ->
