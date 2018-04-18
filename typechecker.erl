@@ -96,6 +96,9 @@ compat_ty({atom, true}, {type, bool, []}, A, _TEnv) ->
 compat_ty({atom, false}, {type, bool, []}, A, _TEnv) ->
     A;
 
+compat_ty({type, record, [{atom, Record}]}, {type, record, [{atom, Record}]}, A, _TEnv) ->
+    A;
+
 compat_ty({type, list, [Ty1]}, {type, list, [Ty2]}, A, TEnv) ->
     compat_ty(Ty1, Ty2, A, TEnv);
 compat_ty({type, nil, []}, {type, list, [_Ty]}, A, _TEnv) ->
@@ -264,15 +267,16 @@ type_check_expr(Env, {map, _, Expr, Assocs}) ->
 
 %% Records
 type_check_expr(Env, {record_field, P, Expr, Record, {atom, _, Field}}) ->
-    {ExprTy, VB} = type_check_expr(Env, Expr),
-    case subtype(ExprTy, {record, 0, Record}) of
-	true ->
-	    Rec = maps:get(Record, Env#env.renv),
-	    Ty  = maps:get(Field, Rec),
-	    {Ty, VB};
-	false ->
-	    throw({type_error, record_type, P, ExprTy, Record})
-    end;
+    {_ExprTy, VB} = type_check_expr_in(Env, {type, 0, record, [{atom, 0, Record}]}, Expr),
+    Rec = maps:get(Record, Env#env.renv),
+    Ty  = maps:get(Field, Rec),
+    {Ty, VB};
+type_check_expr(Env, {record, _, Expr, Record, Fields}) ->
+    RecTy = {type, 0, record, [{atom, 0, Record}]},
+    {_ExprTy, VB1} = type_check_expr_in(Env, RecTy, Expr),
+    Rec = maps:get(Record, Env#env.renv),
+    VB2 = type_check_fields(Env, Rec, Fields),
+    {RecTy, union_var_binds([VB1, VB2])};
 
 %% Functions
 type_check_expr(Env, {'fun', _, {clauses, Clauses}}) ->
@@ -362,6 +366,15 @@ type_check_expr(Env, {'try', _, [Expr], CaseCs, CatchCs, AfterCs}) ->
     % just merging them?
     % TODO: Check what variable bindings actually should be propagated
     {merge_types([Ty, TyC, TyS, TyA]), VB}.
+
+
+type_check_fields(Env, Rec, [{record_field, _, {atom, _, Field}, Expr} | Fields]) ->
+    FieldTy = maps:get(Field, Rec),
+    {_, VB1} = type_check_expr_in(Env, FieldTy, Expr),
+    VB2 = type_check_fields(Env, Rec, Fields),
+    union_var_binds([VB1, VB2]);
+type_check_fields(_Env, _Rec, []) ->
+    #{}.
 
 
 
@@ -922,6 +935,8 @@ remove_unexported(FEnv, #parsedata{exports = Exports}) ->
 
 pp_type({type, _, tuple, Args}) ->
   "{" ++ string:join(lists:map(fun pp_type/1, Args), ", ") ++ "}";
+pp_type({type, _, record, [{atom, _, Record}]}) ->
+    "#" ++ atom_to_list(Record);
 pp_type({type, _, Name, Args}) ->
     atom_to_list(Name) ++ "(" ++
 	string:join(lists:map(fun pp_type/1, Args), ", ") ++ ")";
