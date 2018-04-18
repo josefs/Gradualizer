@@ -277,6 +277,11 @@ type_check_expr(Env, {record, _, Expr, Record, Fields}) ->
     Rec = maps:get(Record, Env#env.renv),
     VB2 = type_check_fields(Env, Rec, Fields),
     {RecTy, union_var_binds([VB1, VB2])};
+type_check_expr(Env, {record, _, Record, Fields}) ->
+    RecTy = {type, 0, record, [{atom, 0, Record}]},
+    Rec   = maps:get(Record, Env#env.renv),
+    VB    = type_check_fields(Env, Rec, Fields),
+    {RecTy, VB};
 
 %% Functions
 type_check_expr(Env, {'fun', _, {clauses, Clauses}}) ->
