@@ -573,7 +573,7 @@ type_check_fun(Env, {atom, P, Name}, Arity) ->
 type_check_fun(_Env, {remote, P, {atom,_,Module}, {atom,_,Fun}}, Arity) ->
     % Module:function call
     case gradualizer_db:get_spec(Module, Fun, Arity) of
-	{ok, Types} -> Types;
+	{ok, Types} -> {Types, #{}};
 	not_found   -> throw({call_undef, P, Module, Fun, Arity})
     end;
 type_check_fun(Env, Expr, _Arity) ->
@@ -812,9 +812,8 @@ type_check_file(File) ->
 	collect_specs_types_opaques_and_functions(Forms),
     FEnv = create_fenv(Specs, Funs),
     REnv = create_renv(Records),
-    FEnvWithBuiltins = add_builtin_functions(FEnv),
     lists:foldr(fun (Function, ok) ->
-			try type_check_function(FEnvWithBuiltins, REnv, Function) of
+			try type_check_function(FEnv, REnv, Function) of
 			    {_Ty, _VarBinds} ->
 				ok
 			catch

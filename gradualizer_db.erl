@@ -100,7 +100,7 @@ init(Opts0) ->
 handle_call({get_spec, M, F, A}, _From, State) ->
     State1 = autoimport(M, State),
     K = {M, F, A},
-    case State#state.specs of
+    case State1#state.specs of
         #{K := Types} -> {reply, {ok, Types}, State1};
         _NoMatch      -> {reply, not_found, State1}
     end;
@@ -196,6 +196,7 @@ autoimport(M, #state{opts = #{autoimport := true},
             %% Alrady loaded or attempted
             State;
         _ ->
+            %io:format("Loading types from ~p~n", [M]),
             case import_module(M, State) of
                 {ok, State1} -> State1;
                 not_found    -> State
