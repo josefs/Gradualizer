@@ -814,6 +814,10 @@ glb_types(_, _) ->
 
 
 type_check_file(File) ->
+    case gradualizer_db:start_link() of
+	{ok, _Pid}                    -> ok;
+	{error, {already_started, _}} -> ok
+    end,
     {ok, Forms} = epp:parse_file(File,[]),
     #parsedata{specs     = Specs
 	      ,functions = Funs
