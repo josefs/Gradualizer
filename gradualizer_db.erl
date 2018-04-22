@@ -1,6 +1,3 @@
-%% Copyright 2018 Viktor Söderqvist
-%% See the LICENSE file shipped with this file.
-
 %% @doc Collect exported functions and types from multiple files.
 %%
 %% For exported functions with missing spec, a spec is generated with any()
@@ -9,7 +6,7 @@
 
 %% API functions
 -export([start_link/0,
-         get_spec/3, get_type/3,
+         get_spec/3, get_type/3, get_exported_type/3, get_record_type/2,
          save/1, load/1,
          import_files/1, import_app/1, import_otp/0]).
 
@@ -19,12 +16,21 @@
          code_change/3]).
 
 %% Types for the Erlang Abstract Format
--type line() :: non_neg_integer().
+-type line()          :: non_neg_integer().
+-type atom_or_var()   :: {atom|var, line(), atom()}.
 
--type type() :: {type, line(), atom(), [type()] | any} |
-                {var, line(), atom()} |
-                {integer, line(), integer()} |
-                {atom, line(), atom()}.
+-type type()          :: {type, line(), atom(), [type()] | any} |
+                         {user_type, line(), atom(), [type()]} |
+                         {remote_type, line(), [atom_or_var() | [type()]]} |
+                         {var, line(), atom()} |
+                         {integer, line(), integer()} |
+                         {atom, line(), atom()}.
+
+%% Type annotated with the module where it is defined
+-type extended_type() :: {remote_local_type, line(), module(), atom(),
+                          [type()]} |
+                         {remote_record_type, line(), module(), atom()} |
+                         type().
 
 %% Gen server local registered name
 -define(name, ?MODULE).
@@ -40,15 +46,35 @@
 start_link() ->
     gen_server:start_link({local, ?name}, ?MODULE, #{}, []).
 
--spec get_spec(M :: module(), F :: atom(), A :: arity()) ->
-        {ok, [type()]} | not_found.
+%% @doc Fetches the types of the clauses of an exported function. The returned
+%%      types may contain special forms for 'remote local' and 'remote record'
+%%      types.
+-spec get_spec(M :: module(),
+               F :: atom(),
+               A :: arity()) -> {ok, [extended_type()]} | not_found.
 get_spec(M, F, A) ->
     gen_server:call(?name, {get_spec, M, F, A}).
 
--spec get_type(Module :: module(), Type :: atom(), Params :: [type()]) ->
-        {ok, type()} | not_found.
+%% @doc Fetches an exported or unexported type.
+-spec get_type(Module :: module(),
+               Type :: atom(),
+               Params :: [type()]) -> {ok, extended_type()} | not_found.
 get_type(M, T, A) ->
     gen_server:call(?name, {get_type, M, T, A}).
+
+%% @doc Fetches an exported type.
+-spec get_exported_type(Module :: module(),
+                        Type :: atom(),
+                        Params :: [type()]) -> {ok, extended_type()} |
+                                               not_found.
+get_exported_type(M, T, A) ->
+    gen_server:call(?name, {get_exported_type, M, T, A}).
+
+%% @doc Fetches a record type defined in the module.
+-spec get_record_type(Module :: module(),
+                      Name :: atom()) -> {ok, extended_type()} | not_found.
+get_record_type(Module, Name) ->
+    gen_server:call(?name, {get_record_type, Module, Name}).
 
 -spec save(Filename :: any()) -> ok | {error, any()}.
 save(Filename) ->
@@ -101,46 +127,35 @@ handle_call({get_spec, M, F, A}, _From, State) ->
     State1 = autoimport(M, State),
     K = {M, F, A},
     case State1#state.specs of
-        #{K := Types} -> {reply, {ok, Types}, State1};
-        _NoMatch      -> {reply, not_found, State1}
-    end;
-handle_call({get_type, M, T, A}, _From, State) ->
-    State1 = autoimport(M, State),
-    K = {M, T, length(A)},
-    case State1#state.types of
-        #{K := TypeInfo} ->
-            Type1 = case TypeInfo of
-                        #typeinfo{opaque = true} ->
-                            %% Don't expand opaques (toggle option?)
-                            {opaque, M, T, A};
-                        #typeinfo{params = Vars,
-                                  body = Type} ->
-                            %% TODO: Add another function 'get_exported_type'
-                            %%       that checks the 'exported' flag
-                            VarMap = maps:from_list(lists:zip(Vars, A)),
-                            substitute_type_vars(Type, VarMap)
-                    end,
-            {reply, {ok, Type1}, State1};
+        #{K := Types} ->
+            Types1 = [annotate_local_types(M, Type) || Type <- Types],
+            {reply, {ok, Types1}, State1};
         _NoMatch ->
-            {reply, not_found, State}
+            {reply, not_found, State1}
     end;
+handle_call({get_exported_type, M, T, Args}, _From, State) ->
+    State1 = autoimport(M, State),
+    handle_get_type(M, T, Args, true, State1);
+handle_call({get_type, M, T, Args}, _From, State) ->
+    State1 = autoimport(M, State),
+    handle_get_type(M, T, Args, false, State1);
+handle_call({get_record_type, M, Name}, _From, State) ->
+    State1 = autoimport(M, State),
+    handle_get_type(M, {record, Name}, [], false, State1);
 handle_call({save, Filename}, _From, State) ->
-    Str = io_lib:format("~p.~n", [State]),
-    Gz  = zlib:gzip(Str),
-    Res = file:write_file(Filename, Gz),
+    Permanent = {State#state.specs, State#state.types, State#state.loaded},
+    Bin = term_to_binary(Permanent, [compressed]),
+    Res = file:write_file(Filename, Bin),
     {reply, Res, State};
 handle_call({load, Filename}, _From, State) ->
     case file:read_file(Filename) of
-        {ok, Gz} ->
+        {ok, Bin} ->
             try
-                Bin = zlib:gunzip(Gz),
-                S = binary_to_list(Bin),
-                {ok, Tokens, _} = erl_scan:string(S),
-                {ok, {Sp2, Ty2}} = erl_parse:parse_term(Tokens),
-                true = is_map(Sp2) and is_map(Ty2),
-                #state{specs = Sp1, types = Ty1} = State,
-                NewState = State#state{specs = maps:merge(Sp1, Sp2),
-                                       types = maps:merge(Ty1, Ty2)},
+                {Sp2, Ty2, Loaded2} = binary_to_term(Bin),
+                #state{specs = Sp1, types = Ty1, loaded = Loaded1} = State,
+                NewState = State#state{specs  = maps:merge(Sp1, Sp2),
+                                       types  = maps:merge(Ty1, Ty2),
+                                       loaded = maps:merge(Loaded1, Loaded2)},
                 {reply, ok, NewState}
             catch error:E ->
                 {reply, {error, E, erlang:get_stacktrace()}, State}
@@ -186,6 +201,30 @@ code_change(_OldVsn, State, _Extra) ->
 
 %% Helpers
 
+%% helper for handle_call for get_type, get_unexported_type and get_record_type.
+handle_get_type(M, T, Args, RequireExported, State) ->
+    K = {M, T, length(Args)},
+    case State#state.types of
+        #{K := TypeInfo} ->
+            case TypeInfo of
+                 #typeinfo{exported = false} when RequireExported ->
+                     {reply, not_found, State};
+                 #typeinfo{opaque = true} ->
+                     %% Don't expand opaques (toggle option?)
+                     {reply, {ok, {opaque, M, T, Args}}, State};
+                 #typeinfo{params = Vars,
+                           body = Type0} ->
+                     %% TODO: Add another function 'get_exported_type'
+                     %%       that checks the 'exported' flag
+                     VarMap = maps:from_list(lists:zip(Vars, Args)),
+                     Type1 = substitute_type_vars(Type0, VarMap),
+                     Type2 = annotate_local_types(M, Type1),
+                     {reply, {ok, Type2}, State}
+             end;
+        _NoMatch ->
+            {reply, not_found, State}
+    end.
+
 -spec autoimport(module(), state()) -> state().
 autoimport(_M, #state{opts = #{autoimport := false}} = State) ->
     State;
@@ -213,9 +252,11 @@ import_module(Mod, State) ->
     end.
 
 import_files([File | Files], State) ->
-    {ok, Forms} = epp:parse_file(File, []),
+    EppOpts = [{includes, guess_include_dirs(File)}],
+    {ok, Forms} = epp:parse_file(File, EppOpts),
     [{attribute, _, file, _},
      {attribute, _, module, Module} | Forms1] = Forms,
+    check_epp_errors(File, Forms1),
     Specs    = collect_specs(Module, Forms1),
     SpecMap1 = add_entries_to_map(Specs, State#state.specs),
     Types    = collect_types(Module, Forms1),
@@ -227,6 +268,34 @@ import_files([File | Files], State) ->
     import_files(Files, State1);
 import_files([], St) ->
     St.
+
+%% Include dirs for OTP apps are given in makefiles. We can never
+%% guarrantee to get them right without extracting the types during
+%% compilation.
+guess_include_dirs(File) ->
+    Dir = filename:dirname(File),
+    case filename:basename(Dir) of
+        "src" -> [Dir ++ "/../include"];
+        _     -> []
+    end ++ [code:lib_dir(M) ++ "/include" || M <- [erts, kernel, stdlib]].
+
+%% Log warnings for epp errors among the given forms
+%% Bad errors are failed includes due to bad include paths.
+-spec check_epp_errors(file:filename(), Forms :: [tuple()]) -> ok.
+check_epp_errors(File, Forms) ->
+    Errors          = [E || {error, E} <- Forms],
+    MissingIncludes = [F || {_Line, epp, {include, file, F}} <- Errors],
+    if
+        MissingIncludes /= [] ->
+            error_logger:warning_msg("Failed to find the following include"
+                                     " files for ~p:~n~p",
+                                     [File, MissingIncludes]);
+        Errors /= [] ->
+            error_logger:warning_msg("Errors while loading ~p:~n~p",
+                                     [File, Errors]);
+        true ->
+            ok
+    end.
 
 -spec add_entries_to_map([{Key, Value}], #{K => V}) -> #{K => V}
                                              when Key :: K, Value :: V.
@@ -252,7 +321,7 @@ collect_types(Module, Forms) ->
     %% Now all type definitions are easy to extract.
     Types = [begin
                  Id       = {Module, Name, length(Vars)},
-                 Exported = lists:member(Id, ExportedTypes),
+                 Exported = lists:member({Name, length(Vars)}, ExportedTypes),
                  Params   = [VarName || {var, _, VarName} <- Vars],
                  Info     = #typeinfo{exported = Exported,
                                       opaque   = (Attr == opaque),
@@ -328,6 +397,19 @@ substitute_type_vars({var, L, Var}, TVars) ->
     end;
 substitute_type_vars(Other, _) ->
     Other.
+
+%% Annotate unexported user-defined types and local record types with a module
+%% name, creating special types identified as 'remote_local_type' and
+%% 'remote_record_type'.
+-spec annotate_local_types(module(), type()) -> extended_type().
+annotate_local_types(Module, {user_type, Line, Name, Params}) ->
+    {remote_local_type, Line, Module, Name, Params};
+annotate_local_types(Module, {type, Line, record, [RecName]}) ->
+    {remote_record_type, Line, Module, RecName};
+annotate_local_types(Module, {type, Line, Tag, Args}) ->
+    {type, Line, Tag, [annotate_local_types(Module, Arg) || Arg <- Args]};
+annotate_local_types(_Module, Type) ->
+    Type.
 
 %% Returns specs for all exported functions, generating any-types for unspeced
 %% functions.
