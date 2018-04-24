@@ -482,24 +482,24 @@ type_check_expr_in(Env, ResTy, {op, P, 'not', Arg}) ->
 	false ->
 	    throw({type_error, not_user_with_wrong_type, P, ResTy})
     end;
-type_check_expr_in(Env, ResTy, {op, _, Op, Arg1, Arg2}) when
+type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
       Op == '+' orelse Op == '-' orelse Op == '*' orelse Op == '/' ->
-    type_check_arith_op(Env, ResTy, Op, Arg1, Arg2);
-type_check_expr_in(Env, ResTy, {op, _, Op, Arg1, Arg2}) when
+    type_check_arith_op(Env, ResTy, Op, P, Arg1, Arg2);
+type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
       Op == 'bnot' orelse Op == 'div' orelse Op == 'rem' orelse
       Op == 'band' orelse Op == 'bor' orelse Op == 'bxor' orelse
       Op == 'bsl'  orelse Op == 'bsr' ->
-    type_check_int_op(Env, ResTy, Op, Arg1, Arg2);
-type_check_expr_in(Env, ResTy, {op, _, Op, Arg1, Arg2}) when
+    type_check_int_op(Env, ResTy, Op, P, Arg1, Arg2);
+type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
       Op == 'and' orelse Op == 'or' orelse Op == 'xor' orelse
       Op == 'andalso' orelse Op == 'orelse' ->
-    type_check_logic_op(Env, ResTy, Op, Arg1, Arg2);
-type_check_expr_in(Env, ResTy, {op, _, Op, Arg1, Arg2}) when
+    type_check_logic_op(Env, ResTy, Op, P, Arg1, Arg2);
+type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
       Op == '++' orelse Op == '--' ->
-    type_check_list_op(Env, ResTy, Op, Arg1, Arg2)
+    type_check_list_op(Env, ResTy, Op, P, Arg1, Arg2)
 .
 
-type_check_arith_op(Env, ResTy, _Op, Arg1, Arg2) ->
+type_check_arith_op(Env, ResTy, Op, P, Arg1, Arg2) ->
     case ResTy of
 	{type, _, Ty, []} when Ty == 'integer' orelse Ty == 'float' orelse
 			       Ty == 'any' ->
@@ -507,27 +507,28 @@ type_check_arith_op(Env, ResTy, _Op, Arg1, Arg2) ->
 	  {_, VarBinds2} = type_check_expr_in(Env, ResTy, Arg2),
 	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
 	_ ->
-	  throw({arithmetic_type_error})
+	  throw({type_error, arith_error, Op, P, ResTy})
     end.
-type_check_int_op(Env, ResTy, _Op, Arg1, Arg2) ->
+type_check_int_op(Env, ResTy, Op, P, Arg1, Arg2) ->
     case ResTy of
 	{type, _, Ty, []} when Ty == 'integer' orelse Ty == 'any' ->
 	  {_, VarBinds1} = type_check_expr_in(Env, ResTy, Arg1),
 	  {_, VarBinds2} = type_check_expr_in(Env, ResTy, Arg2),
 	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
 	_ ->
-	  throw({arithmetic_type_error})
+	  throw({type_error, int_error, Op, P, ResTy})
     end.
-type_check_logic_op(Env, ResTy, _Op, Arg1, Arg2) ->
+type_check_logic_op(Env, ResTy, Op, P, Arg1, Arg2) ->
     case ResTy of
-	{type, _, Ty, []} when Ty == 'boolean' orelse Ty == 'any' ->
+	{type, _, Ty, []} when Ty == 'boolean' orelse Ty == 'bool'
+			       orelse Ty == 'any' ->
 	  {_, VarBinds1} = type_check_expr_in(Env, ResTy, Arg1),
 	  {_, VarBinds2} = type_check_expr_in(Env, ResTy, Arg2),
 	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
 	_ ->
-	  throw({arithmetic_type_error})
+	  throw({type_error, logic_error, Op, P, ResTy})
     end.
-type_check_list_op(Env, ResTy, _Op, Arg1, Arg2) ->
+type_check_list_op(Env, ResTy, Op, P, Arg1, Arg2) ->
     case ResTy of
 	{type, _, 'list', [_Ty]} ->
 	  {_, VarBinds1} = type_check_expr_in(Env, ResTy, Arg1),
@@ -538,7 +539,7 @@ type_check_list_op(Env, ResTy, _Op, Arg1, Arg2) ->
 	  {_, VarBinds2} = type_check_expr_in(Env, ResTy, Arg2),
 	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
 	_ ->
-	  throw({arithmetic_type_error})
+	  throw({type_error, list_op_error, Op, P, ResTy})
     end.
 
 
@@ -911,6 +912,18 @@ handle_type_error({type_error, call, _P, Name, TyArgs, ArgTys}) ->
 handle_type_error({type_error, boolop, BoolOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-boolean argument "
 	      " of type ~p~n", [BoolOp, P, pp_type(Ty)]);
+handle_type_error({type_error, arith_error, ArithOp, P, Ty}) ->
+    io:format("The operator ~p on line ~p is given a non-numeric argument "
+	      " of type ~p~n", [ArithOp, P, pp_type(Ty)]);
+handle_type_error({type_error, int_error, IntOp, P, Ty}) ->
+    io:format("The operator ~p on line ~p is given a non-integer argument "
+	      " of type ~p~n", [IntOp, P, pp_type(Ty)]);
+handle_type_error({type_error, logic_error, LogicOp, P, Ty}) ->
+    io:format("The operator ~p on line ~p is given a non-boolean argument "
+	      " of type ~p~n", [LogicOp, P, pp_type(Ty)]);
+handle_type_error({type_error, list_op_error, ListOp, P, Ty}) ->
+    io:format("The operator ~p on line ~p is given a non-list argument "
+	      " of type ~p~n", [ListOp, P, pp_type(Ty)]);
 handle_type_error({unknown_variable, P, Var}) ->
     io:format("Unknown variable ~p on line ~p.~n", [Var, P]);
 handle_type_error(type_error) ->
