@@ -246,8 +246,6 @@ type_check_expr(Env, {call, P, Name, Args}) ->
 	    { {type, 0, any, []}, VarBind };
 	[{type, _, 'fun', [{type, _, product, TyArgs}, ResTy]}] ->
 	    % TODO: Handle multi-clause function types
-	    % TODO: Push types inwards here, rather than inferring and
-	    % checking
 	    case subtypes(TyArgs, ArgTys) of
 		true ->
 		    {ResTy, union_var_binds([VarBind, VarBind2])};
