@@ -17,13 +17,13 @@
 % Subtyping compatibility
 % The first argument is a "compatible subtype" of the second.
 
--spec subtype(any(), any()) -> boolean().
+-spec subtype(any(), any()) -> bool(). % {ok, any()} | false.
 subtype(Ty1, Ty2) ->
-    R = begin
-	    catch
-		compat(remove_pos(Ty1),remove_pos(Ty2), sets:new(), maps:new())
-	end,
-    sets:is_set(R).
+    case catch compat(remove_pos(Ty1),remove_pos(Ty2), sets:new(), maps:new()) of
+	Tuple when element(1,Tuple) == type_error -> false;
+	{_, Constraints} -> %{ok, Constraints}
+	    true
+    end.
 
 subtypes([], []) ->
     true;
@@ -34,75 +34,83 @@ subtypes([Ty1|Tys1], [Ty2|Tys2]) ->
 
 % This function throws an exception in case of a type error
 
-%compat({Id1, Ty1},{Id2,Ty2}, A, TEnv) ->
+%% The functions compat and compat_ty are mutually recursive.
+%% The main entry point is compat and all recursive calls should go via compat.
+%% The function compat_ty is just a convenience function to be able to
+%% pattern match on types in a nice way.
 compat(Ty1, Ty2, A, TEnv) ->
-    sets:is_element({Ty1, Ty2}, A) orelse
-	compat_ty(Ty1, Ty2, sets:add_element({Ty1, Ty2}, A), TEnv).
+    case sets:is_element({Ty1, Ty2}, A) of
+	true ->
+	    ret(A);
+	false ->
+	    compat_ty(Ty1, Ty2, sets:add_element({Ty1, Ty2}, A), TEnv)
+    end.
 
 compat_ty({type, any, []}, _, A, _TEnv) ->
-    A;
+    ret(A);
 compat_ty(_, {type, any ,[]}, A, _TEnv) ->
-    A;
+    ret(A);
 %% Term is the top of the subtyping relation
 compat_ty(_, {type, term, []}, A, _TEnv) ->
-    A;
+    ret(A);
 %% None is the bottom of the subtyping relation
 compat_ty({type, none, []}, _, A, _TEnv) ->
-    A;
+    ret(A);
 
 % TODO: There are several kinds of fun types.
 % Add support for them all eventually
 compat_ty({type, 'fun', {type, product, Args1}, Res1},
 	  {type, 'fun', {type, product, Args2}, Res2},
 	  A, TEnv) ->
-    Ap = compat_tys(Args2, Args1, A, TEnv),
-    compat(Res1, Res2, Ap, TEnv);
+    {Ap, Cs} = compat_tys(Args2, Args1, A, TEnv),
+    {Aps, Css} = compat(Res1, Res2, Ap, TEnv),
+    {Aps, sets:union(Cs, Css)};
 
 % Integer types
 compat_ty({type, integer, []}, {type, integer, []}, A, _TEnv) ->
-    A;
+    ret(A);
 compat_ty({type, range, _}, {type, integer, []}, A, _TEnv) ->
-    A;
+    ret(A);
 compat_ty({type, range, [{integer, I11},{integer, I12}]},
 	  {type, range, [{integer, I21},{integer, I22}]},
 	  A, _TEnv) when
       I11 >= I21 andalso I12 =< I22 ->
-    A;
+    ret(A);
 compat_ty({type, integer, I}, {type, integer, I}, A, _TEnv) ->
-    A;
+    ret(A);
 compat_ty({type, integer, _I}, {type, integer, []}, A, _TEnv) ->
-    A;
+    ret(A);
 compat_ty({type, integer, I}, {type, range, [{integer,I1},
 					     {integer, I2}]}, A, _TEnv)
   when I >= I1 andalso I =< I2 ->
-    A;
+    ret(A);
 
 compat_ty({atom, Atom}, {atom, Atom}, A, _TEnv) ->
-    A;
+    ret(A);
 
 compat_ty({type, float, []}, {type, float, []}, A, _TEnv) ->
-    A;
+    ret(A);
 
 compat_ty({type, bool, []}, {type, bool, []}, A, _TEnv) ->
-    A;
+    ret(A);
 compat_ty({type, boolean, []}, {type, bool, []}, A, _TEnv) ->
-    A;
+    ret(A);
 compat_ty({type, bool, []}, {type, boolean, []}, A, _TEnv) ->
-    A;
+    ret(A);
 compat_ty({type, boolean, []}, {type, boolean, []}, A, _TEnv) ->
-    A;
+    ret(A);
 compat_ty({atom, true}, {type, bool, []}, A, _TEnv) ->
-    A;
+    ret(A);
 compat_ty({atom, false}, {type, bool, []}, A, _TEnv) ->
-    A;
+    ret(A);
 
 compat_ty({type, record, [{atom, Record}]}, {type, record, [{atom, Record}]}, A, _TEnv) ->
-    A;
+    ret(A);
 
 compat_ty({type, list, [Ty1]}, {type, list, [Ty2]}, A, TEnv) ->
-    compat_ty(Ty1, Ty2, A, TEnv);
+    compat(Ty1, Ty2, A, TEnv);
 compat_ty({type, nil, []}, {type, list, [_Ty]}, A, _TEnv) ->
-    A;
+    ret(A);
 
 compat_ty({type, tuple, Args1}, {type, tuple, Args2}, A, TEnv) ->
     compat_tys(Args1, Args2, A, TEnv);
@@ -112,30 +120,37 @@ compat_ty(Ty, {user_type, Name, Args}, A, TEnv) ->
     compat(Ty, unfold_user_type(Name, Args, TEnv), A, TEnv);
 
 compat_ty({type, map, []}, {type, map, []}, A, _TEnv) ->
-    A;
+    ret(A);
 compat_ty({type, map, []}, {type, map, _Assocs}, A, _TEnv) ->
-    A;
+    ret(A);
 %% TODO: Should we have this rule?
 compat_ty({type, map, _Assocs}, {type, map, []}, A, _TEnv) ->
-    A;
+    ret(A);
 compat_ty({type, map, Assocs1}, {type, map, Assocs2}, A, TEnv) ->
-    lists:foldl(fun (Assoc2, As) ->
-			any_type(Assoc2, Assocs1, As, TEnv)
-		end, A, Assocs2);
+    ret(lists:foldl(fun (Assoc2, As) ->
+			    any_type(Assoc2, Assocs1, As, TEnv)
+		    end, A, Assocs2));
 compat_ty({type, map_field_assoc, [Key1, Val1]},
 	  {type, map_field_assoc, [Key2, Val2]}, A, TEnv) ->
-    A2 = compat_ty(Key2, Key1, A, TEnv),
-    compat_ty(Val1, Val2, A2, TEnv);
+    {A1, Cs1} = compat_ty(Key2, Key1, A, TEnv),
+    {A2, Cs2} = compat_ty(Val1, Val2, A1, TEnv),
+    {A2, sets:union(Cs1, Cs2)};
 
 compat_ty(Ty1, Ty2, _, _) ->
     throw({type_error, compat, 0, Ty1, Ty2}).
 
 
 compat_tys([], [], A, _TEnv) ->
-    A;
+    ret(A);
 compat_tys([Ty1|Tys1], [Ty2|Tys2], A, TEnv) ->
-    Ap = compat(Ty1 ,Ty2, A, TEnv),
-    compat_tys(Tys1, Tys2, Ap, TEnv).
+    {Ap, Cs} = compat(Ty1 ,Ty2, A, TEnv),
+    {Aps, Css} = compat_tys(Tys1, Tys2, Ap, TEnv),
+    {Aps, sets:union(Cs, Css)}.
+
+%% Returns a successful matching of two types. Convenience function for when
+%% there were no type variables involved.
+ret(A) ->
+    {A, sets:new()}.
 
 any_type(_Ty, [], _A, _TEnv) ->
     throw({type_error, no_type_matching});
@@ -169,7 +184,6 @@ remove_pos({Type, _Pos, Foo}) ->
 	     ,renv   = #{}
 	     ,tyenv  = #{}
 	     ,tyvenv = #{}
-	     ,cenv   = #{}
 	     }).
 
 
@@ -178,8 +192,7 @@ remove_pos({Type, _Pos, Foo}) ->
 %% and the expression to type check.
 %% Returns the type of the expression and a collection of variables bound in
 %% the expression together with their type.
-%-spec type_check_expr(#{ any() => any() },#{ any() => any() }, any()) ->
-%			     { any(), #{ any() => any()} }.
+%-spec type_check_expr(#env, any()) -> { any(), #{ any() => any()} }.
 type_check_expr(Env, {var, P, Var}) ->
     case catch maps:get(Var, Env#env.venv) of
 	{'EXIT', {{badkey, _}, _}} ->
