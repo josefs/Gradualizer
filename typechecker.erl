@@ -17,11 +17,11 @@
 % Subtyping compatibility
 % The first argument is a "compatible subtype" of the second.
 
--spec subtype(any(), any()) -> bool(). % {ok, any()} | false.
+-spec subtype(any(), any()) -> boolean(). % {ok, any()} | false.
 subtype(Ty1, Ty2) ->
     case catch compat(remove_pos(Ty1),remove_pos(Ty2), sets:new(), maps:new()) of
 	Tuple when element(1,Tuple) == type_error -> false;
-	{_, Constraints} -> %{ok, Constraints}
+	{_, _Constraints} -> %{ok, Constraints}
 	    true
     end.
 
@@ -278,7 +278,7 @@ type_check_expr(Env, {map, _, Expr, Assocs}) ->
     {Ty, union_var_binds([VBExpr, VBAssocs])};
 
 %% Records
-type_check_expr(Env, {record_field, P, Expr, Record, {atom, _, Field}}) ->
+type_check_expr(Env, {record_field, _P, Expr, Record, {atom, _, Field}}) ->
     {_ExprTy, VB} = type_check_expr_in(Env, {type, 0, record, [{atom, 0, Record}]}, Expr),
     Rec = maps:get(Record, Env#env.renv),
     Ty  = maps:get(Field, Rec),
@@ -559,8 +559,8 @@ type_check_list_op(Env, ResTy, Op, P, Arg1, Arg2) ->
 
 type_check_assocs(Env, [{Assoc, _, Key, Val}| Assocs])
   when Assoc == map_field_assoc orelse Assoc == map_field_exact ->
-    {KeyTy, KeyVB} = type_check_expr(Env, Key),
-    {ValTy, ValVB} = type_check_expr(Env, Val),
+    {_KeyTy, _KeyVB} = type_check_expr(Env, Key),
+    {_ValTy, _ValVB} = type_check_expr(Env, Val),
     % TODO
     type_check_assocs(Env, Assocs);
 type_check_assocs(_Env, []) ->
@@ -735,7 +735,7 @@ add_type_pat({atom, _, Bool}, {type, _, boolean, []}, VEnv)
     VEnv;
 add_type_pat({atom, _, _}, {type, _, any, []}, VEnv) ->
     VEnv;
-add_type_pat({record, _, Record, Fields}, {type, _, record, [{atom, _, RecordName}]}, VEnv) ->
+add_type_pat({record, _, _Record, Fields}, {type, _, record, [{atom, _, _RecordName}]}, VEnv) ->
     % TODO: We need the definitions of records here, to be able to add the
     % types of the matches in the record.
     add_type_pat_fields(Fields, {type, 0, any, []}, VEnv);
@@ -744,7 +744,7 @@ add_type_pat({match, _, Pat1, Pat2}, Ty, VEnv) ->
 
 add_type_pat_fields([], _, VEnv) ->
     VEnv;
-add_type_pat_fields([{record_field, _, Field, Pat}|Fields], Ty, VEnv) ->
+add_type_pat_fields([{record_field, _, _Field, Pat}|Fields], Ty, VEnv) ->
     add_type_pat_fields(Fields, Ty, add_type_pat(Pat, Ty, VEnv)).
 
 
@@ -924,7 +924,8 @@ handle_type_error({type_error, list, _, Ty}) ->
 	      [pp_type(Ty), line_no(Ty)]);
 handle_type_error({type_error, call, _P, Name, TyArgs, ArgTys}) ->
     io:format("The function ~p expects arguments of type~n~p~n but is given "
-	      "arguments of type~n~p~n", [Name, TyArgs, ArgTys]);
+	      "arguments of type~n~p~n",
+	      [Name, TyArgs, ArgTys]);
 handle_type_error({type_error, boolop, BoolOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-boolean argument "
 	      " of type ~p~n", [BoolOp, P, pp_type(Ty)]);
