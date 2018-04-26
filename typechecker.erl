@@ -66,6 +66,16 @@ compat_ty({type, 'fun', {type, product, Args1}, Res1},
     {Aps, Css} = compat(Res1, Res2, Ap, TEnv),
     {Aps, sets:union(Cs, Css)};
 
+% Number type
+compat_ty({type, integer, []}, {type, number, []}, A, _TEnv) ->
+    ret(A);
+compat_ty({type, range, _}, {type, number, []}, A, _TEnv) ->
+    ret(A);
+compat_ty({integer, _I}, {type, number, []}, A, _TEnv) ->
+    ret(A);
+compat_ty({type, float, []}, {type, number, []}, A, _TEnv) ->
+    ret(A);
+
 % Integer types
 compat_ty({type, integer, []}, {type, integer, []}, A, _TEnv) ->
     ret(A);
@@ -76,16 +86,18 @@ compat_ty({type, range, [{integer, I11},{integer, I12}]},
 	  A, _TEnv) when
       I11 >= I21 andalso I12 =< I22 ->
     ret(A);
-compat_ty({type, integer, I}, {type, integer, I}, A, _TEnv) ->
+compat_ty({integer, I}, {integer, I}, A, _TEnv) ->
     ret(A);
-compat_ty({type, integer, _I}, {type, integer, []}, A, _TEnv) ->
+compat_ty({integer, _I}, {type, integer, []}, A, _TEnv) ->
     ret(A);
-compat_ty({type, integer, I}, {type, range, [{integer,I1},
-					     {integer, I2}]}, A, _TEnv)
+compat_ty({integer, I}, {type, range, [{integer, I1}, {integer, I2}]}, A, _TEnv)
   when I >= I1 andalso I =< I2 ->
     ret(A);
 
+%% Atoms
 compat_ty({atom, Atom}, {atom, Atom}, A, _TEnv) ->
+    ret(A);
+compat_ty({atom, _Atom}, {type, atom, []}, A, _TEnv) ->
     ret(A);
 
 compat_ty({type, float, []}, {type, float, []}, A, _TEnv) ->
@@ -132,12 +144,12 @@ compat_ty({type, map, Assocs1}, {type, map, Assocs2}, A, TEnv) ->
     ret(lists:foldl(fun (Assoc2, As) ->
 			    any_type(Assoc2, Assocs1, As, TEnv)
 		    end, A, Assocs2));
-compat_ty({type, AssocTag1, [Key1, Val1]},
-	  {type, AssocTag2, [Key2, Val2]}, A, TEnv)
-	when AssocTag1 == map_field_assoc, AssocTag2 == map_field_assoc;
-	     AssocTag1 == map_field_exact, AssocTag2 == map_field_exact;
-	     AssocTag1 == map_field_assoc, AssocTag2 == map_field_exact ->
-    %% For M2 <: M1, mandatory fields in M1 must be mandatory fields in M2
+compat_ty({type, AssocTag2, [Key2, Val2]},
+	  {type, AssocTag1, [Key1, Val1]}, A, TEnv)
+	when AssocTag2 == map_field_assoc, AssocTag1 == map_field_assoc;
+	     AssocTag2 == map_field_exact, AssocTag1 == map_field_exact;
+	     AssocTag2 == map_field_assoc, AssocTag1 == map_field_exact ->
+    %% For M1 <: M2, mandatory fields in M2 must be mandatory fields in M1
     {A1, Cs1} = compat_ty(Key2, Key1, A, TEnv),
     {A2, Cs2} = compat_ty(Val1, Val2, A1, TEnv),
     {A2, sets:union(Cs1, Cs2)};
