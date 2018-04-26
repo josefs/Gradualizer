@@ -123,19 +123,21 @@ compat_ty({user_type, Name, Args}, Ty, A, TEnv) ->
 compat_ty(Ty, {user_type, Name, Args}, A, TEnv) ->
     compat(Ty, unfold_user_type(Name, Args, TEnv), A, TEnv);
 
-compat_ty({type, map, []}, {type, map, []}, A, _TEnv) ->
+%% Maps
+compat_ty({type, map, any}, {type, map, _Assocs}, A, _TEnv) ->
     ret(A);
-compat_ty({type, map, []}, {type, map, _Assocs}, A, _TEnv) ->
-    ret(A);
-%% TODO: Should we have this rule?
-compat_ty({type, map, _Assocs}, {type, map, []}, A, _TEnv) ->
+compat_ty({type, map, _Assocs}, {type, map, any}, A, _TEnv) ->
     ret(A);
 compat_ty({type, map, Assocs1}, {type, map, Assocs2}, A, TEnv) ->
     ret(lists:foldl(fun (Assoc2, As) ->
 			    any_type(Assoc2, Assocs1, As, TEnv)
 		    end, A, Assocs2));
-compat_ty({type, map_field_assoc, [Key1, Val1]},
-	  {type, map_field_assoc, [Key2, Val2]}, A, TEnv) ->
+compat_ty({type, AssocTag1, [Key1, Val1]},
+	  {type, AssocTag2, [Key2, Val2]}, A, TEnv)
+	when AssocTag1 == map_field_assoc, AssocTag2 == map_field_assoc;
+	     AssocTag1 == map_field_exact, AssocTag2 == map_field_exact;
+	     AssocTag1 == map_field_assoc, AssocTag2 == map_field_exact ->
+    %% For M2 <: M1, mandatory fields in M1 must be mandatory fields in M2
     {A1, Cs1} = compat_ty(Key2, Key1, A, TEnv),
     {A2, Cs2} = compat_ty(Val1, Val2, A1, TEnv),
     {A2, sets:union(Cs1, Cs2)};
@@ -174,6 +176,8 @@ remove_pos({atom, _Pos, Atom}) ->
     {atom, Atom};
 remove_pos({type, _Pos, Type, Args}) when is_list(Args) ->
     {type, Type, lists:map(fun remove_pos/1, Args)};
+remove_pos({type, _Pos, Type, any})->
+    {type, Type, any};
 remove_pos({user_type, _Pos, Type, Args}) when is_list(Args) ->
     {user_type, Type, lists:map(fun remove_pos/1, Args)};
 remove_pos({type, _Pos, 'fun', Args}) ->
@@ -990,16 +994,14 @@ remove_unexported(FEnv, #parsedata{exports = Exports}) ->
 %%% Pretty printing
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-pp_type({type, _, tuple, Args}) ->
-  "{" ++ string:join(lists:map(fun pp_type/1, Args), ", ") ++ "}";
-pp_type({type, _, record, [{atom, _, Record}]}) ->
-    "#" ++ atom_to_list(Record);
-pp_type({type, _, Name, Args}) ->
-    atom_to_list(Name) ++ "(" ++
-	string:join(lists:map(fun pp_type/1, Args), ", ") ++ ")";
-pp_type({user_type, _, Name, Args}) ->
-    atom_to_list(Name) ++ "(" ++
-	string:join(lists:map(fun pp_type/1, Args), ", ") ++ ")".
+pp_type(Type) ->
+    %% erl_pp can handle type definitions, so wrap Type in a type definition
+    %% for a type called 't'. Then keep only the stuff after "::".
+    Form = {attribute, 0, type, {t, Type, []}},
+    TypeDef = erl_pp:form(Form),
+    {match, [S]} = re:run(TypeDef, <<"::\\s*(.*)\\.\\n*">>,
+			  [{capture, all_but_first, binary}]),
+    S.
 
 line_no(Ty) ->
     element(2,Ty).
