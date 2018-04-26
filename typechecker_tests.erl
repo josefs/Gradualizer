@@ -43,6 +43,11 @@ subtype_test() ->
     ?assert(typechecker:subtype(?t( nonempty_list() ) , ?t( [a, ...]       ))),
     ?assert(typechecker:subtype(?t( [a, ...]        ) , ?t( [a]            ))),
 
+    %% Tuples
+    ?assert(typechecker:subtype(?t( {a,b,c}         ) , ?t( tuple()        ))),
+    ?assert(typechecker:subtype(?t( tuple()         ) , ?t( {a,b,c}        ))),
+    ?assert(typechecker:subtype(?t( {x, 1}          ) , ?t( {atom(), 1..5} ))),
+
     %% Maps
     ?assert(typechecker:subtype(?t( map()           ) , ?t( #{a := b}      ))),
     ?assert(typechecker:subtype(?t( #{a := b}       ) , ?t( map()          ))),
@@ -73,6 +78,10 @@ not_subtype_test() ->
     ?assertNot(typechecker:subtype(?t( [a]           ), ?t( nonempty_list() ))),
     ?assertNot(typechecker:subtype(?t( [a]           ), ?t( [a, ...]        ))),
     ?assertNot(typechecker:subtype(?t( [b]           ), ?t( [a]             ))),
+
+    %% Tuples
+    ?assertNot(typechecker:subtype(?t( {}             ), ?t( {any()}        ))),
+    ?assertNot(typechecker:subtype(?t( {1..2, 3..4}   ), ?t( {1, 3}         ))),
 
     %% Maps
     ?assertNot(typechecker:subtype(?t( #{}            ), ?t( #{a := b}      ))),

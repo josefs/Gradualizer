@@ -138,6 +138,10 @@ compat_ty({type, nonempty_list, [Ty1]}, {type, list, [Ty2]}, A, TEnv) ->
 compat_ty({type, nonempty_list, [_Ty]}, {type, list, []}, A, _TEnv) ->
     ret(A);
 
+compat_ty({type, tuple, any}, {type, tuple, _Args}, A, _TEnv) ->
+    ret(A);
+compat_ty({type, tuple, _Args}, {type, tuple, any}, A, _TEnv) ->
+    ret(A);
 compat_ty({type, tuple, Args1}, {type, tuple, Args2}, A, TEnv) ->
     compat_tys(Args1, Args2, A, TEnv);
 compat_ty({user_type, Name, Args}, Ty, A, TEnv) ->
@@ -173,7 +177,9 @@ compat_tys([], [], A, _TEnv) ->
 compat_tys([Ty1|Tys1], [Ty2|Tys2], A, TEnv) ->
     {Ap, Cs} = compat(Ty1 ,Ty2, A, TEnv),
     {Aps, Css} = compat_tys(Tys1, Tys2, Ap, TEnv),
-    {Aps, sets:union(Cs, Css)}.
+    {Aps, sets:union(Cs, Css)};
+compat_tys(Tys1, Tys2, _, _) ->
+    throw({type_error, compat, 0, Tys1, Tys2}).
 
 %% Returns a successful matching of two types. Convenience function for when
 %% there were no type variables involved.
