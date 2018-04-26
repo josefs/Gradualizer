@@ -103,6 +103,10 @@ compat_ty({atom, true}, {type, bool, []}, A, _TEnv) ->
     ret(A);
 compat_ty({atom, false}, {type, bool, []}, A, _TEnv) ->
     ret(A);
+compat_ty({atom, true}, {type, boolean, []}, A, _TEnv) ->
+    ret(A);
+compat_ty({atom, false}, {type, boolean, []}, A, _TEnv) ->
+    ret(A);
 
 compat_ty({type, record, [{atom, Record}]}, {type, record, [{atom, Record}]}, A, _TEnv) ->
     ret(A);
@@ -248,6 +252,16 @@ type_check_expr(Env, {call, P, Name, Args}) ->
 	    % TODO: Handle multi-clause function types
 	    case subtypes(TyArgs, ArgTys) of
 		true ->
+		    {ResTy, union_var_binds([VarBind, VarBind2])};
+		false ->
+		    throw({type_error, call, P, Name, TyArgs, ArgTys})
+	    end;
+	[{type, _, bounded_fun, [{type, _, 'fun',
+				  [{type, _, product, TyArgs}, ResTy]}
+				,_Cs]}] ->
+	    case subtypes(TyArgs, ArgTys) of
+		true ->
+		    %%% TODO: Store the constraints
 		    {ResTy, union_var_binds([VarBind, VarBind2])};
 		false ->
 		    throw({type_error, call, P, Name, TyArgs, ArgTys})
@@ -434,7 +448,7 @@ type_check_expr_in(_Env, Ty, {float, LINE, _Int}) ->
 	    throw({type_error, float, LINE, Ty})
     end;
 type_check_expr_in(_Env, Ty, Atom = {atom, LINE, _}) ->
-    case subtype(Ty, Atom) of
+    case subtype(Atom, Ty) of
 	true ->
 	    return(Atom);
 	false ->
@@ -688,6 +702,10 @@ merge_types(Tys) ->
 	    case Tys of
 		[Ty={atom, _, A}, {atom, _, A} | Rest] ->
 		    merge_types([Ty | Rest]);
+		[{atom, _, false}, {atom, _, true} | Rest] ->
+		    merge_types([{type, 0, boolean, []} | Rest]);
+		[{atom, _, true}, {atom, _, false} | Rest] ->
+		    merge_types([{type, 0, boolean, []} | Rest]);
 		[{atom, _, _}, {type, _, _, _} | _] ->
 		    {type, 0, any, []};
 		[{type, P, Ty, Args1}, {type, _, Ty, Args2}]
@@ -912,7 +930,7 @@ handle_type_error({type_error, tyVar, LINE, Var, VarTy, Ty}) ->
 	      [Var, LINE, pp_type(VarTy), pp_type(Ty)]);
 handle_type_error({type_error, {atom, _, A}, LINE, Ty}) ->
     io:format("The atom ~p on line ~p does not have type ~p~n",
-	      [A, LINE, Ty]);
+	      [A, LINE, pp_type(Ty)]);
 handle_type_error({type_error, compat, _LINE, Ty1, Ty2}) ->
     io:format("The type ~p is not compatible with type ~p~n"
 	     ,[pp_type(Ty1), pp_type(Ty2)]);
