@@ -23,27 +23,35 @@ subtype_test() ->
     ?assert(typechecker:subtype(?t( 2             ) , ?t( 1..10          ))),
 
     %% Number
-    ?assert(typechecker:subtype(?t( 1             ) , ?t( number()       ))),
-    ?assert(typechecker:subtype(?t( 1..5          ) , ?t( number()       ))),
-    ?assert(typechecker:subtype(?t( integer()     ) , ?t( number()       ))),
-    ?assert(typechecker:subtype(?t( float()       ) , ?t( number()       ))),
+    ?assert(typechecker:subtype(?t( 1               ) , ?t( number()       ))),
+    ?assert(typechecker:subtype(?t( 1..5            ) , ?t( number()       ))),
+    ?assert(typechecker:subtype(?t( integer()       ) , ?t( number()       ))),
+    ?assert(typechecker:subtype(?t( float()         ) , ?t( number()       ))),
 
     %% Atom
-    ?assert(typechecker:subtype(?t( a             ) , ?t( atom()         ))),
-    ?assert(typechecker:subtype(?t( a             ) , ?t( a              ))),
+    ?assert(typechecker:subtype(?t( a               ) , ?t( atom()         ))),
+    ?assert(typechecker:subtype(?t( a               ) , ?t( a              ))),
+
+    %% Lists
+    ?assert(typechecker:subtype(?t( [a]             ) , ?t( list()         ))),
+    ?assert(typechecker:subtype(?t( list()          ) , ?t( [a]            ))),
+    ?assert(typechecker:subtype(?t( []              ) , ?t( list()         ))),
+    ?assert(typechecker:subtype(?t( []              ) , ?t( [a]            ))),
+    ?assert(typechecker:subtype(?t( [1]             ) , ?t( [1..5]         ))),
+    ?assert(typechecker:subtype(?t( nonempty_list() ) , ?t( list()         ))),
+    ?assert(typechecker:subtype(?t( nonempty_list() ) , ?t( [a]            ))),
+    ?assert(typechecker:subtype(?t( nonempty_list() ) , ?t( [a, ...]       ))),
+    ?assert(typechecker:subtype(?t( [a, ...]        ) , ?t( [a]            ))),
 
     %% Maps
-    ?assert(typechecker:subtype(?t( map()         ) , ?t( #{a := b}      ))),
-    ?assert(typechecker:subtype(?t( #{a := b}     ) , ?t( map()          ))),
-    ?assert(typechecker:subtype(?t( #{a => b}     ) , ?t( #{}            ))),
-    ?assert(typechecker:subtype(?t( #{a := b}     ) , ?t( #{a => b}      ))),
-    ?assert(typechecker:subtype(?t( #{1..5 := a } ) , ?t( #{5 := atom()} ))),
+    ?assert(typechecker:subtype(?t( map()           ) , ?t( #{a := b}      ))),
+    ?assert(typechecker:subtype(?t( #{a := b}       ) , ?t( map()          ))),
+    ?assert(typechecker:subtype(?t( #{a => b}       ) , ?t( #{}            ))),
+    ?assert(typechecker:subtype(?t( #{a := b}       ) , ?t( #{a => b}      ))),
+    ?assert(typechecker:subtype(?t( #{1..5 := a }   ) , ?t( #{5 := atom()} ))),
     ok.
 
 not_subtype_test() ->
-    %% Atom
-    ?assertNot(typechecker:subtype(?t( a             ), ?t( b               ))),
-
     %% Numeric
     ?assertNot(typechecker:subtype(?t( 1             ), ?t( 2               ))),
     ?assertNot(typechecker:subtype(?t( integer()     ), ?t( 1               ))),
@@ -54,6 +62,17 @@ not_subtype_test() ->
     ?assertNot(typechecker:subtype(?t( float()       ), ?t( integer()       ))),
     ?assertNot(typechecker:subtype(?t( number()      ), ?t( integer()       ))),
     ?assertNot(typechecker:subtype(?t( number()      ), ?t( float()         ))),
+
+    %% Atom
+    ?assertNot(typechecker:subtype(?t( a             ), ?t( b               ))),
+
+    %% Lists
+    ?assertNot(typechecker:subtype(?t( []            ), ?t( nonempty_list() ))),
+    ?assertNot(typechecker:subtype(?t( []            ), ?t( [a, ...]        ))),
+    ?assertNot(typechecker:subtype(?t( list()        ), ?t( nonempty_list() ))),
+    ?assertNot(typechecker:subtype(?t( [a]           ), ?t( nonempty_list() ))),
+    ?assertNot(typechecker:subtype(?t( [a]           ), ?t( [a, ...]        ))),
+    ?assertNot(typechecker:subtype(?t( [b]           ), ?t( [a]             ))),
 
     %% Maps
     ?assertNot(typechecker:subtype(?t( #{}            ), ?t( #{a := b}      ))),

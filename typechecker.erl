@@ -50,6 +50,9 @@ compat_ty({type, any, []}, _, A, _TEnv) ->
     ret(A);
 compat_ty(_, {type, any ,[]}, A, _TEnv) ->
     ret(A);
+%% Reflexivity (for builtin types, known to exist)
+compat_ty({type, Type, Params}, {type, Type, Params}, A, _TEnv) ->
+    ret(A);
 %% Term is the top of the subtyping relation
 compat_ty(_, {type, term, []}, A, _TEnv) ->
     ret(A);
@@ -77,8 +80,6 @@ compat_ty({type, float, []}, {type, number, []}, A, _TEnv) ->
     ret(A);
 
 % Integer types
-compat_ty({type, integer, []}, {type, integer, []}, A, _TEnv) ->
-    ret(A);
 compat_ty({type, range, _}, {type, integer, []}, A, _TEnv) ->
     ret(A);
 compat_ty({type, range, [{integer, I11},{integer, I12}]},
@@ -100,16 +101,9 @@ compat_ty({atom, Atom}, {atom, Atom}, A, _TEnv) ->
 compat_ty({atom, _Atom}, {type, atom, []}, A, _TEnv) ->
     ret(A);
 
-compat_ty({type, float, []}, {type, float, []}, A, _TEnv) ->
-    ret(A);
-
-compat_ty({type, bool, []}, {type, bool, []}, A, _TEnv) ->
-    ret(A);
 compat_ty({type, boolean, []}, {type, bool, []}, A, _TEnv) ->
     ret(A);
 compat_ty({type, bool, []}, {type, boolean, []}, A, _TEnv) ->
-    ret(A);
-compat_ty({type, boolean, []}, {type, boolean, []}, A, _TEnv) ->
     ret(A);
 compat_ty({atom, true}, {type, bool, []}, A, _TEnv) ->
     ret(A);
@@ -123,9 +117,25 @@ compat_ty({atom, false}, {type, boolean, []}, A, _TEnv) ->
 compat_ty({type, record, [{atom, Record}]}, {type, record, [{atom, Record}]}, A, _TEnv) ->
     ret(A);
 
+compat_ty({type, list, [_Ty]}, {type, list, []}, A, _TEnv) ->
+    ret(A);
+compat_ty({type, list, []}, {type, list, [_Ty]}, A, _TEnv) ->
+    ret(A);
 compat_ty({type, list, [Ty1]}, {type, list, [Ty2]}, A, TEnv) ->
     compat(Ty1, Ty2, A, TEnv);
-compat_ty({type, nil, []}, {type, list, [_Ty]}, A, _TEnv) ->
+compat_ty({type, nil, []}, {type, list, _Any}, A, _TEnv) ->
+    ret(A);
+compat_ty({type, nonempty_list, []}, {type, list, _Any}, A, _TEnv) ->
+    ret(A);
+compat_ty({type, nonempty_list, [_Ty]}, {type, nonempty_list, []}, A, _TEnv) ->
+    ret(A);
+compat_ty({type, nonempty_list, []}, {type, nonempty_list, [_Ty]}, A, _TEnv) ->
+    ret(A);
+compat_ty({type, nonempty_list, [Ty1]}, {type, nonempty_list, [Ty2]}, A, TEnv) ->
+    compat(Ty1, Ty2, A, TEnv);
+compat_ty({type, nonempty_list, [Ty1]}, {type, list, [Ty2]}, A, TEnv) ->
+    compat(Ty1, Ty2, A, TEnv);
+compat_ty({type, nonempty_list, [_Ty]}, {type, list, []}, A, _TEnv) ->
     ret(A);
 
 compat_ty({type, tuple, Args1}, {type, tuple, Args2}, A, TEnv) ->
