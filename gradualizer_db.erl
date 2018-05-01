@@ -390,18 +390,19 @@ substitute_type_vars(Other, _) ->
 %% Annotate user-defined types and record types with a file
 %% name.
 -spec annotate_local_types(file:filename(), type()) -> type().
-annotate_local_types(Filename, {user_type, Anno, Name, Args}) ->
+annotate_local_types(Filename, {user_type, Anno, Name, Params}) ->
     %% Annotate local user-defined type
     {user_type, erl_anno:set_file(Filename, Anno), Name,
-     [annotate_local_types(Filename, Arg) || Arg <- Args]};
+     [annotate_local_types(Filename, Param) || Param <- Params]};
 annotate_local_types(Filename, {type, Anno, record, RecName = [_]}) ->
     %% Annotate local record type
     {type, erl_anno:set_file(Filename, Anno), record, RecName};
-annotate_local_types(Filename, {Tag, Anno, T, Args}) when Tag == type orelse
-							  Tag == ann_type,
-							  is_list(Args) ->
+annotate_local_types(Filename, {type, Anno, T, Params}) when is_list(Params) ->
     %% Don't annotate, just recurse
-    {Tag, Anno, T, [annotate_local_types(Filename, Arg) || Arg <- Args]};
+    {type, Anno, T, [annotate_local_types(Filename, Param) || Param <- Params]};
+annotate_local_types(Filename, {ann_type, Anno, [Var, Type]}) ->
+    %% Don't annotate, just recurse
+    {ann_type, Anno, [Var, annotate_local_types(Filename, Type)]};
 annotate_local_types(_Filename, Type) ->
     Type.
 
