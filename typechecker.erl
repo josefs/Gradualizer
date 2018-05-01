@@ -1,5 +1,7 @@
 -module(typechecker).
 
+-type type() :: erl_parse:abstract_type().
+
 -compile([export_all]).
 
 %% Data collected from epp parse tree
@@ -17,12 +19,14 @@
 % Subtyping compatibility
 % The first argument is a "compatible subtype" of the second.
 
--spec subtype(any(), any()) -> boolean(). % {ok, any()} | false.
+-spec subtype(type(), type()) -> boolean().
 subtype(Ty1, Ty2) ->
-    case catch compat(remove_pos(Ty1),remove_pos(Ty2), sets:new(), maps:new()) of
-	Tuple when element(1,Tuple) == type_error -> false;
-	{_, _Constraints} -> %{ok, Constraints}
+    try compat(remove_pos(Ty1),remove_pos(Ty2), sets:new(), maps:new()) of
+	{_Memoization, _Constraints} ->
 	    true
+    catch
+	nomatch ->
+	    false
     end.
 
 subtypes([], []) ->
@@ -46,120 +50,120 @@ compat(Ty1, Ty2, A, TEnv) ->
 	    compat_ty(Ty1, Ty2, sets:add_element({Ty1, Ty2}, A), TEnv)
     end.
 
-compat_ty({type, any, []}, _, A, _TEnv) ->
+%% any() is used as the unknown type in the gradual type system
+compat_ty({type, _, any, []}, _, A, _TEnv) ->
     ret(A);
-compat_ty(_, {type, any ,[]}, A, _TEnv) ->
-    ret(A);
-%% Reflexivity (for builtin types, known to exist)
-compat_ty({type, Type, Params}, {type, Type, Params}, A, _TEnv) ->
+compat_ty(_, {type, _, any ,[]}, A, _TEnv) ->
     ret(A);
 %% Term is the top of the subtyping relation
-compat_ty(_, {type, term, []}, A, _TEnv) ->
+compat_ty(_, {type, _, term, []}, A, _TEnv) ->
     ret(A);
 %% None is the bottom of the subtyping relation
-compat_ty({type, none, []}, _, A, _TEnv) ->
+compat_ty({type, _, none, []}, _, A, _TEnv) ->
+    ret(A);
+%% Every type is subtype of itself
+compat_ty(T, T, A, _TEnv) ->
     ret(A);
 
 % TODO: There are several kinds of fun types.
 % Add support for them all eventually
-compat_ty({type, 'fun', {type, product, Args1}, Res1},
-	  {type, 'fun', {type, product, Args2}, Res2},
+compat_ty({type, _, 'fun', [{type, _, product, Args1}, Res1]},
+	  {type, _, 'fun', [{type, _, product, Args2}, Res2]},
 	  A, TEnv) ->
     {Ap, Cs} = compat_tys(Args2, Args1, A, TEnv),
     {Aps, Css} = compat(Res1, Res2, Ap, TEnv),
     {Aps, sets:union(Cs, Css)};
 
 % Number type
-compat_ty({type, integer, []}, {type, number, []}, A, _TEnv) ->
+compat_ty({type, _, integer, []}, {type, _, number, []}, A, _TEnv) ->
     ret(A);
-compat_ty({type, range, _}, {type, number, []}, A, _TEnv) ->
+compat_ty({type, _, range, _}, {type, _, number, []}, A, _TEnv) ->
     ret(A);
-compat_ty({integer, _I}, {type, number, []}, A, _TEnv) ->
+compat_ty({integer, _, _I}, {type, _, number, []}, A, _TEnv) ->
     ret(A);
-compat_ty({type, float, []}, {type, number, []}, A, _TEnv) ->
+compat_ty({type, _, float, []}, {type, _, number, []}, A, _TEnv) ->
     ret(A);
 
 % Integer types
-compat_ty({type, range, _}, {type, integer, []}, A, _TEnv) ->
+compat_ty({type, _, range, _}, {type, _, integer, []}, A, _TEnv) ->
     ret(A);
-compat_ty({type, range, [{integer, I11},{integer, I12}]},
-	  {type, range, [{integer, I21},{integer, I22}]},
+compat_ty({type, _, range, [{integer, _, I11}, {integer, _, I12}]},
+	  {type, _, range, [{integer, _, I21}, {integer, _, I22}]},
 	  A, _TEnv) when
       I11 >= I21 andalso I12 =< I22 ->
     ret(A);
-compat_ty({integer, I}, {integer, I}, A, _TEnv) ->
+compat_ty({integer, _, I}, {integer, _, I}, A, _TEnv) ->
     ret(A);
-compat_ty({integer, _I}, {type, integer, []}, A, _TEnv) ->
+compat_ty({integer, _, _I}, {type, _, integer, []}, A, _TEnv) ->
     ret(A);
-compat_ty({integer, I}, {type, range, [{integer, I1}, {integer, I2}]}, A, _TEnv)
+compat_ty({integer,_,  I}, {type, _, range, [{integer, _, I1}, {integer, _, I2}]}, A, _TEnv)
   when I >= I1 andalso I =< I2 ->
     ret(A);
 
 %% Atoms
-compat_ty({atom, Atom}, {atom, Atom}, A, _TEnv) ->
-    ret(A);
-compat_ty({atom, _Atom}, {type, atom, []}, A, _TEnv) ->
+compat_ty({atom, _, _Atom}, {type, _, atom, []}, A, _TEnv) ->
     ret(A);
 
-compat_ty({type, boolean, []}, {type, bool, []}, A, _TEnv) ->
+compat_ty({type, _, boolean, []}, {type, _, bool, []}, A, _TEnv) ->
     ret(A);
-compat_ty({type, bool, []}, {type, boolean, []}, A, _TEnv) ->
+compat_ty({type, _, bool, []}, {type, _, boolean, []}, A, _TEnv) ->
     ret(A);
-compat_ty({atom, true}, {type, bool, []}, A, _TEnv) ->
+compat_ty({atom, _, true}, {type, _, bool, []}, A, _TEnv) ->
     ret(A);
-compat_ty({atom, false}, {type, bool, []}, A, _TEnv) ->
+compat_ty({atom, _, false}, {type, _, bool, []}, A, _TEnv) ->
     ret(A);
-compat_ty({atom, true}, {type, boolean, []}, A, _TEnv) ->
+compat_ty({atom, _, true}, {type, _, boolean, []}, A, _TEnv) ->
     ret(A);
-compat_ty({atom, false}, {type, boolean, []}, A, _TEnv) ->
-    ret(A);
-
-compat_ty({type, record, [{atom, Record}]}, {type, record, [{atom, Record}]}, A, _TEnv) ->
+compat_ty({atom, _, false}, {type, _, boolean, []}, A, _TEnv) ->
     ret(A);
 
-compat_ty({type, list, [_Ty]}, {type, list, []}, A, _TEnv) ->
+%compat_ty({type, _, record, [{atom, _, Record}]},
+%          {type, _, record, [{atom, _, Record}]}, A, _TEnv) ->
+%    ret(A);
+
+compat_ty({type, _, list, [_Ty]}, {type, _, list, []}, A, _TEnv) ->
     ret(A);
-compat_ty({type, list, []}, {type, list, [_Ty]}, A, _TEnv) ->
+compat_ty({type, _, list, []}, {type, _, list, [_Ty]}, A, _TEnv) ->
     ret(A);
-compat_ty({type, list, [Ty1]}, {type, list, [Ty2]}, A, TEnv) ->
+compat_ty({type, _, list, [Ty1]}, {type, _, list, [Ty2]}, A, TEnv) ->
     compat(Ty1, Ty2, A, TEnv);
-compat_ty({type, nil, []}, {type, list, _Any}, A, _TEnv) ->
+compat_ty({type, _, nil, []}, {type, _, list, _Any}, A, _TEnv) ->
     ret(A);
-compat_ty({type, nonempty_list, []}, {type, list, _Any}, A, _TEnv) ->
+compat_ty({type, _, nonempty_list, []}, {type, _, list, _Any}, A, _TEnv) ->
     ret(A);
-compat_ty({type, nonempty_list, [_Ty]}, {type, nonempty_list, []}, A, _TEnv) ->
+compat_ty({type, _, nonempty_list, [_Ty]}, {type, _, nonempty_list, []}, A, _TEnv) ->
     ret(A);
-compat_ty({type, nonempty_list, []}, {type, nonempty_list, [_Ty]}, A, _TEnv) ->
+compat_ty({type, _, nonempty_list, []}, {type, _, nonempty_list, [_Ty]}, A, _TEnv) ->
     ret(A);
-compat_ty({type, nonempty_list, [Ty1]}, {type, nonempty_list, [Ty2]}, A, TEnv) ->
+compat_ty({type, _, nonempty_list, [Ty1]}, {type, _, nonempty_list, [Ty2]}, A, TEnv) ->
     compat(Ty1, Ty2, A, TEnv);
-compat_ty({type, nonempty_list, [Ty1]}, {type, list, [Ty2]}, A, TEnv) ->
+compat_ty({type, _, nonempty_list, [Ty1]}, {type, _, list, [Ty2]}, A, TEnv) ->
     compat(Ty1, Ty2, A, TEnv);
-compat_ty({type, nonempty_list, [_Ty]}, {type, list, []}, A, _TEnv) ->
+compat_ty({type, _, nonempty_list, [_Ty]}, {type, _, list, []}, A, _TEnv) ->
     ret(A);
 
-compat_ty({type, tuple, any}, {type, tuple, _Args}, A, _TEnv) ->
+compat_ty({type, _, tuple, any}, {type, _, tuple, _Args}, A, _TEnv) ->
     ret(A);
-compat_ty({type, tuple, _Args}, {type, tuple, any}, A, _TEnv) ->
+compat_ty({type, _, tuple, _Args}, {type, _, tuple, any}, A, _TEnv) ->
     ret(A);
-compat_ty({type, tuple, Args1}, {type, tuple, Args2}, A, TEnv) ->
+compat_ty({type, _, tuple, Args1}, {type, _, tuple, Args2}, A, TEnv) ->
     compat_tys(Args1, Args2, A, TEnv);
-compat_ty({user_type, Name, Args}, Ty, A, TEnv) ->
+compat_ty({user_type, _, Name, Args}, Ty, A, TEnv) ->
     compat(unfold_user_type(Name, Args, TEnv), Ty, A, TEnv);
 compat_ty(Ty, {user_type, Name, Args}, A, TEnv) ->
     compat(Ty, unfold_user_type(Name, Args, TEnv), A, TEnv);
 
 %% Maps
-compat_ty({type, map, any}, {type, map, _Assocs}, A, _TEnv) ->
+compat_ty({type, _, map, any}, {type, _, map, _Assocs}, A, _TEnv) ->
     ret(A);
-compat_ty({type, map, _Assocs}, {type, map, any}, A, _TEnv) ->
+compat_ty({type, _, map, _Assocs}, {type, _, map, any}, A, _TEnv) ->
     ret(A);
-compat_ty({type, map, Assocs1}, {type, map, Assocs2}, A, TEnv) ->
+compat_ty({type, _, map, Assocs1}, {type, _, map, Assocs2}, A, TEnv) ->
     ret(lists:foldl(fun (Assoc2, As) ->
 			    any_type(Assoc2, Assocs1, As, TEnv)
 		    end, A, Assocs2));
-compat_ty({type, AssocTag2, [Key2, Val2]},
-	  {type, AssocTag1, [Key1, Val1]}, A, TEnv)
+compat_ty({type, _, AssocTag2, [Key2, Val2]},
+	  {type, _, AssocTag1, [Key1, Val1]}, A, TEnv)
 	when AssocTag2 == map_field_assoc, AssocTag1 == map_field_assoc;
 	     AssocTag2 == map_field_exact, AssocTag1 == map_field_exact;
 	     AssocTag2 == map_field_assoc, AssocTag1 == map_field_exact ->
@@ -168,8 +172,8 @@ compat_ty({type, AssocTag2, [Key2, Val2]},
     {A2, Cs2} = compat_ty(Val1, Val2, A1, TEnv),
     {A2, sets:union(Cs1, Cs2)};
 
-compat_ty(Ty1, Ty2, _, _) ->
-    throw({type_error, compat, 0, Ty1, Ty2}).
+compat_ty(_Ty1, _Ty2, _, _) ->
+    throw(nomatch).
 
 
 compat_tys([], [], A, _TEnv) ->
@@ -178,8 +182,8 @@ compat_tys([Ty1|Tys1], [Ty2|Tys2], A, TEnv) ->
     {Ap, Cs} = compat(Ty1 ,Ty2, A, TEnv),
     {Aps, Css} = compat_tys(Tys1, Tys2, Ap, TEnv),
     {Aps, sets:union(Cs, Css)};
-compat_tys(Tys1, Tys2, _, _) ->
-    throw({type_error, compat, 0, Tys1, Tys2}).
+compat_tys(_Tys1, _Tys2, _, _) ->
+    throw(nomatch).
 
 %% Returns a successful matching of two types. Convenience function for when
 %% there were no type variables involved.
@@ -187,12 +191,12 @@ ret(A) ->
     {A, sets:new()}.
 
 any_type(_Ty, [], _A, _TEnv) ->
-    throw({type_error, no_type_matching});
+    throw(nomatch);
 any_type(Ty, [Ty1|Tys], A, TEnv) ->
     try
 	compat_ty(Ty, Ty1, A, TEnv)
     catch
-	_ ->
+	nomatch ->
 	    any_type(Ty, Tys, A, TEnv)
     end.
 
@@ -200,18 +204,28 @@ any_type(Ty, [Ty1|Tys], A, TEnv) ->
 unfold_user_type(_Name, _Args, _TEnv) ->
     unimplemented. %maps:find(Name, TEnv)
 
-remove_pos({atom, _Pos, Atom}) ->
-    {atom, Atom};
-remove_pos({type, _Pos, Type, Args}) when is_list(Args) ->
-    {type, Type, lists:map(fun remove_pos/1, Args)};
-remove_pos({type, _Pos, Type, any})->
-    {type, Type, any};
-remove_pos({user_type, _Pos, Type, Args}) when is_list(Args) ->
-    {user_type, Type, lists:map(fun remove_pos/1, Args)};
-remove_pos({type, _Pos, 'fun', Args}) ->
-    {type, 'fun', remove_pos(Args)};
-remove_pos({Type, _Pos, Foo}) ->
-    {Type, Foo}.
+-spec remove_pos(type()) -> type().
+remove_pos({Type, Anno, Value}) when Type == atom; Type == integer; Type == var ->
+    {Type, normalize_anno(Anno), Value};
+remove_pos({type, Anno, Type, Params}) when is_list(Params) ->
+    {type, normalize_anno(Anno), Type, lists:map(fun remove_pos/1, Params)};
+remove_pos({type, Anno, Type, any}) when Type == tuple; Type == map ->
+    {type, normalize_anno(Anno), Type, any};
+remove_pos({user_type, Anno, Name, Params}) when is_list(Params) ->
+    {user_type, normalize_anno(Anno), Name, lists:map(fun remove_pos/1, Params)};
+remove_pos({remote_type, Anno, [Mod, Name, Params]}) ->
+    {remote_type, normalize_anno(Anno), [Mod, Name, remove_pos(Params)]};
+remove_pos({ann_type, Anno, [Var, Type]}) ->
+    {ann_type, normalize_anno(Anno), [Var, remove_pos(Type)]}.
+
+%% Remove all annotations (e.g. line number) except filename, so that types
+%% with different annotations implies inequal types.
+normalize_anno(Anno) ->
+    NewAnno = erl_anno:new(0),
+    case erl_anno:file(Anno) of
+	undefined -> NewAnno;
+	Filename  -> erl_anno:set_file(Filename, NewAnno)
+    end.
 
 %%% The environment passed around during typechecking.
 
@@ -1027,9 +1041,24 @@ pp_type(Type) ->
     %% for a type called 't'. Then keep only the stuff after "::".
     Form = {attribute, 0, type, {t, Type, []}},
     TypeDef = erl_pp:form(Form),
+    %io:format("pp_type(~p) -> \"~s\"~n", [Type, TypeDef]),
     {match, [S]} = re:run(TypeDef, <<"::\\s*(.*)\\.\\n*">>,
-			  [{capture, all_but_first, binary}]),
+			  [{capture, all_but_first, binary}, dotall]),
     S.
+    %case erl_anno:file(element(2, Type)) of
+    %	undefined -> S;
+    %	File      -> <<S/binary, " in ", (list_to_binary(File))/binary>>
+    %end.
+
+debug_type(M, N, P) ->
+    case gradualizer_db:get_type(M, N, P) of
+	{ok, T} ->
+	    Params = lists:join($,, lists:map(fun pp_type/1, P)),
+	    io:format("~w:~w(~s) :: ~s.~n",
+		      [M, N, Params, pp_type(T)]);
+	not_found ->
+	    not_found
+    end.
 
 line_no(Ty) ->
     element(2,Ty).

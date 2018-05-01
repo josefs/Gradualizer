@@ -16,21 +16,7 @@
          code_change/3]).
 
 %% Types for the Erlang Abstract Format
--type line()          :: non_neg_integer().
--type atom_or_var()   :: {atom|var, line(), atom()}.
-
--type type()          :: {type, line(), atom(), [type()] | any} |
-                         {user_type, line(), atom(), [type()]} |
-                         {remote_type, line(), [atom_or_var() | [type()]]} |
-                         {var, line(), atom()} |
-                         {integer, line(), integer()} |
-                         {atom, line(), atom()}.
-
-%% Type annotated with the module where it is defined
--type extended_type() :: {remote_local_type, line(), module(), atom(),
-                          [type()]} |
-                         {remote_record_type, line(), module(), atom()} |
-                         type().
+-type type() :: erl_parse:abstract_type().
 
 %% Gen server local registered name
 -define(name, ?MODULE).
@@ -38,7 +24,7 @@
 %% Internal data
 -record(typeinfo, {exported :: boolean(),
                    opaque   :: boolean(),
-                   params   :: [{var, _, atom()}],
+                   params   :: [{var, erl_anno:anno(), atom()}],
                    body     :: type()}).
 
 %% Public API functions
@@ -51,28 +37,28 @@ start_link() ->
 %%      types.
 -spec get_spec(M :: module(),
                F :: atom(),
-               A :: arity()) -> {ok, [extended_type()]} | not_found.
+               A :: arity()) -> {ok, [type()]} | not_found.
 get_spec(M, F, A) ->
     gen_server:call(?name, {get_spec, M, F, A}).
 
 %% @doc Fetches an exported or unexported type.
 -spec get_type(Module :: module(),
                Type :: atom(),
-               Params :: [type()]) -> {ok, extended_type()} | not_found.
+               Params :: [type()]) -> {ok, type()} | not_found.
 get_type(M, T, A) ->
     gen_server:call(?name, {get_type, M, T, A}).
 
 %% @doc Fetches an exported type.
 -spec get_exported_type(Module :: module(),
                         Type :: atom(),
-                        Params :: [type()]) -> {ok, extended_type()} |
+                        Params :: [type()]) -> {ok, type()} |
                                                not_found.
 get_exported_type(M, T, A) ->
     gen_server:call(?name, {get_exported_type, M, T, A}).
 
 %% @doc Fetches a record type defined in the module.
 -spec get_record_type(Module :: module(),
-                      Name :: atom()) -> {ok, extended_type()} | not_found.
+                      Name :: atom()) -> {ok, type()} | not_found.
 get_record_type(Module, Name) ->
     gen_server:call(?name, {get_record_type, Module, Name}).
 
@@ -128,7 +114,7 @@ handle_call({get_spec, M, F, A}, _From, State) ->
     K = {M, F, A},
     case State1#state.specs of
         #{K := Types} ->
-            Types1 = [annotate_local_types(M, Type) || Type <- Types],
+            Types1 = [annotate_local_types(atom_to_list(M) ++ ".erl", Type) || Type <- Types],
             {reply, {ok, Types1}, State1};
         _NoMatch ->
             {reply, not_found, State1}
@@ -202,14 +188,16 @@ code_change(_OldVsn, State, _Extra) ->
 %% Helpers
 
 %% helper for handle_call for get_type, get_unexported_type and get_record_type.
-handle_get_type(M, T, Args, RequireExported, State) ->
+handle_get_type(M, T, Args, RequireExported, %ExpandOpaque,
+		State) ->
     K = {M, T, length(Args)},
     case State#state.types of
         #{K := TypeInfo} ->
             case TypeInfo of
                  #typeinfo{exported = false} when RequireExported ->
                      {reply, not_found, State};
-                 #typeinfo{opaque = true} ->
+                 #typeinfo{opaque = true} %when not ExpandOpaque
+		                             ->
                      %% Don't expand opaques (toggle option?)
                      {reply, {ok, {opaque, M, T, Args}}, State};
                  #typeinfo{params = Vars,
@@ -218,7 +206,7 @@ handle_get_type(M, T, Args, RequireExported, State) ->
                      %%       that checks the 'exported' flag
                      VarMap = maps:from_list(lists:zip(Vars, Args)),
                      Type1 = substitute_type_vars(Type0, VarMap),
-                     Type2 = annotate_local_types(M, Type1),
+                     Type2 = annotate_local_types(atom_to_list(M) ++ ".erl", Type1),
                      {reply, {ok, Type2}, State}
              end;
         _NoMatch ->
@@ -386,10 +374,11 @@ normalize_record_field({typed_record_field,
     Complete.
 
 -spec substitute_type_vars(type(),
-                           %[{{atom(), arity()}, typeinfo()}],
                            #{atom() => type()}) -> type().
-substitute_type_vars({type, L, T, Params}, TVars) when is_list(Params) ->
-    {type, L, T, [substitute_type_vars(P, TVars) || P <- Params]};
+substitute_type_vars({Tag, L, T, Params}, TVars) when Tag == type orelse
+						      Tag == user_type,
+						      is_list(Params) ->
+    {Tag, L, T, [substitute_type_vars(P, TVars) || P <- Params]};
 substitute_type_vars({var, L, Var}, TVars) ->
     case TVars of
         #{Var := Type} -> Type;
@@ -398,17 +387,22 @@ substitute_type_vars({var, L, Var}, TVars) ->
 substitute_type_vars(Other, _) ->
     Other.
 
-%% Annotate unexported user-defined types and local record types with a module
-%% name, creating special types identified as 'remote_local_type' and
-%% 'remote_record_type'.
--spec annotate_local_types(module(), type()) -> extended_type().
-annotate_local_types(Module, {user_type, Line, Name, Params}) ->
-    {remote_local_type, Line, Module, Name, Params};
-annotate_local_types(Module, {type, Line, record, [RecName]}) ->
-    {remote_record_type, Line, Module, RecName};
-annotate_local_types(Module, {type, Line, Tag, Args}) ->
-    {type, Line, Tag, [annotate_local_types(Module, Arg) || Arg <- Args]};
-annotate_local_types(_Module, Type) ->
+%% Annotate user-defined types and record types with a file
+%% name.
+-spec annotate_local_types(file:filename(), type()) -> type().
+annotate_local_types(Filename, {user_type, Anno, Name, Args}) ->
+    %% Annotate local user-defined type
+    {user_type, erl_anno:set_file(Filename, Anno), Name,
+     [annotate_local_types(Filename, Arg) || Arg <- Args]};
+annotate_local_types(Filename, {type, Anno, record, RecName = [_]}) ->
+    %% Annotate local record type
+    {type, erl_anno:set_file(Filename, Anno), record, RecName};
+annotate_local_types(Filename, {Tag, Anno, T, Args}) when Tag == type orelse
+							  Tag == ann_type,
+							  is_list(Args) ->
+    %% Don't annotate, just recurse
+    {Tag, Anno, T, [annotate_local_types(Filename, Arg) || Arg <- Args]};
+annotate_local_types(_Filename, Type) ->
     Type.
 
 %% Returns specs for all exported functions, generating any-types for unspeced
