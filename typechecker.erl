@@ -914,7 +914,7 @@ type_check_file(File) ->
 				ok
 			catch
 			    Throw ->
-				erlang:display(erlang:get_stacktrace()),
+				io:format("~p~n", [erlang:get_stacktrace()]),
 				handle_type_error(Throw),
 				nok
 			end;
