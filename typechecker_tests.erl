@@ -5,7 +5,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 %% Macro to convert type to abstract form
--define(t(T), parse_type(??T)).
+-define(t(T), typelib:parse_type(??T)).
 
 subtype_test() ->
     %% The unknown type, both directions
@@ -90,12 +90,6 @@ not_subtype_test() ->
     ?assertNot(subtype(?t( #{1 := atom()} ), ?t( #{1 := a}      ))),
     ok.
 
--spec parse_type(string()) -> erl_parse:abstract_type().
-parse_type(Src) ->
-    AttrSrc = "-type t() :: " ++ Src ++ ".",
-    {ok, Tokens, _EndLocation} = erl_scan:string(AttrSrc),
-    {ok, {attribute, _, type, {t, Type, []}}} = erl_parse:parse_form(Tokens),
-    Type.
 
 subtype(T1, T2) ->
     case typechecker:subtype(T1, T2) of

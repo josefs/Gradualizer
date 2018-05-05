@@ -21,7 +21,8 @@
 
 -spec subtype(type(), type()) -> {true, any()} | false.
 subtype(Ty1, Ty2) ->
-    try compat(remove_pos(Ty1),remove_pos(Ty2), sets:new(), maps:new()) of
+    try compat(typelib:remove_pos(Ty1), typelib:remove_pos(Ty2),
+               sets:new(), maps:new()) of
 	{_Memoization, Constraints} ->
 	    {true, Constraints}
     catch
@@ -210,29 +211,6 @@ any_type(Ty, [Ty1|Tys], A, TEnv) ->
 %% TODO: Implement user type unfolding
 unfold_user_type(_Name, _Args, _TEnv) ->
     unimplemented. %maps:find(Name, TEnv)
-
--spec remove_pos(type()) -> type().
-remove_pos({Type, Anno, Value}) when Type == atom; Type == integer; Type == var ->
-    {Type, normalize_anno(Anno), Value};
-remove_pos({type, Anno, Type, Params}) when is_list(Params) ->
-    {type, normalize_anno(Anno), Type, lists:map(fun remove_pos/1, Params)};
-remove_pos({type, Anno, Type, any}) when Type == tuple; Type == map ->
-    {type, normalize_anno(Anno), Type, any};
-remove_pos({user_type, Anno, Name, Params}) when is_list(Params) ->
-    {user_type, normalize_anno(Anno), Name, lists:map(fun remove_pos/1, Params)};
-remove_pos({remote_type, Anno, [Mod, Name, Params]}) ->
-    {remote_type, normalize_anno(Anno), [Mod, Name, remove_pos(Params)]};
-remove_pos({ann_type, Anno, [Var, Type]}) ->
-    {ann_type, normalize_anno(Anno), [Var, remove_pos(Type)]}.
-
-%% Remove all annotations (e.g. line number) except filename, so that types
-%% with different annotations implies inequal types.
-normalize_anno(Anno) ->
-    NewAnno = erl_anno:new(0),
-    case erl_anno:file(Anno) of
-	undefined -> NewAnno;
-	Filename  -> erl_anno:set_file(Filename, NewAnno)
-    end.
 
 %%% The environment passed around during typechecking.
 
@@ -993,38 +971,38 @@ handle_type_error({call_undef, LINE, Module, Func, Arity}) ->
 handle_type_error({type_error, tyVar, LINE, Var, VarTy, Ty}) ->
     io:format("The variable ~p on line ~p has type ~s "
 	      "but is expected to have type ~s~n",
-	      [Var, LINE, pp_type(VarTy), pp_type(Ty)]);
+	      [Var, LINE, typelib:pp_type(VarTy), typelib:pp_type(Ty)]);
 handle_type_error({type_error, {atom, _, A}, LINE, Ty}) ->
     io:format("The atom ~p on line ~p does not have type ~p~n",
-	      [A, LINE, pp_type(Ty)]);
+	      [A, LINE, typelib:pp_type(Ty)]);
 handle_type_error({type_error, compat, _LINE, Ty1, Ty2}) ->
     io:format("The type ~p is not compatible with type ~p~n"
-	     ,[pp_type(Ty1), pp_type(Ty2)]);
+	     ,[typelib:pp_type(Ty1), typelib:pp_type(Ty2)]);
 handle_type_error({type_error, list, _, Ty1, Ty}) ->
     io:format("The type ~p cannot be an element of a list of type ~p~n",
-	      [pp_type(Ty1), pp_type(Ty)]);
+	      [typelib:pp_type(Ty1), typelib:pp_type(Ty)]);
 handle_type_error({type_error, list, _, Ty}) ->
     io:format("The type ~p on line ~p is not a list type~n",
-	      [pp_type(Ty), line_no(Ty)]);
+	      [typelib:pp_type(Ty), line_no(Ty)]);
 handle_type_error({type_error, call, _P, Name, TyArgs, ArgTys}) ->
     io:format("The function ~p expects arguments of type~n~p~n but is given "
 	      "arguments of type~n~p~n",
 	      [Name, TyArgs, ArgTys]);
 handle_type_error({type_error, boolop, BoolOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-boolean argument "
-	      " of type ~p~n", [BoolOp, P, pp_type(Ty)]);
+	      " of type ~p~n", [BoolOp, P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, arith_error, ArithOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-numeric argument "
-	      " of type ~p~n", [ArithOp, P, pp_type(Ty)]);
+	      " of type ~p~n", [ArithOp, P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, int_error, IntOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-integer argument "
-	      " of type ~p~n", [IntOp, P, pp_type(Ty)]);
+	      " of type ~p~n", [IntOp, P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, logic_error, LogicOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-boolean argument "
-	      " of type ~p~n", [LogicOp, P, pp_type(Ty)]);
+	      " of type ~p~n", [LogicOp, P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, list_op_error, ListOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-list argument "
-	      " of type ~p~n", [ListOp, P, pp_type(Ty)]);
+	      " of type ~p~n", [ListOp, P, typelib:pp_type(Ty)]);
 handle_type_error({unknown_variable, P, Var}) ->
     io:format("Unknown variable ~p on line ~p.~n", [Var, P]);
 handle_type_error(type_error) ->
@@ -1051,34 +1029,6 @@ remove_unexported(FEnv, #parsedata{exports = Exports}) ->
 			lists:member(Key, Exports)
 		end,
 		FEnv).
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%% Pretty printing
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-pp_type(Type) ->
-    %% erl_pp can handle type definitions, so wrap Type in a type definition
-    %% for a type called 't'. Then keep only the stuff after "::".
-    Form = {attribute, 0, type, {t, Type, []}},
-    TypeDef = erl_pp:form(Form),
-    %io:format("pp_type(~p) -> \"~s\"~n", [Type, TypeDef]),
-    {match, [S]} = re:run(TypeDef, <<"::\\s*(.*)\\.\\n*">>,
-			  [{capture, all_but_first, binary}, dotall]),
-    S.
-    %case erl_anno:file(element(2, Type)) of
-    %	undefined -> S;
-    %	File      -> <<S/binary, " in ", (list_to_binary(File))/binary>>
-    %end.
-
-debug_type(M, N, P) ->
-    case gradualizer_db:get_type(M, N, P) of
-	{ok, T} ->
-	    Params = lists:join($,, lists:map(fun pp_type/1, P)),
-	    io:format("~w:~w(~s) :: ~s.~n",
-		      [M, N, Params, pp_type(T)]);
-	not_found ->
-	    not_found
-    end.
 
 line_no(Ty) ->
     element(2,Ty).
