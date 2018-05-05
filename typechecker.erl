@@ -19,21 +19,28 @@
 % Subtyping compatibility
 % The first argument is a "compatible subtype" of the second.
 
--spec subtype(type(), type()) -> boolean().
+-spec subtype(type(), type()) -> {true, any()} | false.
 subtype(Ty1, Ty2) ->
     try compat(remove_pos(Ty1),remove_pos(Ty2), sets:new(), maps:new()) of
-	{_Memoization, _Constraints} ->
-	    true
+	{_Memoization, Constraints} ->
+	    {true, Constraints}
     catch
 	nomatch ->
 	    false
     end.
 
 subtypes([], []) ->
-    true;
+    {true, sets:new()};
 subtypes([Ty1|Tys1], [Ty2|Tys2]) ->
-    subtype(Ty1, Ty2) andalso subtypes(Tys1, Tys2).
-
+    case subtype(Ty1, Ty2) of
+	false -> false;
+	{true, C1} ->
+	    case subtypes(Tys1, Tys2) of
+		false -> false;
+		{true, C2} ->
+		    sets:unions(C1,C2)
+	    end
+    end.
 
 
 % This function throws an exception in case of a type error
@@ -251,23 +258,24 @@ type_check_expr(Env, {var, P, Var}) ->
 	    return(Ty)
     end;
 type_check_expr(Env, {match, _, Pat, Expr}) ->
-    {Ty, VarBinds} = type_check_expr(Env, Expr),
-    {Ty, add_type_pat(Pat, Ty, VarBinds)};
+    {Ty, VarBinds, Cs} = type_check_expr(Env, Expr),
+    {Ty, add_type_pat(Pat, Ty, VarBinds), Cs};
 type_check_expr(Env, {'if', _, Clauses}) ->
     infer_clauses(Env, Clauses);
 type_check_expr(Env, {'case', _, Expr, Clauses}) ->
-    {_ExprTy, VarBinds} = type_check_expr(Env, Expr),
+    {_ExprTy, VarBinds, Cs1} = type_check_expr(Env, Expr),
     VEnv = add_var_binds(Env#env.venv, VarBinds),
-    infer_clauses(Env#env{ venv = VEnv}, Clauses);
+    {Ty, VB, Cs2} = infer_clauses(Env#env{ venv = VEnv}, Clauses),
+    {Ty, VB, sets:union(Cs1, Cs2)};
 type_check_expr(_Env, {integer, _, _N}) ->
     return({type, 0, any, []});
 type_check_expr(Env, {tuple, _, TS}) ->
-    { Tys, VarBinds } = lists:unzip([ type_check_expr(Env, Expr)
+    { Tys, VarBinds, Css} = lists:unzip3([ type_check_expr(Env, Expr)
 				    || Expr <- TS ]),
-    { {type, 0, tuple, Tys}, union_var_binds(VarBinds) };
+    { {type, 0, tuple, Tys}, union_var_binds(VarBinds), sets:union(Css) };
 type_check_expr(Env, {cons, _, Head, Tail}) ->
-    {Ty1, VB1} = type_check_expr(Env, Head),
-    {Ty2, VB2} = type_check_expr(Env, Tail),
+    {Ty1, VB1, Cs1} = type_check_expr(Env, Head),
+    {Ty2, VB2, Cs2} = type_check_expr(Env, Tail),
     % TODO: Should we check the types here?
     case {Ty1, Ty2} of
 	{{type, _, any, []}, _} ->
@@ -276,8 +284,8 @@ type_check_expr(Env, {cons, _, Head, Tail}) ->
 	    {{type, 0, any, []}, VB2};
 	{Ty1, TyList = {type, _, list, [Ty]}} ->
 	    case subtype(Ty1, Ty) of
-		true ->
-		    {TyList, union_var_binds([VB1, VB2])};
+		{true, Cs} ->
+		    {TyList, union_var_binds([VB1, VB2]), sets:union([Cs1, Cs2, Cs])};
 		false ->
 		    throw({type_error, list, 0, Ty1, Ty})
 	    end;
@@ -287,28 +295,28 @@ type_check_expr(Env, {cons, _, Head, Tail}) ->
 		% (nor is it of type any()).
     end;
 type_check_expr(Env, {call, P, Name, Args}) ->
-    { ArgTys, VarBinds} =
-	lists:unzip([ type_check_expr(Env, Arg) || Arg <- Args]),
+    { ArgTys, VarBinds, Css} =
+	lists:unzip3([ type_check_expr(Env, Arg) || Arg <- Args]),
     VarBind = union_var_binds(VarBinds),
-    {FunTy, VarBind2} = type_check_fun(Env, Name, length(Args)),
-    case  FunTy of
+    {FunTy, VarBind2, Cs} = type_check_fun(Env, Name, length(Args)),
+    case FunTy of
 	{type, _, any, []} ->
-	    { {type, 0, any, []}, VarBind };
+	    { {type, 0, any, []}, VarBind, sets:union([Cs|Css])};
 	[{type, _, 'fun', [{type, _, product, TyArgs}, ResTy]}] ->
 	    % TODO: Handle multi-clause function types
 	    case subtypes(TyArgs, ArgTys) of
-		true ->
-		    {ResTy, union_var_binds([VarBind, VarBind2])};
+		{true, Cs2} ->
+		    {ResTy, union_var_binds([VarBind, VarBind2]), sets:union([Cs,Cs2|Css])};
 		false ->
 		    throw({type_error, call, P, Name, TyArgs, ArgTys})
 	    end;
 	[{type, _, bounded_fun, [{type, _, 'fun',
 				  [{type, _, product, TyArgs}, ResTy]}
-				,_Cs]}] ->
+				,Cs2]}] ->
 	    case subtypes(TyArgs, ArgTys) of
-		true ->
-		    %%% TODO: Store the constraints
-		    {ResTy, union_var_binds([VarBind, VarBind2])};
+		{true, Cs3} ->
+		    {ResTy, union_var_binds([VarBind, VarBind2])
+		    ,sets:union([Cs,Cs2,Cs3|Css])};
 		false ->
 		    throw({type_error, call, P, Name, TyArgs, ArgTys})
 	    end
@@ -331,29 +339,29 @@ type_check_expr(_Env, {atom, _, _Atom}) ->
 type_check_expr(Env, {map, _, Assocs}) ->
     type_check_assocs(Env, Assocs);
 type_check_expr(Env, {map, _, Expr, Assocs}) ->
-    {Ty, VBExpr} = type_check_expr(Env, Expr),
-    {Ty, VBAssocs} = type_check_assocs(Env, Assocs),
+    {Ty, VBExpr,   Cs1} = type_check_expr(Env, Expr),
+    {Ty, VBAssocs, Cs2} = type_check_assocs(Env, Assocs),
     % TODO: Update the type of the map.
     % TODO: Check the type of the map.
-    {Ty, union_var_binds([VBExpr, VBAssocs])};
+    {Ty, union_var_binds([VBExpr, VBAssocs]), sets:union(Cs1, Cs2)};
 
 %% Records
 type_check_expr(Env, {record_field, _P, Expr, Record, {atom, _, Field}}) ->
-    {_ExprTy, VB} = type_check_expr_in(Env, {type, 0, record, [{atom, 0, Record}]}, Expr),
+    {_ExprTy, VB, Cs} = type_check_expr_in(Env, {type, 0, record, [{atom, 0, Record}]}, Expr),
     Rec = maps:get(Record, Env#env.renv),
     Ty  = maps:get(Field, Rec),
-    {Ty, VB};
+    {Ty, VB, Cs};
 type_check_expr(Env, {record, _, Expr, Record, Fields}) ->
     RecTy = {type, 0, record, [{atom, 0, Record}]},
-    {_ExprTy, VB1} = type_check_expr_in(Env, RecTy, Expr),
+    {_ExprTy, VB1, Cs1} = type_check_expr_in(Env, RecTy, Expr),
     Rec = maps:get(Record, Env#env.renv),
-    VB2 = type_check_fields(Env, Rec, Fields),
-    {RecTy, union_var_binds([VB1, VB2])};
+    {VB2, Cs2} = type_check_fields(Env, Rec, Fields),
+    {RecTy, union_var_binds([VB1, VB2]), sets:union(Cs1, Cs2)};
 type_check_expr(Env, {record, _, Record, Fields}) ->
-    RecTy = {type, 0, record, [{atom, 0, Record}]},
-    Rec   = maps:get(Record, Env#env.renv),
-    VB    = type_check_fields(Env, Rec, Fields),
-    {RecTy, VB};
+    RecTy    = {type, 0, record, [{atom, 0, Record}]},
+    Rec      = maps:get(Record, Env#env.renv),
+    {VB, Cs} = type_check_fields(Env, Rec, Fields),
+    {RecTy, VB, Cs};
 
 %% Functions
 type_check_expr(Env, {'fun', _, {clauses, Clauses}}) ->
@@ -367,14 +375,14 @@ type_check_expr(Env, {'receive', _, Clauses}) ->
 %% Operators
 type_check_expr(Env, {op, _, '!', Proc, Val}) ->
     % Message passing is always untyped, which is why we discard the types
-    {_, VB1} = type_check_expr(Env, Proc),
-    {_, VB2} = type_check_expr(Env, Val),
-    {{type, 0, any, []}, union_var_binds([VB1, VB2])};
+    {_, VB1, Cs1} = type_check_expr(Env, Proc),
+    {_, VB2, Cs2} = type_check_expr(Env, Val),
+    {{type, 0, any, []}, union_var_binds([VB1, VB2]), sets:union(Cs1, Cs2)};
 type_check_expr(Env, {op, P, 'not', Arg}) ->
-    {Ty, VB} = type_check_expr(Env, Arg),
+    {Ty, VB, Cs1} = type_check_expr(Env, Arg),
     case subtype({type, 0, boolean, []}, Ty) of
-	true ->
-	    {{type, 0, any, []}, VB};
+	{true, Cs2} ->
+	    {{type, 0, any, []}, VB, sets:union(Cs1, Cs2)};
 	false ->
 	    throw({type_error, non_boolean_argument_to_not, P, Ty})
     end;
@@ -392,19 +400,20 @@ type_check_expr(Env, {op, P, BoolOp, Arg1, Arg2}) when
 		end
 	end,
     case type_check_expr(Env, Arg1) of
-	{Ty1, VB1} ->
+	{Ty1, VB1, Cs1} ->
 	    case subtype(Ty1, {type, 0, bool, []}) of
 		false ->
 		    throw({type_error, boolop, BoolOp, P, Ty1});
-		true ->
+		{true, Cs2} ->
 		    case type_check_expr(Env#env{ venv = UnionVarBindsSecondArg(Env#env.venv,VB1 )}, Arg2) of
-			{Ty2, VB2} ->
+			{Ty2, VB2, Cs3} ->
 			    case subtype(Ty2, {type, 0, bool, []}) of
 				false ->
 				    throw({type_error, boolop, BoolOp, P, Ty1});
-				true ->
+				{true, Cs4} ->
 				    {merge_types([Ty1, Ty2])
-				    ,union_var_binds([VB1, VB2])}
+				    ,union_var_binds([VB1, VB2])
+				    ,sets:union([Cs1,Cs2,Cs3,Cs4])}
 			    end
 		    end
 	    end
@@ -416,14 +425,15 @@ type_check_expr(Env, {op, _, RelOp, Arg1, Arg2}) when
       (RelOp == '>=')  or (RelOp == '=<') ->
     case {type_check_expr(Env, Arg1)
 	 ,type_check_expr(Env, Arg2)} of
-	{{Ty1, VB1}, {Ty2, VB2}} ->
-	    case subtype(Ty1, Ty2) andalso subtype(Ty2, Ty1) of
-		true ->
+	{{Ty1, VB1, Cs1}, {Ty2, VB2, Cs2}} ->
+	    case {subtype(Ty1, Ty2), subtype(Ty2, Ty1)} of
+		{{true, Cs3}, {true, Cs4}} ->
 		    % TODO: Should we return boolean() here in some cases?
 		    % If both Ty1 and Ty2 are not any() then one could
 		    % plausably return boolean().
-		    {{type, 0, any, []}, union_var_binds([VB1, VB2])};
-		false ->
+		    {{type, 0, any, []}, union_var_binds([VB1, VB2])
+		    ,sets:union([Cs1,Cs2,Cs3,Cs4])};
+		_ ->
 		    throw(type_error)
 	    end
     end;
@@ -435,36 +445,37 @@ type_check_expr(Env, {'catch', _, Arg}) ->
 % TODO: Unclear why there is a list of expressions in try
 % This is why: try f(), g() catch _:_ -> x end.
 type_check_expr(Env, {'try', _, [Expr], CaseCs, CatchCs, AfterCs}) ->
-    {Ty,  VB}  = type_check_expr(Env, Expr),
+    {Ty,  VB,   Cs1}  = type_check_expr(Env, Expr),
     Env2 = Env#env{ venv = add_var_binds(VB, Env#env.venv) },
-    {TyC, _VB2} = infer_clauses(Env2, CaseCs),
-    {TyS, _VB3} = infer_clauses(Env2, CatchCs),
-    {TyA, _VB4} = infer_clauses(Env2, AfterCs),
+    {TyC, _VB2, Cs2} = infer_clauses(Env2, CaseCs),
+    {TyS, _VB3, Cs3} = infer_clauses(Env2, CatchCs),
+    {TyA, _VB4, Cs4} = infer_clauses(Env2, AfterCs),
     % TODO: Should we check types against each other instead of
     % just merging them?
     % TODO: Check what variable bindings actually should be propagated
-    {merge_types([Ty, TyC, TyS, TyA]), VB}.
+    {merge_types([Ty, TyC, TyS, TyA]), VB, sets:union([Cs1,Cs2,Cs3,Cs4])}.
 
 
 type_check_fields(Env, Rec, [{record_field, _, {atom, _, Field}, Expr} | Fields]) ->
     FieldTy = maps:get(Field, Rec),
-    {_, VB1} = type_check_expr_in(Env, FieldTy, Expr),
-    VB2 = type_check_fields(Env, Rec, Fields),
-    union_var_binds([VB1, VB2]);
+    {_, VB1, Cs1} = type_check_expr_in(Env, FieldTy, Expr),
+    {VB2, Cs2} = type_check_fields(Env, Rec, Fields),
+    {union_var_binds([VB1, VB2]), sets:union(Cs1,Cs2)};
 type_check_fields(_Env, _Rec, []) ->
-    #{}.
+    {#{}, sets:new()}.
 
 
 
 
 type_check_lc(Env, Expr, []) ->
-    {_Ty, _VB} = type_check_expr(Env, Expr),
+    {_Ty, _VB, Cs} = type_check_expr(Env, Expr),
     % We're returning any() here because we're in a context that doesn't
     % care what type we return. It's different for type_check_lc_in.
-    {{type, 0, any, []}, #{}};
+    {{type, 0, any, []}, #{}, Cs};
 type_check_lc(Env, Expr, [{generate, _, Pat, Gen} | Quals]) ->
-    {Ty, _} = type_check_expr(Env, Gen),
-    type_check_lc(Env#env{ venv = add_type_pat(Pat, Ty, Env#env.venv) }, Expr, Quals).
+    {Ty,  _,  Cs1} = type_check_expr(Env, Gen),
+    {TyL, VB, Cs2} = type_check_lc(Env#env{ venv = add_type_pat(Pat, Ty, Env#env.venv) }, Expr, Quals),
+    {TyL, VB, sets:union(Cs1,Cs2)}.
 
 
 
@@ -474,70 +485,75 @@ type_check_expr_in(Env, {type, _, any, []}, Expr) ->
 type_check_expr_in(Env, Ty, {var, LINE, Var}) ->
     VarTy = maps:get(Var, Env#env.venv),
     case subtype(VarTy, Ty) of
-	true ->
-	    return(VarTy);
+	{true, Cs} ->
+	    {VarTy, #{}, Cs};
 	false ->
 	    throw({type_error, tyVar, LINE, Var, VarTy, Ty})
     end;
 type_check_expr_in(_Env, Ty, {integer, LINE, _Int}) ->
     case subtype(Ty, {type, 0, integer, []}) of
-	true ->
-	    return({type, 0, integer, []});
+	{true, Cs} ->
+	    {{type, 0, integer, []}, #{}, Cs};
 	false ->
 	    throw({type_error, int, LINE, Ty})
     end;
 type_check_expr_in(_Env, Ty, {float, LINE, _Int}) ->
     case subtype(Ty, {type, 0, float, []}) of
-	true ->
-	    return({type, 0, float, []});
+	{true, Cs} ->
+	    {{type, 0, float, []}, #{}, Cs};
 	false ->
 	    throw({type_error, float, LINE, Ty})
     end;
 type_check_expr_in(_Env, Ty, Atom = {atom, LINE, _}) ->
     case subtype(Atom, Ty) of
-	true ->
-	    return(Atom);
+	{true, Cs} ->
+	    {Atom, #{}, Cs};
 	false ->
 	    throw({type_error, Atom, LINE, Ty})
     end;
 type_check_expr_in(Env, ResTy, {tuple, _LINE, TS}) ->
     case ResTy of
       {type, _, tuple, Tys} ->
-	    {ResTys, VarBinds} =
-		lists:unzip(
+	    {ResTys, VarBinds, Css} =
+		lists:unzip3(
 		  lists:map(fun ({Ty, Expr}) -> type_check_expr_in(Env, Ty, Expr)
 			    end,
 			    lists:zip(Tys,TS))),
-	    {{type, 0, tuple, ResTys}, union_var_binds(VarBinds)};
+	    {{type, 0, tuple, ResTys}
+	    ,union_var_binds(VarBinds)
+	    ,sets:union(Css)};
 	{type, _, any, []} ->
-	    {ResTys, VarBinds} =
-		lists:unzip([type_check_expr(Env, Expr) || Expr <- TS]),
-	    {{type, 0, tuple, ResTys}, union_var_binds(VarBinds)}
+	    {ResTys, VarBinds, Css} =
+		lists:unzip3([type_check_expr(Env, Expr) || Expr <- TS]),
+	    {{type, 0, tuple, ResTys}
+	    ,union_var_binds(VarBinds)
+	    ,sets:union(Css)}
     end;
 type_check_expr_in(Env, ResTy, {'case', _, Expr, Clauses}) ->
-    {ExprTy, VarBinds} = type_check_expr(Env, Expr),
+    {ExprTy, VarBinds, Cs1} = type_check_expr(Env, Expr),
     Env2 = Env#env{ venv = add_var_binds(Env#env.venv, VarBinds) },
-    check_clauses(Env2, ExprTy, ResTy, Clauses);
+    {Ty, VB, Cs2} = check_clauses(Env2, ExprTy, ResTy, Clauses),
+    {Ty, VB, sets:union(Cs1,Cs2)};
 type_check_expr_in(Env, ResTy, {'if', _, Clauses}) ->
     check_clauses(Env, {type, 0, any, []}, ResTy, Clauses);
 type_check_expr_in(Env, ResTy, {call, _, Name, Args}) ->
-    {FunTy, VarBinds1} = type_check_fun(Env, Name, length(Args)),
+    {FunTy, VarBinds1, Cs} = type_check_fun(Env, Name, length(Args)),
     case FunTy of
 	{type, _, any, []} ->
-	    {_, VarBinds2} =
-		lists:unzip([ type_check_expr(Env, Arg) || Arg <- Args]),
+	    {_, VarBinds2, Css} =
+		lists:unzip3([ type_check_expr(Env, Arg) || Arg <- Args]),
 
 	    VarBind = union_var_binds([VarBinds1 |  VarBinds2]),
-	    { {type, 0, any, []}, VarBind };
+	    { {type, 0, any, []}, VarBind, sets:union([Cs|Css]) };
 	[{type, _, 'fun', [{type, _, product, TyArgs}, FunResTy]}] ->
 	    % TODO: Handle multi-clause function types
-	    {_, VarBinds2} =
-		lists:unzip([ type_check_expr_in(Env, TyArg, Arg)
+	    {_, VarBinds2, Css} =
+		lists:unzip3([ type_check_expr_in(Env, TyArg, Arg)
 			      || {TyArg, Arg} <- lists:zip(TyArgs, Args) ]),
 	    case subtype(ResTy, FunResTy) of
-		true ->
+		{true, Cs2} ->
 		    VarBind = union_var_binds([VarBinds1 | VarBinds2]),
-		    {ResTy, VarBind};
+		    {ResTy, VarBind, sets:union([Cs, Cs2 | Css])};
 		_ ->
 		    throw(type_error)
 	    end
@@ -546,13 +562,14 @@ type_check_expr_in(Env, ResTy, {'receive', _, Clauses}) ->
     check_clauses(Env, [{type, 0, any, []}], ResTy, Clauses);
 type_check_expr_in(Env, ResTy, {op, _, '!', Arg1, Arg2}) ->
     % The first argument should be a pid.
-    {_, VarBinds1} = type_check_expr(Env, Arg1),
-    {Ty, VarBinds2} = type_check_expr_in(Env, ResTy, Arg2),
-    {Ty, union_var_binds([VarBinds1,VarBinds2])};
+    {_,  VarBinds1, Cs1} = type_check_expr(Env, Arg1),
+    {Ty, VarBinds2, Cs2} = type_check_expr_in(Env, ResTy, Arg2),
+    {Ty, union_var_binds([VarBinds1,VarBinds2]), sets:union(Cs1,Cs2)};
 type_check_expr_in(Env, ResTy, {op, P, 'not', Arg}) ->
     case subtype({type, 0, boolean, []}, ResTy) of
-	true ->
-	    type_check_expr_in(Env, ResTy, Arg);
+	{true, Cs1} ->
+	    {Ty, VB, Cs2} = type_check_expr_in(Env, ResTy, Arg),
+	    {Ty, VB, sets:union(Cs1, Cs2)};
 	false ->
 	    throw({type_error, not_user_with_wrong_type, P, ResTy})
     end;
@@ -577,18 +594,18 @@ type_check_arith_op(Env, ResTy, Op, P, Arg1, Arg2) ->
     case ResTy of
 	{type, _, Ty, []} when Ty == 'integer' orelse Ty == 'float' orelse
 			       Ty == 'any' ->
-	  {_, VarBinds1} = type_check_expr_in(Env, ResTy, Arg1),
-	  {_, VarBinds2} = type_check_expr_in(Env, ResTy, Arg2),
-	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
+	  {_, VarBinds1, Cs1} = type_check_expr_in(Env, ResTy, Arg1),
+	  {_, VarBinds2, Cs2} = type_check_expr_in(Env, ResTy, Arg2),
+	  {ResTy, union_var_binds([VarBinds1, VarBinds2]), sets:union(Cs1, Cs2)};
 	_ ->
 	  throw({type_error, arith_error, Op, P, ResTy})
     end.
 type_check_int_op(Env, ResTy, Op, P, Arg1, Arg2) ->
     case ResTy of
 	{type, _, Ty, []} when Ty == 'integer' orelse Ty == 'any' ->
-	  {_, VarBinds1} = type_check_expr_in(Env, ResTy, Arg1),
-	  {_, VarBinds2} = type_check_expr_in(Env, ResTy, Arg2),
-	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
+	  {_, VarBinds1, Cs1} = type_check_expr_in(Env, ResTy, Arg1),
+	  {_, VarBinds2, Cs2} = type_check_expr_in(Env, ResTy, Arg2),
+	  {ResTy, union_var_binds([VarBinds1, VarBinds2]), sets:union(Cs1, Cs2)};
 	_ ->
 	  throw({type_error, int_error, Op, P, ResTy})
     end.
@@ -596,22 +613,22 @@ type_check_logic_op(Env, ResTy, Op, P, Arg1, Arg2) ->
     case ResTy of
 	{type, _, Ty, []} when Ty == 'boolean' orelse Ty == 'bool'
 			       orelse Ty == 'any' ->
-	  {_, VarBinds1} = type_check_expr_in(Env, ResTy, Arg1),
-	  {_, VarBinds2} = type_check_expr_in(Env, ResTy, Arg2),
-	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
+	  {_, VarBinds1, Cs1} = type_check_expr_in(Env, ResTy, Arg1),
+	  {_, VarBinds2, Cs2} = type_check_expr_in(Env, ResTy, Arg2),
+	  {ResTy, union_var_binds([VarBinds1, VarBinds2]), sets:union(Cs1, Cs2)};
 	_ ->
 	  throw({type_error, logic_error, Op, P, ResTy})
     end.
 type_check_list_op(Env, ResTy, Op, P, Arg1, Arg2) ->
     case ResTy of
 	{type, _, 'list', [_Ty]} ->
-	  {_, VarBinds1} = type_check_expr_in(Env, ResTy, Arg1),
-	  {_, VarBinds2} = type_check_expr_in(Env, ResTy, Arg2),
-	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
+	  {_, VarBinds1, Cs1} = type_check_expr_in(Env, ResTy, Arg1),
+	  {_, VarBinds2, Cs2} = type_check_expr_in(Env, ResTy, Arg2),
+	  {ResTy, union_var_binds([VarBinds1, VarBinds2]), sets:union(Cs1, Cs2)};
 	{type, _, any, []} ->
-	  {_, VarBinds1} = type_check_expr_in(Env, ResTy, Arg1),
-	  {_, VarBinds2} = type_check_expr_in(Env, ResTy, Arg2),
-	  {ResTy, union_var_binds([VarBinds1, VarBinds2])};
+	  {_, VarBinds1, Cs1} = type_check_expr_in(Env, ResTy, Arg1),
+	  {_, VarBinds2, Cs2} = type_check_expr_in(Env, ResTy, Arg2),
+	  {ResTy, union_var_binds([VarBinds1, VarBinds2]), sets:union(Cs1, Cs2)};
 	_ ->
 	  throw({type_error, list_op_error, Op, P, ResTy})
     end.
@@ -619,20 +636,21 @@ type_check_list_op(Env, ResTy, Op, P, Arg1, Arg2) ->
 
 type_check_assocs(Env, [{Assoc, _, Key, Val}| Assocs])
   when Assoc == map_field_assoc orelse Assoc == map_field_exact ->
-    {_KeyTy, _KeyVB} = type_check_expr(Env, Key),
-    {_ValTy, _ValVB} = type_check_expr(Env, Val),
+    {_KeyTy, _KeyVB, Cs1} = type_check_expr(Env, Key),
+    {_ValTy, _ValVB, Cs2} = type_check_expr(Env, Val),
     % TODO
-    type_check_assocs(Env, Assocs);
+    {Ty, VB, Cs} = type_check_assocs(Env, Assocs),
+    {Ty, VB, sets:union([Cs, Cs1, Cs2])};
 type_check_assocs(_Env, []) ->
-    {{type, 0, any, []}, #{}}.
+    {{type, 0, any, []}, #{}, sets:new()}.
 
 
-
+% TODO: Collect constraints
 type_check_fun(Env, {atom, P, Name}, Arity) ->
     % Local function call
     case maps:find({Name, Arity}, Env#env.fenv) of
 	{ok, Types} ->
-	    {Types, #{}};
+	    {Types, #{}, sets:new()};
 	error ->
 	    case erl_internal:bif(Name, Arity) of
 		true ->
@@ -654,22 +672,24 @@ type_check_fun(Env, Expr, _Arity) ->
 type_check_block(Env, [Expr]) ->
     type_check_expr(Env, Expr);
 type_check_block(Env, [Expr | Exprs]) ->
-    {_, VarBinds} = type_check_expr(Env, Expr),
-    type_check_block(Env#env{ venv = add_var_binds(Env#env.venv, VarBinds) }, Exprs).
+    {_, VarBinds, Cs1} = type_check_expr(Env, Expr),
+    {Ty, VB, Cs2} = type_check_block(Env#env{ venv = add_var_binds(Env#env.venv, VarBinds) }, Exprs),
+    {Ty, VB, sets:union(Cs1, Cs2)}.
 
 type_check_block_in(Env, ResTy, [Expr]) ->
     type_check_expr_in(Env, ResTy, Expr);
 type_check_block_in(Env, ResTy, [Expr | Exprs]) ->
-    {_, VarBinds} = type_check_expr(Env, Expr),
-    type_check_block_in(Env#env{ venv = add_var_binds(Env#env.venv, VarBinds) }, ResTy, Exprs).
+    {_, VarBinds, Cs1} = type_check_expr(Env, Expr),
+    {Ty, VB, Cs2} = type_check_block_in(Env#env{ venv = add_var_binds(Env#env.venv, VarBinds) }, ResTy, Exprs),
+    {Ty, VB, sets:union(Cs1, Cs2)}.
 
 
 infer_clauses(Env, Clauses) ->
-    {Tys, VarBinds} =
-	lists:unzip(lists:map(fun (Clause) ->
+    {Tys, VarBinds, Css} =
+	lists:unzip3(lists:map(fun (Clause) ->
 				  infer_clause(Env, Clause)
 			  end, Clauses)),
-    {merge_types(Tys), union_var_binds(VarBinds)}.
+    {merge_types(Tys), union_var_binds(VarBinds), sets:union(Css)}.
 
 infer_clause(Env, {clause, _, Args, Guards, Block}) ->
     EnvNew = Env#env{ venv = add_any_types_pats(Args, Env#env.venv) },
@@ -688,11 +708,11 @@ check_clauses(Env, ArgsTy, ResTy, Clauses) when
       not is_list(ArgsTy) ->
     check_clauses(Env, [ArgsTy], ResTy, Clauses);
 check_clauses(Env, ArgsTy, ResTy, Clauses) ->
-    {Tys, VarBinds} =
-	lists:unzip(lists:map(fun (Clause) ->
+    {Tys, VarBinds, Css} =
+	lists:unzip3(lists:map(fun (Clause) ->
 				  check_clause(Env, ArgsTy, ResTy, Clause)
 			  end, Clauses)),
-    {merge_types(Tys), VarBinds}.
+    {merge_types(Tys), VarBinds, sets:union(Css)}.
 
 check_clause(Env, ArgsTy, ResTy, {clause, _, Args, Guards, Block}) ->
     case length(ArgsTy) =:= length(Args) of
@@ -727,9 +747,9 @@ type_check_function(FEnv, REnv, {function,_, Name, NArgs, Clauses}) ->
     case maps:find({Name, NArgs}, FEnv) of
 	{ok, [{type, _, 'fun', [{type, _, product, ArgsTy}, ResTy]}]} ->
 	    % TODO: Handle multi-clause function types
-	    {_, VarBinds} = check_clauses(#env{ fenv = FEnv, renv = REnv },
-					  ArgsTy, ResTy, Clauses),
-	    {ResTy, VarBinds};
+	    {_, VarBinds, Cs} = check_clauses(#env{ fenv = FEnv, renv = REnv },
+					      ArgsTy, ResTy, Clauses),
+	    {ResTy, VarBinds, Cs};
 	{ok, {type, _, any, []}} ->
 	    infer_clauses(#env{ fenv = FEnv, renv = REnv }, Clauses);
 	error ->
@@ -847,7 +867,7 @@ add_any_types_pat({var, _,A}, VEnv) ->
 %%% Helper functions
 
 return(X) ->
-    { X, #{} }.
+    { X, #{}, sets:new() }.
 
 union_var_binds([]) ->
     #{};
@@ -890,7 +910,7 @@ type_check_file(File) ->
     REnv = create_renv(Records),
     lists:foldr(fun (Function, ok) ->
 			try type_check_function(FEnv, REnv, Function) of
-			    {_Ty, _VarBinds} ->
+			    {_Ty, _VarBinds, _Cs} ->
 				ok
 			catch
 			    Throw ->
