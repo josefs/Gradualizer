@@ -50,7 +50,9 @@ subtypes([Ty1|Tys1], [Ty2|Tys2]) ->
 %% The main entry point is compat and all recursive calls should go via compat.
 %% The function compat_ty is just a convenience function to be able to
 %% pattern match on types in a nice way.
-compat(Ty1, Ty2, A, TEnv) ->
+compat(T1, T2, A, TEnv) ->
+    Ty1 = normalize(T1, TEnv),
+    Ty2 = normalize(T2, TEnv),
     case sets:is_element({Ty1, Ty2}, A) of
 	true ->
 	    ret(A);
@@ -82,15 +84,14 @@ compat_ty({type, _, 'fun', [{type, _, product, Args1}, Res1]},
     {Aps, Css} = compat(Res1, Res2, Ap, TEnv),
     {Aps, sets:union(Cs, Css)};
 
-% Number type
-compat_ty({type, _, integer, []}, {type, _, number, []}, A, _TEnv) ->
-    ret(A);
-compat_ty({type, _, range, _}, {type, _, number, []}, A, _TEnv) ->
-    ret(A);
-compat_ty({integer, _, _I}, {type, _, number, []}, A, _TEnv) ->
-    ret(A);
-compat_ty({type, _, float, []}, {type, _, number, []}, A, _TEnv) ->
-    ret(A);
+%% Unions
+compat_ty({type, _, union, Tys1}, {type, _, union, Tys2}, A, TEnv) ->
+    lists:foldl(fun (Ty1, {A1, C1}) ->
+                    {A2, C2} = any_type(Ty1, Tys2, A1, TEnv),
+                    {A2, sets:union(C1, C2)}
+                end, {A, sets:new()}, Tys1);
+compat_ty(Ty1, {type, _, union, Tys2}, A, TEnv) ->
+    any_type(Ty1, Tys2, A, TEnv);
 
 % Integer types
 compat_ty({type, _, range, _}, {type, _, integer, []}, A, _TEnv) ->
@@ -107,28 +108,17 @@ compat_ty({integer, _, _I}, {type, _, integer, []}, A, _TEnv) ->
 compat_ty({integer,_,  I}, {type, _, range, [{integer, _, I1}, {integer, _, I2}]}, A, _TEnv)
   when I >= I1 andalso I =< I2 ->
     ret(A);
+% TODO: pos_integer(), neg_integer(), non_neg_integer()
 
 %% Atoms
 compat_ty({atom, _, _Atom}, {type, _, atom, []}, A, _TEnv) ->
-    ret(A);
-
-compat_ty({type, _, boolean, []}, {type, _, bool, []}, A, _TEnv) ->
-    ret(A);
-compat_ty({type, _, bool, []}, {type, _, boolean, []}, A, _TEnv) ->
-    ret(A);
-compat_ty({atom, _, true}, {type, _, bool, []}, A, _TEnv) ->
-    ret(A);
-compat_ty({atom, _, false}, {type, _, bool, []}, A, _TEnv) ->
-    ret(A);
-compat_ty({atom, _, true}, {type, _, boolean, []}, A, _TEnv) ->
-    ret(A);
-compat_ty({atom, _, false}, {type, _, boolean, []}, A, _TEnv) ->
     ret(A);
 
 %compat_ty({type, _, record, [{atom, _, Record}]},
 %          {type, _, record, [{atom, _, Record}]}, A, _TEnv) ->
 %    ret(A);
 
+%% Lists
 compat_ty({type, _, list, [_Ty]}, {type, _, list, []}, A, _TEnv) ->
     ret(A);
 compat_ty({type, _, list, []}, {type, _, list, [_Ty]}, A, _TEnv) ->
@@ -149,17 +139,17 @@ compat_ty({type, _, nonempty_list, [Ty1]}, {type, _, list, [Ty2]}, A, TEnv) ->
     compat(Ty1, Ty2, A, TEnv);
 compat_ty({type, _, nonempty_list, [_Ty]}, {type, _, list, []}, A, _TEnv) ->
     ret(A);
+%% TODO: improper and maybe improper list types
 
+%% Tuples
 compat_ty({type, _, tuple, any}, {type, _, tuple, _Args}, A, _TEnv) ->
     ret(A);
 compat_ty({type, _, tuple, _Args}, {type, _, tuple, any}, A, _TEnv) ->
     ret(A);
 compat_ty({type, _, tuple, Args1}, {type, _, tuple, Args2}, A, TEnv) ->
     compat_tys(Args1, Args2, A, TEnv);
-compat_ty({user_type, _, Name, Args}, Ty, A, TEnv) ->
-    compat(unfold_user_type(Name, Args, TEnv), Ty, A, TEnv);
-compat_ty(Ty, {user_type, Name, Args}, A, TEnv) ->
-    compat(Ty, unfold_user_type(Name, Args, TEnv), A, TEnv);
+%compat_ty({user_type, _, Name, Args}, Ty, A, TEnv) ->
+%    compat(unfold_user_type(Name, Args, TEnv), Ty, A, TEnv);
 
 %% Maps
 compat_ty({type, _, map, any}, {type, _, map, _Assocs}, A, _TEnv) ->
@@ -208,9 +198,269 @@ any_type(Ty, [Ty1|Tys], A, TEnv) ->
 	    any_type(Ty, Tys, A, TEnv)
     end.
 
-%% TODO: Implement user type unfolding
-unfold_user_type(_Name, _Args, _TEnv) ->
-    unimplemented. %maps:find(Name, TEnv)
+%% Normalize
+%% ---------
+%%
+%% * Expand user-defined and remote types on head level (except opaque types)
+%% * Replace built-in type synonyms
+%% * Flatten unions and merge overlapping types (e.g. ranges) in unions
+-spec normalize(type()) -> type().
+normalize(T) -> normalize(T, #{}).
+
+%% TEnv is currently not used. Type definitions are fetched from gradualizer_db.
+-spec normalize(type(), TEnv :: map()) -> type().
+normalize({type, _, union, _} = U, TEnv) ->
+    Types = flatten_unions([U], TEnv),
+    case merge_union_types(Types, TEnv) of
+        []  -> {type, 0, none, []};
+        [T] -> T;
+        Ts  -> {type, 0, union, Ts}
+    end;
+normalize({user_type, P, Name, Args} = Type, TEnv) ->
+    case typelib:get_module_from_annotation(P) of
+        {ok, Module} ->
+            case gradualizer_db:get_type(Module, Name, Args) of
+                {ok, T} ->
+                    normalize(T, TEnv);
+                opaque ->
+                    Type;
+                not_found ->
+                    throw({undef, user_type, {Module, Name, length(Args)}})
+            end;
+        none ->
+            %% TODO
+            throw({not_implemented, unfold_user_type, {Name, length(Args)}})
+    end;
+normalize({type, P, record, [Name]}, TEnv) ->
+    %% TODO: Handle #rec{} without file annotation
+    {ok, Module} = typelib:get_module_from_annotation(P),
+    case gradualizer_db:get_record_type(Module, Name) of
+        {ok, T} ->
+            normalize(T, TEnv);
+        not_found ->
+            throw({undef, record, {Module, Name}})
+    end;
+normalize({remote_type, _P, Module, Name, Args} = RemoteType, TEnv) ->
+    case gradualizer_db:get_exported_type(Module, Name, Args) of
+        {ok, T} ->
+            normalize(T, TEnv);
+        opaque ->
+            RemoteType;
+        not_exported ->
+            throw({not_exported, remote_type, {Module, Name, length(Args)}});
+        not_found ->
+            throw({undef, remote_type, {Module, Name, length(Args)}})
+    end;
+normalize(Type, _TEnv) ->
+    expand_builtin_aliases(Type).
+
+%% Replace built-in type aliases
+-spec expand_builtin_aliases(type()) -> type().
+expand_builtin_aliases({var, Ann, '_'}) ->
+    {type, Ann, any, []};
+expand_builtin_aliases({type, Ann, binary, []}) ->
+    {type, Ann, binary, [{integer, Ann, 0}, {integer, Ann, 8}]};
+expand_builtin_aliases({type, Ann, bitstring, []}) ->
+    {type, Ann, binary, [{integer, Ann, 0}, {integer, Ann, 1}]};
+expand_builtin_aliases({type, Ann, boolean, []}) ->
+    {type, Ann, union, [{atom, Ann, true}, {atom, Ann, false}]};
+expand_builtin_aliases({type, Ann, bool, []}) ->
+    {type, Ann, union, [{atom, Ann, true}, {atom, Ann, false}]};
+expand_builtin_aliases({type, Ann, byte, []}) ->
+    {type, Ann, range, [{integer, Ann, 0}, {integer, Ann, 255}]};
+expand_builtin_aliases({type, Ann, char, []}) ->
+    {type, Ann, range, [{integer, Ann, 0}, {integer, Ann, 16#10ffff}]};
+expand_builtin_aliases({type, Ann, number, []}) ->
+    {type, Ann, union, [{type, Ann, integer, []}, {type, Ann, float, []}]};
+expand_builtin_aliases({type, Ann, list, []}) ->
+    {type, Ann, list, [{type, Ann, any, []}]};
+expand_builtin_aliases({type, Ann, maybe_improper_list, []}) ->
+    {type, Ann, maybe_improper_list, [{type, Ann, any, []},
+                                      {type, Ann, any, []}]};
+expand_builtin_aliases({type, Ann, nonempty_list, []}) ->
+    {type, Ann, nonempty_list, [{type, Ann, any, []}]};
+expand_builtin_aliases({type, Ann, string, []}) ->
+    {type, Ann, list, [{type, Ann, char, []}]};
+expand_builtin_aliases({type, Ann, nonempty_string, []}) ->
+    {type, Ann, nonempty_list, [{type, Ann, char, []}]};
+expand_builtin_aliases({type, Ann, iodata, []}) ->
+    {type, Ann, union, [{type, Ann, iolist, []}, {type, Ann, binary, []}]};
+expand_builtin_aliases({type, Ann, iolist, []}) ->
+    %% recursive type
+    Union = [{type, Ann, byte, []},
+             {type, Ann, binary, []},
+             {type, Ann, iolist, []}],
+    {type, Ann, maybe_improper_list, [{union, Union}]};
+expand_builtin_aliases({type, Ann, function, []}) ->
+    {type, Ann, 'fun', []};
+expand_builtin_aliases({type, Ann, module, []}) ->
+    {type, Ann, atom, []};
+expand_builtin_aliases({type, Ann, mfa, []}) ->
+    {type, Ann, tuple, [{type, Ann, module, []},
+                        {type, Ann, atom, []},
+                        {type, Ann, arity, []}]};
+expand_builtin_aliases({type, Ann, arity, []}) ->
+    {type, Ann, range, [{integer, Ann, 0}, {integer, Ann, 255}]};
+expand_builtin_aliases({type, Ann, identifier, []}) ->
+    {type, Ann, union, [{type, Ann, pid, []},
+                        {type, Ann, port, []},
+                        {type, Ann, reference, []}]};
+expand_builtin_aliases({type, Ann, node, []}) ->
+    {type, Ann, atom, []};
+expand_builtin_aliases({type, Ann, timeout, []}) ->
+    {type, Ann, union, [{atom, Ann, infinity},
+                        {type, Ann, non_neg_integer, []}]};
+expand_builtin_aliases({type, Ann, no_return, []}) ->
+    {type, Ann, none, []};
+expand_builtin_aliases(Type) ->
+    Type.
+
+%% Flattens nested unions
+%%
+%% Mutually recursive with normalize/2
+%%
+%% * Normalize each element
+%% * TODO: Detect user-defined and remote types expanding to themselves
+%%   or to unions containing themselves (using memoization?)
+%% * Remove subtypes of other types in the same union; keeping any() separate
+%% * Merge integer types, including singleton integers and ranges
+%%   1, 1..5, integer(), non_neg_integer(), pos_integer(), neg_integer()
+-spec flatten_unions([type()], map()) -> [type()].
+flatten_unions([{type, _, union, UnionTs} | Ts], TEnv) ->
+    UnionTs1 = [normalize(T, TEnv) || T <- UnionTs],
+    flatten_unions(UnionTs1 ++ Ts, TEnv);
+flatten_unions([T | Ts], TEnv) ->
+    [T | flatten_unions(Ts, TEnv)];
+flatten_unions([], _TEnv) ->
+    [].
+
+%% Merges overlapping integer types (including ranges and singletons).
+%% (TODO) Removes all types that are subtypes of other types in the same union.
+%% Retuns a list of disjoint types.
+merge_union_types(Types, _TEnv) ->
+    case lists:any(fun ({type, _, term, []}) -> true; (_) -> false end,
+                   Types) of
+        true ->
+            %% term() is among the types.
+            [{type, 0, term, []}];
+        false ->
+            {IntegerTypes, NonIntegerTypes} =
+                lists:partition(fun is_int_type/1, Types),
+            {Anys, OtherTypes} =
+                lists:partition(fun ({type, _, any, []}) -> true;
+                                    (_)                  -> false
+                                end, NonIntegerTypes),
+            merge_int_types(IntegerTypes) ++
+                OtherTypes ++ %remove_subtypes(OtherTypes, TEnv) ++
+                case Anys of
+                    []      -> [];
+                    [Any|_] -> [Any]
+                end
+    end.
+
+%% Keep only types that are not subtypes of any other types in the list.
+%remove_subtypes(Types, TEnv) ->
+%    remove_subtypes_help(Types, Types, TEnv).
+%
+%remove_subtypes_help([T|Ts], Types, TEnv) ->
+%    case any_type(T, Types -- [T], sets:new(), TEnv) of
+%        true -> remove_subtypes_help(Ts, Types, TEnv);
+%        false -> [T | remove_subtypes_help(Ts, Types, TEnv)]
+%    end;
+%remove_subtypes_help([], _Types, _TEnv) ->
+%    [].
+
+-spec is_int_type(type()) -> boolean().
+is_int_type({type, _, T, _})
+  when T == pos_integer; T == non_neg_integer; T == neg_integer;
+       T == integer; T == range -> true;
+is_int_type({integer, _, _}) -> true;
+is_int_type(_) -> false.
+
+%% A type used while normalizing integer types. The ranges that are possible to
+%% write in the type system, i.e. non_neg_integer(), pos_integer(),
+%% neg_integer(), integer(), finite ranges, singletons and unions of these.
+-type int_range() :: {neg_inf, -1 | non_neg_integer() | pos_inf} |
+                     {neg_integer() | 0 | 1, pos_inf} |
+                     {integer(), integer()}.
+
+%% Merges integer types by sorting on the lower bound and then merging adjacent
+%% ranges. Returns a list of mutually exclusive integer types.
+%%
+%% This is an adoption of the standard algorithm for merging intervals.
+-spec merge_int_types([type()]) -> [type()].
+merge_int_types([]) ->
+    [];
+merge_int_types(IntTypes) ->
+    Ranges = lists:map(fun int_type_to_range/1, IntTypes),
+    [T | Ts] = lists:sort(fun lower_bound_less_or_eq/2, Ranges),
+    MergedRanges = merge_int_ranges_help(Ts, [T]),
+    lists:append(lists:map(fun int_range_to_types/1, MergedRanges)).
+
+merge_int_ranges_help([{R1, R2} = R | Rs], [{S1, S2} | StackTail] = Stack) ->
+    NewStack = if
+                   R1 == neg_inf; S2 == pos_inf; R1 =< S2 + 1 ->
+                       %% Overlapping or adjacent ranges. Merge them.
+                       [{S1, int_max(R2, S2)} | StackTail];
+                   true ->
+                       %% Not mergeable ranges. Push R to stack.
+                       [R | Stack]
+               end,
+    merge_int_ranges_help(Rs, NewStack);
+merge_int_ranges_help([], Stack) ->
+    lists:reverse(Stack).
+
+%% callback for sorting ranges.
+-spec lower_bound_less_or_eq(int_range(), int_range()) -> boolean().
+lower_bound_less_or_eq({A, _}, {B, _}) ->
+    if
+        A == neg_inf -> true;
+        B == neg_inf -> false;
+        true         -> A =< B
+    end.
+
+int_max(A, B) when A == pos_inf; B == pos_inf   -> pos_inf;
+int_max(A, B) when is_integer(A), is_integer(B) -> max(A, B).
+
+%% Integer type to range, where the bounds can be infinities in some cases.
+-spec int_type_to_range(type()) -> int_range().
+int_type_to_range({type, _, integer, []})              -> {neg_inf, pos_inf};
+int_type_to_range({type, _, neg_integer, []})          -> {neg_inf, -1};
+int_type_to_range({type, _, non_neg_integer, []})      -> {0, pos_inf};
+int_type_to_range({type, _, pos_integer, []})          -> {1, pos_inf};
+int_type_to_range({type, _, range, [{integer, _, I1},
+                                    {integer, _, I2}]})
+                                        when I1 =< I2  -> {I1, I2};
+int_type_to_range({integer, _, I})                     -> {I, I}.
+
+%% Converts a range back to a type. Creates two types in some cases.
+-spec int_range_to_types(int_range()) -> [type()].
+int_range_to_types({neg_inf, pos_inf}) ->
+    [{type, 0, integer, []}];
+int_range_to_types({neg_inf, -1}) ->
+    [{type, 0, neg_integer, []}];
+int_range_to_types({neg_inf, 0}) ->
+    [{type, 0, neg_integer, []}, {integer, 0, 0}];
+int_range_to_types({neg_inf, I}) when I > 0 ->
+    [{type, 0, neg_integer, []},
+     {type, 0, range, [{integer, 0, 0}, {integer, 0, I}]}];
+int_range_to_types({I, pos_inf}) when I < -1 ->
+    [{type, 0, range, [{integer, 0, I}, {integer, 0, -1}]},
+     {type, 0, non_neg_integer, []}];
+int_range_to_types({-1, pos_inf}) ->
+    [{integer, 0, -1}, {type, 0, non_neg_integer, []}];
+int_range_to_types({0, pos_inf}) ->
+    [{type, 0, non_neg_integer, []}];
+int_range_to_types({1, pos_inf}) ->
+    [{type, 0, pos_integer, []}];
+int_range_to_types({I, I}) ->
+    [{integer, 0, I}];
+int_range_to_types({I, J}) when I < J ->
+    [{type, 0, range, [{integer, 0, I}, {integer, 0, J}]}].
+
+%% End of subtype help functions
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %%% The environment passed around during typechecking.
 

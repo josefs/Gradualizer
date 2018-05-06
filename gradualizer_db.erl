@@ -6,7 +6,10 @@
 
 %% API functions
 -export([start_link/0,
-         get_spec/3, get_type/3, get_exported_type/3, get_record_type/2,
+         get_spec/3,
+         get_type/3, get_exported_type/3, get_opaque_type/3,
+         get_record_type/2,
+         get_modules/0, get_types/1,
          save/1, load/1,
          import_files/1, import_app/1, import_otp/0]).
 
@@ -41,26 +44,43 @@ start_link() ->
 get_spec(M, F, A) ->
     gen_server:call(?name, {get_spec, M, F, A}).
 
-%% @doc Fetches an exported or unexported type.
+%% @doc Fetches an exported or unexported user-defined type. Does not expand
+%%      opaque types.
 -spec get_type(Module :: module(),
                Type :: atom(),
-               Params :: [type()]) -> {ok, type()} | not_found.
+               Params :: [type()]) -> {ok, type()} | opaque | not_found.
 get_type(M, T, A) ->
     gen_server:call(?name, {get_type, M, T, A}).
 
-%% @doc Fetches an exported type.
+%% @doc Fetches an exported type. Does not expand opaque types.
 -spec get_exported_type(Module :: module(),
                         Type :: atom(),
-                        Params :: [type()]) -> {ok, type()} |
-                                               not_found.
+                        Params :: [type()]) -> {ok, type()} | opaque |
+                                               not_exported | not_found.
 get_exported_type(M, T, A) ->
     gen_server:call(?name, {get_exported_type, M, T, A}).
+
+%% @doc Like get_type/3 but also expands opaque types.
+-spec get_opaque_type(Module :: module(),
+                      Type :: atom(),
+                      Params :: [type()]) -> {ok, type()} | not_found.
+get_opaque_type(M, T, A) ->
+    gen_server:call(?name, {get_opaque_type, M, T, A}).
 
 %% @doc Fetches a record type defined in the module.
 -spec get_record_type(Module :: module(),
                       Name :: atom()) -> {ok, type()} | not_found.
 get_record_type(Module, Name) ->
     gen_server:call(?name, {get_record_type, Module, Name}).
+
+%% @doc Return a list of all known modules.
+-spec get_modules() -> [module()].
+get_modules() ->
+    gen_server:call(?name, get_modules).
+
+-spec get_types(module()) -> [{atom(), arity()}].
+get_types(Module) ->
+    gen_server:call(?name, {get_types, Module}).
 
 -spec save(Filename :: any()) -> ok | {error, any()}.
 save(Filename) ->
@@ -88,11 +108,12 @@ import_otp() ->
 -type opts() :: #{autoimport => boolean()}.
 -define(default_opts, #{autoimport => true}).
 
--record(state, {specs  = #{} :: #{mfa() => [type()]},
-                types  = #{} :: #{mfa() => #typeinfo{}},
-                opts   = ?default_opts :: opts(),
-                srcmap = #{} :: #{module() => string()},
-                loaded = #{} :: #{module() => boolean()}}).
+-record(state, {specs   = #{} :: #{mfa() => [type()]},
+                types   = #{} :: #{mfa() => #typeinfo{}},
+                records = #{} :: #{{module(), atom()} => [type()]},
+                opts    = ?default_opts :: opts(),
+                srcmap  = #{} :: #{module() => string()},
+                loaded  = #{} :: #{module() => boolean()}}).
 
 -type state() :: #state{}.
 
@@ -114,20 +135,36 @@ handle_call({get_spec, M, F, A}, _From, State) ->
     K = {M, F, A},
     case State1#state.specs of
         #{K := Types} ->
-            Types1 = [annotate_local_types(atom_to_list(M) ++ ".erl", Type) || Type <- Types],
+            Types1 = [typelib:annotate_user_types(M, Type) || Type <- Types],
             {reply, {ok, Types1}, State1};
         _NoMatch ->
             {reply, not_found, State1}
     end;
 handle_call({get_exported_type, M, T, Args}, _From, State) ->
     State1 = autoimport(M, State),
-    handle_get_type(M, T, Args, true, State1);
+    handle_get_type(M, T, Args, true, false, State1);
 handle_call({get_type, M, T, Args}, _From, State) ->
     State1 = autoimport(M, State),
-    handle_get_type(M, T, Args, false, State1);
+    handle_get_type(M, T, Args, false, false, State1);
+handle_call({get_opaque_type, M, T, Args}, _From, State) ->
+    State1 = autoimport(M, State),
+    handle_get_type(M, T, Args, false, true, State1);
 handle_call({get_record_type, M, Name}, _From, State) ->
     State1 = autoimport(M, State),
-    handle_get_type(M, {record, Name}, [], false, State1);
+    K = {M, Name},
+    case State1#state.records of
+        #{K := Type1} ->
+            Type1 = typelib:annotate_user_types(M, Type1),
+            {reply, {ok, Type1}, State1};
+        _ ->
+            {reply, not_found, State1}
+    end;
+handle_call(get_modules, _From, State) ->
+    {reply, maps:keys(State#state.srcmap), State};
+handle_call({get_types, M}, _From, State) ->
+    State1 = autoimport(M, State),
+    Ts = [{T, A} || {Mod, T, A} <- maps:keys(State#state.types), Mod == M],
+    {reply, Ts, State1};
 handle_call({save, Filename}, _From, State) ->
     Permanent = {State#state.specs, State#state.types, State#state.loaded},
     Bin = term_to_binary(Permanent, [compressed]),
@@ -188,25 +225,23 @@ code_change(_OldVsn, State, _Extra) ->
 %% Helpers
 
 %% helper for handle_call for get_type, get_unexported_type and get_record_type.
-handle_get_type(M, T, Args, RequireExported, %ExpandOpaque,
-		State) ->
+-spec handle_get_type(module(), Name :: atom(), Params :: [type()],
+                      RequireExported :: boolean(), ExpandOpaque :: boolean(),
+                      state()) -> {reply, {ok, type()} | atom(), state()}.
+handle_get_type(M, T, Args, RequireExported, ExpandOpaque, State) ->
     K = {M, T, length(Args)},
     case State#state.types of
         #{K := TypeInfo} ->
             case TypeInfo of
                  #typeinfo{exported = false} when RequireExported ->
-                     {reply, not_found, State};
-                 #typeinfo{opaque = true} %when not ExpandOpaque
-		                             ->
-                     %% Don't expand opaques (toggle option?)
-                     {reply, {ok, {opaque, M, T, Args}}, State};
+                     {reply, not_exported, State};
+                 #typeinfo{opaque = true} when not ExpandOpaque ->
+                     {reply, opaque, State};
                  #typeinfo{params = Vars,
                            body = Type0} ->
-                     %% TODO: Add another function 'get_exported_type'
-                     %%       that checks the 'exported' flag
                      VarMap = maps:from_list(lists:zip(Vars, Args)),
                      Type1 = substitute_type_vars(Type0, VarMap),
-                     Type2 = annotate_local_types(atom_to_list(M) ++ ".erl", Type1),
+                     Type2 = typelib:annotate_user_types(M, Type1),
                      {reply, {ok, Type2}, State}
              end;
         _NoMatch ->
@@ -248,11 +283,14 @@ import_files([File | Files], State) ->
     Specs    = collect_specs(Module, Forms1),
     SpecMap1 = add_entries_to_map(Specs, State#state.specs),
     Types    = collect_types(Module, Forms1),
+    Records  = collect_records(Module, Forms1),
     TypeMap1 = add_entries_to_map(Types, State#state.types),
+    RecMap1  = add_entries_to_map(Records, State#state.records),
     Loaded1  = (State#state.loaded)#{Module => true},
-    State1   = State#state{specs  = SpecMap1,
-                           types  = TypeMap1,
-                           loaded = Loaded1},
+    State1   = State#state{specs   = SpecMap1,
+                           types   = TypeMap1,
+                           records = RecMap1,
+                           loaded  = Loaded1},
     import_files(Files, State1);
 import_files([], St) ->
     St.
@@ -303,9 +341,6 @@ collect_types(Module, Forms) ->
     ExportedTypes = lists:concat([Tys || {attribute, _, export_type,
                                           Tys} <- Forms]),
 
-    %% Records are represented as types with name = {record, RecordName}
-    TypeDefs = normalize_type_defs(Forms),
-
     %% Now all type definitions are easy to extract.
     Types = [begin
                  Id       = {Module, Name, length(Vars)},
@@ -316,9 +351,16 @@ collect_types(Module, Forms) ->
                                       params   = Params,
                                       body     = Body},
                  {Id, Info}
-             end || {attribute, _, Attr, {Name, Body, Vars}} <- TypeDefs,
-                    Attr == type orelse Attr == opaque],
+             end || {attribute, _, Attr, {Name, Body, Vars}} <- Forms,
+                    Attr == type orelse Attr == opaque,
+                    is_atom(Name)],
     Types.
+
+collect_records(Module, Forms) ->
+    %% Records are represented as types with name = {record, RecordName}
+    [{{Module, Name}, Fields} || {Name, Fields} <- extract_record_defs(Forms)].
+
+
 
 %% Normalize Type Defs
 %% -------------------
@@ -330,26 +372,22 @@ collect_types(Module, Forms) ->
 %% forms, create one from the untyped one and normalize so that they
 %% all have a default value.
 %%
--spec normalize_type_defs(Forms :: [tuple()]) -> Typedefs :: [tuple()].
-normalize_type_defs([{attribute, L, record, {Name, _UntypedFields}},
+-spec extract_record_defs(Forms :: [tuple()]) -> Typedefs :: [tuple()].
+extract_record_defs([{attribute, L, record, {Name, _UntypedFields}},
                      {attribute, L, type, {{record, Name}, Fields, []}} = R |
                      Rest]) ->
     TypedFields = lists:map(fun normalize_record_field/1, Fields),
-    R = {attribute, L, type, {{record, Name}, TypedFields, []}},
-    [R | normalize_type_defs(Rest)];
-normalize_type_defs([{attribute, L, record, {Name, UntypedFields}} | Rest]) ->
+    R = {Name, TypedFields},
+    [R | extract_record_defs(Rest)];
+extract_record_defs([{attribute, _L, record, {Name, UntypedFields}} | Rest]) ->
     %% Convert type typed record
     TypedFields = lists:map(fun normalize_record_field/1, UntypedFields),
-    R = {attribute, L, type, {{record, Name}, TypedFields, []}},
-    [R | normalize_type_defs(Rest)];
-normalize_type_defs([{attribute, _, Attr, {_Name, _Body, _Params}} = T | Rest])
-                                        when Attr == type; Attr == opaque ->
-    %% Normal type or opaque definition
-    [T | normalize_type_defs(Rest)];
-normalize_type_defs([_ | Rest]) ->
-    %% Skip forms that are not type definitions
-    normalize_type_defs(Rest);
-normalize_type_defs([]) ->
+    R = {Name, TypedFields},
+    [R | extract_record_defs(Rest)];
+extract_record_defs([_ | Rest]) ->
+    %% Skip forms that are not record definitions
+    extract_record_defs(Rest);
+extract_record_defs([]) ->
     [].
 
 %% Turns all records into typed records and all record fields into typed
@@ -379,32 +417,15 @@ substitute_type_vars({Tag, L, T, Params}, TVars) when Tag == type orelse
 						      Tag == user_type,
 						      is_list(Params) ->
     {Tag, L, T, [substitute_type_vars(P, TVars) || P <- Params]};
+substitute_type_vars({remote_type, L, M, T, Params}, TVars) ->
+    {remote_type, L, M, T, [substitute_type_vars(P, TVars) || P <- Params]};
 substitute_type_vars({var, L, Var}, TVars) ->
     case TVars of
         #{Var := Type} -> Type;
         _              -> {var, L, Var}
     end;
-substitute_type_vars(Other, _) ->
+substitute_type_vars(Other = {T, _, _}, _) when T == atom; T == integer ->
     Other.
-
-%% Annotate user-defined types and record types with a file
-%% name.
--spec annotate_local_types(file:filename(), type()) -> type().
-annotate_local_types(Filename, {user_type, Anno, Name, Params}) ->
-    %% Annotate local user-defined type
-    {user_type, erl_anno:set_file(Filename, Anno), Name,
-     [annotate_local_types(Filename, Param) || Param <- Params]};
-annotate_local_types(Filename, {type, Anno, record, RecName = [_]}) ->
-    %% Annotate local record type
-    {type, erl_anno:set_file(Filename, Anno), record, RecName};
-annotate_local_types(Filename, {type, Anno, T, Params}) when is_list(Params) ->
-    %% Don't annotate, just recurse
-    {type, Anno, T, [annotate_local_types(Filename, Param) || Param <- Params]};
-annotate_local_types(Filename, {ann_type, Anno, [Var, Type]}) ->
-    %% Don't annotate, just recurse
-    {ann_type, Anno, [Var, annotate_local_types(Filename, Type)]};
-annotate_local_types(_Filename, Type) ->
-    Type.
 
 %% Returns specs for all exported functions, generating any-types for unspeced
 %% functions.
