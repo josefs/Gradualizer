@@ -1047,6 +1047,11 @@ add_type_pat({atom, _, Bool}, {type, _, boolean, []}, VEnv)
     VEnv;
 add_type_pat({atom, _, _}, {type, _, any, []}, VEnv) ->
     VEnv;
+add_type_pat({nil, _}, {type, _, list, _}, VEnv) ->
+    VEnv;
+add_type_pat({cons, _, PH, PT}, ListTy = {type, _, list, [ElemTy]}, VEnv) ->
+    VEnv2 = add_type_pat(PH, ElemTy, VEnv),
+    add_type_pat(PT, ListTy, VEnv2);
 add_type_pat({record, _, _Record, Fields}, {type, _, record, [{atom, _, _RecordName}]}, VEnv) ->
     % TODO: We need the definitions of records here, to be able to add the
     % types of the matches in the record.
