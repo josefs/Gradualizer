@@ -1,0 +1,36 @@
+Title:
+
+A Gradual Type system for Erlang
+
+abstract
+
+This talk introduces a new type system for Erlang based on Gradual Typing. The principles of Gradual Typing has emerged in the type system research community over the last decade and has among other things resulted in TypeScript, a typed dialect of JavaScript. Gradual Typing is tailored to mix static and dynamic code.
+
+The type system provides pay-as-you-go static checking: the more type
+annotation in the program, the more static checking will be performed.
+
+The tool we've developed uses Erlang's current syntax for specs, and it
+works on existing code bases without change.
+
+Dialyzer is the current most popular tool for static checking of
+Erlang. Our gradual type system turns out to be somewhat complementary
+to the Dialyzer. While the Dialyzer aims to give no false positives, our type system always reports an error whenever a type spec doesn't match the code. We'll provide an in-depth comparison of the two
+tools.
+
+
+Objective:
+
+Present our new type checking tool for Erlang and show how to
+effectively use it in a code base.
+
+
+Audience:
+
+All Erlang developers
+
+Biography:
+
+Josef Svenningsson is a System Manager at Ericsson working on one of
+the the oldest, active Erlang codebases: the SGSN-MME.
+In a previous life he was an Assistant Professor at Chalmers University of Technology, with a broad range of interest in computer science. He has published papers on wide variety of topics, including: program analysis, constraint solving, security, programming language design, testing and high-performance computing.
+
