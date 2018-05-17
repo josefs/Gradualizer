@@ -108,7 +108,35 @@ compat_ty({integer, _, _I}, {type, _, integer, []}, A, _TEnv) ->
 compat_ty({integer,_,  I}, {type, _, range, [{integer, _, I1}, {integer, _, I2}]}, A, _TEnv)
   when I >= I1 andalso I =< I2 ->
     ret(A);
-% TODO: pos_integer(), neg_integer(), non_neg_integer()
+compat_ty({type, _, pos_integer, []}, {type, _, integer, []}, A, _TEnv) ->
+    ret(A);
+compat_ty({integer, _, I}, {type, _, pos_integer, []}, A, _TEnv)
+  when I > 0 ->
+    ret(A);
+compat_ty({type, _, range, [{integer, _, I1}, {integer, _, I2}]},
+	  {type, _, pos_integer, []}, A, _TEnv)
+  when I1 > 0 andalso I2 > 0 ->
+    ret(A);
+compat_ty({type, _, neg_integer, []}, {type, _, integer, []}, A, _TEnv) ->
+    ret(A);
+compat_ty({integer, _, I}, {type, _, neg_integer, []}, A, _TEnv)
+  when I < 0 ->
+    ret(A);
+compat_ty({type, _, range, [{integer, _, I1}, {integer, _, I2}]},
+	  {type, _, neg_integer, []}, A, _TEnv)
+  when I1 < 0 andalso I2 < 0 ->
+    ret(A);
+compat_ty({type, _, non_neg_integer, []}, {type, _, integer, []}, A, _TEnv) ->
+    ret(A);
+compat_ty({type, _, pos_integer, []}, {type, _, non_neg_integer, []}, A, _TEnv) ->
+    ret(A);
+compat_ty({integer, _, I}, {type, _, non_neg_integer, []}, A, _TEnv)
+  when I >= 0 ->
+    ret(A);
+compat_ty({type, _, range, [{integer, _, I1}, {integer, _, I2}]},
+	  {type, _, non_neg_integer, []}, A, _TEnv)
+  when I1 >= 0 andalso I2 >= 0 ->
+    ret(A);
 
 %% Atoms
 compat_ty({atom, _, _Atom}, {type, _, atom, []}, A, _TEnv) ->
@@ -251,6 +279,12 @@ normalize({remote_type, _P, Module, Name, Args} = RemoteType, TEnv) ->
         not_found ->
             throw({undef, remote_type, {Module, Name, length(Args)}})
     end;
+normalize({op, _, '-', {integer, Ann, I}}, _TEnv) ->
+    {integer, Ann, -I};
+normalize({op, _, '+', {integer, Ann, I}}, _TEnv) ->
+    {integer, Ann, I};
+normalize({type, Ann, range, [T1, T2]}, TEnv) ->
+    {type, Ann, range, [normalize(T1, TEnv), normalize(T2, TEnv)]};
 normalize(Type, _TEnv) ->
     expand_builtin_aliases(Type).
 
