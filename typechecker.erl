@@ -752,12 +752,12 @@ type_check_expr_in(Env, Ty, {var, LINE, Var}) ->
 	false ->
 	    throw({type_error, tyVar, LINE, Var, VarTy, Ty})
     end;
-type_check_expr_in(_Env, Ty, {integer, LINE, _Int}) ->
-    case subtype(Ty, {type, 0, integer, []}) of
+type_check_expr_in(_Env, Ty, I = {integer, LINE, Int}) ->
+    case subtype(I, Ty) of
 	{true, Cs} ->
 	    {{type, 0, integer, []}, #{}, Cs};
 	false ->
-	    throw({type_error, int, LINE, Ty})
+	    throw({type_error, int, Int, LINE, Ty})
     end;
 type_check_expr_in(_Env, Ty, {float, LINE, _Int}) ->
     case subtype(Ty, {type, 0, float, []}) of
@@ -1262,16 +1262,19 @@ handle_type_error({type_error, tyVar, LINE, Var, VarTy, Ty}) ->
 	      "but is expected to have type ~s~n",
 	      [Var, LINE, typelib:pp_type(VarTy), typelib:pp_type(Ty)]);
 handle_type_error({type_error, {atom, _, A}, LINE, Ty}) ->
-    io:format("The atom ~p on line ~p does not have type ~p~n",
+    io:format("The atom ~p on line ~p does not have type ~s~n",
 	      [A, LINE, typelib:pp_type(Ty)]);
+handle_type_error({type_error, int, I, LINE, Ty}) ->
+    io:format("The integer ~p on line ~p does not have type ~s~n",
+	      [I, LINE, typelib:pp_type(Ty)]);
 handle_type_error({type_error, compat, _LINE, Ty1, Ty2}) ->
-    io:format("The type ~p is not compatible with type ~p~n"
+    io:format("The type ~s is not compatible with type ~s~n"
 	     ,[typelib:pp_type(Ty1), typelib:pp_type(Ty2)]);
 handle_type_error({type_error, list, _, Ty1, Ty}) ->
-    io:format("The type ~p cannot be an element of a list of type ~p~n",
+    io:format("The type ~s cannot be an element of a list of type ~s~n",
 	      [typelib:pp_type(Ty1), typelib:pp_type(Ty)]);
 handle_type_error({type_error, list, _, Ty}) ->
-    io:format("The type ~p on line ~p is not a list type~n",
+    io:format("The type ~s on line ~p is not a list type~n",
 	      [typelib:pp_type(Ty), line_no(Ty)]);
 handle_type_error({type_error, call, _P, Name, TyArgs, ArgTys}) ->
     io:format("The function ~p expects arguments of type~n~p~n but is given "
@@ -1279,19 +1282,19 @@ handle_type_error({type_error, call, _P, Name, TyArgs, ArgTys}) ->
 	      [Name, TyArgs, ArgTys]);
 handle_type_error({type_error, boolop, BoolOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-boolean argument "
-	      " of type ~p~n", [BoolOp, P, typelib:pp_type(Ty)]);
+	      " of type ~s~n", [BoolOp, P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, arith_error, ArithOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-numeric argument "
-	      " of type ~p~n", [ArithOp, P, typelib:pp_type(Ty)]);
+	      " of type ~s~n", [ArithOp, P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, int_error, IntOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-integer argument "
-	      " of type ~p~n", [IntOp, P, typelib:pp_type(Ty)]);
+	      " of type ~s~n", [IntOp, P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, logic_error, LogicOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-boolean argument "
-	      " of type ~p~n", [LogicOp, P, typelib:pp_type(Ty)]);
+	      " of type ~s~n", [LogicOp, P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, list_op_error, ListOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-list argument "
-	      " of type ~p~n", [ListOp, P, typelib:pp_type(Ty)]);
+	      " of type ~s~n", [ListOp, P, typelib:pp_type(Ty)]);
 handle_type_error({unknown_variable, P, Var}) ->
     io:format("Unknown variable ~p on line ~p.~n", [Var, P]);
 handle_type_error(type_error) ->
