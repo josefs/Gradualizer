@@ -1239,7 +1239,8 @@ aux([{attribute, _, record, Record} | Forms], Acc) ->
     aux(Forms, Acc#parsedata{records = [Record | Acc#parsedata.records]});
 aux([{attribute, _, export, Exports} | Forms], Acc) ->
     aux(Forms, Acc#parsedata{exports = Exports ++ Acc#parsedata.exports});
-aux([{attribute, _, compile, CompileOpts} | Forms], Acc) ->
+aux([{attribute, _, compile, CompileOpts} | Forms], Acc)
+  when is_list(CompileOpts) ->
     Acc1 = lists:foldl(fun (export_all, AccAcc) ->
 			       AccAcc#parsedata{export_all = true};
 			   (_, AccAcc) ->
@@ -1248,6 +1249,8 @@ aux([{attribute, _, compile, CompileOpts} | Forms], Acc) ->
 		       Acc,
 		       CompileOpts),
     aux(Forms, Acc1);
+aux([{attribute, _, compile, export_all} | Forms], Acc) ->
+    aux(Forms, Acc#parsedata{export_all = true});
 aux([_|Forms], Acc) ->
     aux(Forms, Acc).
 
