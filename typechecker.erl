@@ -773,23 +773,18 @@ type_check_expr_in(_Env, Ty, Atom = {atom, LINE, _}) ->
 	false ->
 	    throw({type_error, Atom, LINE, Ty})
     end;
-type_check_expr_in(Env, ResTy, {tuple, _LINE, TS}) ->
-    case ResTy of
-      {type, _, tuple, Tys} ->
-	    {ResTys, VarBinds, Css} =
-		lists:unzip3(
-		  lists:map(fun ({Ty, Expr}) -> type_check_expr_in(Env, Ty, Expr)
-			    end,
-			    lists:zip(Tys,TS))),
-	    {{type, 0, tuple, ResTys}
-	    ,union_var_binds(VarBinds)
-	    ,sets:union(Css)};
-	{type, _, any, []} ->
-	    {ResTys, VarBinds, Css} =
-		lists:unzip3([type_check_expr(Env, Expr) || Expr <- TS]),
-	    {{type, 0, tuple, ResTys}
-	    ,union_var_binds(VarBinds)
-	    ,sets:union(Css)}
+type_check_expr_in(Env, ResTy, {tuple, LINE, TS}) ->
+    case subtype({type, 0, tuple, lists:duplicate(length(TS), {type, 0, any, []})}
+		,ResTy) of
+	false ->
+	    throw({type_error, tuple, LINE, ResTy});
+	{true, Cs} ->
+	    % We re-typecheck the expression for every possible
+	    % tuple in a union. That's potentially inefficient.
+	    % Maybe we should have a flag to allow for approximation here
+	    % in the same way that dialyzer does it.
+	    {Ty, VBs, Cs2} = type_check_tuple_in(Env, ResTy, TS),
+	    {Ty, VBs, sets:union(Cs, Cs2)}
     end;
 type_check_expr_in(Env, ResTy, {'case', _, Expr, Clauses}) ->
     {ExprTy, VarBinds, Cs1} = type_check_expr(Env, Expr),
@@ -944,6 +939,52 @@ type_check_block_in(Env, ResTy, [Expr | Exprs]) ->
     {_, VarBinds, Cs1} = type_check_expr(Env, Expr),
     {Ty, VB, Cs2} = type_check_block_in(Env#env{ venv = add_var_binds(Env#env.venv, VarBinds) }, ResTy, Exprs),
     {Ty, VB, sets:union(Cs1, Cs2)}.
+
+
+type_check_tuple_in(Env, {type, _, tuple, any}, TS) ->
+    {_Tys, VBs, Css} = lists:unzip3(
+      lists:map(fun (Expr) ->
+			type_check_expr_in(Env, {type, 0, any, []}, Expr)
+		end, TS)),
+    {dummy_type, union_var_binds(VBs), sets:union(Css)};
+type_check_tuple_in(Env, {type, _, tuple, Tys}, TS) ->
+    {_Tys, VBs, Css} = lists:unzip3(
+      lists:zipwith(fun (Ty, Expr) ->
+			type_check_expr_in(Env, Ty, Expr)
+		end, Tys, TS)),
+    {dummy_type, union_var_binds(VBs), sets:union(Css)};
+type_check_tuple_in(Env, {type, _, union, Tys}, TS) ->
+    type_check_tuple_union(Env, Tys, TS).
+
+type_check_tuple_union(Env, [Tuple = {type, _, tuple, _}|Union], TS) ->
+    try type_check_tuple_in(Env, Tuple, TS)
+    catch
+	_ ->
+	    type_check_tuple_union(Env, Union, TS)
+    end;
+type_check_tuple_union(Env, [_|Union], TS) ->
+    type_check_tuple_union(Env, Union, TS);
+type_check_tuple_union(_Env, [], _TS) ->
+    %% TODO: Better error message
+    throw({type_error, tuple_error}).
+
+
+%% We don't use these function right now but they can be useful for
+%% implementing an approximation when typechecking unions of tuples.
+split_tuple_type(N, {type, P, tuple, any}) ->
+    [lists:duplicate(N, {type, P, any, []})];
+split_tuple_type(_N, {type, _, tuple, Tys}) ->
+    [Tys];
+split_tuple_type(N, {type, _, union, Tys}) ->
+    split_tuple_union(N, Tys).
+
+split_tuple_union(N, [Tuple = {type, _, tuple, _}|Tys]) ->
+    split_tuple_type(N, Tuple) ++ split_tuple_union(N, Tys);
+split_tuple_union(_, []) ->
+    [];
+split_tuple_union(N, [{type, _, union, Tys1} | Tys2]) ->
+    split_tuple_union(N, Tys1 ++ Tys2).
+
 
 
 infer_clauses(Env, Clauses) ->
@@ -1181,7 +1222,8 @@ type_check_file(File) ->
 				ok
 			catch
 			    Throw ->
-				io:format("~p~n", [erlang:get_stacktrace()]),
+				% Useful for debugging
+				% io:format("~p~n", [erlang:get_stacktrace()]),
 				handle_type_error(Throw),
 				nok
 			end;
@@ -1298,6 +1340,8 @@ handle_type_error({type_error, logic_error, LogicOp, P, Ty}) ->
 handle_type_error({type_error, list_op_error, ListOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-list argument "
 	      " of type ~s~n", [ListOp, P, typelib:pp_type(Ty)]);
+handle_type_error({type_error, tuple_error}) ->
+    io:format("A tuple didn't match any of the types in a union~n");
 handle_type_error({unknown_variable, P, Var}) ->
     io:format("Unknown variable ~p on line ~p.~n", [Var, P]);
 handle_type_error(type_error) ->
