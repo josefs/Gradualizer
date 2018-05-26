@@ -2,10 +2,10 @@
 
 -compile([export_all]).
 
--spec f(int()) -> int().
+-spec f(integer()) -> integer().
 f(N) ->
     N.
 
--spec g(int()) -> int().
+-spec g(integer()) -> integer().
 g(1) ->
     2.
