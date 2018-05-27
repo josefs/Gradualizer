@@ -1,6 +1,6 @@
 -module(constraints).
 
--export([empty/0, combine/1, convert/1]).
+-export([empty/0, combine/1, combine/2, convert/1]).
 
 -type type() :: erl_parse:abstract_type().
 
@@ -12,6 +12,11 @@
 
 empty() ->
     #constraints{}.
+
+% add({T1, T2}, Cs) ->
+
+combine(C1, C2) ->
+    combine([C1, C2]).
 
 combine([]) ->
     empty();
