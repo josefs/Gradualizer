@@ -39,7 +39,7 @@ subtypes([Ty1|Tys1], [Ty2|Tys2]) ->
 	    case subtypes(Tys1, Tys2) of
 		false -> false;
 		{true, C2} ->
-		    sets:unions(C1,C2)
+		    {true, sets:union(C1,C2)}
 	    end
     end.
 
@@ -568,7 +568,9 @@ type_check_expr(Env, {call, P, Name, Args}) ->
 	    % TODO: Handle multi-clause function types
 	    case subtypes(TyArgs, ArgTys) of
 		{true, Cs2} ->
-		    {ResTy, union_var_binds([VarBind, VarBind2]), sets:union([Cs,Cs2|Css])};
+		    {ResTy
+		    ,union_var_binds([VarBind, VarBind2])
+		    ,sets:union([Cs,Cs2|Css])};
 		false ->
 		    throw({type_error, call, P, Name, TyArgs, ArgTys})
 	    end;
@@ -577,7 +579,8 @@ type_check_expr(Env, {call, P, Name, Args}) ->
 				,Cs2]}] ->
 	    case subtypes(TyArgs, ArgTys) of
 		{true, Cs3} ->
-		    {ResTy, union_var_binds([VarBind, VarBind2])
+		    {ResTy
+		    ,union_var_binds([VarBind, VarBind2])
 		    ,sets:union([Cs,Cs2,Cs3|Css])};
 		false ->
 		    throw({type_error, call, P, Name, TyArgs, ArgTys})
@@ -912,7 +915,7 @@ type_check_fun(Env, {atom, P, Name}, Arity) ->
 	    case erl_internal:bif(Name, Arity) of
 		true ->
 		    {ok, Types} = gradualizer_db:get_spec(erlang, Name, Arity),
-		    {Types, #{}};
+		    {Types, #{}, sets:new()};
 		false ->
 		    throw({call_undef, P, Name, Arity})
 	    end
@@ -920,7 +923,7 @@ type_check_fun(Env, {atom, P, Name}, Arity) ->
 type_check_fun(_Env, {remote, P, {atom,_,Module}, {atom,_,Fun}}, Arity) ->
     % Module:function call
     case gradualizer_db:get_spec(Module, Fun, Arity) of
-	{ok, Types} -> {Types, #{}};
+	{ok, Types} -> {Types, #{}, sets:new()};
 	not_found   -> throw({call_undef, P, Module, Fun, Arity})
     end;
 type_check_fun(Env, Expr, _Arity) ->
