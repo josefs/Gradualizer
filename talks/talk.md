@@ -30,21 +30,71 @@ Should a language have **Static** or **Dynamic** Typing?
 
 . . .
 
-Both choices have their advantages
+As Erlang programmers we all know the advantages of Dynamic Typic
+
+* Programming becomes more agile
+
+  It's very quick to write and immediately run the program
+
+* It's the right choice for Erlang-style message passing
+
+* Easily handles situations where the type of a value depends on runtime
+  information
 
 
-| Static                     | Dynamic                                 |
-|----------------------------|-----------------------------------------|
-| Helps structuring code     | Good for open-world message passing     |
 
+## Static Typing advantages
+
+* Catches bugs earlier
+
+* Type signatures provide documentation and help understanding
+
+* Types can help structuring code
+
+## Soundness for Static Typing
+
+
+> Well typed programs can't go wrong
+
+. . .
+
+* **Sound** type systems can guarantee the absence of whole classes of errors
+
+## Static vs Dynamic
+
+* Dynamic typing is particularly sweet for small, script-like, programs.
+
+* Static typing becomes increasing helpful as programs grow large
 
 ## Gradual Typing
 
-A method for combining **static typing** and **dynamic typing**.
+**Gradual Typing** is a method for **mixing** static and dynamic typing.
 
-Hot research topic over the last decade
 
-Examples of implementations of gradual types:
+* Start with a dynamically program and **gradually** add type annotations
+  to make the program more statically typed.
+
+* Start out with a dynamically typed small program.
+
+  As the program grow larger, add type signatures to make it more
+  statically typed.
+
+## Soundness for Gradual Typing
+
+Instead of **soundness**, gradual typing has **gradual guarantee**:
+
+> If the program fails, the problem lies in the dynamically typed part
+
+. . .
+
+The new slogan is:
+
+> Well typed programs can't be blamed
+
+
+## Examples of Languages with Gradual Typing
+
+Gradual typing has been a hot research topic over the last decade
 
 * Javascript
   * Type Script
@@ -72,6 +122,21 @@ Two choices for default typing:
 * The default is dynamic typing
   * The programmer has to add static types explicitly
 
+## Compatibility
+
+In a standard static type system, types are compared to **equality**
+or **subtyping**.
+
+* Equality
+
+  `integer() == integer()`, `integer() /= boolean()`
+
+* Subtyping
+
+  `integer() :: number()`
+
+
+
 
 # Gradual Typing in Erlang
 
@@ -85,7 +150,7 @@ No type specs = no type checking
 
 ## Gradual Typing in Erlang
 
-* Type type any() means dynamic type.
+* Type any() means dynamic type.
 
 * Subtyping
 
@@ -117,7 +182,6 @@ TODO: Example of how to add types to a program gradually to catch errors
 # Type annotations
 
 ## Type annotation
-
 * Currently, type specs can only be given on the toplevel on functions.
 
 * This is enough for most circumstances.
@@ -140,7 +204,9 @@ We provide a small library of functions which can act as type annotations
 
 TODO: Examples
 
-## Current status of Gradualizer
+# Current status of Gradualizer
+
+## Status
 
 * Alpha-quality. A beta-release soonish
 
@@ -148,15 +214,17 @@ TODO: Examples
 
 * Please try it out! But beware of bugs!
 
+  https://github.com/josefs/Gradualizer
+
 # Comparison With Dialyzer
 
-## 
+## Dialyzer
 
 Do we really need the Gradualizer?
 
 We already have the Dialyzer!
 
-## Dialyzer
+. . .
 
 * The Dialyzer is *not* a type system
 
@@ -164,7 +232,15 @@ We already have the Dialyzer!
 
 * It tries it best to avoid false negatives
 
+* It doesn't use type specs to guide the analysis,
+  it infers information and then checks against the type specs.
+
 ## Concrete differences between Gradualizer and Dialyzer
+
+What follows is a collection of examples to show the difference between
+Gradualizer and Dialyzer.
+
+The examples may look contrived, but most of them come from real code.
 
 ## Restrictions on the Nesting Depth of Types
 
@@ -197,7 +273,7 @@ pattern_test(X) ->
 ```
 
 * Dialyzer will not detect the error in the above program
-  * Using the flag `-Wunderspec` will detect it though.
+  * Using the flag `-Woverspecs` will detect it though.
 * Gradualizer detects the error
 
 ## Unions
@@ -217,6 +293,50 @@ tuple_union() ->
   The result is that Dialyzer fails to catch the error
   
 * Gradualizer detects the error
+
+## Unions - 2
+
+A modification of the example, with pattern matching on the union.
+
+``` {.erlang}
+-spec tuple_union({undefined, {}}
+                | {{}, undefined}) -> {}.
+tuple_union({undefined, undefined}) ->
+    {};
+tuple_union({{},{}}) ->
+    {}.
+```
+
+* Both Dialyzer and Gradualizer fails to catch this problem
+
+## Flow Sensitivity
+
+``` {.erlang}
+-export([foo/0]).
+
+foo() ->
+	bar(apa).
+
+-spec :: (apa | bepa) -> true | false.
+bar(apa) ->
+	true;
+bar(bepa) ->
+	false.
+```
+
+* Dialyzer can figure out that the clause `bar(bepa)`
+  will never be called.
+
+* With `-Wunderspecs`, Dialyzer will also complain that `bar` will never
+  return `false`.
+
+* Gradualizer cannot do any of that.
+
+## Speed
+
+Gradualizer to typically **alot** faster than Dialyzer
+
+TODO: More here.
 
 # Future work
 
