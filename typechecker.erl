@@ -533,7 +533,7 @@ type_check_expr(_Env, {integer, _, _N}) ->
     return({type, 0, any, []});
 type_check_expr(Env, {tuple, _, TS}) ->
     { Tys, VarBinds, Css} = lists:unzip3([ type_check_expr(Env, Expr)
-				    || Expr <- TS ]),
+				        || Expr <- TS ]),
     { {type, 0, tuple, Tys}, union_var_binds(VarBinds), constraints:combine(Css) };
 type_check_expr(Env, {cons, _, Head, Tail}) ->
     {Ty1, VB1, Cs1} = type_check_expr(Env, Head),
@@ -818,7 +818,7 @@ type_check_expr_in(Env, ResTy, {call, _, Name, Args}) ->
 	    % TODO: Handle multi-clause function types
 	    {VarBinds2, Css} =
 		lists:unzip([ type_check_expr_in(Env, TyArg, Arg)
-			      || {TyArg, Arg} <- lists:zip(TyArgs, Args) ]),
+			   || {TyArg, Arg} <- lists:zip(TyArgs, Args) ]),
 	    case subtype(ResTy, FunResTy) of
 		{true, Cs2} ->
 		    VarBind = union_var_binds([VarBinds1 | VarBinds2]),
