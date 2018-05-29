@@ -1126,21 +1126,30 @@ add_type_pat({var, _, A}, Ty, VEnv) ->
     VEnv#{ A => Ty };
 add_type_pat({integer, _, _}, _Ty, VEnv) ->
     VEnv;
-add_type_pat({tuple, _, Pats}, {type, _, tuple, Tys}, VEnv) when
-      length(Pats) == length(Tys) ->
-    add_type_pat_list(Pats, Tys, VEnv);
-add_type_pat({tuple, _, Pats}, {type, _, any, []}, VEnv) ->
-    add_any_types_pats(Pats, VEnv);
-add_type_pat({atom, _, Bool}, {type, _, bool, []}, VEnv)
-  when Bool == true orelse Bool == false ->
-    VEnv;
-add_type_pat({atom, _, Bool}, {type, _, boolean, []}, VEnv)
-  when Bool == true orelse Bool == false ->
-    VEnv;
-add_type_pat({atom, _, _}, {type, _, any, []}, VEnv) ->
-    VEnv;
-add_type_pat({nil, _}, {type, _, list, _}, VEnv) ->
-    VEnv;
+add_type_pat(Tuple = {tuple, P, Pats}, Ty, VEnv) ->
+    case subtype({type,P,tuple,lists:duplicate(length(Pats),{type,0,any,[]}) }
+		 , Ty) of
+	{true, _Cs} ->
+	    add_type_pat_tuple(Pats, Ty, VEnv);
+	false ->
+	    throw({type_error, pattern, P, Tuple, Ty})
+    end;
+add_type_pat(Atom = {atom, P, _}, Ty, VEnv) ->
+    case subtype(Atom, Ty) of
+	% There cannot be any constraints generated in this case
+	{true, _Cs} ->
+	    VEnv;
+	false ->
+	    throw({type_error, pattern, P, Atom, Ty})
+    end;
+add_type_pat(Nil = {nil, P}, Ty, VEnv) ->
+    case subtype(Nil, Ty) of
+	% There cannot be any constraints generated in this case
+	{true, _Cs} ->
+	    VEnv;
+	false ->
+	    throw({type_error, pattern, P, Nil, Ty})
+    end;
 add_type_pat({cons, _, PH, PT}, ListTy = {type, _, list, [ElemTy]}, VEnv) ->
     VEnv2 = add_type_pat(PH, ElemTy, VEnv),
     add_type_pat(PT, ListTy, VEnv2);
@@ -1149,7 +1158,10 @@ add_type_pat({record, _, _Record, Fields}, {type, _, record, [{atom, _, _RecordN
     % types of the matches in the record.
     add_type_pat_fields(Fields, {type, 0, any, []}, VEnv);
 add_type_pat({match, _, Pat1, Pat2}, Ty, VEnv) ->
-    add_type_pat(Pat1, Ty, add_type_pat(Pat2, Ty, VEnv)).
+    add_type_pat(Pat1, Ty, add_type_pat(Pat2, Ty, VEnv));
+
+add_type_pat(Pat, Ty, _VEnv) ->
+    throw({type_error, pattern, element(2, Pat), Pat, Ty}).
 
 add_type_pat_fields([], _, VEnv) ->
     VEnv;
@@ -1163,6 +1175,28 @@ add_type_pat_list([Pat|Pats], [Ty|Tys], VEnv) ->
     add_type_pat_list(Pats, Tys, VEnv2);
 add_type_pat_list([], [], VEnv) ->
     VEnv.
+
+add_type_pat_tuple(Pats, {type, _, tuple, any}, VEnv) ->
+    add_any_types_pats(Pats, VEnv);
+add_type_pat_tuple(Pats, {type, _, tuple, Tys}, VEnv) ->
+    add_types_pats(Pats, Tys, VEnv);
+add_type_pat_tuple(Pats, {type, _, union, Tys}, VEnv) ->
+%% TODO: This code approximates unions of tuples with tuples of unions
+    Unions =
+	lists:map(fun (UnionTys) ->
+			  {type, 0, union, UnionTys}
+		  end
+		 ,transpose([TS
+			   || {type, _, tuple, TS} <- Tys
+			    , length(TS) == length(Pats)])),
+    lists:foldl(fun ({Pat, Union}, Env) ->
+			add_type_pat(Pat, Union, Env)
+		end, VEnv, lists:zip(Pats, Unions)).
+
+
+transpose([[]|_]) -> [];
+transpose(M) ->
+  [lists:map(fun hd/1, M) | transpose(lists:map(fun tl/1, M))].
 
 
 add_any_types_pats([], VEnv) ->
@@ -1359,6 +1393,9 @@ handle_type_error({type_error, list_op_error, ListOp, P, Ty}) ->
 	      " of type ~s~n", [ListOp, P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, tuple_error}) ->
     io:format("A tuple didn't match any of the types in a union~n");
+handle_type_error({type_error, pattern, P, Pat, Ty}) ->
+    io:format("The pattern ~s on line ~p doesn't have the type ~s~n",
+	      [erl_pp:expr(Pat), P, typelib:pp_type(Ty)]);
 handle_type_error({unknown_variable, P, Var}) ->
     io:format("Unknown variable ~p on line ~p.~n", [Var, P]);
 handle_type_error(type_error) ->
