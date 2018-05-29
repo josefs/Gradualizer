@@ -70,14 +70,14 @@ file or inferred.
   * [X] Generate interface files
   * [ ] Read the appropriate interface files and add the definitions to the environment
 
-* [ ] Better error messages.
+* [X] Better error messages.
 
 * [ ] Warn about unsupported types.
       Unsupported types should be converted to `any()`.
 
 * [ ] Make it a standalone program.
 
-* [ ] Test suite
+* [X] Test suite
 
 * Type system support
   * [ ] Polymorphism. This will require contexts with type variables and constraints.
@@ -86,16 +86,16 @@ file or inferred.
 * [ ] Extend support for all of Erlang.
 
   * [x] Message passing constructs
-  * [ ] Exception constructs
+  * [X] Exception constructs
   * [ ] Guards
   * [ ] Binary syntax
   * [ ] Records
-  * [ ] List comprehensions
-  * [ ] If expressions
-  * [ ] Maps
-  * [ ] An initial environment for the erlang module
+  * [X] List comprehensions
+  * [X] If expressions
+  * [X] Maps
+  * [X] An initial environment for the erlang module
   
-* [ ] New representation of types which supports
+* [X] New representation of types which supports
       subtyping of recursive types. This requires that
       each subtree in a type has a unique identity so that
       we can keep track of cycles. It's not hard but it
