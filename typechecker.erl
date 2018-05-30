@@ -163,9 +163,13 @@ compat_ty({type, _, range, [{integer, _, I1}, {integer, _, I2}]},
 compat_ty({atom, _, _Atom}, {type, _, atom, []}, A, _TEnv) ->
     ret(A);
 
-%compat_ty({type, _, record, [{atom, _, Record}]},
-%          {type, _, record, [{atom, _, Record}]}, A, _TEnv) ->
-%    ret(A);
+%% Records with the same name, defined in differend modules
+%% TODO: Record equivallend on tuple form
+compat_ty({type, P1, record, [{atom, _, Name}]},
+          {type, P2, record, [{atom, _, Name}]}, A, TEnv) ->
+    Fields1 = get_record_fields(Name, P1, TEnv),
+    Fields2 = get_record_fields(Name, P2, TEnv),
+    compat_record_fields(Fields1, Fields2, A, TEnv);
 
 %% Lists
 compat_ty({type, _, list, [_Ty]}, {type, _, list, []}, A, _TEnv) ->
@@ -226,10 +230,25 @@ compat_ty(_Ty1, _Ty2, _, _) ->
 compat_tys([], [], A, _TEnv) ->
     ret(A);
 compat_tys([Ty1|Tys1], [Ty2|Tys2], A, TEnv) ->
-    {Ap, Cs} = compat(Ty1 ,Ty2, A, TEnv),
+    {Ap, Cs} = 
+    compat(Ty1 ,Ty2, A, TEnv),
     {Aps, Css} = compat_tys(Tys1, Tys2, Ap, TEnv),
     {Aps, constraints:combine(Cs, Css)};
 compat_tys(_Tys1, _Tys2, _, _) ->
+    throw(nomatch).
+
+%% Two records are compatible if they have the same name (defined in different
+%% modules) and they have the same number of fields and the field types match.
+compat_record_fields([], [], A, _TEnv) ->
+    ret(A);
+compat_record_fields([{typed_record_field, _NameAndDefaultValue1, T1} | Fs1],
+                     [{typed_record_field, _NameAndDefaultValue2, T2} | Fs2],
+                     A, TEnv) ->
+    {A1, Cs1} = compat_ty(T1, T2, A, TEnv),
+    {A2, Cs2} = compat_record_fields(Fs1, Fs2, A1, TEnv),
+    {A2, constraints:combine(Cs1, Cs2)};
+compat_record_fields(_, _, _, _) ->
+    %% Mismatching number of fields
     throw(nomatch).
 
 %% Returns a successful matching of two types. Convenience function for when
@@ -245,6 +264,26 @@ any_type(Ty, [Ty1|Tys], A, TEnv) ->
     catch
 	nomatch ->
 	    any_type(Ty, Tys, A, TEnv)
+    end.
+
+get_record_fields(RecName, Anno, #tenv{records = REnv}) ->
+    case typelib:get_module_from_annotation(Anno) of
+    	{ok, Module} ->
+    	    %% A record type in another module, from an expanded remote type
+	    case gradualizer_db:get_record_type(Module, RecName) of
+		{ok, TypedRecordFields} ->
+		    TypedRecordFields;
+		not_found ->
+		    throw({undef, record, {Module, RecName}})
+	    end;
+	none ->
+	    %% Local record type
+	    case REnv of
+	    	#{RecName := Fields} ->
+		    Fields;
+		_NotFound ->
+		    throw({undef, record, RecName})
+	    end
     end.
 
 %% Normalize
@@ -288,16 +327,6 @@ normalize({user_type, P, Name, Args} = Type, TEnv) ->
                     throw({undef, user_type, {Name, length(Args)}})
             end
     end;
-%normalize({type, P, record, [Name]}, TEnv) ->
-%    %% TODO: Move this to compat_ty and only compare when necessary
-%    %% TODO: Handle #rec{} without file annotation
-%    {ok, Module} = typelib:get_module_from_annotation(P),
-%    case gradualizer_db:get_record_type(Module, Name) of
-%        {ok, TypedRecordFields} ->
-%            normalize(TypedRecordFields, TEnv);
-%        not_found ->
-%            throw({undef, record, {Module, Name}})
-%    end;
 normalize({remote_type, _P, Module, Name, Args} = RemoteType, TEnv) ->
     case gradualizer_db:get_exported_type(Module, Name, Args) of
         {ok, T} ->
