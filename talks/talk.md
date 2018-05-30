@@ -1,10 +1,6 @@
 ---
 title:  A Gradual Typesystem for Erlang
 author: Josef Svenningsson
-abstract: |
-  This is the abstract.
-
-  It consists of two paragraphs.
 ...
 
 
@@ -66,10 +62,18 @@ As Erlang programmers we all know the advantages of Dynamic Typic
 
 * Static typing becomes increasing helpful as programs grow large
 
+. . .
+
+This suggests a way of developing code:
+
+* When starting to develop a program, use dynamic typing for agility
+
+* As the program grow larger and more programmers are involved, increase
+  static typing to help enforce the architecture and provide documentation.
+
 ## Gradual Typing
 
 **Gradual Typing** is a method for **mixing** static and dynamic typing.
-
 
 * Start with a dynamically program and **gradually** add type annotations
   to make the program more statically typed.
@@ -78,6 +82,71 @@ As Erlang programmers we all know the advantages of Dynamic Typic
 
   As the program grow larger, add type signatures to make it more
   statically typed.
+
+## Gradual typing primer (simlified)
+
+A Gradual type system has two components
+
+* An ordinary type system + a type for dynamic typing
+
+* A compatibility relation between types
+
+## Gradual Type System
+
+* A Gradual Type system builds on a static type system.
+
+* A new type, `any()`, for dynamic typing is added to the type system
+
+## Compatibility
+
+In a standard static type system, types are compared using **equality**
+or **subtyping**.
+
+* Equality
+
+  `integer() = integer()`, `integer() 	≠ boolean()`
+
+* Subtyping
+
+  `integer() :: number()`
+
+## Compatibitily
+
+Instead, Gradual Type system have **compatibility**.
+
+::: incremental
+
+* For ordinary types, compatibitiliy works like equality
+
+  `integer()` ~ `integer()`, `integer()` ≁ $\nsim$ `boolean()`
+
+* The dynamic type `any()` is compatible to all types
+
+  `integer()` ~ `any()`, `any()` ~ `boolean()`
+
+* The compatibility relation is **not** an equality relation.
+  Specifically, it's not transitive.
+
+  `integer()` ~ `any()` ~ `boolean() `
+
+  This does not mean that `integer()` ~ `boolean()`
+
+:::
+
+## Compatibility and Subtyping
+
+In a Gradual Type system, how does `any()` interact with subtyping`?
+
+* We cannot have `T1 :: any()` and `any() :: T2` because subtyping is
+  transitive and it would mean that `T1 :: T2`.
+
+* Instead `any() :: any()` and we then need to combine the subtyping
+  and compatibility relations
+
+* The combined relation, **compatible subtyping**, $\lesssim$ is defined as:
+
+  $A \lessim B \equiv A :: T, T \sim U, U :: B$
+
 
 ## Soundness for Gradual Typing
 
@@ -90,7 +159,6 @@ Instead of **soundness**, gradual typing has **gradual guarantee**:
 The new slogan is:
 
 > Well typed programs can't be blamed
-
 
 ## Examples of Languages with Gradual Typing
 
@@ -109,81 +177,37 @@ Gradual typing has been a hot research topic over the last decade
 * C#
 * ...
 
-# Gradual typing primer
-
-## Gradual typing primer
-
-An ordinary type system + a type for dynamic typing
-
-Two choices for default typing:
-
-* The default is static typing
-  * The programmer has to annotate dynamically typed parts explicitly
-* The default is dynamic typing
-  * The programmer has to add static types explicitly
-
-## Compatibility
-
-In a standard static type system, types are compared to **equality**
-or **subtyping**.
-
-* Equality
-
-  `integer() == integer()`, `integer() /= boolean()`
-
-* Subtyping
-
-  `integer() :: number()`
-
-## Compatibitily
-
-Instead, Gradual Type system have **compatibility**.
-
-::: incremental
-
-* For ordinary types, compatibitiliy works like equality
-
-  `integer()` ~ `integer()`, `integer()` \\~ `boolean()`
-
-* The dynamic type `any()` is compatible to all types
-
-  `integer()` ~ `any()`, `any()` ~ `boolean()`
-
-* The compatibility relation is **not** an equality relation
-
-  Specifically, it's not transitive.
-
-  `integer()` ~ `any()` ~ `boolean() `
-
-  This does not mean that `integer()` ~ `boolean()`
-
-:::
 
 # Gradual Typing in Erlang
 
+## Building a Gradual Type System for Erlang
+
+* The static type system we start with is just the existing type
+  specs in Erlang.
+
+* The type `any()` takes the role of the dynamic type
+
+* We assume a standard subtyping relation between types.
+
+  * `term()` is the top of the subtyping hierarchy
+  * `none()` is the bottom of the hierarchy
+
+
 ## Principles for the Type System
 
-The programmer is in control.
+* Without any type specs, no static typing happens.
 
-Type specs are the means of control.
+* When type specs are added the program the program is checked against
+  these specs statically. The more type specs, the more static typing.
 
-No type specs = no type checking
+  The programmer is in control.
 
-## Gradual Typing in Erlang
-
-* Type any() means dynamic type.
-
-* Subtyping
-
-  * term() is the top of the subtyping hierarchy
-  * none() is the bottom of the hierarchy
-
-## Principles
+  Type specs are the means of control.
 
 * The type system is backwards compatible with all existing type specs,
   record declarations and type defintions.
 
-=> Works well on existing code bases
+  Works well on existing code bases
 
 ## Process communication
 
@@ -199,6 +223,12 @@ No type specs = no type checking
 ## Example
 
 TODO: Example of how to add types to a program gradually to catch errors
+
+## Partial Type Specs
+
+It is possible to use `any()` anywhere in a type.
+
+This enables partial types.
 
 # Current status of Gradualizer
 
@@ -353,7 +383,7 @@ TODO: More here.
 
 Thanks to
 
-* Viktor Söderqvist for hacking on the tool and general discussions
+* Viktor SÃ¶derqvist for hacking on the tool and general discussions
 * David Wahlstedt for discussions on type systems and general support
 
 ##
@@ -392,4 +422,15 @@ It's tempting to extend Erlang with type annotations on expressions
 We provide a small library of functions which can act as type annotations
 
 TODO: Examples
+
+# Design choices for Gradual Typing
+
+
+Two choices for default typing:
+
+* The default is static typing
+  * The programmer has to annotate dynamically typed parts explicitly
+* The default is dynamic typing
+  * The programmer has to add static types explicitly
+
 
