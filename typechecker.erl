@@ -16,13 +16,34 @@
 	  functions  = []    :: list()
 	 }).
 
+-type typed_record_field() :: {typed_record_field,
+                               {record_field, erl_anno:anno(), Name :: atom(),
+                                DefaultValue :: erl_parse:abstract_expr()},
+     			        Type :: erl_parse:abstract_type()}.
+
+%% Type environment, passed around while comparing compatible subtypes
+-record(tenv, {types   :: #{{Name :: atom(), arity()} => {Params :: [atom()],
+							  Body :: type()}},
+	       records :: #{Name :: atom()            => [typed_record_field()]}
+	      }).
+
+%%% The environment passed around during typechecking.
+-record(env, {fenv   = #{}
+	     ,venv   = #{}
+	     ,tenv   :: #tenv{}
+	     %,tyvenv = #{}
+	     }).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Subtyping compatibility
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 % The first argument is a "compatible subtype" of the second.
 
--spec subtype(type(), type()) -> {true, any()} | false.
-subtype(Ty1, Ty2) ->
+-spec subtype(type(), type(), #tenv{}) -> {true, any()} | false.
+subtype(Ty1, Ty2, TEnv) ->
     try compat(typelib:remove_pos(Ty1), typelib:remove_pos(Ty2),
-               sets:new(), maps:new()) of
+               sets:new(), TEnv) of
 	{_Memoization, Constraints} ->
 	    {true, Constraints}
     catch
@@ -30,13 +51,13 @@ subtype(Ty1, Ty2) ->
 	    false
     end.
 
-subtypes([], []) ->
+subtypes([], [], _TEnv) ->
     {true, constraints:empty()};
-subtypes([Ty1|Tys1], [Ty2|Tys2]) ->
-    case subtype(Ty1, Ty2) of
+subtypes([Ty1|Tys1], [Ty2|Tys2], TEnv) ->
+    case subtype(Ty1, Ty2, TEnv) of
 	false -> false;
 	{true, C1} ->
-	    case subtypes(Tys1, Tys2) of
+	    case subtypes(Tys1, Tys2, TEnv) of
 		false -> false;
 		{true, C2} ->
 		    {true, constraints:combine(C1,C2)}
@@ -247,6 +268,7 @@ normalize({type, _, union, _} = U, TEnv) ->
 normalize({user_type, P, Name, Args} = Type, TEnv) ->
     case typelib:get_module_from_annotation(P) of
         {ok, Module} ->
+            %% Local type in another module, from an expanded remote type
             case gradualizer_db:get_type(Module, Name, Args) of
                 {ok, T} ->
                     normalize(T, TEnv);
@@ -256,18 +278,26 @@ normalize({user_type, P, Name, Args} = Type, TEnv) ->
                     throw({undef, user_type, {Module, Name, length(Args)}})
             end;
         none ->
-            %% TODO
-            throw({not_implemented, unfold_user_type, {Name, length(Args)}})
+            %% Local user-defined type
+            TypeId = {Name, length(Args)},
+            case TEnv#tenv.types of
+                #{TypeId := {Vars, Type0}} ->
+                    VarMap = maps:from_list(lists:zip(Vars, Args)),
+                    typelib:substitute_type_vars(Type0, VarMap);
+                _NotFound ->
+                    throw({undef, user_type, {Name, length(Args)}})
+            end
     end;
-normalize({type, P, record, [Name]}, TEnv) ->
-    %% TODO: Handle #rec{} without file annotation
-    {ok, Module} = typelib:get_module_from_annotation(P),
-    case gradualizer_db:get_record_type(Module, Name) of
-        {ok, T} ->
-            normalize(T, TEnv);
-        not_found ->
-            throw({undef, record, {Module, Name}})
-    end;
+%normalize({type, P, record, [Name]}, TEnv) ->
+%    %% TODO: Move this to compat_ty and only compare when necessary
+%    %% TODO: Handle #rec{} without file annotation
+%    {ok, Module} = typelib:get_module_from_annotation(P),
+%    case gradualizer_db:get_record_type(Module, Name) of
+%        {ok, TypedRecordFields} ->
+%            normalize(TypedRecordFields, TEnv);
+%        not_found ->
+%            throw({undef, record, {Module, Name}})
+%    end;
 normalize({remote_type, _P, Module, Name, Args} = RemoteType, TEnv) ->
     case gradualizer_db:get_exported_type(Module, Name, Args) of
         {ok, T} ->
@@ -496,17 +526,6 @@ int_range_to_types({I, J}) when I < J ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%%% The environment passed around during typechecking.
-
--record(env, {fenv   = #{}
-	     ,venv   = #{}
-	     ,renv   = #{}
-	     ,tyenv  = #{}
-	     ,tyvenv = #{}
-	     }).
-
-
-
 %% Arguments: An environment for functions, an environment for variables
 %% and the expression to type check.
 %% Returns the type of the expression and a collection of variables bound in
@@ -521,7 +540,7 @@ type_check_expr(Env, {var, P, Var}) ->
     end;
 type_check_expr(Env, {match, _, Pat, Expr}) ->
     {Ty, VarBinds, Cs} = type_check_expr(Env, Expr),
-    {Ty, add_type_pat(Pat, Ty, VarBinds), Cs};
+    {Ty, add_type_pat(Pat, Ty, Env#env.tenv, VarBinds), Cs};
 type_check_expr(Env, {'if', _, Clauses}) ->
     infer_clauses(Env, Clauses);
 type_check_expr(Env, {'case', _, Expr, Clauses}) ->
@@ -545,7 +564,7 @@ type_check_expr(Env, {cons, _, Head, Tail}) ->
 	{_, {type, _, any, []}} ->
 	    {{type, 0, any, []}, VB2};
 	{Ty1, TyList = {type, _, list, [Ty]}} ->
-	    case subtype(Ty1, Ty) of
+	    case subtype(Ty1, Ty, Env#env.tenv) of
 		{true, Cs} ->
 		    {TyList
 		    ,union_var_binds([VB1, VB2])
@@ -568,7 +587,7 @@ type_check_expr(Env, {call, P, Name, Args}) ->
 	    { {type, 0, any, []}, VarBind, constraints:combine([Cs|Css])};
 	[{type, _, 'fun', [{type, _, product, TyArgs}, ResTy]}] ->
 	    % TODO: Handle multi-clause function types
-	    case subtypes(TyArgs, ArgTys) of
+	    case subtypes(TyArgs, ArgTys, Env#env.tenv) of
 		{true, Cs2} ->
 		    {ResTy
 		    ,union_var_binds([VarBind, VarBind2])
@@ -580,7 +599,7 @@ type_check_expr(Env, {call, P, Name, Args}) ->
 				  [{type, _, product, TyArgs}, ResTy]}
 				,SCs2]}] ->
 	    Cs2 = constraints:convert(SCs2),
-	    case subtypes(TyArgs, ArgTys) of
+	    case subtypes(TyArgs, ArgTys, Env#env.tenv) of
 		{true, Cs3} ->
 		    {ResTy
 		    ,union_var_binds([VarBind, VarBind2])
@@ -616,18 +635,18 @@ type_check_expr(Env, {map, _, Expr, Assocs}) ->
 %% Records
 type_check_expr(Env, {record_field, _P, Expr, Record, {atom, _, Field}}) ->
     {VB, Cs} = type_check_expr_in(Env, {type, 0, record, [{atom, 0, Record}]}, Expr),
-    Rec = maps:get(Record, Env#env.renv),
+    Rec = maps:get(Record, Env#env.tenv#tenv.records),
     Ty  = maps:get(Field, Rec),
     {Ty, VB, Cs};
 type_check_expr(Env, {record, _, Expr, Record, Fields}) ->
     RecTy = {type, 0, record, [{atom, 0, Record}]},
     {VB1, Cs1} = type_check_expr_in(Env, RecTy, Expr),
-    Rec = maps:get(Record, Env#env.renv),
+    Rec = maps:get(Record, Env#env.tenv#tenv.records),
     {VB2, Cs2} = type_check_fields(Env, Rec, Fields),
     {RecTy, union_var_binds([VB1, VB2]), constraints:combine(Cs1, Cs2)};
 type_check_expr(Env, {record, _, Record, Fields}) ->
     RecTy    = {type, 0, record, [{atom, 0, Record}]},
-    Rec      = maps:get(Record, Env#env.renv),
+    Rec      = maps:get(Record, Env#env.tenv#tenv.records),
     {VB, Cs} = type_check_fields(Env, Rec, Fields),
     {RecTy, VB, Cs};
 
@@ -650,7 +669,7 @@ type_check_expr(Env, {op, _, '!', Proc, Val}) ->
     ,constraints:combine(Cs1, Cs2)};
 type_check_expr(Env, {op, P, 'not', Arg}) ->
     {Ty, VB, Cs1} = type_check_expr(Env, Arg),
-    case subtype({type, 0, boolean, []}, Ty) of
+    case subtype({type, 0, boolean, []}, Ty, Env#env.tenv) of
 	{true, Cs2} ->
 	    {{type, 0, any, []}, VB, constraints:combine(Cs1, Cs2)};
 	false ->
@@ -671,13 +690,13 @@ type_check_expr(Env, {op, P, BoolOp, Arg1, Arg2}) when
 	end,
     case type_check_expr(Env, Arg1) of
 	{Ty1, VB1, Cs1} ->
-	    case subtype(Ty1, {type, 0, bool, []}) of
+	    case subtype(Ty1, {type, 0, bool, []}, Env#env.tenv) of
 		false ->
 		    throw({type_error, boolop, BoolOp, P, Ty1});
 		{true, Cs2} ->
 		    case type_check_expr(Env#env{ venv = UnionVarBindsSecondArg(Env#env.venv,VB1 )}, Arg2) of
 			{Ty2, VB2, Cs3} ->
-			    case subtype(Ty2, {type, 0, bool, []}) of
+			    case subtype(Ty2, {type, 0, bool, []}, Env#env.tenv) of
 				false ->
 				    throw({type_error, boolop, BoolOp, P, Ty1});
 				{true, Cs4} ->
@@ -696,7 +715,8 @@ type_check_expr(Env, {op, _, RelOp, Arg1, Arg2}) when
     case {type_check_expr(Env, Arg1)
 	 ,type_check_expr(Env, Arg2)} of
 	{{Ty1, VB1, Cs1}, {Ty2, VB2, Cs2}} ->
-	    case {subtype(Ty1, Ty2), subtype(Ty2, Ty1)} of
+	    case {subtype(Ty1, Ty2, Env#env.tenv),
+		  subtype(Ty2, Ty1, Env#env.tenv)} of
 		{{true, Cs3}, {true, Cs4}} ->
 		    % TODO: Should we return boolean() here in some cases?
 		    % If both Ty1 and Ty2 are not any() then one could
@@ -747,7 +767,11 @@ type_check_lc(Env, Expr, []) ->
     {{type, 0, any, []}, #{}, Cs};
 type_check_lc(Env, Expr, [{generate, _, Pat, Gen} | Quals]) ->
     {Ty,  _,  Cs1} = type_check_expr(Env, Gen),
-    {TyL, VB, Cs2} = type_check_lc(Env#env{ venv = add_type_pat(Pat, Ty, Env#env.venv) }, Expr, Quals),
+    {TyL, VB, Cs2} = type_check_lc(Env#env{ venv = add_type_pat(Pat,
+								Ty,
+								Env#env.tenv,
+								Env#env.venv) },
+				   Expr, Quals),
     {TyL, VB, constraints:empty(Cs1,Cs2)}.
 
 
@@ -758,28 +782,28 @@ type_check_expr_in(Env, {type, _, any, []}, Expr) ->
     {VB, Cs};
 type_check_expr_in(Env, Ty, {var, LINE, Var}) ->
     VarTy = maps:get(Var, Env#env.venv),
-    case subtype(VarTy, Ty) of
+    case subtype(VarTy, Ty, Env#env.tenv) of
 	{true, Cs} ->
 	    {#{}, Cs};
 	false ->
 	    throw({type_error, tyVar, LINE, Var, VarTy, Ty})
     end;
-type_check_expr_in(_Env, Ty, I = {integer, LINE, Int}) ->
-    case subtype(I, Ty) of
+type_check_expr_in(Env, Ty, I = {integer, LINE, Int}) ->
+    case subtype(I, Ty, Env#env.tenv) of
 	{true, Cs} ->
 	    {#{}, Cs};
 	false ->
 	    throw({type_error, int, Int, LINE, Ty})
     end;
-type_check_expr_in(_Env, Ty, {float, LINE, _Int}) ->
-    case subtype(Ty, {type, 0, float, []}) of
+type_check_expr_in(Env, Ty, {float, LINE, _Int}) ->
+    case subtype(Ty, {type, 0, float, []}, Env#env.tenv) of
 	{true, Cs} ->
 	    {#{}, Cs};
 	false ->
 	    throw({type_error, float, LINE, Ty})
     end;
-type_check_expr_in(_Env, Ty, Atom = {atom, LINE, _}) ->
-    case subtype(Atom, Ty) of
+type_check_expr_in(Env, Ty, Atom = {atom, LINE, _}) ->
+    case subtype(Atom, Ty, Env#env.tenv) of
 	{true, Cs} ->
 	    {#{}, Cs};
 	false ->
@@ -787,7 +811,7 @@ type_check_expr_in(_Env, Ty, Atom = {atom, LINE, _}) ->
     end;
 type_check_expr_in(Env, ResTy, {tuple, LINE, TS}) ->
     case subtype({type, 0, tuple, lists:duplicate(length(TS), {type, 0, any, []})}
-		,ResTy) of
+		,ResTy, Env#env.tenv) of
 	false ->
 	    throw({type_error, tuple, LINE, ResTy});
 	{true, Cs} ->
@@ -819,7 +843,7 @@ type_check_expr_in(Env, ResTy, {call, _, Name, Args}) ->
 	    {VarBinds2, Css} =
 		lists:unzip([ type_check_expr_in(Env, TyArg, Arg)
 			   || {TyArg, Arg} <- lists:zip(TyArgs, Args) ]),
-	    case subtype(ResTy, FunResTy) of
+	    case subtype(ResTy, FunResTy, Env#env.tenv) of
 		{true, Cs2} ->
 		    VarBind = union_var_binds([VarBinds1 | VarBinds2]),
 		    {VarBind, constraints:combine([Cs, Cs2 | Css])};
@@ -835,7 +859,7 @@ type_check_expr_in(Env, ResTy, {op, _, '!', Arg1, Arg2}) ->
     {VarBinds2, Cs2} = type_check_expr_in(Env, ResTy, Arg2),
     {union_var_binds([VarBinds1,VarBinds2]), constraints:combine(Cs1,Cs2)};
 type_check_expr_in(Env, ResTy, {op, P, 'not', Arg}) ->
-    case subtype({type, 0, boolean, []}, ResTy) of
+    case subtype({type, 0, boolean, []}, ResTy, Env#env.tenv) of
 	{true, Cs1} ->
 	    {VB, Cs2} = type_check_expr_in(Env, ResTy, Arg),
 	    {VB, constraints:combine(Cs1, Cs2)};
@@ -1039,7 +1063,10 @@ check_clause(Env, ArgsTy, ResTy, {clause, _, Args, Guards, Block}) ->
 	false ->
 	    throw(argument_length_mismatch);
 	true ->
-	    EnvNew    = Env#env{ venv = add_types_pats(Args, ArgsTy, Env#env.venv) },
+	    EnvNew    = Env#env{ venv = add_types_pats(Args,
+	                                               ArgsTy,
+	                                               Env#env.tenv,
+	                                               Env#env.venv) },
 	    VarBinds  = check_guards(EnvNew, Guards),
 	    EnvNewest = EnvNew#env{ venv = add_var_binds(EnvNew#env.venv, VarBinds) },
 	    type_check_block_in(EnvNewest, ResTy, Block)
@@ -1063,15 +1090,15 @@ check_guards(Env, Guards) ->
 				    end, GuardSeq))
 		end, Guards)).
 
-type_check_function(FEnv, REnv, {function,_, Name, NArgs, Clauses}) ->
+type_check_function(FEnv, TEnv, {function,_, Name, NArgs, Clauses}) ->
     case maps:find({Name, NArgs}, FEnv) of
 	{ok, [{type, _, 'fun', [{type, _, product, ArgsTy}, ResTy]}]} ->
 	    % TODO: Handle multi-clause function types
-	    {VarBinds, Cs} = check_clauses(#env{ fenv = FEnv, renv = REnv },
+	    {VarBinds, Cs} = check_clauses(#env{ fenv = FEnv, tenv = TEnv },
 					   ArgsTy, ResTy, Clauses),
 	    {ResTy, VarBinds, Cs};
 	{ok, {type, _, any, []}} ->
-	    infer_clauses(#env{ fenv = FEnv, renv = REnv }, Clauses);
+	    infer_clauses(#env{ fenv = FEnv, tenv = TEnv }, Clauses);
 	error ->
 	    throw({internal_error, missing_type_spec, Name, NArgs})
     end.
@@ -1118,72 +1145,72 @@ merge_types(Tys) ->
 	    end
     end.
 
-add_types_pats([], [], VEnv) ->
+add_types_pats([], [], _TEnv, VEnv) ->
     VEnv;
-add_types_pats([Pat | Pats], [Ty | Tys], VEnv) ->
-    add_types_pats(Pats, Tys, add_type_pat(Pat, Ty, VEnv)).
+add_types_pats([Pat | Pats], [Ty | Tys], TEnv, VEnv) ->
+    add_types_pats(Pats, Tys, TEnv, add_type_pat(Pat, Ty, TEnv, VEnv)).
 
-add_type_pat({var, _, '_'}, _Ty, VEnv) ->
+add_type_pat({var, _, '_'}, _Ty, _TEnv, VEnv) ->
     VEnv;
-add_type_pat({var, _, A}, Ty, VEnv) ->
+add_type_pat({var, _, A}, Ty, _TEnv, VEnv) ->
     VEnv#{ A => Ty };
-add_type_pat({integer, _, _}, _Ty, VEnv) ->
+add_type_pat({integer, _, _}, _Ty, _TEnv, VEnv) ->
     VEnv;
-add_type_pat(Tuple = {tuple, P, Pats}, Ty, VEnv) ->
-    case subtype({type,P,tuple,lists:duplicate(length(Pats),{type,0,any,[]}) }
-		 , Ty) of
+add_type_pat(Tuple = {tuple, P, Pats}, Ty, TEnv, VEnv) ->
+    case subtype({type,P,tuple,lists:duplicate(length(Pats),{type,0,any,[]})},
+		 Ty, TEnv) of
 	{true, _Cs} ->
-	    add_type_pat_tuple(Pats, Ty, VEnv);
+	    add_type_pat_tuple(Pats, Ty, TEnv, VEnv);
 	false ->
 	    throw({type_error, pattern, P, Tuple, Ty})
     end;
-add_type_pat(Atom = {atom, P, _}, Ty, VEnv) ->
-    case subtype(Atom, Ty) of
+add_type_pat(Atom = {atom, P, _}, Ty, TEnv, VEnv) ->
+    case subtype(Atom, Ty, TEnv) of
 	% There cannot be any constraints generated in this case
 	{true, _Cs} ->
 	    VEnv;
 	false ->
 	    throw({type_error, pattern, P, Atom, Ty})
     end;
-add_type_pat(Nil = {nil, P}, Ty, VEnv) ->
-    case subtype(Nil, Ty) of
+add_type_pat(Nil = {nil, P}, Ty, TEnv, VEnv) ->
+    case subtype(Nil, Ty, TEnv) of
 	% There cannot be any constraints generated in this case
 	{true, _Cs} ->
 	    VEnv;
 	false ->
 	    throw({type_error, pattern, P, Nil, Ty})
     end;
-add_type_pat({cons, _, PH, PT}, ListTy = {type, _, list, [ElemTy]}, VEnv) ->
-    VEnv2 = add_type_pat(PH, ElemTy, VEnv),
-    add_type_pat(PT, ListTy, VEnv2);
-add_type_pat({record, _, _Record, Fields}, {type, _, record, [{atom, _, _RecordName}]}, VEnv) ->
+add_type_pat({cons, _, PH, PT}, ListTy = {type, _, list, [ElemTy]}, TEnv, VEnv) ->
+    VEnv2 = add_type_pat(PH, ElemTy, TEnv, VEnv),
+    add_type_pat(PT, ListTy, TEnv, VEnv2);
+add_type_pat({record, _, _Record, Fields}, {type, _, record, [{atom, _, _RecordName}]}, TEnv, VEnv) ->
     % TODO: We need the definitions of records here, to be able to add the
     % types of the matches in the record.
-    add_type_pat_fields(Fields, {type, 0, any, []}, VEnv);
-add_type_pat({match, _, Pat1, Pat2}, Ty, VEnv) ->
-    add_type_pat(Pat1, Ty, add_type_pat(Pat2, Ty, VEnv));
+    add_type_pat_fields(Fields, {type, 0, any, []}, TEnv, VEnv);
+add_type_pat({match, _, Pat1, Pat2}, Ty, TEnv, VEnv) ->
+    add_type_pat(Pat1, Ty, TEnv, add_type_pat(Pat2, Ty, TEnv, VEnv));
 
-add_type_pat(Pat, Ty, _VEnv) ->
+add_type_pat(Pat, Ty, _TEnv, _VEnv) ->
     throw({type_error, pattern, element(2, Pat), Pat, Ty}).
 
-add_type_pat_fields([], _, VEnv) ->
+add_type_pat_fields([], _, _TEnv, VEnv) ->
     VEnv;
-add_type_pat_fields([{record_field, _, _Field, Pat}|Fields], Ty, VEnv) ->
-    add_type_pat_fields(Fields, Ty, add_type_pat(Pat, Ty, VEnv)).
+add_type_pat_fields([{record_field, _, _Field, Pat}|Fields], Ty, TEnv, VEnv) ->
+    add_type_pat_fields(Fields, Ty, TEnv, add_type_pat(Pat, Ty, TEnv, VEnv)).
 
 
 
-add_type_pat_list([Pat|Pats], [Ty|Tys], VEnv) ->
-    VEnv2 = add_type_pat(Pat, Ty, VEnv),
-    add_type_pat_list(Pats, Tys, VEnv2);
-add_type_pat_list([], [], VEnv) ->
+add_type_pat_list([Pat|Pats], [Ty|Tys], TEnv, VEnv) ->
+    VEnv2 = add_type_pat(Pat, Ty, TEnv, VEnv),
+    add_type_pat_list(Pats, Tys, TEnv, VEnv2);
+add_type_pat_list([], [], _TEnv, VEnv) ->
     VEnv.
 
-add_type_pat_tuple(Pats, {type, _, tuple, any}, VEnv) ->
+add_type_pat_tuple(Pats, {type, _, tuple, any}, _TEnv, VEnv) ->
     add_any_types_pats(Pats, VEnv);
-add_type_pat_tuple(Pats, {type, _, tuple, Tys}, VEnv) ->
-    add_types_pats(Pats, Tys, VEnv);
-add_type_pat_tuple(Pats, {type, _, union, Tys}, VEnv) ->
+add_type_pat_tuple(Pats, {type, _, tuple, Tys}, TEnv, VEnv) ->
+    add_types_pats(Pats, Tys, TEnv, VEnv);
+add_type_pat_tuple(Pats, {type, _, union, Tys}, TEnv, VEnv) ->
 %% TODO: This code approximates unions of tuples with tuples of unions
     Unions =
 	lists:map(fun (UnionTys) ->
@@ -1193,7 +1220,7 @@ add_type_pat_tuple(Pats, {type, _, union, Tys}, VEnv) ->
 			   || {type, _, tuple, TS} <- Tys
 			    , length(TS) == length(Pats)])),
     lists:foldl(fun ({Pat, Union}, Env) ->
-			add_type_pat(Pat, Union, Env)
+			add_type_pat(Pat, Union, TEnv, Env)
 		end, VEnv, lists:zip(Pats, Unions)).
 
 
@@ -1265,13 +1292,15 @@ type_check_file(File) ->
     {ok, Forms} = epp:parse_file(File,[]),
     #parsedata{specs     = Specs
 	      ,functions = Funs
+	      ,types     = Types
+	      ,opaques   = Opaques
 	      ,records   = Records
 	      } =
 	collect_specs_types_opaques_and_functions(Forms),
     FEnv = create_fenv(Specs, Funs),
-    REnv = create_renv(Records),
+    TEnv = create_tenv(Types ++ Opaques, Records),
     lists:foldr(fun (Function, ok) ->
-			try type_check_function(FEnv, REnv, Function) of
+			try type_check_function(FEnv, TEnv, Function) of
 			    {_Ty, _VarBinds, _Cs} ->
 				ok
 			catch
@@ -1285,21 +1314,19 @@ type_check_file(File) ->
 			Err
 		end, ok, Funs).
 
-create_renv(Records) ->
-    maps:from_list(lists:map(fun ({Rec,Fields}) ->
-				     {Rec, maps:from_list(lists:map(fun create_field/1
-							     ,Fields))}
-			     end, Records)).
-
-create_field({record_field, _, {atom, _, Field}}) ->
-    {Field, {type, 0, any, []}};
-create_field({record_field, _, {atom, _, Field}, _}) ->
-    {Field, {type, 0, any, []}};
-create_field({typed_record_field, {record_field, _, {atom, _, Field}}, Ty}) ->
-    {Field, Ty};
-create_field({typed_record_field, {record_field, _, {atom, _, Field}, _}, Ty}) ->
-    {Field, Ty}.
-
+create_tenv(TypeDefs, RecordDefs) ->
+    TypeMap =
+	maps:from_list([begin
+			    Id       = {Name, length(Vars)},
+			    Params   = [VarName || {var, _, VarName} <- Vars],
+			    {Id, {Params, Body}}
+			end || {Name, Body, Vars} <- TypeDefs]),
+    RecordMap =
+	maps:from_list([{Name, lists:map(fun absform:normalize_record_field/1,
+					 Fields)}
+			    || {Name, Fields} <- RecordDefs]),
+    #tenv{types   = TypeMap,
+          records = RecordMap}.
 
 create_fenv(Specs, Funs) ->
 % We're taking advantage of the fact that if a key occurrs more than once

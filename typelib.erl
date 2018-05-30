@@ -2,6 +2,7 @@
 -module(typelib).
 
 -export([remove_pos/1, annotate_user_types/2, get_module_from_annotation/1,
+	 substitute_type_vars/2,
          pp_type/1, debug_type/3, parse_type/1]).
 
 -type type() :: erl_parse:abstract_type().
@@ -48,6 +49,8 @@ parse_type(Src) ->
 -spec remove_pos(type()) -> type().
 remove_pos({Type, _, Value}) when Type == atom; Type == integer; Type == var ->
     {Type, erl_anno:new(0), Value};
+remove_pos({nil, _}) ->
+    {nil, erl_anno:new(0)};
 remove_pos({user_type, Anno, Name, Params}) when is_list(Params) ->
     {user_type, anno_keep_only_filename(Anno), Name,
      lists:map(fun remove_pos/1, Params)};
@@ -100,3 +103,18 @@ get_module_from_annotation(Anno) ->
             none
     end.
 
+-spec substitute_type_vars(type(),
+                           #{atom() => type()}) -> type().
+substitute_type_vars({Tag, L, T, Params}, TVars) when Tag == type orelse
+						      Tag == user_type,
+						      is_list(Params) ->
+    {Tag, L, T, [substitute_type_vars(P, TVars) || P <- Params]};
+substitute_type_vars({remote_type, L, M, T, Params}, TVars) ->
+    {remote_type, L, M, T, [substitute_type_vars(P, TVars) || P <- Params]};
+substitute_type_vars({var, L, Var}, TVars) ->
+    case TVars of
+        #{Var := Type} -> Type;
+        _              -> {var, L, Var}
+    end;
+substitute_type_vars(Other = {T, _, _}, _) when T == atom; T == integer ->
+    Other.

@@ -35,9 +35,9 @@
 start_link() ->
     gen_server:start_link({local, ?name}, ?MODULE, #{}, []).
 
-%% @doc Fetches the types of the clauses of an exported function. The returned
-%%      types may contain special forms for 'remote local' and 'remote record'
-%%      types.
+%% @doc Fetches the types of the clauses of an exported function. User-defined
+%%      types and record types are annotated with filename on the form
+%%      "module.erl"
 -spec get_spec(M :: module(),
                F :: atom(),
                A :: arity()) -> {ok, [type()]} | not_found.
@@ -69,7 +69,7 @@ get_opaque_type(M, T, A) ->
 
 %% @doc Fetches a record type defined in the module.
 -spec get_record_type(Module :: module(),
-                      Name :: atom()) -> {ok, type()} | not_found.
+                      Name :: atom()) -> {ok, [type()]} | not_found.
 get_record_type(Module, Name) ->
     gen_server:call(?name, {get_record_type, Module, Name}).
 
@@ -153,9 +153,11 @@ handle_call({get_record_type, M, Name}, _From, State) ->
     State1 = autoimport(M, State),
     K = {M, Name},
     case State1#state.records of
-        #{K := Type1} ->
-            Type1 = typelib:annotate_user_types(M, Type1),
-            {reply, {ok, Type1}, State1};
+        #{K := TypedFields1} ->
+            TypedFields2 =
+                [{typed_record_field, Field, typelib:annotate_user_types(M, Type)}
+                     || {typed_record_field, Field, Type} <- TypedFields1],
+            {reply, {ok, TypedFields2}, State1};
         _ ->
             {reply, not_found, State1}
     end;
@@ -224,7 +226,7 @@ code_change(_OldVsn, State, _Extra) ->
 
 %% Helpers
 
-%% helper for handle_call for get_type, get_unexported_type and get_record_type.
+%% helper for handle_call for get_type, get_exported_type, get_opaque_type.
 -spec handle_get_type(module(), Name :: atom(), Params :: [type()],
                       RequireExported :: boolean(), ExpandOpaque :: boolean(),
                       state()) -> {reply, {ok, type()} | atom(), state()}.
@@ -240,7 +242,7 @@ handle_get_type(M, T, Args, RequireExported, ExpandOpaque, State) ->
                  #typeinfo{params = Vars,
                            body = Type0} ->
                      VarMap = maps:from_list(lists:zip(Vars, Args)),
-                     Type1 = substitute_type_vars(Type0, VarMap),
+                     Type1 = typelib:substitute_type_vars(Type0, VarMap),
                      Type2 = typelib:annotate_user_types(M, Type1),
                      {reply, {ok, Type2}, State}
              end;
@@ -357,7 +359,6 @@ collect_types(Module, Forms) ->
     Types.
 
 collect_records(Module, Forms) ->
-    %% Records are represented as types with name = {record, RecordName}
     [{{Module, Name}, Fields} || {Name, Fields} <- extract_record_defs(Forms)].
 
 
@@ -372,16 +373,17 @@ collect_records(Module, Forms) ->
 %% forms, create one from the untyped one and normalize so that they
 %% all have a default value.
 %%
--spec extract_record_defs(Forms :: [tuple()]) -> Typedefs :: [tuple()].
+-spec extract_record_defs(Forms :: [tuple()]) -> Typedefs :: [{atom(), [type()]}].
 extract_record_defs([{attribute, L, record, {Name, _UntypedFields}},
                      {attribute, L, type, {{record, Name}, Fields, []}} = R |
                      Rest]) ->
-    TypedFields = lists:map(fun normalize_record_field/1, Fields),
+    %% This representation is only used in OTP < 19
+    TypedFields = lists:map(fun absform:normalize_record_field/1, Fields),
     R = {Name, TypedFields},
     [R | extract_record_defs(Rest)];
-extract_record_defs([{attribute, _L, record, {Name, UntypedFields}} | Rest]) ->
+extract_record_defs([{attribute, _L, record, {Name, Fields}} | Rest]) ->
     %% Convert type typed record
-    TypedFields = lists:map(fun normalize_record_field/1, UntypedFields),
+    TypedFields = lists:map(fun absform:normalize_record_field/1, Fields),
     R = {Name, TypedFields},
     [R | extract_record_defs(Rest)];
 extract_record_defs([_ | Rest]) ->
@@ -389,43 +391,6 @@ extract_record_defs([_ | Rest]) ->
     extract_record_defs(Rest);
 extract_record_defs([]) ->
     [].
-
-%% Turns all records into typed records and all record fields into typed
-%% record fields. Adds default 'undefined' if default is missing.
-normalize_record_field({record_field, L, Name = {atom, _, _}}) ->
-    {typed_record_field,
-     {record_field, L, Name, {atom, L, undefined}},
-     {type, L, any, []}};
-normalize_record_field({record_field, L, Name = {atom, _, _}, Default}) ->
-    {typed_record_field,
-     {record_field, L, Name, Default},
-     {type, L, any, []}};
-normalize_record_field({typed_record_field,
-                        {record_field, L, Name = {atom, _, _}},
-                        Type}) ->
-    {typed_record_field,
-     {record_field, L, Name, {atom, L, undefined}},
-     Type};
-normalize_record_field({typed_record_field,
-                        {record_field, _L, {atom, _, _Name}, _Default},
-                        _Type} = Complete) ->
-    Complete.
-
--spec substitute_type_vars(type(),
-                           #{atom() => type()}) -> type().
-substitute_type_vars({Tag, L, T, Params}, TVars) when Tag == type orelse
-						      Tag == user_type,
-						      is_list(Params) ->
-    {Tag, L, T, [substitute_type_vars(P, TVars) || P <- Params]};
-substitute_type_vars({remote_type, L, M, T, Params}, TVars) ->
-    {remote_type, L, M, T, [substitute_type_vars(P, TVars) || P <- Params]};
-substitute_type_vars({var, L, Var}, TVars) ->
-    case TVars of
-        #{Var := Type} -> Type;
-        _              -> {var, L, Var}
-    end;
-substitute_type_vars(Other = {T, _, _}, _) when T == atom; T == integer ->
-    Other.
 
 %% Returns specs for all exported functions, generating any-types for unspeced
 %% functions.
