@@ -135,8 +135,29 @@ or **subtyping**.
 
   `integer() :: number()`
 
+## Compatibitily
 
+Instead, Gradual Type system have **compatibility**.
 
+::: incremental
+
+* For ordinary types, compatibitiliy works like equality
+
+  `integer()` ~ `integer()`, `integer()` \\~ `boolean()`
+
+* The dynamic type `any()` is compatible to all types
+
+  `integer()` ~ `any()`, `any()` ~ `boolean()`
+
+* The compatibility relation is **not** an equality relation
+
+  Specifically, it's not transitive.
+
+  `integer()` ~ `any()` ~ `boolean() `
+
+  This does not mean that `integer()` ~ `boolean()`
+
+:::
 
 # Gradual Typing in Erlang
 
@@ -178,31 +199,6 @@ No type specs = no type checking
 ## Example
 
 TODO: Example of how to add types to a program gradually to catch errors
-
-# Type annotations
-
-## Type annotation
-* Currently, type specs can only be given on the toplevel on functions.
-
-* This is enough for most circumstances.
-
-* But sometimes it would be nice to have type annotations on expressions
-
-## Possible type annotation extension
-
-It's tempting to extend Erlang with type annotations on expressions
-
-* A new grammatical form:
-
-  E :: T
-
-* However, we have a more lightweight solution for this problem.
-
-## A library of type annotation functions
-
-We provide a small library of functions which can act as type annotations
-
-TODO: Examples
 
 # Current status of Gradualizer
 
@@ -267,9 +263,9 @@ depth5() -> {1,{2,{3,{4,6}}}}.
 ``` {.erlang}
 -spec pattern_test(integer()) -> {}.
 pattern_test(1) ->
-    true;
+	true;
 pattern_test(X) ->
-    {}.
+	{}.
 ```
 
 * Dialyzer will not detect the error in the above program
@@ -280,9 +276,9 @@ pattern_test(X) ->
 
 ``` {.erlang}
 -spec tuple_union() -> {undefined, binary()}
-                     | {integer(), undefined}.
+					 | {integer(), undefined}.
 tuple_union() ->
-    {undefined, undefined}.
+	{undefined, undefined}.
 ```
 
 * Dialyzer approximates a union of tuples as a tuple of unions.
@@ -291,7 +287,7 @@ tuple_union() ->
   `{undefined | integer(), binary() | undefined}`
 
   The result is that Dialyzer fails to catch the error
-  
+
 * Gradualizer detects the error
 
 ## Unions - 2
@@ -300,11 +296,11 @@ A modification of the example, with pattern matching on the union.
 
 ``` {.erlang}
 -spec tuple_union({undefined, {}}
-                | {{}, undefined}) -> {}.
+				| {{}, undefined}) -> {}.
 tuple_union({undefined, undefined}) ->
-    {};
+	{};
 tuple_union({{},{}}) ->
-    {}.
+	{}.
 ```
 
 * Both Dialyzer and Gradualizer fails to catch this problem
@@ -369,3 +365,31 @@ Thank you!
 \url{http://github.com/josefs/Gradualizer}
 
 \end{center}
+
+# Backup slides
+
+# Type annotations
+
+## Type annotation
+* Currently, type specs can only be given on the toplevel on functions.
+
+* This is enough for most circumstances.
+
+* But sometimes it would be nice to have type annotations on expressions
+
+## Possible type annotation extension
+
+It's tempting to extend Erlang with type annotations on expressions
+
+* A new grammatical form:
+
+  E :: T
+
+* However, we have a more lightweight solution for this problem.
+
+## A library of type annotation functions
+
+We provide a small library of functions which can act as type annotations
+
+TODO: Examples
+
