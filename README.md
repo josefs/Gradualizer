@@ -6,5 +6,5 @@ This tool is a type checker for Erlang.
 * It works with the existsing type specs syntax in Erlang.
 * Without any type specs, no static typing happens.
 
-  When adding type specs the program becomes more statically typed.
-
+  When type specs are added the program the program is checked against
+  these specs statically. The more type specs, the more static typing.
