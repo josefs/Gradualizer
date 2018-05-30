@@ -1081,6 +1081,9 @@ merge_types([]) ->
 merge_types([Ty]) ->
     Ty;
 merge_types(Tys) ->
+    %%% TODO: We shouldn't be so eager to convert types to any().
+    %%% If we find any() in the list, it should simply vanish, if favour of
+    %%% the other types present in the list.
     case lists:keyfind(any, 3, Tys) of
 	Any = {type, _, any, []} ->
 	    Any;
