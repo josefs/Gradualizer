@@ -597,9 +597,9 @@ type_check_expr(Env, {cons, _, Head, Tail}) ->
     % TODO: Should we check the types here?
     case {Ty1, Ty2} of
 	{{type, _, any, []}, _} ->
-	    {{type, 0, any, []}, VB2};
+	    {{type, 0, any, []}, VB2, constraints:empty()};
 	{_, {type, _, any, []}} ->
-	    {{type, 0, any, []}, VB2};
+	    {{type, 0, any, []}, VB2, constraints:empty()};
 	{Ty1, TyList = {type, _, list, [Ty]}} ->
 	    case subtype(Ty1, Ty, Env#env.tenv) of
 		{true, Cs} ->
