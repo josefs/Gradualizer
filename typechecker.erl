@@ -180,6 +180,8 @@ compat_ty({type, _, list, [Ty1]}, {type, _, list, [Ty2]}, A, TEnv) ->
     compat(Ty1, Ty2, A, TEnv);
 compat_ty({type, _, nil, []}, {type, _, list, _Any}, A, _TEnv) ->
     ret(A);
+compat_ty({nil, _}, {type, _, list, _Any}, A, _TEnv) ->
+    ret(A);
 compat_ty({type, _, nonempty_list, []}, {type, _, list, _Any}, A, _TEnv) ->
     ret(A);
 compat_ty({type, _, nonempty_list, [_Ty]}, {type, _, nonempty_list, []}, A, _TEnv) ->
@@ -192,6 +194,12 @@ compat_ty({type, _, nonempty_list, [Ty1]}, {type, _, list, [Ty2]}, A, TEnv) ->
     compat(Ty1, Ty2, A, TEnv);
 compat_ty({type, _, nonempty_list, [_Ty]}, {type, _, list, []}, A, _TEnv) ->
     ret(A);
+compat_ty({nil, _}, {type, _, maybe_improper_list, [_Ty2]}, A, _TEnv) ->
+    ret(A);
+compat_ty({type, _, list, [Ty1]}, {type, _, maybe_improper_list, [Ty2]}, A, TEnv) ->
+    compat(Ty1, Ty2, A, TEnv);
+compat_ty({type, _, nonempty_list, [Ty1]}, {type, _, maybe_improper_list, [Ty2]}, A, TEnv) ->
+    compat(Ty1, Ty2, A, TEnv);
 %% TODO: improper and maybe improper list types
 
 %% Tuples
