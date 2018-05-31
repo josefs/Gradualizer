@@ -1110,8 +1110,8 @@ split_tuple_union(N, [{type, _, union, Tys1} | Tys2]) ->
 infer_clauses(Env, Clauses) ->
     {Tys, VarBinds, Css} =
 	lists:unzip3(lists:map(fun (Clause) ->
-				  infer_clause(Env, Clause)
-			  end, Clauses)),
+				       infer_clause(Env, Clause)
+			       end, Clauses)),
     {merge_types(Tys), union_var_binds(VarBinds), constraints:combine(Css)}.
 
 infer_clause(Env, {clause, _, Args, Guards, Block}) ->
