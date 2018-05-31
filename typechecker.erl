@@ -846,6 +846,21 @@ type_check_expr_in(Env, Ty, Atom = {atom, LINE, _}) ->
 	false ->
 	    throw({type_error, Atom, LINE, Ty})
     end;
+type_check_expr_in(Env, Ty, Cons = {cons, LINE, H, T}) ->
+    case subtype({type, 0, nonempty_list, [{type, 0, any, []}]}, Ty, Env#env.tenv) of
+	{true, Cs1} ->
+	    {VB, Cs2} = type_check_cons_in(Env, Ty, H, T),
+	    {VB, constraints:combine(Cs1, Cs2)};
+	false ->
+	    throw({type_error, cons, LINE, Cons, Ty})
+    end;
+type_check_expr_in(Env, Ty, {nil, LINE}) ->
+    case subtype({nil,0}, Ty, Env#env.tenv) of
+	{true, Cs} ->
+	    {#{}, Cs};
+	false ->
+	    throw({type_error, nil, LINE, Ty})
+    end;
 type_check_expr_in(Env, ResTy, {tuple, LINE, TS}) ->
     case subtype({type, 0, tuple, lists:duplicate(length(TS), {type, 0, any, []})}
 		,ResTy, Env#env.tenv) of
@@ -1046,7 +1061,34 @@ type_check_tuple_union(_Env, [], _TS) ->
     %% TODO: Better error message
     throw({type_error, tuple_error}).
 
+type_check_cons_in(Env, Ty = {type, _, List, []}, H, T)
+  when List == list orelse List == nonempty_list ->
+    {_Ty, VB1, Cs1} = type_check_expr(Env, H),
+    {     VB2, Cs2} = type_check_expr_in(Env, Ty, T),
+    {union_var_binds([VB1, VB2]), constraints:combine(Cs1, Cs2)};
+type_check_cons_in(Env, Ty = {type, _, List, [ElemTy]}, H, T)
+    when List == list orelse List == nonempty_list ->
+    {VB1, Cs1} = type_check_expr_in(Env, ElemTy, H),
+    {VB2, Cs2} = type_check_expr_in(Env, Ty,     T),
+    {union_var_binds([VB1, VB2]), constraints:combine(Cs1, Cs2)};
+type_check_cons_in(Env, {type, _, union, Tys}, H, T) ->
+    type_check_cons_union(Env, Tys, H, T).
 
+type_check_cons_union(_Env, [], _H, _T) ->
+    throw({type_error, cons_union});
+type_check_cons_union(Env, [ Ty = {type, _, List, _} | Tys ], H, T)
+    when List == list orelse List == nonempty_list ->
+    try type_check_cons_in(Env, Ty, H, T)
+    catch
+	_ ->
+	    type_check_cons_union(Env, Tys, H, T)
+    end;
+type_check_cons_union(Env, [_ | Tys], H, T) ->
+    type_check_cons_union(Env, Tys, H, T).
+
+
+    
+    
 %% We don't use these function right now but they can be useful for
 %% implementing an approximation when typechecking unions of tuples.
 split_tuple_type(N, {type, P, tuple, any}) ->
@@ -1219,6 +1261,9 @@ add_type_pat(Nil = {nil, P}, Ty, TEnv, VEnv) ->
     end;
 add_type_pat({cons, _, PH, PT}, ListTy = {type, _, list, [ElemTy]}, TEnv, VEnv) ->
     VEnv2 = add_type_pat(PH, ElemTy, TEnv, VEnv),
+    add_type_pat(PT, ListTy, TEnv, VEnv2);
+add_type_pat({cons, _, PH, PT}, ListTy = {type, _, list, []}, TEnv, VEnv) ->
+    VEnv2 = add_any_types_pat(PH, VEnv),
     add_type_pat(PT, ListTy, TEnv, VEnv2);
 add_type_pat({record, _, _Record, Fields}, {type, _, record, [{atom, _, _RecordName}]}, TEnv, VEnv) ->
     % TODO: We need the definitions of records here, to be able to add the
