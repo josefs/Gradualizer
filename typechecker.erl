@@ -1222,6 +1222,13 @@ type_check_function(FEnv, TEnv, {function,_, Name, NArgs, Clauses}) ->
 	    {VarBinds, Cs} = check_clauses(#env{ fenv = FEnv, tenv = TEnv },
 					   ArgsTy, ResTy, Clauses),
 	    {ResTy, VarBinds, Cs};
+    {ok, [{type, _, bounded_fun, [{type, _, 'fun',
+                                   [{type, _, product, ArgsTy}, ResTy]},
+                                  SCs2]}]} ->
+	    Cs2 = constraints:convert(SCs2),
+	    {VarBinds, Cs} = check_clauses(#env{ fenv = FEnv, tenv = TEnv },
+					   ArgsTy, ResTy, Clauses),
+	    {ResTy, VarBinds, constraints:combine(Cs,Cs2)};
 	{ok, {type, _, any, []}} ->
 	    infer_clauses(#env{ fenv = FEnv, tenv = TEnv }, Clauses);
 	error ->
