@@ -614,36 +614,39 @@ type_check_expr(Env, {cons, _, Head, Tail}) ->
 		% We throw a type error here because Tail is not of type list
 		% (nor is it of type any()).
     end;
-type_check_expr(Env, {call, P, Name, Args}) ->
-    { ArgTys, VarBinds, Css} =
-	lists:unzip3([ type_check_expr(Env, Arg) || Arg <- Args]),
-    VarBind = union_var_binds(VarBinds),
-    {FunTy, VarBind2, Cs} = type_check_fun(Env, Name, length(Args)),
+type_check_expr(Env, {call, _, Name, Args}) ->
+    {FunTy, VarBind, Cs} = type_check_fun(Env, Name, length(Args)),
     case FunTy of
 	{type, _, any, []} ->
-	    { {type, 0, any, []}, VarBind, constraints:combine([Cs|Css])};
-	[{type, _, 'fun', [{type, _, product, TyArgs}, ResTy]}] ->
+	    { _ArgTys, VarBinds, Css} =
+		lists:unzip3([ type_check_expr(Env, Arg) || Arg <- Args]),
+	    { {type, 0, any, []}
+	    , union_var_binds([VarBind | VarBinds])
+	    , constraints:combine([Cs | Css])};
+	[{type, _, 'fun', [{type, _, product, ArgTys}, ResTy]}] ->
 	    % TODO: Handle multi-clause function types
-	    case subtypes(TyArgs, ArgTys, Env#env.tenv) of
-		{true, Cs2} ->
-		    {ResTy
-		    ,union_var_binds([VarBind, VarBind2])
-		    ,constraints:combine([Cs,Cs2|Css])};
-		false ->
-		    throw({type_error, call, P, Name, TyArgs, ArgTys})
-	    end;
+	    {VarBinds, Css} =
+		lists:unzip(
+		  lists:zipwith(fun (ArgTy, Arg) ->
+				       type_check_expr_in(Env, ArgTy, Arg)
+			       end, ArgTys, Args)
+		 ),
+	    { ResTy
+	    , union_var_binds([VarBind | VarBinds])
+	    , constraints:combine([Cs | Css])};
 	[{type, _, bounded_fun, [{type, _, 'fun',
-				  [{type, _, product, TyArgs}, ResTy]}
+				  [{type, _, product, ArgTys}, ResTy]}
 				,SCs2]}] ->
 	    Cs2 = constraints:convert(SCs2),
-	    case subtypes(TyArgs, ArgTys, Env#env.tenv) of
-		{true, Cs3} ->
-		    {ResTy
-		    ,union_var_binds([VarBind, VarBind2])
-		    ,constraints:combine([Cs,Cs2,Cs3|Css])};
-		false ->
-		    throw({type_error, call, P, Name, TyArgs, ArgTys})
-	    end
+	    {VarBinds, Css} =
+		lists:unzip(
+		  lists:zipwith(fun (ArgTy, Arg) ->
+				       type_check_expr_in(Env, ArgTy, Arg)
+			       end, ArgTys, Args)
+		 ),
+	    { ResTy
+	    , union_var_binds([VarBind, VarBinds])
+	    , constraints:combine([Cs, Cs2 | Css])}
     end;
 type_check_expr(Env, {lc, _, Expr, Qualifiers}) ->
     type_check_lc(Env, Expr, Qualifiers);
