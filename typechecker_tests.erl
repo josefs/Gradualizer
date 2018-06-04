@@ -115,7 +115,7 @@ normalize_test_() ->
 
 
 subtype(T1, T2) ->
-    case typechecker:subtype(T1, T2) of
+    case typechecker:subtype(T1, T2, {tenv, #{}, #{}}) of
 	{true, _} ->
 	    true;
 	false ->
