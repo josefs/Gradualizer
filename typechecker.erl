@@ -645,7 +645,7 @@ type_check_expr(Env, {call, _, Name, Args}) ->
 			       end, ArgTys, Args)
 		 ),
 	    { ResTy
-	    , union_var_binds([VarBind, VarBinds])
+	    , union_var_binds([VarBind | VarBinds])
 	    , constraints:combine([Cs, Cs2 | Css])}
     end;
 type_check_expr(Env, {lc, _, Expr, Qualifiers}) ->
@@ -916,7 +916,7 @@ type_check_expr_in(Env, ResTy, {call, _, Name, Args}) ->
 		 ),
 	    case subtype(ResTy, FunResTy, Env#env.tenv) of
 		{true, Cs3} ->
-		    { union_var_binds([VarBinds1, VarBinds])
+		    { union_var_binds([VarBinds1 | VarBinds])
 		    , constraints:combine([Cs, Cs2, Cs3 | Css]) };
 		false ->
 		    throw(type_error)
