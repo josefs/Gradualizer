@@ -67,7 +67,12 @@ subtype_test_() ->
      ?_assert(subtype(?t( #{a := b}         ), ?t( map()            ))),
      ?_assert(subtype(?t( #{a => b}         ), ?t( #{}              ))),
      ?_assert(subtype(?t( #{a := b}         ), ?t( #{a => b}        ))),
-     ?_assert(subtype(?t( #{1..5 := a }     ), ?t( #{5 := atom()}   )))
+     ?_assert(subtype(?t( #{1..5 := a }     ), ?t( #{5 := atom()}   ))),
+
+     %% Annotated types
+     ?_assert(subtype(?t( integer()         ), ?t( A :: number()    ))),
+     ?_assert(subtype(?t( A :: integer()    ), ?t( number()         ))),
+     ?_assert(subtype(?t( A :: integer()    ), ?t( A :: number()    )))
     ].
 
 not_subtype_test() ->
