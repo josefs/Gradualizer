@@ -1,26 +1,19 @@
 -module(test).
 
--compile([export_all]).
+-include_lib("eunit/include/eunit.hrl").
 
-run_tests() ->
-    should_pass(),
-    should_fail().
+should_pass_test_() ->
+    run_tests_in("test/should_pass", ok).
 
-should_pass() ->
-    {ok, Files} = file:list_dir("tests/should_pass"),
-    Fs = lists:map(fun (File) -> "tests/should_pass/" ++ File end, Files),
-    lists:foreach(fun typechecker:type_check_file/1, Fs).
+should_fail_test_() ->
+    run_tests_in("test/should_fail", nok).
 
-should_fail() ->
-    {ok, Files} = file:list_dir("tests/should_fail"),
-    Fs = lists:map(fun (File) -> "tests/should_fail/" ++ File end, Files),
-    lists:foreach(fun (File) ->
-      case typechecker:type_check_file(File) of
-	nok ->
-	      ok;
-	ok ->
-	      io:format("Typechecking of ~s succeeded but was expected to fail.~n", File),
-	      nok
-        end
-      end,
-      Fs).
+run_tests_in(Dir, ExpectedRes) ->
+    {ok, Files} = file:list_dir(Dir),
+
+    [{filename:basename(Dir) ++ ": " ++ File,
+      fun() ->
+              FullFile = filename:join(Dir, File),
+              ?assert(ExpectedRes =:= typechecker:type_check_file(FullFile))
+      end}
+     || File <- Files].
