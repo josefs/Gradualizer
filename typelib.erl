@@ -109,8 +109,8 @@ substitute_type_vars({Tag, L, T, Params}, TVars) when Tag == type orelse
 						      Tag == user_type,
 						      is_list(Params) ->
     {Tag, L, T, [substitute_type_vars(P, TVars) || P <- Params]};
-substitute_type_vars({remote_type, L, M, T, Params}, TVars) ->
-    {remote_type, L, M, T, [substitute_type_vars(P, TVars) || P <- Params]};
+substitute_type_vars({remote_type, L, [M, T, Params]}, TVars) ->
+    {remote_type, L, [M, T, [substitute_type_vars(P, TVars) || P <- Params]]};
 substitute_type_vars({var, L, Var}, TVars) ->
     case TVars of
         #{Var := Type} -> Type;
