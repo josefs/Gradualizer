@@ -1334,6 +1334,8 @@ add_type_pat_list([Pat|Pats], [Ty|Tys], TEnv, VEnv) ->
 add_type_pat_list([], [], _TEnv, VEnv) ->
     VEnv.
 
+add_type_pat_tuple(Pats, {type, _, any, []}, _TEnv, VEnv) ->
+    add_any_types_pats(Pats, VEnv);
 add_type_pat_tuple(Pats, {type, _, tuple, any}, _TEnv, VEnv) ->
     add_any_types_pats(Pats, VEnv);
 add_type_pat_tuple(Pats, {type, _, tuple, Tys}, TEnv, VEnv) ->
@@ -1376,6 +1378,17 @@ add_any_types_pat({nil, _}, VEnv) ->
     VEnv;
 add_any_types_pat({tuple, _, Pats}, VEnv) ->
     add_any_types_pats(Pats, VEnv);
+add_any_types_pat({record, _, _RecName, Fields}, VEnv) ->
+    add_any_types_pats(
+      [Value || {record_field, _, _Name, Value} <- Fields], VEnv);
+add_any_types_pat({map, _, Fields}, VEnv) ->
+    add_any_types_pats(
+      lists:flatmap(
+        fun({Tag, _, Name, Value})
+              when Tag =:= map_field_assoc; Tag =:= map_field_exact ->
+                [Name, Value]
+        end, Fields),
+      VEnv);
 add_any_types_pat({var, _,'_'}, VEnv) ->
     VEnv;
 add_any_types_pat({var, _,A}, VEnv) ->
@@ -1511,6 +1524,19 @@ handle_type_error({call_undef, LINE, Func, Arity}) ->
 handle_type_error({call_undef, LINE, Module, Func, Arity}) ->
     io:format("Call to undefined function ~p:~p/~p on line ~p~n",
               [Module, Func, Arity, LINE]);
+handle_type_error({undef, record, {{atom, LINE, Module}, {atom, _, RecName}}}) ->
+    io:format("Undefined record ~p:~p on line ~p~n",
+              [Module, RecName, LINE]);
+handle_type_error({undef, record, {atom, LINE, RecName}}) ->
+    io:format("Undefined record ~p on line ~p~n",
+              [RecName, LINE]);
+handle_type_error({undef, Type, {{atom, LINE, Module}, {atom, _, Name}, Arity}})
+  when Type =:= user_type; Type =:= remote_type ->
+    io:format("Undefined ~p ~p:~p/~p on line ~p~n",
+              [Type, Module, Name, Arity, LINE]);
+handle_type_error({undef, user_type, {{atom, LINE, Name}, Arity}}) ->
+    io:format("Undefined user type ~p/~p on line ~p~n",
+              [Name, Arity, LINE]);
 handle_type_error({type_error, tyVar, LINE, Var, VarTy, Ty}) ->
     io:format("The variable ~p on line ~p has type ~s "
 	      "but is expected to have type ~s~n",
@@ -1554,6 +1580,9 @@ handle_type_error({type_error, tuple_error}) ->
 handle_type_error({type_error, pattern, P, Pat, Ty}) ->
     io:format("The pattern ~s on line ~p doesn't have the type ~s~n",
 	      [erl_pp:expr(Pat), P, typelib:pp_type(Ty)]);
+handle_type_error({type_error, tuple, LINE, Ty}) ->
+    io:format("The tuple on line ~p does not have type ~s~n",
+	      [LINE, typelib:pp_type(Ty)]);
 handle_type_error({unknown_variable, P, Var}) ->
     io:format("Unknown variable ~p on line ~p.~n", [Var, P]);
 handle_type_error(type_error) ->
