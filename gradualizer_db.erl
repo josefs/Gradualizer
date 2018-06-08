@@ -110,7 +110,7 @@ import_otp() ->
 
 -record(state, {specs   = #{} :: #{mfa() => [type()]},
                 types   = #{} :: #{mfa() => #typeinfo{}},
-                records = #{} :: #{{module(), atom()} => [type()]},
+                records = #{} :: #{{module(), atom()} => [typechecker:typed_record_field()]},
                 opts    = ?default_opts :: opts(),
                 srcmap  = #{} :: #{module() => string()},
                 loaded  = #{} :: #{module() => boolean()}}).
@@ -129,7 +129,7 @@ init(Opts0) ->
              end,
     {ok, State2}.
 
--spec handle_call(any(), pid(), state()) -> {reply, state()}.
+-spec handle_call(any(), {pid(), term()}, state()) -> {reply, term(), state()}.
 handle_call({get_spec, M, F, A}, _From, State) ->
     State1 = autoimport(M, State),
     K = {M, F, A},
@@ -375,7 +375,7 @@ collect_records(Module, Forms) ->
 %%
 -spec extract_record_defs(Forms :: [tuple()]) -> Typedefs :: [{atom(), [type()]}].
 extract_record_defs([{attribute, L, record, {Name, _UntypedFields}},
-                     {attribute, L, type, {{record, Name}, Fields, []}} = R |
+                     {attribute, L, type, {{record, Name}, Fields, []}} |
                      Rest]) ->
     %% This representation is only used in OTP < 19
     TypedFields = lists:map(fun absform:normalize_record_field/1, Fields),
@@ -435,9 +435,10 @@ make_spec(Module, Name, Arity) ->
 
 %% Creates the function type (any(), any(), ...) -> any().
 make_function_type(Arity) ->
-    {type, 0, 'fun',
-     [{type, 0, product, lists:duplicate(Arity, {type, 0, any, []})},
-      {type, 0, any, []}]}.
+    A = erl_anno:new(0),
+    {type, A, 'fun',
+     [{type, A, product, lists:duplicate(Arity, {type, A, any, []})},
+      {type, A, any, []}]}.
 
 -spec get_src_map() -> #{module() => file:filename()}.
 get_src_map() ->

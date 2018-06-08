@@ -15,7 +15,7 @@
 pp_type(Type) ->
     %% erl_pp can handle type definitions, so wrap Type in a type definition
     %% and then take the type from that.
-    Form = {attribute, 0, type, {t, Type, []}},
+    Form = {attribute, erl_anno:new(0), type, {t, Type, []}},
     TypeDef = erl_pp:form(Form),
     {match, [S]} = re:run(TypeDef, <<"::\\s*(.*)\\.\\n*">>,
 			  [{capture, all_but_first, list}, dotall]),
