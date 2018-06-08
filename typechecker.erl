@@ -1,5 +1,7 @@
 -module(typechecker).
 
+-export_type([typed_record_field/0]).
+
 -type type() :: erl_parse:abstract_type().
 
 -compile([export_all]).
@@ -17,9 +19,9 @@
 	 }).
 
 -type typed_record_field() :: {typed_record_field,
-                               {record_field, erl_anno:anno(), Name :: atom(),
+                               {record_field, erl_anno:anno(), Name :: {atom, erl_anno:anno(), atom()},
                                 DefaultValue :: erl_parse:abstract_expr()},
-     			        Type :: erl_parse:abstract_type()}.
+     			        Type :: type()}.
 
 %% Type environment, passed around while comparing compatible subtypes
 -record(tenv, {types   :: #{{Name :: atom(), arity()} => {Params :: [atom()],
@@ -194,8 +196,6 @@ compat_ty({type, _, list, [Ty1]}, {type, _, list, [Ty2]}, A, TEnv) ->
     compat(Ty1, Ty2, A, TEnv);
 compat_ty({type, _, nil, []}, {type, _, list, _Any}, A, _TEnv) ->
     ret(A);
-compat_ty({nil, _}, {type, _, list, _Any}, A, _TEnv) ->
-    ret(A);
 compat_ty({type, _, nonempty_list, []}, {type, _, list, _Any}, A, _TEnv) ->
     ret(A);
 compat_ty({type, _, nonempty_list, [_Ty]}, {type, _, nonempty_list, []}, A, _TEnv) ->
@@ -208,7 +208,7 @@ compat_ty({type, _, nonempty_list, [Ty1]}, {type, _, list, [Ty2]}, A, TEnv) ->
     compat(Ty1, Ty2, A, TEnv);
 compat_ty({type, _, nonempty_list, [_Ty]}, {type, _, list, []}, A, _TEnv) ->
     ret(A);
-compat_ty({nil, _}, {type, _, maybe_improper_list, [_Ty2]}, A, _TEnv) ->
+compat_ty({type, nil, _, []}, {type, _, maybe_improper_list, [_Ty2]}, A, _TEnv) ->
     ret(A);
 compat_ty({type, _, list, [Ty1]}, {type, _, maybe_improper_list, [Ty2]}, A, TEnv) ->
     compat(Ty1, Ty2, A, TEnv);
@@ -551,27 +551,27 @@ int_type_to_range({integer, _, I})                     -> {I, I}.
 %% Converts a range back to a type. Creates two types in some cases.
 -spec int_range_to_types(int_range()) -> [type()].
 int_range_to_types({neg_inf, pos_inf}) ->
-    [{type, 0, integer, []}];
+    [{type, erl_anno:new(0), integer, []}];
 int_range_to_types({neg_inf, -1}) ->
-    [{type, 0, neg_integer, []}];
+    [{type, erl_anno:new(0), neg_integer, []}];
 int_range_to_types({neg_inf, 0}) ->
-    [{type, 0, neg_integer, []}, {integer, 0, 0}];
+    [{type, erl_anno:new(0), neg_integer, []}, {integer, 0, 0}];
 int_range_to_types({neg_inf, I}) when I > 0 ->
-    [{type, 0, neg_integer, []},
-     {type, 0, range, [{integer, 0, 0}, {integer, 0, I}]}];
+    [{type, erl_anno:new(0), neg_integer, []},
+     {type, erl_anno:new(0), range, [{integer, 0, 0}, {integer, 0, I}]}];
 int_range_to_types({I, pos_inf}) when I < -1 ->
-    [{type, 0, range, [{integer, 0, I}, {integer, 0, -1}]},
-     {type, 0, non_neg_integer, []}];
+    [{type, erl_anno:new(0), range, [{integer, 0, I}, {integer, 0, -1}]},
+     {type, erl_anno:new(0), non_neg_integer, []}];
 int_range_to_types({-1, pos_inf}) ->
-    [{integer, 0, -1}, {type, 0, non_neg_integer, []}];
+    [{integer, 0, -1}, {type, erl_anno:new(0), non_neg_integer, []}];
 int_range_to_types({0, pos_inf}) ->
-    [{type, 0, non_neg_integer, []}];
+    [{type, erl_anno:new(0), non_neg_integer, []}];
 int_range_to_types({1, pos_inf}) ->
-    [{type, 0, pos_integer, []}];
+    [{type, erl_anno:new(0), pos_integer, []}];
 int_range_to_types({I, I}) ->
     [{integer, 0, I}];
 int_range_to_types({I, J}) when I < J ->
-    [{type, 0, range, [{integer, 0, I}, {integer, 0, J}]}].
+    [{type, erl_anno:new(0), range, [{integer, 0, I}, {integer, 0, J}]}].
 
 %% End of subtype help functions
 
@@ -579,9 +579,9 @@ int_range_to_types({I, J}) when I < J ->
 
 %% Arguments: An environment for functions, an environment for variables
 %% and the expression to type check.
-%% Returns the type of the expression and a collection of variables bound in
-%% the expression together with their type.
-%-spec type_check_expr(#env, any()) -> { any(), #{ any() => any()} }.
+%% Returns the type of the expression, a collection of variables bound in
+%% the expression together with their type and constraints.
+%-spec type_check_expr(#env, any()) -> { any(), #{ any() => any()}, #{ any() => any()} }.
 type_check_expr(Env, {var, P, Var}) ->
     case catch maps:get(Var, Env#env.venv) of
 	{'EXIT', {{badkey, _}, _}} ->
@@ -690,7 +690,8 @@ type_check_expr(Env, {map, _, Expr, Assocs}) ->
 type_check_expr(Env, {record_field, _P, Expr, Record, {atom, _, Field}}) ->
     {VB, Cs} = type_check_expr_in(Env, {type, 0, record, [{atom, 0, Record}]}, Expr),
     Rec = maps:get(Record, Env#env.tenv#tenv.records),
-    Ty  = maps:get(Field, Rec),
+    [Ty]  = [Ty0 || {typed_record_field, {record_field, _, {atom, _, Name}, _}, Ty0} <- Rec,
+                    Name =:= Field],
     {Ty, VB, Cs};
 type_check_expr(Env, {record, _, Expr, Record, Fields}) ->
     RecTy = {type, 0, record, [{atom, 0, Record}]},
@@ -723,7 +724,7 @@ type_check_expr(Env, {op, _, '!', Proc, Val}) ->
     ,constraints:combine(Cs1, Cs2)};
 type_check_expr(Env, {op, P, 'not', Arg}) ->
     {Ty, VB, Cs1} = type_check_expr(Env, Arg),
-    case subtype({type, 0, boolean, []}, Ty, Env#env.tenv) of
+    case subtype({type, P, boolean, []}, Ty, Env#env.tenv) of
 	{true, Cs2} ->
 	    {{type, 0, any, []}, VB, constraints:combine(Cs1, Cs2)};
 	false ->
@@ -744,13 +745,13 @@ type_check_expr(Env, {op, P, BoolOp, Arg1, Arg2}) when
 	end,
     case type_check_expr(Env, Arg1) of
 	{Ty1, VB1, Cs1} ->
-	    case subtype(Ty1, {type, 0, bool, []}, Env#env.tenv) of
+	    case subtype(Ty1, {type, P, bool, []}, Env#env.tenv) of
 		false ->
 		    throw({type_error, boolop, BoolOp, P, Ty1});
 		{true, Cs2} ->
 		    case type_check_expr(Env#env{ venv = UnionVarBindsSecondArg(Env#env.venv,VB1 )}, Arg2) of
 			{Ty2, VB2, Cs3} ->
-			    case subtype(Ty2, {type, 0, bool, []}, Env#env.tenv) of
+			    case subtype(Ty2, {type, P, bool, []}, Env#env.tenv) of
 				false ->
 				    throw({type_error, boolop, BoolOp, P, Ty1});
 				{true, Cs4} ->
@@ -824,7 +825,7 @@ type_check_lc(Env, Expr, [{generate, _, Pat, Gen} | Quals]) ->
 								Env#env.tenv,
 								Env#env.venv) },
 				   Expr, Quals),
-    {TyL, VB, constraints:empty(Cs1,Cs2)}.
+    {TyL, VB, constraints:combine(Cs1,Cs2)}.
 
 
 
@@ -848,7 +849,7 @@ type_check_expr_in(Env, Ty, I = {integer, LINE, Int}) ->
 	    throw({type_error, int, Int, LINE, Ty})
     end;
 type_check_expr_in(Env, Ty, {float, LINE, _Int}) ->
-    case subtype(Ty, {type, 0, float, []}, Env#env.tenv) of
+    case subtype(Ty, {type, LINE, float, []}, Env#env.tenv) of
 	{true, Cs} ->
 	    {#{}, Cs};
 	false ->
@@ -862,7 +863,7 @@ type_check_expr_in(Env, Ty, Atom = {atom, LINE, _}) ->
 	    throw({type_error, Atom, LINE, Ty})
     end;
 type_check_expr_in(Env, Ty, Cons = {cons, LINE, H, T}) ->
-    case subtype({type, 0, nonempty_list, [{type, 0, any, []}]}, Ty, Env#env.tenv) of
+    case subtype({type, LINE, nonempty_list, [{type, LINE, any, []}]}, Ty, Env#env.tenv) of
 	{true, Cs1} ->
 	    {VB, Cs2} = type_check_cons_in(Env, Ty, H, T),
 	    {VB, constraints:combine(Cs1, Cs2)};
@@ -870,14 +871,14 @@ type_check_expr_in(Env, Ty, Cons = {cons, LINE, H, T}) ->
 	    throw({type_error, cons, LINE, Cons, Ty})
     end;
 type_check_expr_in(Env, Ty, {nil, LINE}) ->
-    case subtype({nil,0}, Ty, Env#env.tenv) of
+    case subtype({type, LINE, nil, []}, Ty, Env#env.tenv) of
 	{true, Cs} ->
 	    {#{}, Cs};
 	false ->
 	    throw({type_error, nil, LINE, Ty})
     end;
 type_check_expr_in(Env, ResTy, {tuple, LINE, TS}) ->
-    case subtype({type, 0, tuple, lists:duplicate(length(TS), {type, 0, any, []})}
+    case subtype({type, LINE, tuple, lists:duplicate(length(TS), {type, LINE, any, []})}
 		,ResTy, Env#env.tenv) of
 	false ->
 	    throw({type_error, tuple, LINE, ResTy});
@@ -942,7 +943,7 @@ type_check_expr_in(Env, ResTy, {op, _, '!', Arg1, Arg2}) ->
     {VarBinds2, Cs2} = type_check_expr_in(Env, ResTy, Arg2),
     {union_var_binds([VarBinds1,VarBinds2]), constraints:combine(Cs1,Cs2)};
 type_check_expr_in(Env, ResTy, {op, P, 'not', Arg}) ->
-    case subtype({type, 0, boolean, []}, ResTy, Env#env.tenv) of
+    case subtype({type, P, boolean, []}, ResTy, Env#env.tenv) of
 	{true, Cs1} ->
 	    {VB, Cs2} = type_check_expr_in(Env, ResTy, Arg),
 	    {VB, constraints:combine(Cs1, Cs2)};
@@ -1209,10 +1210,8 @@ check_guards(Env, Guards) ->
       lists:map(fun (GuardSeq) ->
 			union_var_binds(
 			  lists:map(fun (Guard) ->
-					    begin
-						{_Ty, VB} = type_check_expr(Env, Guard), % Do we need to thread the Env?
+						{_Ty, VB, _Cs} = type_check_expr(Env, Guard), % Do we need to thread the Env?
 						VB
-					    end
 				    end, GuardSeq))
 		end, Guards)).
 
@@ -1299,7 +1298,7 @@ add_type_pat(Atom = {atom, P, _}, Ty, TEnv, VEnv) ->
 	    throw({type_error, pattern, P, Atom, Ty})
     end;
 add_type_pat(Nil = {nil, P}, Ty, TEnv, VEnv) ->
-    case subtype(Nil, Ty, TEnv) of
+    case subtype({type, P, nil, []}, Ty, TEnv) of
 	% There cannot be any constraints generated in this case
 	{true, _Cs} ->
 	    VEnv;
@@ -1595,7 +1594,7 @@ paux([], _Fun, Tuple) ->
 paux([Elem|List], Fun, Tuple) ->
     case Fun(Elem) of
 	{I, Item} ->
-	    paux(List, Fun, erlang:setelement(I, [Item | erlang:element(I,Tuple)], Tuple));
+	    paux(List, Fun, erlang:setelement(I, Tuple, [Item | erlang:element(I,Tuple)]));
 	false ->
 	    paux(List, Fun, Tuple)
     end.
