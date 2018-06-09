@@ -963,8 +963,24 @@ type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
     type_check_logic_op(Env, ResTy, Op, P, Arg1, Arg2);
 type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
       Op == '++' orelse Op == '--' ->
-    type_check_list_op(Env, ResTy, Op, P, Arg1, Arg2)
-.
+    type_check_list_op(Env, ResTy, Op, P, Arg1, Arg2);
+
+type_check_expr_in(Env, ResTy, {'catch', _, Arg}) ->
+    % TODO: Should we require ResTy to also include the possibility of
+    % exceptions? But exceptions can be of any type! That would mean
+    % that we require ResTy to be any(), or perhaps also term().
+    % But that would make exceptions and types almost incompatible!
+    type_check_expr_in(Env, ResTy, Arg);
+type_check_expr_in(Env, ResTy, {'try', _, Block, CaseCs, CatchCs, AfterCs}) ->
+    {VB,   Cs1}  = type_check_block_in(Env, ResTy, Block),
+    Env2 = Env#env{ venv = add_var_binds(VB, Env#env.venv) },
+    {_VB2, Cs2} = check_clauses(Env2, {type, 0, any, []}, ResTy, CaseCs),
+    {_VB3, Cs3} = check_clauses(Env2, {type, 0, any, []}, ResTy, CatchCs),
+    {_VB4, Cs4} = check_clauses(Env2, {type, 0, any, []}, ResTy, AfterCs),
+    % TODO: Check what variable bindings actually should be propagated
+    {VB
+    ,constraints:combine([Cs1,Cs2,Cs3,Cs4])}.
+
 
 type_check_arith_op(Env, ResTy, Op, P, Arg1, Arg2) ->
     case ResTy of
