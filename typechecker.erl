@@ -96,6 +96,20 @@ compat_ty({type, _, none, []}, _, A, _TEnv) ->
 compat_ty(T, T, A, _TEnv) ->
     ret(A);
 
+%% Variables
+compat_ty({var, _, Var}, Ty, A, _TEnv) ->
+    {A, constraints:upper(Var, Ty)};
+compat_ty(Ty, {var, _, Var}, A, _TEnv) ->
+    {A, constraints:lower(Var, Ty)};
+compat_ty({ann_type, _, [{var, _, Var}, Ty1]}, Ty2, A, TEnv) ->
+    {A1, Cs} = compat(Ty1, Ty2, A, TEnv),
+    {A1, constraints:combine(Cs, constraints:upper(Var, Ty1))};
+compat_ty(Ty1, {ann_type, _, [{var, _, Var}, Ty2]}, A, TEnv) ->
+    {A1, Cs} = compat(Ty1, Ty2, A, TEnv),
+    {A1, constraints:combine(Cs, constraints:upper(Var, Ty2))};
+
+
+
 % TODO: There are several kinds of fun types.
 % Add support for them all eventually
 compat_ty({type, _, 'fun', [{type, _, product, Args1}, Res1]},

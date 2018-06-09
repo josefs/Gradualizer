@@ -1,6 +1,6 @@
 -module(constraints).
 
--export([empty/0, combine/1, combine/2, convert/1]).
+-export([empty/0, upper/2, lower/2, combine/1, combine/2, convert/1]).
 
 -type type() :: erl_parse:abstract_type().
 
@@ -14,6 +14,12 @@ empty() ->
     #constraints{}.
 
 % add({T1, T2}, Cs) ->
+
+upper(Var, Ty) ->
+    #constraints{ upper_bounds = #{ Var => Ty } }.
+
+lower(Var, Ty) ->
+    #constraints{ lower_bounds = #{ Var => Ty } }.
 
 combine(C1, C2) ->
     combine([C1, C2]).
