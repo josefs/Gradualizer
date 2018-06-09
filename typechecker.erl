@@ -787,10 +787,8 @@ type_check_expr(Env, {op, _, RelOp, Arg1, Arg2}) when
 %% There is no typechecking of exceptions
 type_check_expr(Env, {'catch', _, Arg}) ->
     type_check_expr(Env, Arg);
-% TODO: Unclear why there is a list of expressions in try
-% This is why: try f(), g() catch _:_ -> x end.
-type_check_expr(Env, {'try', _, [Expr], CaseCs, CatchCs, AfterCs}) ->
-    {Ty,  VB,   Cs1}  = type_check_expr(Env, Expr),
+type_check_expr(Env, {'try', _, Block, CaseCs, CatchCs, AfterCs}) ->
+    {Ty,  VB,   Cs1}  = type_check_block(Env, Block),
     Env2 = Env#env{ venv = add_var_binds(VB, Env#env.venv) },
     {TyC, _VB2, Cs2} = infer_clauses(Env2, CaseCs),
     {TyS, _VB3, Cs3} = infer_clauses(Env2, CatchCs),
