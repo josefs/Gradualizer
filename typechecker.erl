@@ -214,7 +214,7 @@ compat_ty({type, _, list, [Ty1]}, {type, _, maybe_improper_list, [Ty2]}, A, TEnv
     compat(Ty1, Ty2, A, TEnv);
 compat_ty({type, _, nonempty_list, [Ty1]}, {type, _, maybe_improper_list, [Ty2]}, A, TEnv) ->
     compat(Ty1, Ty2, A, TEnv);
-%% TODO: improper and maybe improper list types
+%% TODO: improper lists
 
 %% Tuples
 compat_ty({type, _, tuple, any}, {type, _, tuple, _Args}, A, _TEnv) ->
