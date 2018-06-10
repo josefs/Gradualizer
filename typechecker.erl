@@ -637,20 +637,10 @@ type_check_expr(Env, {call, _, Name, Args}) ->
 	    { {type, 0, any, []}
 	    , union_var_binds([VarBinds | VarBindsList])
 	    , constraints:combine([Cs | Css])};
-	[{type, _, 'fun', [{type, _, product, ArgTys}, ResTy]}] ->
-	    % TODO: Handle multi-clause function types
-	    {VarBindsList, Css} =
-		lists:unzip(
-		  lists:zipwith(fun (ArgTy, Arg) ->
-				       type_check_expr_in(Env, ArgTy, Arg)
-			       end, ArgTys, Args)
-		 ),
-	    { ResTy
-	    , union_var_binds([VarBinds | VarBindsList])
-	    , constraints:combine([Cs | Css])};
 	[{type, _, bounded_fun, [{type, _, 'fun',
 				  [{type, _, product, ArgTys}, ResTy]}
 				,SCs2]}] ->
+	    % TODO: Handle multi-clause function types
 	    Cs2 = constraints:convert(SCs2),
 	    {VarBindsList, Css} =
 		lists:unzip(
@@ -905,21 +895,10 @@ type_check_expr_in(Env, ResTy, {call, _, Name, Args}) ->
 		lists:unzip3([ type_check_expr(Env, Arg) || Arg <- Args]),
 	    { union_var_binds([VarBinds |  VarBindsList])
 	    , constraints:combine([Cs|Css]) };
-	[{type, _, 'fun', [{type, _, product, TyArgs}, FunResTy]}] ->
-	    % TODO: Handle multi-clause function types
-	    {VarBindsList, Css} =
-		lists:unzip([ type_check_expr_in(Env, TyArg, Arg)
-			   || {TyArg, Arg} <- lists:zip(TyArgs, Args) ]),
-	    case subtype(ResTy, FunResTy, Env#env.tenv) of
-		{true, Cs2} ->
-		    VarBind = union_var_binds([VarBinds | VarBindsList]),
-		    {VarBind, constraints:combine([Cs, Cs2 | Css])};
-		_ ->
-		    throw(type_error)
-	    end;
 	[{type, _, bounded_fun, [{type, _, 'fun',
 				  [{type, _, product, ArgTys}, FunResTy]}
 				,SCs2]}] ->
+	    % TODO: Handle multi-clause function types
 	    Cs2 = constraints:convert(SCs2),
 	    {VarBindsList, Css} =
 		lists:unzip(
@@ -1217,14 +1196,10 @@ check_guards(Env, Guards) ->
 
 type_check_function(FEnv, TEnv, {function,_, Name, NArgs, Clauses}) ->
     case maps:find({Name, NArgs}, FEnv) of
-	{ok, [{type, _, 'fun', [{type, _, product, ArgsTy}, ResTy]}]} ->
-	    % TODO: Handle multi-clause function types
-	    {VarBinds, Cs} = check_clauses(#env{ fenv = FEnv, tenv = TEnv },
-					   ArgsTy, ResTy, Clauses),
-	    {ResTy, VarBinds, Cs};
     {ok, [{type, _, bounded_fun, [{type, _, 'fun',
                                    [{type, _, product, ArgsTy}, ResTy]},
                                   SCs2]}]} ->
+	    % TODO: Handle multi-clause function types
 	    Cs2 = constraints:convert(SCs2),
 	    {VarBinds, Cs} = check_clauses(#env{ fenv = FEnv, tenv = TEnv },
 					   ArgsTy, ResTy, Clauses),
@@ -1484,7 +1459,8 @@ create_fenv(Specs, Funs) ->
     maps:from_list([ {{Name, NArgs}, {type, 0, any, []}}
 		     || {function,_, Name, NArgs, _Clauses} <- Funs
 		   ] ++
-		   [ {{Name, NArgs}, Types} || {{Name, NArgs}, Types} <- Specs
+		   [ {{Name, NArgs}, absform:normalize_function_type_list(Types)}
+             || {{Name, NArgs}, Types} <- Specs
 		   ]
 		  ).
 
