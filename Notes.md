@@ -149,3 +149,18 @@ file or inferred.
   take advantage of the type information. That is a long way away
   though, especially since it is an unsolved problem how to compile casts in
   the blame calculus efficiently.
+
+* Purity analysis. It'd be quite easy to add on a purity analysis to the
+  Gradualizer. The simplest possible analysis would be to just
+  allow the programmer to declare a function pure as follows:
+
+  -pure(pure/1).
+
+  The Gradualizer would then check that pure/1 is indeed pure and that
+  all the functions is calls are also pure.
+
+  A more advanced analysis would be some kind of effects system. One
+  could imagine a powerset lattice of effects such as exceptions, io,
+  process_communication etc. A syntax could look like this:
+
+  -effects({not_pure/1, [exceptions,io]}).
