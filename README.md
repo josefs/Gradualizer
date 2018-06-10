@@ -22,3 +22,16 @@ Right now the user experience is not very polished. Here's how to get started:
   `typechecker:type_check_file(<some file>).`
 
   You can try typechecking some of the example modules in the `tests`directory.
+
+# Status
+
+The Gradualizer is in alpha. There are plenty of things that don't work right
+now. It is not ment for public consumption. That being said, pull requrests
+are most welcome!
+
+A non-exhaustive list of things which need fixing:
+
+* Making it a real Erlang application
+* Support for intersection types
+* Support for subtype polymorphism
+* Support for all language constructs in Erlang
