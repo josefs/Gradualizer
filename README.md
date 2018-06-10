@@ -23,7 +23,7 @@ Right now the user experience is not very polished. Here's how to get started:
 
   You can try typechecking some of the example modules in the `tests`directory.
 
-The Gradualizer requires at least OTP 18.
+The Gradualizer requires at least OTP 19.
 
 # Status
 
