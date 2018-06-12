@@ -4,7 +4,10 @@ deps
 *.beam
 *.plt
 erl_crash.dump
-ebin/*.beam
+ebin/*
 rel/example_project
 .concrete/DEV_MODE
 .rebar
+.erlang.mk
+gradualizer.d
+cover/
