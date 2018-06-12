@@ -110,7 +110,7 @@ import_otp() ->
 
 -record(state, {specs   = #{} :: #{mfa() => [type()]},
                 types   = #{} :: #{mfa() => #typeinfo{}},
-                records = #{} :: #{{module(), atom()} => [typechecker:typed_record_field()]},
+                records = #{} :: #{{module(), atom()} => [gradualizer:typed_record_field()]},
                 opts    = ?default_opts :: opts(),
                 srcmap  = #{} :: #{module() => string()},
                 loaded  = #{} :: #{module() => boolean()}}).
