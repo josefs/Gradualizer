@@ -1,4 +1,4 @@
--module(typechecker).
+-module(gradualizer).
 
 -export_type([typed_record_field/0]).
 
