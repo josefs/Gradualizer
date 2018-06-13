@@ -14,7 +14,10 @@
 # run dialyzer
 # > make dialyze
 #
-# run all checks (including tests and dialyzer)
+# run gradualizer on itself
+# > make gradualize
+#
+# run all checks (including tests, dialyze and gradualize)
 # > make check
 #
 PROJECT = gradualizer
@@ -23,6 +26,10 @@ PLT_APPS = kernel stdlib compiler crypto
 DIALYZER_OPTS = -Werror_handling
 
 include erlang.mk
+
+gradualize: app
+	$(ERL) -pa $(CURDIR)/ebin -eval 'typechecker:type_check_file("src/typechecker.erl"), halt().'
+check:: gradualize
 
 # We want warnings to be warnings, not errors.
 ERLC_OPTS := $(filter-out -Werror,$(ERLC_OPTS))
