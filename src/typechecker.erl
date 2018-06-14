@@ -693,8 +693,7 @@ type_check_expr(Env, {map, _, Expr, Assocs}) ->
 type_check_expr(Env, {record_field, _P, Expr, Record, {atom, _, Field}}) ->
     {VB, Cs} = type_check_expr_in(Env, {type, 0, record, [{atom, 0, Record}]}, Expr),
     Rec = maps:get(Record, Env#env.tenv#tenv.records),
-    [Ty]  = [Ty0 || {typed_record_field, {record_field, _, {atom, _, Name}, _}, Ty0} <- Rec,
-                    Name =:= Field],
+    Ty = get_rec_field_type(Field, Rec),
     {Ty, VB, Cs};
 type_check_expr(Env, {record, _, Expr, Record, Fields}) ->
     RecTy = {type, 0, record, [{atom, 0, Record}]},
@@ -778,7 +777,7 @@ type_check_expr(Env, {'try', _, Block, CaseCs, CatchCs, AfterCs}) ->
 
 
 type_check_fields(Env, Rec, [{record_field, _, {atom, _, Field}, Expr} | Fields]) ->
-    FieldTy = maps:get(Field, Rec),
+    FieldTy = get_rec_field_type(Field, Rec),
     {VB1, Cs1} = type_check_expr_in(Env, FieldTy, Expr),
     {VB2, Cs2} = type_check_fields(Env, Rec, Fields),
     {union_var_binds([VB1, VB2]), constraints:combine(Cs1,Cs2)};
@@ -1430,6 +1429,16 @@ glb_types(K, {type, _, N, Args1}, {type, _, N, Args2}) ->
     {type, 0, N, Args};
 glb_types(_, _, _) ->
     {type, 0, any, []}.
+
+get_rec_field_type(FieldName,
+                   [{typed_record_field,
+                     {record_field, _,
+                      {atom, _, FieldName}, _}, Ty}|_]) ->
+    Ty;
+get_rec_field_type(FieldName, [_|RecFieldTypes]) ->
+    get_rec_field_type(FieldName, RecFieldTypes);
+get_rec_field_type(_, []) ->
+    {error, not_found}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% Main entry point
