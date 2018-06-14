@@ -14,6 +14,6 @@ run_tests_in(Dir, ExpectedRes) ->
     [{filename:basename(Dir) ++ ": " ++ File,
       fun() ->
               FullFile = filename:join(Dir, File),
-              ?assert(ExpectedRes =:= typechecker:type_check_file(FullFile))
+              ?assert(ExpectedRes =:= gradualizer:type_check_file(FullFile))
       end}
      || File <- Files].

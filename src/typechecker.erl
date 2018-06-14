@@ -1563,13 +1563,14 @@ get_rec_field_type(FieldName, []) ->
 %%% Main entry point
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+type_check_forms(Forms, Opts) ->
+    StopOnFirstError = proplists:get_bool(stop_on_first_error, Opts),
+    File = proplists:get_value(print_file, Opts),
 
-type_check_file(File) ->
     case gradualizer_db:start_link() of
 	{ok, _Pid}                    -> ok;
 	{error, {already_started, _}} -> ok
     end,
-    {ok, Forms} = epp:parse_file(File,[]),
     #parsedata{specs     = Specs
 	      ,functions = Funs
 	      ,types     = Types
@@ -1579,14 +1580,16 @@ type_check_file(File) ->
 	collect_specs_types_opaques_and_functions(Forms),
     FEnv = create_fenv(Specs, Funs),
     TEnv = create_tenv(Types ++ Opaques, Records),
-    lists:foldr(fun (Function, ok) ->
+    lists:foldr(fun (Function, Res) when Res =:= ok;
+                                         not StopOnFirstError ->
 			try type_check_function(FEnv, TEnv, Function) of
 			    {_Ty, _VarBinds, _Cs} ->
-				ok
+				Res
 			catch
 			    Throw ->
 				% Useful for debugging
 				% io:format("~p~n", [erlang:get_stacktrace()]),
+                    File =/= undefined andalso io:format("~s: ", [File]),
 				handle_type_error(Throw),
 				nok
 			end;

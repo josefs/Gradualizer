@@ -28,7 +28,7 @@ DIALYZER_OPTS = -Werror_handling
 include erlang.mk
 
 gradualize: app
-	$(ERL) -pa $(CURDIR)/ebin -eval 'typechecker:type_check_file("src/typechecker.erl"), halt().'
+	$(ERL) -pa $(CURDIR)/ebin -eval 'gradualizer:type_check_file("src/typechecker.erl"), halt().'
 check:: gradualize
 
 # We want warnings to be warnings, not errors.

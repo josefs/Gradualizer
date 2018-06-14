@@ -23,7 +23,7 @@ Right now the user experience is not very polished. Here's how to get started:
 
 * From the prompt you can run the type checker as follows:
 
-  `typechecker:type_check_file(<path/to/some_file.erl>).`
+  `gradualizer:type_check_file(<path/to/some_file.erl>).`
 
   You can try typechecking some of the example modules in the `test` directory.
 
