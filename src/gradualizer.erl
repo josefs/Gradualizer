@@ -37,6 +37,18 @@
 	     }).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Application callbacks
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+-behaviour(application).
+
+start(_Type, _Args) ->
+    gradualizer_sup:start_link().
+
+stop(_State) ->
+    ok.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Subtyping compatibility
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -252,7 +264,7 @@ compat_ty(_Ty1, _Ty2, _, _) ->
 compat_tys([], [], A, _TEnv) ->
     ret(A);
 compat_tys([Ty1|Tys1], [Ty2|Tys2], A, TEnv) ->
-    {Ap, Cs} = 
+    {Ap, Cs} =
     compat(Ty1 ,Ty2, A, TEnv),
     {Aps, Css} = compat_tys(Tys1, Tys2, Ap, TEnv),
     {Aps, constraints:combine(Cs, Css)};
@@ -1135,8 +1147,8 @@ type_check_cons_union(Env, [_ | Tys], H, T) ->
     type_check_cons_union(Env, Tys, H, T).
 
 
-    
-    
+
+
 %% We don't use these function right now but they can be useful for
 %% implementing an approximation when typechecking unions of tuples.
 split_tuple_type(N, {type, P, tuple, any}) ->
