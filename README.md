@@ -13,15 +13,19 @@ This tool is a type checker for Erlang.
 
 Right now the user experience is not very polished. Here's how to get started:
 
-* Type `make` in the root directory of the repository.
+* Compile the project by:
 
-  This will launch the interactive prompt with all the relevant modules loaded.
-  
+  `make app`
+
+* Launch the interactive prompt with all the relevant modules in the path:
+
+  `make shell`
+
 * From the prompt you can run the type checker as follows:
 
-  `typechecker:type_check_file(<some file>).`
+  `typechecker:type_check_file(<path/to/some_file.erl>).`
 
-  You can try typechecking some of the example modules in the `tests`directory.
+  You can try typechecking some of the example modules in the `test` directory.
 
 The Gradualizer requires at least OTP 19.
 
