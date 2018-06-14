@@ -1437,12 +1437,25 @@ glb_types(_, _) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
+type_check_module(Module) when is_atom(Module) ->
+  case beam_lib:chunks(code:which(Module), [abstract_code]) of
+    {ok, {Module, [{abstract_code, {raw_abstract_v1, Forms}}]}} ->
+        type_check_forms(Forms);
+    {ok, {no_debug_info, _}} ->
+        throw({forms_not_found, Module});
+    {error, beam_lib, {file_error, _, enoent}} ->
+        throw({module_not_found, Module})
+  end.
+
 type_check_file(File) ->
-    case gradualizer_db:start_link() of
-	{ok, _Pid}                    -> ok;
-	{error, {already_started, _}} -> ok
-    end,
     {ok, Forms} = epp:parse_file(File,[]),
+    type_check_forms(Forms).
+
+type_check_forms(Forms) ->
+    case gradualizer_db:start_link() of
+      {ok, _Pid}                    -> ok;
+      {error, {already_started, _}} -> ok
+    end,
     #parsedata{specs     = Specs
 	      ,functions = Funs
 	      ,types     = Types
