@@ -110,7 +110,7 @@ import_otp() ->
 
 -record(state, {specs   = #{} :: #{mfa() => [type()]},
                 types   = #{} :: #{mfa() => #typeinfo{}},
-                records = #{} :: #{{module(), atom()} => [typechecker:typed_record_field()]},
+                records = #{} :: #{{module(), atom()} => [gradualizer:typed_record_field()]},
                 opts    = ?default_opts :: opts(),
                 srcmap  = #{} :: #{module() => string()},
                 loaded  = #{} :: #{module() => boolean()}}).
@@ -420,6 +420,7 @@ collect_specs(Module, Forms) ->
             {F, A} <- Exports,
             not sets:is_element({F, A},
                         SpecedFunsSet)],
+
     [{Key, absform:normalize_function_type_list(Types)}
      || {Key, Types} <- Specs ++ ImplicitSpecs].
 

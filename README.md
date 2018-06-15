@@ -16,7 +16,7 @@ Right now the user experience is not very polished. Here's how to get started:
 * Type `make` in the root directory of the repository.
 
   This will launch the interactive prompt with all the relevant modules loaded.
-  
+
 * From the prompt you can run the type checker as follows:
 
   `typechecker:type_check_file(<some file>).`
@@ -24,6 +24,22 @@ Right now the user experience is not very polished. Here's how to get started:
   You can try typechecking some of the example modules in the `tests`directory.
 
 The Gradualizer requires at least OTP 19.
+
+# Mix
+
+Project is compatible with Elixir `mix` utility:
+
+```
+$ mix deps.get       # fetch dependencies (including mix-erlang-tasks)
+
+$ mix compile        # compile everything
+
+$ mix eunit          # run EUnit tests
+
+$ mix ct             # run Common Test suites
+
+$ mix edoc           # generate HTML documentation from the source
+```
 
 # Status
 

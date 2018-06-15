@@ -1,4 +1,4 @@
--module(typechecker).
+-module(gradualizer).
 
 -export_type([typed_record_field/0]).
 
@@ -35,6 +35,18 @@
 	     ,tenv   :: #tenv{}
 	     %,tyvenv = #{}
 	     }).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Application callbacks
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+-behaviour(application).
+
+start(_Type, _Args) ->
+    gradualizer_sup:start_link().
+
+stop(_State) ->
+    ok.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Subtyping compatibility
@@ -637,10 +649,20 @@ type_check_expr(Env, {call, _, Name, Args}) ->
 	    { {type, 0, any, []}
 	    , union_var_binds([VarBinds | VarBindsList])
 	    , constraints:combine([Cs | Css])};
+	[{type, _, 'fun', [{type, _, product, ArgTys}, ResTy]}] ->
+	    % TODO: Handle multi-clause function types
+	    {VarBindsList, Css} =
+		lists:unzip(
+		  lists:zipwith(fun (ArgTy, Arg) ->
+				       type_check_expr_in(Env, ArgTy, Arg)
+			       end, ArgTys, Args)
+		 ),
+	    { ResTy
+	    , union_var_binds([VarBinds | VarBindsList])
+	    , constraints:combine([Cs | Css])};
 	[{type, _, bounded_fun, [{type, _, 'fun',
 				  [{type, _, product, ArgTys}, ResTy]}
 				,SCs2]}] ->
-	    % TODO: Handle multi-clause function types
 	    Cs2 = constraints:convert(SCs2),
 	    {VarBindsList, Css} =
 		lists:unzip(
@@ -895,10 +917,21 @@ type_check_expr_in(Env, ResTy, {call, _, Name, Args}) ->
 		lists:unzip3([ type_check_expr(Env, Arg) || Arg <- Args]),
 	    { union_var_binds([VarBinds |  VarBindsList])
 	    , constraints:combine([Cs|Css]) };
+	[{type, _, 'fun', [{type, _, product, TyArgs}, FunResTy]}] ->
+	    % TODO: Handle multi-clause function types
+	    {VarBindsList, Css} =
+		lists:unzip([ type_check_expr_in(Env, TyArg, Arg)
+			   || {TyArg, Arg} <- lists:zip(TyArgs, Args) ]),
+	    case subtype(ResTy, FunResTy, Env#env.tenv) of
+		{true, Cs2} ->
+		    VarBind = union_var_binds([VarBinds | VarBindsList]),
+		    {VarBind, constraints:combine([Cs, Cs2 | Css])};
+		_ ->
+		    throw(type_error)
+	    end;
 	[{type, _, bounded_fun, [{type, _, 'fun',
 				  [{type, _, product, ArgTys}, FunResTy]}
 				,SCs2]}] ->
-	    % TODO: Handle multi-clause function types
 	    Cs2 = constraints:convert(SCs2),
 	    {VarBindsList, Css} =
 		lists:unzip(
@@ -1114,8 +1147,7 @@ type_check_cons_union(Env, [_ | Tys], H, T) ->
     type_check_cons_union(Env, Tys, H, T).
 
 
-    
-    
+
 %% We don't use these function right now but they can be useful for
 %% implementing an approximation when typechecking unions of tuples.
 split_tuple_type(N, {type, P, tuple, any}) ->
@@ -1406,13 +1438,25 @@ glb_types(_, _) ->
 %%% Main entry point
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+type_check_module(Module) when is_atom(Module) ->
+  case beam_lib:chunks(code:which(Module), [abstract_code]) of
+    {ok, {Module, [{abstract_code, {raw_abstract_v1, Forms}}]}} ->
+        type_check_forms(Forms);
+    {ok, {no_debug_info, _}} ->
+        throw({forms_not_found, Module});
+    {error, beam_lib, {file_error, _, enoent}} ->
+        throw({module_not_found, Module})
+  end.
 
 type_check_file(File) ->
-    case gradualizer_db:start_link() of
-	{ok, _Pid}                    -> ok;
-	{error, {already_started, _}} -> ok
-    end,
     {ok, Forms} = epp:parse_file(File,[]),
+    type_check_forms(Forms).
+
+type_check_forms(Forms) ->
+    case gradualizer_db:start_link() of
+      {ok, _Pid}                    -> ok;
+      {error, {already_started, _}} -> ok
+    end,
     #parsedata{specs     = Specs
 	      ,functions = Funs
 	      ,types     = Types

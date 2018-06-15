@@ -1,6 +1,6 @@
 %% @doc This is an eunit test suite. Run the tests using
 %%      eunit:test(typechecker, [verbose]).
--module(typechecker_tests).
+-module(gradualizer_tests).
 
 -include_lib("eunit/include/eunit.hrl").
 
@@ -115,12 +115,12 @@ not_subtype_test() ->
 
 normalize_test_() ->
     [
-     ?_assertEqual(?t( 1..6 ), typechecker:normalize(?t( 1..3|4..6 )))
+     ?_assertEqual(?t( 1..6 ), gradualizer:normalize(?t( 1..3|4..6 )))
     ].
 
 
 subtype(T1, T2) ->
-    case typechecker:subtype(T1, T2, {tenv, #{}, #{}}) of
+    case gradualizer:subtype(T1, T2, {tenv, #{}, #{}}) of
 	{true, _} ->
 	    true;
 	false ->
