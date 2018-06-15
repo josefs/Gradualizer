@@ -164,3 +164,9 @@ file or inferred.
   process_communication etc. A syntax could look like this:
 
   -effects({not_pure/1, [exceptions,io]}).
+
+* Some situations require adding typesignatures to expressions, not
+  just on function toplevel. It would be nice to extend Erlang syntax to
+  suupport this. It could look like this:
+
+  E :: T

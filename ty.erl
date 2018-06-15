@@ -120,7 +120,7 @@ union(_,_, U) ->
     U.
 
 -spec union(A,B) -> A | B.
-union(A, B) ->
+union(A, _) ->
     A.
 
 % Any

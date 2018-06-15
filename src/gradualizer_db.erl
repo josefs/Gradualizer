@@ -420,7 +420,9 @@ collect_specs(Module, Forms) ->
             {F, A} <- Exports,
             not sets:is_element({F, A},
                         SpecedFunsSet)],
-    Specs ++ ImplicitSpecs.
+
+    [{Key, absform:normalize_function_type_list(Types)}
+     || {Key, Types} <- Specs ++ ImplicitSpecs].
 
 normalize_spec({{Func, Arity}, Types}, Module) ->
     {{Module, Func, Arity}, Types};

@@ -264,7 +264,7 @@ compat_ty(_Ty1, _Ty2, _, _) ->
 compat_tys([], [], A, _TEnv) ->
     ret(A);
 compat_tys([Ty1|Tys1], [Ty2|Tys2], A, TEnv) ->
-    {Ap, Cs} =
+    {Ap, Cs} = 
     compat(Ty1 ,Ty2, A, TEnv),
     {Aps, Css} = compat_tys(Tys1, Tys2, Ap, TEnv),
     {Aps, constraints:combine(Cs, Css)};
@@ -1148,7 +1148,6 @@ type_check_cons_union(Env, [_ | Tys], H, T) ->
 
 
 
-
 %% We don't use these function right now but they can be useful for
 %% implementing an approximation when typechecking unions of tuples.
 split_tuple_type(N, {type, P, tuple, any}) ->
@@ -1229,11 +1228,14 @@ check_guards(Env, Guards) ->
 
 type_check_function(FEnv, TEnv, {function,_, Name, NArgs, Clauses}) ->
     case maps:find({Name, NArgs}, FEnv) of
-	{ok, [{type, _, 'fun', [{type, _, product, ArgsTy}, ResTy]}]} ->
+    {ok, [{type, _, bounded_fun, [{type, _, 'fun',
+                                   [{type, _, product, ArgsTy}, ResTy]},
+                                  SCs2]}]} ->
 	    % TODO: Handle multi-clause function types
+	    Cs2 = constraints:convert(SCs2),
 	    {VarBinds, Cs} = check_clauses(#env{ fenv = FEnv, tenv = TEnv },
 					   ArgsTy, ResTy, Clauses),
-	    {ResTy, VarBinds, Cs};
+	    {ResTy, VarBinds, constraints:combine(Cs,Cs2)};
 	{ok, {type, _, any, []}} ->
 	    infer_clauses(#env{ fenv = FEnv, tenv = TEnv }, Clauses);
 	error ->
@@ -1436,7 +1438,6 @@ glb_types(_, _) ->
 %%% Main entry point
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-
 type_check_module(Module) when is_atom(Module) ->
   case beam_lib:chunks(code:which(Module), [abstract_code]) of
     {ok, {Module, [{abstract_code, {raw_abstract_v1, Forms}}]}} ->
@@ -1502,7 +1503,8 @@ create_fenv(Specs, Funs) ->
     maps:from_list([ {{Name, NArgs}, {type, 0, any, []}}
 		     || {function,_, Name, NArgs, _Clauses} <- Funs
 		   ] ++
-		   [ {{Name, NArgs}, Types} || {{Name, NArgs}, Types} <- Specs
+		   [ {{Name, NArgs}, absform:normalize_function_type_list(Types)}
+             || {{Name, NArgs}, Types} <- Specs
 		   ]
 		  ).
 
