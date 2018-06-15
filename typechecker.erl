@@ -964,7 +964,11 @@ type_check_expr_in(Env, ResTy, {'try', _, Block, CaseCs, CatchCs, AfterCs}) ->
 
 type_check_arith_op(Env, ResTy, Op, P, Arg1, Arg2) ->
     case ResTy of
-	{type, _, Ty, []} when Ty == 'integer' orelse Ty == 'float' orelse
+	{type, _, Ty, []} when Ty == 'integer' orelse
+			       Ty == 'non_neg_integer' orelse
+			       Ty == 'pos_integer' orelse
+			       Ty == 'neg_integer' orelse
+			       Ty == 'float' orelse
 			       Ty == 'any' ->
 	  {VarBinds1, Cs1} = type_check_expr_in(Env, ResTy, Arg1),
 	  {VarBinds2, Cs2} = type_check_expr_in(Env, ResTy, Arg2),
