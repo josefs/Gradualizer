@@ -1549,19 +1549,19 @@ handle_type_error({type_error, call, _P, Name, TyArgs, ArgTys}) ->
 	      [Name, TyArgs, ArgTys]);
 handle_type_error({type_error, boolop, BoolOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-boolean argument "
-	      " of type ~s~n", [BoolOp, P, typelib:pp_type(Ty)]);
+	      "of type ~s~n", [BoolOp, P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, arith_error, ArithOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-numeric argument "
-	      " of type ~s~n", [ArithOp, P, typelib:pp_type(Ty)]);
+	      "of type ~s~n", [ArithOp, P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, int_error, IntOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-integer argument "
-	      " of type ~s~n", [IntOp, P, typelib:pp_type(Ty)]);
+	      "of type ~s~n", [IntOp, P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, logic_error, LogicOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-boolean argument "
-	      " of type ~s~n", [LogicOp, P, typelib:pp_type(Ty)]);
+	      "of type ~s~n", [LogicOp, P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, list_op_error, ListOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-list argument "
-	      " of type ~s~n", [ListOp, P, typelib:pp_type(Ty)]);
+	      "of type ~s~n", [ListOp, P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, tuple_error}) ->
     io:format("A tuple didn't match any of the types in a union~n");
 handle_type_error({type_error, pattern, P, Pat, Ty}) ->
