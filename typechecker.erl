@@ -931,19 +931,19 @@ type_check_expr_in(Env, ResTy, {op, P, 'not', Arg}) ->
     end;
 type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
       Op == '+' orelse Op == '-' orelse Op == '*' orelse Op == '/' ->
-    type_check_arith_op(Env, ResTy, Op, P, Arg1, Arg2);
+    type_check_arith_op_in(Env, ResTy, Op, P, Arg1, Arg2);
 type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
       Op == 'bnot' orelse Op == 'div' orelse Op == 'rem' orelse
       Op == 'band' orelse Op == 'bor' orelse Op == 'bxor' orelse
       Op == 'bsl'  orelse Op == 'bsr' ->
-    type_check_int_op(Env, ResTy, Op, P, Arg1, Arg2);
+    type_check_int_op_in(Env, ResTy, Op, P, Arg1, Arg2);
 type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
       Op == 'and' orelse Op == 'or' orelse Op == 'xor' orelse
       Op == 'andalso' orelse Op == 'orelse' ->
-    type_check_logic_op(Env, ResTy, Op, P, Arg1, Arg2);
+    type_check_logic_op_in(Env, ResTy, Op, P, Arg1, Arg2);
 type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
       Op == '++' orelse Op == '--' ->
-    type_check_list_op(Env, ResTy, Op, P, Arg1, Arg2);
+    type_check_list_op_in(Env, ResTy, Op, P, Arg1, Arg2);
 
 type_check_expr_in(Env, ResTy, {'catch', _, Arg}) ->
     % TODO: Should we require ResTy to also include the possibility of
@@ -962,7 +962,7 @@ type_check_expr_in(Env, ResTy, {'try', _, Block, CaseCs, CatchCs, AfterCs}) ->
     ,constraints:combine([Cs1,Cs2,Cs3,Cs4])}.
 
 
-type_check_arith_op(Env, ResTy, Op, P, Arg1, Arg2) ->
+type_check_arith_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
     case ResTy of
 	{type, _, Ty, []} when Ty == 'integer' orelse
 			       Ty == 'non_neg_integer' orelse
@@ -977,7 +977,7 @@ type_check_arith_op(Env, ResTy, Op, P, Arg1, Arg2) ->
 	_ ->
 	  throw({type_error, arith_error, Op, P, ResTy})
     end.
-type_check_int_op(Env, ResTy, Op, P, Arg1, Arg2) ->
+type_check_int_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
     case ResTy of
 	{type, _, Ty, []} when Ty == 'integer' orelse Ty == 'any' ->
 	  {VarBinds1, Cs1} = type_check_expr_in(Env, ResTy, Arg1),
@@ -987,7 +987,7 @@ type_check_int_op(Env, ResTy, Op, P, Arg1, Arg2) ->
 	_ ->
 	  throw({type_error, int_error, Op, P, ResTy})
     end.
-type_check_logic_op(Env, ResTy, Op, P, Arg1, Arg2) ->
+type_check_logic_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
     case ResTy of
 	{type, _, Ty, []} when Ty == 'boolean' orelse Ty == 'bool'
 			       orelse Ty == 'any' ->
@@ -998,7 +998,7 @@ type_check_logic_op(Env, ResTy, Op, P, Arg1, Arg2) ->
 	_ ->
 	  throw({type_error, logic_error, Op, P, ResTy})
     end.
-type_check_list_op(Env, ResTy, Op, P, Arg1, Arg2) ->
+type_check_list_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
     case ResTy of
 	{type, _, 'list', [_Ty]} ->
 	  {VarBinds1, Cs1} = type_check_expr_in(Env, ResTy, Arg1),
