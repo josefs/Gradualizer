@@ -953,6 +953,9 @@ type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
       Op == 'andalso' orelse Op == 'orelse' ->
     type_check_logic_op_in(Env, ResTy, Op, P, Arg1, Arg2);
 type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
+      Op == '=:=' orelse Op == '==' orelse Op == '>=' orelse Op == '=<' ->
+    type_check_rel_op_in(Env, ResTy, Op, P, Arg1, Arg2);
+type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
       Op == '++' orelse Op == '--' ->
     type_check_list_op_in(Env, ResTy, Op, P, Arg1, Arg2);
 
@@ -1008,6 +1011,22 @@ type_check_logic_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
 	  ,constraints:combine(Cs1, Cs2)};
 	_ ->
 	  throw({type_error, logic_error, Op, P, ResTy})
+    end.
+type_check_rel_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
+    case ResTy of
+	{type, _, Ty, []} when Ty == 'boolean' orelse Ty == 'bool'
+			orelse Ty == 'any' ->
+	  {ResTy1, VarBinds1, Cs1} = type_check_expr(Env, Arg1),
+	  {ResTy2, VarBinds2, Cs2} = type_check_expr(Env, Arg2),
+	  case compatible(ResTy1, ResTy2, Env#env.tenv) of
+	      {true, Cs} ->
+		  {union_var_binds([VarBinds1, VarBinds2])
+		  ,constraints:combine([Cs1, Cs2, Cs])};
+	      false ->
+		  throw({type_error, rel_error, Op, P, ResTy1, ResTy2})
+	  end;
+	_ ->
+	  throw({type_error, rel_error, Op, P, ResTy})
     end.
 type_check_list_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
     case ResTy of
@@ -1570,6 +1589,13 @@ handle_type_error({type_error, int_error, IntOp, P, Ty}) ->
 handle_type_error({type_error, logic_error, LogicOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-boolean argument "
 	      "of type ~s~n", [LogicOp, P, typelib:pp_type(Ty)]);
+handle_type_error({type_error, rel_error, LogicOp, P, Ty}) ->
+    io:format("The operator ~p on line ~p is used in a context where it is "
+	      "required to have type ~s~n", [LogicOp, P, typelib:pp_type(Ty)]);
+handle_type_error({type_error, rel_error, LogicOp, P, Ty1, Ty2}) ->
+    io:format("The operator ~p on line ~p is given two arguments with "
+	      "non-compatible types:~n~s~n~s~n",
+	      [LogicOp, P, typelib:pp_type(Ty1), typelib:pp_type(Ty2)]);
 handle_type_error({type_error, list_op_error, ListOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-list argument "
 	      "of type ~s~n", [ListOp, P, typelib:pp_type(Ty)]);
