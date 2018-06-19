@@ -36,6 +36,19 @@
 	     %,tyvenv = #{}
 	     }).
 
+%% Two types are compatible if one is a subtype of the other, or both.
+compatible(Ty1, Ty2, TEnv) ->
+    case {subtype(Ty1, Ty2, TEnv), subtype(Ty2, Ty1, TEnv)} of
+	{{true, C1}, {true, C2}} ->
+	    {true, constraints:combine(C1,C2)};
+	{false, T={true, _C2}} ->
+	    T;
+	{T={true, _C1}, false} ->
+	    T;
+	{false, false} ->
+	    false
+    end.
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Subtyping compatibility
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -723,35 +736,7 @@ type_check_expr(Env, {op, P, 'not', Arg}) ->
 type_check_expr(Env, {op, P, BoolOp, Arg1, Arg2}) when
       (BoolOp == 'andalso') or (BoolOp == 'and') or
       (BoolOp == 'orelse')  or (BoolOp == 'or') ->
-    % Bindings from the first argument are only passed along for
-    % 'andalso' and 'orelse', not 'and' or 'or'.
-    UnionVarBindsSecondArg =
-	fun (VB1, VB2) ->
-		if (BoolOp == 'and') or (BoolOp == 'or') ->
-			VB1;
-		   true ->
-			union_var_binds([VB1, VB2])
-		end
-	end,
-    case type_check_expr(Env, Arg1) of
-	{Ty1, VB1, Cs1} ->
-	    case subtype(Ty1, {type, P, bool, []}, Env#env.tenv) of
-		false ->
-		    throw({type_error, boolop, BoolOp, P, Ty1});
-		{true, Cs2} ->
-		    case type_check_expr(Env#env{ venv = UnionVarBindsSecondArg(Env#env.venv,VB1 )}, Arg2) of
-			{Ty2, VB2, Cs3} ->
-			    case subtype(Ty2, {type, P, bool, []}, Env#env.tenv) of
-				false ->
-				    throw({type_error, boolop, BoolOp, P, Ty1});
-				{true, Cs4} ->
-				    {merge_types([Ty1, Ty2])
-				    ,union_var_binds([VB1, VB2])
-				    ,constraints:combine([Cs1,Cs2,Cs3,Cs4])}
-			    end
-		    end
-	    end
-    end;
+    type_check_logic_op(Env, BoolOp, P, Arg1, Arg2);
 type_check_expr(Env, {op, _, RelOp, Arg1, Arg2}) when
       (RelOp == '=:=') or (RelOp == '==') or
       % It's debatable whether we should allow comparison between any types
@@ -800,6 +785,32 @@ type_check_fields(Env, Rec, [{record_field, _, {atom, _, Field}, Expr} | Fields]
 type_check_fields(_Env, _Rec, []) ->
     {#{}, constraints:empty()}.
 
+type_check_logic_op(Env, Op, P, Arg1, Arg2) ->
+    % Bindings from the first argument are only passed along for
+    % 'andalso' and 'orelse', not 'and' or 'or'.
+    UnionVarBindsSecondArg =
+	fun (VB1, VB2) ->
+		if (Op == 'and') or (Op == 'or') ->
+			VB1;
+		   true ->
+			union_var_binds([VB1, VB2])
+		end
+	end,
+    {Ty1, VB1, Cs1} = type_check_expr(Env, Arg1),
+    case subtype(Ty1, {type, P, bool, []}, Env#env.tenv) of
+	false ->
+	    throw({type_error, boolop, Op, P, Ty1});
+	{true, Cs2} ->
+	    {Ty2, VB2, Cs3} = type_check_expr(Env#env{ venv = UnionVarBindsSecondArg(Env#env.venv,VB1 )}, Arg2),
+	    case subtype(Ty2, {type, P, bool, []}, Env#env.tenv) of
+		false ->
+		    throw({type_error, boolop, Op, P, Ty1});
+		{true, Cs4} ->
+		    {merge_types([Ty1, Ty2])
+		    ,union_var_binds([VB1, VB2])
+		    ,constraints:combine([Cs1,Cs2,Cs3,Cs4])}
+	    end
+    end.
 
 
 
