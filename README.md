@@ -32,7 +32,7 @@ The Gradualizer requires at least OTP 19.
 # Status
 
 The Gradualizer is in alpha. There are plenty of things that don't work right
-now. It is not ment for public consumption. That being said, pull requrests
+now. It is not meant for public consumption. That being said, pull requrests
 are most welcome!
 
 A non-exhaustive list of things which need fixing:
