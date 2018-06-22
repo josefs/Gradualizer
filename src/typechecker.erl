@@ -1418,22 +1418,17 @@ return(X) ->
 union_var_binds([]) ->
     #{};
 union_var_binds([ VarBinds | VarBindsList ]) ->
-    merge(fun glb_types/2, VarBinds, union_var_binds(VarBindsList)).
+    lib:merge_with(fun glb_types/3, VarBinds, union_var_binds(VarBindsList)).
 
 add_var_binds(VEnv, VarBinds) ->
-    merge(fun glb_types/2, VEnv, VarBinds).
-
-merge(F, M1, M2) ->
-    maps:fold(fun (K, V1, M) ->
-		 maps:update_with(K, fun (V2) -> F(V1, V2) end, V1, M)
-	 end, M2, M1).
+    lib:merge_with(fun glb_types/3, VEnv, VarBinds).
 
 % TODO: improve
 % Is this the right function to use or should I always just return any()?
-glb_types({type, _, N, Args1}, {type, _, N, Args2}) ->
-    Args = [ glb_types(Arg1, Arg2) || {Arg1, Arg2} <- lists:zip(Args1, Args2) ],
+glb_types(K, {type, _, N, Args1}, {type, _, N, Args2}) ->
+    Args = [ glb_types(K, Arg1, Arg2) || {Arg1, Arg2} <- lists:zip(Args1, Args2) ],
     {type, 0, N, Args};
-glb_types(_, _) ->
+glb_types(_, _, _) ->
     {type, 0, any, []}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
