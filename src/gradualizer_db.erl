@@ -42,7 +42,7 @@ start_link() ->
                F :: atom(),
                A :: arity()) -> {ok, [type()]} | not_found.
 get_spec(M, F, A) ->
-    gen_server:call(?name, {get_spec, M, F, A}).
+    call({get_spec, M, F, A}).
 
 %% @doc Fetches an exported or unexported user-defined type. Does not expand
 %%      opaque types.
@@ -50,7 +50,7 @@ get_spec(M, F, A) ->
                Type :: atom(),
                Params :: [type()]) -> {ok, type()} | opaque | not_found.
 get_type(M, T, A) ->
-    gen_server:call(?name, {get_type, M, T, A}).
+    call({get_type, M, T, A}).
 
 %% @doc Fetches an exported type. Does not expand opaque types.
 -spec get_exported_type(Module :: module(),
@@ -58,48 +58,48 @@ get_type(M, T, A) ->
                         Params :: [type()]) -> {ok, type()} | opaque |
                                                not_exported | not_found.
 get_exported_type(M, T, A) ->
-    gen_server:call(?name, {get_exported_type, M, T, A}).
+    call({get_exported_type, M, T, A}).
 
 %% @doc Like get_type/3 but also expands opaque types.
 -spec get_opaque_type(Module :: module(),
                       Type :: atom(),
                       Params :: [type()]) -> {ok, type()} | not_found.
 get_opaque_type(M, T, A) ->
-    gen_server:call(?name, {get_opaque_type, M, T, A}).
+    call({get_opaque_type, M, T, A}).
 
 %% @doc Fetches a record type defined in the module.
 -spec get_record_type(Module :: module(),
                       Name :: atom()) -> {ok, [type()]} | not_found.
 get_record_type(Module, Name) ->
-    gen_server:call(?name, {get_record_type, Module, Name}).
+    call({get_record_type, Module, Name}).
 
 %% @doc Return a list of all known modules.
 -spec get_modules() -> [module()].
 get_modules() ->
-    gen_server:call(?name, get_modules).
+    call(get_modules).
 
 -spec get_types(module()) -> [{atom(), arity()}].
 get_types(Module) ->
-    gen_server:call(?name, {get_types, Module}).
+    call({get_types, Module}).
 
 -spec save(Filename :: any()) -> ok | {error, any()}.
 save(Filename) ->
-    gen_server:call(?name, {save, Filename}).
+    call({save, Filename}).
 
 -spec load(Filename :: any()) -> ok | {error, any()}.
 load(Filename) ->
-    gen_server:call(?name, {load, Filename}).
+    call({load, Filename}).
 
 import_files(Files) ->
-    gen_server:call(?name, {import_files, Files}, infinity).
+    call({import_files, Files}, infinity).
 
 -spec import_app(App :: atom()) -> ok.
 import_app(App) ->
-    gen_server:call(?name, {import_app, App}, infinity).
+    call({import_app, App}, infinity).
 
 -spec import_otp() -> ok.
 import_otp() ->
-    gen_server:call(?name, import_otp, infinity).
+    call(import_otp, infinity).
 
 %% ----------------------------------------------------------------------------
 
@@ -225,6 +225,17 @@ code_change(_OldVsn, State, _Extra) ->
 %% ----------------------------------------------------------------------------
 
 %% Helpers
+
+%% @doc ensure DB server is started
+call(Request) ->
+    call(Request, 5000).
+
+call(Request, Timeout) ->
+    try gen_server:call(?name, Request, Timeout)
+    catch exit:{noproc, _} ->
+            {ok, _} = start_link(),
+            gen_server:call(?name, Request, Timeout)
+    end.
 
 %% helper for handle_call for get_type, get_exported_type, get_opaque_type.
 -spec handle_get_type(module(), Name :: atom(), Params :: [type()],
