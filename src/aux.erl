@@ -1,6 +1,6 @@
 % This module contains useful helper functions.
 
--module(lib).
+-module(aux).
 
 -export([merge_with/3]).
 

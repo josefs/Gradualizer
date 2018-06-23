@@ -1536,10 +1536,10 @@ return(X) ->
 union_var_binds([]) ->
     #{};
 union_var_binds([ VarBinds | VarBindsList ]) ->
-    lib:merge_with(fun glb_types/3, VarBinds, union_var_binds(VarBindsList)).
+    aux:merge_with(fun glb_types/3, VarBinds, union_var_binds(VarBindsList)).
 
 add_var_binds(VEnv, VarBinds) ->
-    lib:merge_with(fun glb_types/3, VEnv, VarBinds).
+    aux:merge_with(fun glb_types/3, VEnv, VarBinds).
 
 % TODO: improve
 % Is this the right function to use or should I always just return any()?
