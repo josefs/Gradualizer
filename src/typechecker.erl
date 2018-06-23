@@ -1556,8 +1556,8 @@ get_rec_field_type(FieldName,
     Ty;
 get_rec_field_type(FieldName, [_|RecFieldTypes]) ->
     get_rec_field_type(FieldName, RecFieldTypes);
-get_rec_field_type(_, []) ->
-    {error, not_found}.
+get_rec_field_type(FieldName, []) ->
+    throw({error, {record_field_not_found, FieldName}}).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% Main entry point
