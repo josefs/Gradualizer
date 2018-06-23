@@ -814,7 +814,7 @@ type_check_rel_op(Env, Op, P, Arg1, Arg2) ->
 				% are known, i.e. not any().
 				{type, 0, boolean, []}
 			end,
-		    {{type, 0, any, []}
+		    {RetType
 		    ,union_var_binds([VB1, VB2])
 		    ,constraints:combine([Cs1,Cs2,Cs3,Cs4])};
 		_ ->
