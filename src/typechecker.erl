@@ -736,27 +736,12 @@ type_check_expr(Env, {op, P, BoolOp, Arg1, Arg2}) when
       (BoolOp == 'andalso') or (BoolOp == 'and') or
       (BoolOp == 'orelse')  or (BoolOp == 'or') ->
     type_check_logic_op(Env, BoolOp, P, Arg1, Arg2);
-type_check_expr(Env, {op, _, RelOp, Arg1, Arg2}) when
+type_check_expr(Env, {op, P, RelOp, Arg1, Arg2}) when
       (RelOp == '=:=') or (RelOp == '==') or
       % It's debatable whether we should allow comparison between any types
       % but right now it's allowed
       (RelOp == '>=')  or (RelOp == '=<') ->
-    case {type_check_expr(Env, Arg1)
-	 ,type_check_expr(Env, Arg2)} of
-	{{Ty1, VB1, Cs1}, {Ty2, VB2, Cs2}} ->
-	    case {subtype(Ty1, Ty2, Env#env.tenv),
-		  subtype(Ty2, Ty1, Env#env.tenv)} of
-		{{true, Cs3}, {true, Cs4}} ->
-		    % TODO: Should we return boolean() here in some cases?
-		    % If both Ty1 and Ty2 are not any() then one could
-		    % plausably return boolean().
-		    {{type, 0, any, []}
-		    ,union_var_binds([VB1, VB2])
-		    ,constraints:combine([Cs1,Cs2,Cs3,Cs4])};
-		_ ->
-		    throw(type_error)
-	    end
-    end;
+    type_check_rel_op(Env, RelOp, P, Arg1, Arg2);
 
 %% Exception constructs
 %% There is no typechecking of exceptions
@@ -811,6 +796,31 @@ type_check_logic_op(Env, Op, P, Arg1, Arg2) ->
 	    end
     end.
 
+type_check_rel_op(Env, Op, P, Arg1, Arg2) ->
+    case {type_check_expr(Env, Arg1)
+	 ,type_check_expr(Env, Arg2)} of
+	{{Ty1, VB1, Cs1}, {Ty2, VB2, Cs2}} ->
+	    case {subtype(Ty1, Ty2, Env#env.tenv),
+		  subtype(Ty2, Ty1, Env#env.tenv)} of
+		{{true, Cs3}, {true, Cs4}} ->
+		    RetType =
+			case {Ty1, Ty2} of
+			    {{type, _, any, []},_} ->
+				{type, 0, any, []};
+			    {_,{type, _, any, []}} ->
+				{type, 0, any, []};
+			    {_,_} ->
+				% Return boolean() when both argument types
+				% are known, i.e. not any().
+				{type, 0, boolean, []}
+			end,
+		    {{type, 0, any, []}
+		    ,union_var_binds([VB1, VB2])
+		    ,constraints:combine([Cs1,Cs2,Cs3,Cs4])};
+		_ ->
+		    throw({type_error, relop, Op, P, Ty1, Ty2})
+	    end
+    end.
 
 
 type_check_lc(Env, Expr, []) ->
@@ -1584,6 +1594,11 @@ handle_type_error({type_error, call, _P, Name, TyArgs, ArgTys}) ->
 handle_type_error({type_error, boolop, BoolOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-boolean argument "
 	      "of type ~s~n", [BoolOp, P, typelib:pp_type(Ty)]);
+handle_type_error({type_error, relop, RelOp, P, Ty1, Ty2}) ->
+    io:format("The operator ~p on line ~p requires arguments of "
+	      "compatible types.~nHowever, it has arguments "
+	      "of type ~s and ~s~n", [RelOp, P, typelib:pp_type(Ty1)
+				              , typelib:pp_type(Ty2)]);
 handle_type_error({type_error, arith_error, ArithOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-numeric argument "
 	      "of type ~s~n", [ArithOp, P, typelib:pp_type(Ty)]);
