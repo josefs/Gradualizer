@@ -742,6 +742,14 @@ type_check_expr(Env, {op, P, RelOp, Arg1, Arg2}) when
       % but right now it's allowed
       (RelOp == '>=')  or (RelOp == '=<') ->
     type_check_rel_op(Env, RelOp, P, Arg1, Arg2);
+type_check_expr(Env, {op, P, Op, Arg1, Arg2}) when
+      Op == '+' orelse Op == '-' orelse Op == '*' orelse Op == '/' ->
+    type_check_arith_op(Env, Op, P, Arg1, Arg2);
+type_check_expr(Env, {op, P, Op, Arg1, Arg2}) when
+      Op == 'bnot' orelse Op == 'div' orelse Op == 'rem' orelse
+      Op == 'band' orelse Op == 'bor' orelse Op == 'bxor' orelse
+      Op == 'bsl'  orelse Op == 'bsr' ->
+    type_check_int_op(Env, Op, P, Arg1, Arg2);
 
 %% Exception constructs
 %% There is no typechecking of exceptions
@@ -821,6 +829,107 @@ type_check_rel_op(Env, Op, P, Arg1, Arg2) ->
 		    throw({type_error, relop, Op, P, Ty1, Ty2})
 	    end
     end.
+
+type_check_arith_op(Env, Op, P, Arg1, Arg2) ->
+    {Ty1, VB1, Cs1} = type_check_expr(Env, Arg1),
+    {Ty2, VB2, Cs2} = type_check_expr(Env, Arg2),
+
+    case compat_arith_type(Ty1,Ty2) of
+	false ->
+	  throw({type_error, arith_error, Op, P, Ty1, Ty2});
+	Ty ->
+	    {Ty
+	    ,union_var_binds([VB1, VB2])
+	    ,constraints:combine(Cs1, Cs2)}
+    end.
+
+type_check_int_op(Env, Op, P, Arg1, Arg2) ->
+    {Ty1, VB1, Cs1} = type_check_expr(Env, Arg1),
+    {Ty2, VB2, Cs2} = type_check_expr(Env, Arg2),
+
+    case compat_arith_type(Ty1,Ty2) of
+	false ->
+	    throw({type_error, int_error, Op, P, Ty1, Ty2});
+	{type, _, float, []} ->
+	    throw({type_error, int_error, Op, P, Ty1, Ty2});
+	Ty ->
+	    {Ty
+	    ,union_var_binds([VB1, VB2])
+	    ,constraints:combine(Cs1, Cs2)}
+    end.
+
+compat_arith_type(Any = {type, _, any, []}, _) ->
+    Any;
+compat_arith_type(_, Any = {type, _, any, []}) ->
+    Any;
+compat_arith_type(Integer = {type, _, integer, []}, {type, _, integer, []}) ->
+    Integer;
+compat_arith_type(Integer = {type, _, integer, []}, {type, _, non_neg_integer, []}) ->
+    Integer;
+compat_arith_type(Integer = {type, _, integer, []}, {type, _, pos_integer, []}) ->
+    Integer;
+compat_arith_type(Integer = {type, _, integer, []}, {type, _, neg_integer, []}) ->
+    Integer;
+compat_arith_type(Integer = {type, _, integer, []}, {type, _, range, [_,_]}) ->
+    Integer;
+compat_arith_type({type, _, non_neg_integer, []}, Integer = {type, _, integer, []}) ->
+    Integer;
+compat_arith_type({type, _, pos_integer, []}, Integer = {type, _, integer, []}) ->
+    Integer;
+compat_arith_type({type, _, neg_integer, []}, Integer = {type, _, integer, []}) ->
+    Integer;
+compat_arith_type({type, _, range, [_,_]}, Integer = {type, _, integer, []}) ->
+    Integer;
+compat_arith_type({type, _, non_neg_integer, []}, {type, _, non_neg_integer, []}) ->
+    {type, 0, integer, []};
+compat_arith_type({type, _, non_neg_integer, []}, {type, _, pos_integer, []}) ->
+    {type, 0, integer, []};
+compat_arith_type({type, _, non_neg_integer, []}, {type, _, neg_integer, []}) ->
+    {type, 0, integer, []};
+compat_arith_type({type, _, non_neg_integer, []}, {type, _, range, [_,_]}) ->
+    {type, 0, integer, []};
+compat_arith_type({type, _, pos_integer, []}, {type, _, non_neg_integer, []}) ->
+    {type, 0, integer, []};
+compat_arith_type({type, _, neg_integer, []}, {type, _, non_neg_integer, []})  ->
+    {type, 0, integer, []};
+compat_arith_type({type, _, range, [_,_]}, {type, _, non_neg_integer, []}) ->
+    {type, 0, integer, []};
+compat_arith_type({type, _, pos_integer, []}, {type, _, pos_integer, []}) ->
+    {type, 0, integer, []};
+compat_arith_type({type, _, pos_integer, []}, {type, _, neg_integer, []}) ->
+    {type, 0, integer, []};
+compat_arith_type({type, _, pos_integer, []}, {type, _, range, [_,_]}) ->
+    {type, 0, integer, []};
+compat_arith_type({type, _, neg_integer, []}, {type, _, pos_integer, []}) ->
+    {type, 0, integer, []};
+compat_arith_type({type, _, range, [_,_]}, {type, _, pos_integer, []}) ->
+    {type, 0, integer, []};
+compat_arith_type({type, _, neg_integer, []}, {type, _, neg_integer, []}) ->
+    {type, 0, integer, []};
+compat_arith_type({type, _, neg_integer, []}, {type, _, range, [_,_]}) ->
+    {type, 0, integer, []};
+compat_arith_type({type, _, range, [_,_]}, {type, _, neg_integer, []}) ->
+    {type, 0, integer, []};
+compat_arith_type({type, _, range, [_,_]}, {type, _, range, [_,_]}) ->
+    {type, 0, integer, []};
+compat_arith_type(Float = {type, _, float, []}, {type, _, float, []}) ->
+    Float;
+compat_arith_type(_,_) ->
+    false.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 type_check_lc(Env, Expr, []) ->
