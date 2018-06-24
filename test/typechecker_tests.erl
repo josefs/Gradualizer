@@ -118,6 +118,12 @@ normalize_test_() ->
      ?_assertEqual(?t( 1..6 ), typechecker:normalize(?t( 1..3|4..6 )))
     ].
 
+handle_type_error_test_() ->
+    [
+     %% {type_error, nil, Line, Ty}
+     ?_assertNot(type_check_forms(["-spec f() -> atom().",
+                                   "f() -> []."]))
+    ].
 
 subtype(T1, T2) ->
     case typechecker:subtype(T1, T2, {tenv, #{}, #{}}) of
@@ -126,3 +132,6 @@ subtype(T1, T2) ->
 	false ->
 	    false
     end.
+
+type_check_forms(String) ->
+    ok =:= typechecker:type_check_forms(merl:quote(String), []).

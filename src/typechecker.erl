@@ -1729,6 +1729,9 @@ handle_type_error({type_error, list, _, Ty1, Ty}) ->
 handle_type_error({type_error, list, _, Ty}) ->
     io:format("The type ~s on line ~p is not a list type~n",
 	      [typelib:pp_type(Ty), line_no(Ty)]);
+handle_type_error({type_error, nil, LINE, Ty}) ->
+    io:format("The empty list on line ~p does not have type ~s~n",
+	      [LINE, typelib:pp_type(Ty)]);
 handle_type_error({type_error, call, _P, Name, TyArgs, ArgTys}) ->
     io:format("The function ~p expects arguments of type~n~p~n but is given "
 	      "arguments of type~n~p~n",
