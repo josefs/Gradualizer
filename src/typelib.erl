@@ -47,7 +47,8 @@ parse_type(Src) ->
 %% kept for user-defined types and record types. Filename is used to
 %% disambiguate between types with the same name from different modules.
 -spec remove_pos(type()) -> type().
-remove_pos({Type, _, Value}) when Type == atom; Type == integer; Type == var ->
+remove_pos({Type, _, Value})
+  when Type == atom; Type == integer; Type == char; Type == var ->
     {Type, erl_anno:new(0), Value};
 remove_pos({nil, _}) ->
     {nil, erl_anno:new(0)};
@@ -120,5 +121,15 @@ substitute_type_vars({var, L, Var}, TVars) ->
         #{Var := Type} -> Type;
         _              -> {var, L, Var}
     end;
-substitute_type_vars(Other = {T, _, _}, _) when T == atom; T == integer ->
+substitute_type_vars(Other = {type, _, T, any}, _)
+  when T == tuple; T == map ->
+    Other;
+substitute_type_vars(Other = {op, _, _Op, _Arg}, _) ->
+    %% unary integer operator - cannot contain type vars
+    Other;
+substitute_type_vars(Other = {op, _, _Op, _Arg1, _Arg2}, _) ->
+    %% binary integer operator - cannot contain type vars
+    Other;
+substitute_type_vars(Other = {T, _, _}, _)
+  when T == atom; T == integer; T == char ->
     Other.

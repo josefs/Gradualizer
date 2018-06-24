@@ -149,6 +149,19 @@ normalize_e2e_test_() ->
       ?_assert(type_check_forms(["-type inner(T) :: list(T).",
                                  "-type outer(T) :: inner(T).",
                                  "-spec f(inner(atom())) -> outer(atom()).",
+                                 "f(A) -> A."]))},
+     {"Normalize integer ops in user types",
+      ?_assert(type_check_forms(["-type one() :: -1 | +1.",
+                                 "-type int16() :: -1 bsl 15..(1 bsl 15) - 1.",
+                                 "-spec f(one(), int16()) -> {one(), int16()}.",
+                                 "f(A, B) -> {A, B}."]))},
+     {"Normalize tuple of any arity and map with any associations in user types",
+      ?_assert(type_check_forms(["-type t() :: tuple() | map().",
+                                 "-spec f(t()) -> t().",
+                                 "f(A) -> A."]))},
+     {"Normalize literals in user types",
+      ?_assert(type_check_forms(["-type t() :: foo | 1 | $a.",
+                                 "-spec f(t()) -> t().",
                                  "f(A) -> A."]))}
     ].
 
