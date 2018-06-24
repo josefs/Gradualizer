@@ -26,9 +26,9 @@
      			        Type :: type()}.
 
 %% Type environment, passed around while comparing compatible subtypes
--record(tenv, {types   :: #{{Name :: atom(), arity()} => {Params :: [atom()],
+-record(tenv, {types = #{} :: #{{Name :: atom(), arity()} => {Params :: [atom()],
 							  Body :: type()}},
-	       records :: #{Name :: atom()            => [typed_record_field()]}
+	       records = #{} :: #{Name :: atom()            => [typed_record_field()]}
 	      }).
 
 %%% The environment passed around during typechecking.
@@ -295,10 +295,10 @@ get_record_fields(RecName, Anno, #tenv{records = REnv}) ->
 %% * Replace built-in type synonyms
 %% * Flatten unions and merge overlapping types (e.g. ranges) in unions
 -spec normalize(type()) -> type().
-normalize(T) -> normalize(T, #{}).
+normalize(T) -> normalize(T, #tenv{}).
 
 %% TEnv is currently not used. Type definitions are fetched from gradualizer_db.
--spec normalize(type(), TEnv :: map()) -> type().
+-spec normalize(type(), TEnv :: #tenv{}) -> type().
 normalize({type, _, union, _} = U, TEnv) ->
     Types = flatten_unions([U], TEnv),
     case merge_union_types(Types, TEnv) of
