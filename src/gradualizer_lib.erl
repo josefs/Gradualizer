@@ -1,6 +1,6 @@
 % This module contains useful helper functions.
 
--module(aux).
+-module(gradualizer_lib).
 
 -export([merge_with/3]).
 
