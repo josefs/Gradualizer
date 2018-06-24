@@ -894,7 +894,7 @@ compat_arith_type(Ty1, Ty2) ->
 		    end
 	    end
     end.
-				
+
 type_check_lc(Env, Expr, []) ->
     {_Ty, _VB, Cs} = type_check_expr(Env, Expr),
     % We're returning any() here because we're in a context that doesn't
