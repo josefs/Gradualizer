@@ -1003,6 +1003,30 @@ type_check_expr_in(Env, ResTy, {tuple, LINE, TS}) ->
 	    {VBs, Cs2} = type_check_tuple_in(Env, ResTy, TS),
 	    {VBs, constraints:combine(Cs, Cs2)}
     end;
+
+%% Maps
+type_check_expr_in(Env, ResTy, {map, LINE, Assocs}) ->
+    case subtype({type, LINE, map, any}, ResTy, Env#env.tenv) of
+        {true, Cs1} ->
+            %% TODO: check the type of the map fields
+            {_AssocTy, VBs, Cs2} = type_check_assocs(Env, Assocs),
+            {VBs, constraints:combine(Cs1, Cs2)};
+        false ->
+            throw({type_error, map, LINE, ResTy})
+    end;
+type_check_expr_in(Env, ResTy, {map, LINE, Expr, Assocs}) ->
+    {Ty, VBExpr,   Cs1} = type_check_expr(Env, Expr),
+    {Ty, VBAssocs, Cs2} = type_check_assocs(Env, Assocs),
+    % TODO: Update the type of the map.
+    % TODO: Check the type of the map.
+    case subtype(Ty, ResTy, Env#env.tenv) of
+        {true, Cs3} ->
+            {union_var_binds([VBExpr, VBAssocs]),
+             constraints:combine([Cs1, Cs2, Cs3])};
+        false ->
+            throw({type_error, map, LINE, ResTy})
+    end;
+
 type_check_expr_in(Env, ResTy, {'case', _, Expr, Clauses}) ->
     {ExprTy, VarBinds, Cs1} = type_check_expr(Env, Expr),
     Env2 = Env#env{ venv = add_var_binds(Env#env.venv, VarBinds) },
@@ -1167,7 +1191,7 @@ type_check_assocs(Env, [{Assoc, _, Key, Val}| Assocs])
     {Ty, VB, Cs} = type_check_assocs(Env, Assocs),
     {Ty, VB, constraints:combine([Cs, Cs1, Cs2])};
 type_check_assocs(_Env, []) ->
-    {{type, 0, any, []}, #{}, constraints:empty()}.
+    {{type, erl_anno:new(0), any, []}, #{}, constraints:empty()}.
 
 
 % TODO: Collect constraints
