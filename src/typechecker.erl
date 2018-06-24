@@ -741,7 +741,17 @@ type_check_expr(Env, {record, _, Record, Fields}) ->
 type_check_expr(Env, {'fun', _, {clauses, Clauses}}) ->
     infer_clauses(Env, Clauses);
 type_check_expr(Env, {'fun', _, {function, Name, Arity}}) ->
-    return(maps:get({Name, Arity}, Env#env.fenv));
+    BoundedFunTypeList = maps:get({Name, Arity}, Env#env.fenv),
+    {Ty, Cs} = absform:function_type_list_to_fun_types(BoundedFunTypeList),
+    {Ty, #{}, Cs};
+type_check_expr(_Env, {'fun', P, {function, {atom, _, M}, {atom, _, F}, {integer, _, A}}}) ->
+    case gradualizer_db:get_spec(M, F, A) of
+        {ok, BoundedFunTypeList} ->
+            {Ty, Cs} = absform:function_type_list_to_fun_types(BoundedFunTypeList),
+            {Ty, #{}, Cs};
+        not_found ->
+            throw({call_undef, P, M, F, A})
+    end;
 
 type_check_expr(Env, {'receive', _, Clauses}) ->
     infer_clauses(Env, Clauses);

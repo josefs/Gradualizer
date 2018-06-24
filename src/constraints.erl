@@ -5,8 +5,8 @@
 -type type() :: erl_parse:abstract_type().
 
 -record(constraints, {
-	  lower_bounds = #{} :: #{ string => [type()] },
-	  upper_bounds = #{} :: #{ string => [type()] }
+	  lower_bounds = #{} :: #{ atom() => [type()] },
+	  upper_bounds = #{} :: #{ atom() => [type()] }
 	 }).
 
 
