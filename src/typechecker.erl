@@ -850,7 +850,7 @@ type_check_int_op(Env, Op, P, Arg1, Arg2) ->
     case compat_arith_type(Ty1,Ty2) of
 	false ->
 	    throw({type_error, int_error, Op, P, Ty1, Ty2});
-	{type, _, float, []} ->
+	{type, _, Ty, []} when Ty == float orelse Ty == number ->
 	    throw({type_error, int_error, Op, P, Ty1, Ty2});
 	Ty ->
 	    {Ty
@@ -858,80 +858,43 @@ type_check_int_op(Env, Op, P, Arg1, Arg2) ->
 	    ,constraints:combine(Cs1, Cs2)}
     end.
 
-compat_arith_type(Any = {type, _, any, []}, _) ->
+compat_arith_type(Any = {type, _, any, []}, {type, _, any, []}) ->
     Any;
-compat_arith_type(_, Any = {type, _, any, []}) ->
-    Any;
-compat_arith_type(Integer = {type, _, integer, []}, {type, _, integer, []}) ->
-    Integer;
-compat_arith_type(Integer = {type, _, integer, []}, {type, _, non_neg_integer, []}) ->
-    Integer;
-compat_arith_type(Integer = {type, _, integer, []}, {type, _, pos_integer, []}) ->
-    Integer;
-compat_arith_type(Integer = {type, _, integer, []}, {type, _, neg_integer, []}) ->
-    Integer;
-compat_arith_type(Integer = {type, _, integer, []}, {type, _, range, [_,_]}) ->
-    Integer;
-compat_arith_type({type, _, non_neg_integer, []}, Integer = {type, _, integer, []}) ->
-    Integer;
-compat_arith_type({type, _, pos_integer, []}, Integer = {type, _, integer, []}) ->
-    Integer;
-compat_arith_type({type, _, neg_integer, []}, Integer = {type, _, integer, []}) ->
-    Integer;
-compat_arith_type({type, _, range, [_,_]}, Integer = {type, _, integer, []}) ->
-    Integer;
-compat_arith_type({type, _, non_neg_integer, []}, {type, _, non_neg_integer, []}) ->
-    {type, 0, integer, []};
-compat_arith_type({type, _, non_neg_integer, []}, {type, _, pos_integer, []}) ->
-    {type, 0, integer, []};
-compat_arith_type({type, _, non_neg_integer, []}, {type, _, neg_integer, []}) ->
-    {type, 0, integer, []};
-compat_arith_type({type, _, non_neg_integer, []}, {type, _, range, [_,_]}) ->
-    {type, 0, integer, []};
-compat_arith_type({type, _, pos_integer, []}, {type, _, non_neg_integer, []}) ->
-    {type, 0, integer, []};
-compat_arith_type({type, _, neg_integer, []}, {type, _, non_neg_integer, []})  ->
-    {type, 0, integer, []};
-compat_arith_type({type, _, range, [_,_]}, {type, _, non_neg_integer, []}) ->
-    {type, 0, integer, []};
-compat_arith_type({type, _, pos_integer, []}, {type, _, pos_integer, []}) ->
-    {type, 0, integer, []};
-compat_arith_type({type, _, pos_integer, []}, {type, _, neg_integer, []}) ->
-    {type, 0, integer, []};
-compat_arith_type({type, _, pos_integer, []}, {type, _, range, [_,_]}) ->
-    {type, 0, integer, []};
-compat_arith_type({type, _, neg_integer, []}, {type, _, pos_integer, []}) ->
-    {type, 0, integer, []};
-compat_arith_type({type, _, range, [_,_]}, {type, _, pos_integer, []}) ->
-    {type, 0, integer, []};
-compat_arith_type({type, _, neg_integer, []}, {type, _, neg_integer, []}) ->
-    {type, 0, integer, []};
-compat_arith_type({type, _, neg_integer, []}, {type, _, range, [_,_]}) ->
-    {type, 0, integer, []};
-compat_arith_type({type, _, range, [_,_]}, {type, _, neg_integer, []}) ->
-    {type, 0, integer, []};
-compat_arith_type({type, _, range, [_,_]}, {type, _, range, [_,_]}) ->
-    {type, 0, integer, []};
-compat_arith_type(Float = {type, _, float, []}, {type, _, float, []}) ->
-    Float;
-compat_arith_type(_,_) ->
-    false.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+compat_arith_type(Any = {type, _, any, []}, Ty) ->
+    case subtype(Ty, {type, 0, number, []}, #tenv{}) of
+	false ->
+	    false;
+	_ ->
+	    Any
+    end;
+compat_arith_type(Ty, Any = {type, _, any, []}) ->
+    case subtype(Ty, {type, 0, number, []}, #tenv{}) of
+	false ->
+	    false;
+	_ ->
+	    Any
+    end;
+compat_arith_type(Ty1, Ty2) ->
+    case {subtype(Ty1, {type, 0, integer, []}, #tenv{})
+	 ,subtype(Ty2, {type, 0, integer, []}, #tenv{})} of
+	{{true,_},{true,_}} ->
+	    {type, 0, integer, []};
+	_ ->
+	    case {subtype(Ty1, {type, 0, float, []}, #tenv{})
+		 ,subtype(Ty2, {type, 0, float, []}, #tenv{})} of
+		{{true,_},{true,_}} ->
+		    {type, 0, float, []};
+		_ ->
+		    case {subtype(Ty1, {type, 0, number, []}, #tenv{})
+			 ,subtype(Ty2, {type, 0, number, []}, #tenv{})} of
+			{{true,_},{true,_}} ->
+			    {type, 0, number, []};
+			_ ->
+			    false
+		    end
+	    end
+    end.
+				
 type_check_lc(Env, Expr, []) ->
     {_Ty, _VB, Cs} = type_check_expr(Env, Expr),
     % We're returning any() here because we're in a context that doesn't
