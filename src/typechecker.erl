@@ -188,6 +188,36 @@ compat_ty({type, _, range, [{integer, _, I1}, {integer, _, I2}]},
   when I1 >= 0 andalso I2 >= 0 ->
     ret(A);
 
+%% Float
+compat_ty({type, _, integer, []}, {type, _, float, []}, A, _TEnv) ->
+    ret(A);
+compat_ty({type, _, pos_integer, []}, {type, _, float, []}, A, _TEnv) ->
+    ret(A);
+compat_ty({type, _, non_neg_integer, []}, {type, _, float, []}, A, _TEnv) ->
+    ret(A);
+compat_ty({type, _, neg_integer, []}, {type, _, float, []}, A, _TEnv) ->
+    ret(A);
+compat_ty({type, _, range, [_,_]}, {type, _, float, []}, A, _TEnv) ->
+    ret(A);
+compat_ty({integer, _}, {type, _, float, []}, A, _TEnv) ->
+    ret(A);
+
+%% Number type
+compat_ty({type, _, integer, []}, {type, _, number, []}, A, _TEnv) ->
+    ret(A);
+compat_ty({type, _, pos_integer, []}, {type, _, number, []}, A, _TEnv) ->
+    ret(A);
+compat_ty({type, _, non_neg_integer, []}, {type, _, number, []}, A, _TEnv) ->
+    ret(A);
+compat_ty({type, _, neg_integer, []}, {type, _, number, []}, A, _TEnv) ->
+    ret(A);
+compat_ty({type, _, range, [_,_]}, {type, _, number, []}, A, _TEnv) ->
+    ret(A);
+compat_ty({integer, _}, {type, _, number, []}, A, _TEnv) ->
+    ret(A);
+compat_ty({type, _, float, []}, {type, _, number, []}, A, _TEnv) ->
+    ret(A);
+
 %% Atoms
 compat_ty({atom, _, _Atom}, {type, _, atom, []}, A, _TEnv) ->
     ret(A);
