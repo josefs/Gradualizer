@@ -75,7 +75,7 @@ subtype_test_() ->
      ?_assert(subtype(?t( A :: integer()    ), ?t( A :: number()    )))
     ].
 
-not_subtype_test() ->
+not_subtype_test_() ->
     [
      %% Numeric
      ?_assertNot(subtype(?t( 1              ), ?t( 2                ))),
