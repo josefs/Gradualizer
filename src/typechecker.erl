@@ -847,34 +847,37 @@ type_check_int_op(Env, Op, P, Arg1, Arg2) ->
 compat_arith_type(Any = {type, _, any, []}, {type, _, any, []}) ->
     Any;
 compat_arith_type(Any = {type, _, any, []}, Ty) ->
-    case subtype(Ty, {type, 0, number, []}, #tenv{}) of
+    case subtype(Ty, {type, erl_anno:new(0), number, []}, #tenv{}) of
 	false ->
 	    false;
 	_ ->
 	    Any
     end;
 compat_arith_type(Ty, Any = {type, _, any, []}) ->
-    case subtype(Ty, {type, 0, number, []}, #tenv{}) of
+    case subtype(Ty, {type, erl_anno:new(0), number, []}, #tenv{}) of
 	false ->
 	    false;
 	_ ->
 	    Any
     end;
 compat_arith_type(Ty1, Ty2) ->
-    case {subtype(Ty1, {type, 0, integer, []}, #tenv{})
-	 ,subtype(Ty2, {type, 0, integer, []}, #tenv{})} of
+    TInteger = {type, erl_anno:new(0), integer, []},
+    case {subtype(Ty1, TInteger, #tenv{})
+	 ,subtype(Ty2, TInteger, #tenv{})} of
 	{{true,_},{true,_}} ->
-	    {type, 0, integer, []};
+	    TInteger;
 	_ ->
-	    case {subtype(Ty1, {type, 0, float, []}, #tenv{})
-		 ,subtype(Ty2, {type, 0, float, []}, #tenv{})} of
+        TFloat = {type, erl_anno:new(0), float, []},
+	    case {subtype(Ty1, TFloat, #tenv{})
+		 ,subtype(Ty2, TFloat, #tenv{})} of
 		{{true,_},{true,_}} ->
-		    {type, 0, float, []};
+		    TFloat;
 		_ ->
-		    case {subtype(Ty1, {type, 0, number, []}, #tenv{})
-			 ,subtype(Ty2, {type, 0, number, []}, #tenv{})} of
+            TNumber = {type, erl_anno:new(0), number, []},
+		    case {subtype(Ty1, TNumber, #tenv{})
+			 ,subtype(Ty2, TNumber, #tenv{})} of
 			{{true,_},{true,_}} ->
-			    {type, 0, number, []};
+			    TNumber;
 			_ ->
 			    false
 		    end
