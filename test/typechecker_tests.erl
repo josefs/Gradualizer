@@ -18,17 +18,21 @@ subtype_test_() ->
      ?_assert(subtype(?t( none()            ), ?t( sets:set()       ))),
 
      %% Integer
+     ?_assert(subtype(?t( 1                 ), ?t( 1                ))),
      ?_assert(subtype(?t( 1                 ), ?t( integer()        ))),
      ?_assert(subtype(?t( 1..5              ), ?t( integer()        ))),
      ?_assert(subtype(?t( 1..5              ), ?t( 1..10            ))),
      ?_assert(subtype(?t( 2                 ), ?t( 1..10            ))),
      ?_assert(subtype(?t( pos_integer()     ), ?t( integer()        ))),
+     ?_assert(subtype(?t( 5                 ), ?t( pos_integer()    ))),
      ?_assert(subtype(?t( 1..5              ), ?t( pos_integer()    ))),
      ?_assert(subtype(?t( neg_integer()     ), ?t( integer()        ))),
      ?_assert(subtype(?t( -5..-1            ), ?t( neg_integer()    ))),
+     ?_assert(subtype(?t( -5                ), ?t( neg_integer()    ))),
      ?_assert(subtype(?t( non_neg_integer() ), ?t( integer()        ))),
      ?_assert(subtype(?t( pos_integer()     ), ?t( non_neg_integer()))),
      ?_assert(subtype(?t( 0..5              ), ?t( non_neg_integer()))),
+     ?_assert(subtype(?t( 0                 ), ?t( non_neg_integer()))),
 
      %% Number
      ?_assert(subtype(?t( 1                 ), ?t( number()         ))),
@@ -68,6 +72,10 @@ subtype_test_() ->
      ?_assert(subtype(?t( #{a => b}         ), ?t( #{}              ))),
      ?_assert(subtype(?t( #{a := b}         ), ?t( #{a => b}        ))),
      ?_assert(subtype(?t( #{1..5 := a }     ), ?t( #{5 := atom()}   ))),
+
+     %% Type variables
+     ?_assert(subtype(?t( A                 ), ?t( integer()        ))),
+     ?_assert(subtype(?t( integer()         ), ?t( A                ))),
 
      %% Annotated types
      ?_assert(subtype(?t( integer()         ), ?t( A :: number()    ))),

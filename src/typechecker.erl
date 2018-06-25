@@ -1,5 +1,7 @@
 -module(typechecker).
 
+-include("typelib.hrl").
+
 -export_type([typed_record_field/0]).
 
 -type type() :: erl_parse:abstract_type().
@@ -144,49 +146,14 @@ compat_ty(Ty1, {type, _, union, Tys2}, A, TEnv) ->
     any_type(Ty1, Tys2, A, TEnv);
 
 % Integer types
-compat_ty({type, _, range, _}, {type, _, integer, []}, A, _TEnv) ->
-    ret(A);
-compat_ty({type, _, range, [{integer, _, I11}, {integer, _, I12}]},
-	  {type, _, range, [{integer, _, I21}, {integer, _, I22}]},
-	  A, _TEnv) when
-      I11 >= I21 andalso I12 =< I22 ->
-    ret(A);
-compat_ty({integer, _, I}, {integer, _, I}, A, _TEnv) ->
-    ret(A);
-compat_ty({integer, _, _I}, {type, _, integer, []}, A, _TEnv) ->
-    ret(A);
-compat_ty({integer,_,  I}, {type, _, range, [{integer, _, I1}, {integer, _, I2}]}, A, _TEnv)
-  when I >= I1 andalso I =< I2 ->
-    ret(A);
-compat_ty({type, _, pos_integer, []}, {type, _, integer, []}, A, _TEnv) ->
-    ret(A);
-compat_ty({integer, _, I}, {type, _, pos_integer, []}, A, _TEnv)
-  when I > 0 ->
-    ret(A);
-compat_ty({type, _, range, [{integer, _, I1}, {integer, _, I2}]},
-	  {type, _, pos_integer, []}, A, _TEnv)
-  when I1 > 0 andalso I2 > 0 ->
-    ret(A);
-compat_ty({type, _, neg_integer, []}, {type, _, integer, []}, A, _TEnv) ->
-    ret(A);
-compat_ty({integer, _, I}, {type, _, neg_integer, []}, A, _TEnv)
-  when I < 0 ->
-    ret(A);
-compat_ty({type, _, range, [{integer, _, I1}, {integer, _, I2}]},
-	  {type, _, neg_integer, []}, A, _TEnv)
-  when I1 < 0 andalso I2 < 0 ->
-    ret(A);
-compat_ty({type, _, non_neg_integer, []}, {type, _, integer, []}, A, _TEnv) ->
-    ret(A);
-compat_ty({type, _, pos_integer, []}, {type, _, non_neg_integer, []}, A, _TEnv) ->
-    ret(A);
-compat_ty({integer, _, I}, {type, _, non_neg_integer, []}, A, _TEnv)
-  when I >= 0 ->
-    ret(A);
-compat_ty({type, _, range, [{integer, _, I1}, {integer, _, I2}]},
-	  {type, _, non_neg_integer, []}, A, _TEnv)
-  when I1 >= 0 andalso I2 >= 0 ->
-    ret(A);
+compat_ty(Ty1, Ty2, A, _TEnv) when ?is_int_type(Ty1), ?is_int_type(Ty2) ->
+    R1 = int_type_to_range(Ty1),
+    R2 = int_type_to_range(Ty2),
+    case lower_bound_less_or_eq(R2, R1) andalso
+        upper_bound_more_or_eq(R2, R1) of
+        true -> ret(A);
+        false -> throw(nomatch)
+    end;
 
 %% Atoms
 compat_ty({atom, _, _Atom}, {type, _, atom, []}, A, _TEnv) ->
@@ -545,6 +512,14 @@ lower_bound_less_or_eq({A, _}, {B, _}) ->
         A == neg_inf -> true;
         B == neg_inf -> false;
         true         -> A =< B
+    end.
+
+-spec upper_bound_more_or_eq(int_range(), int_range()) -> boolean().
+upper_bound_more_or_eq({_, A}, {_, B}) ->
+    if
+        A == pos_inf -> true;
+        B == pos_inf -> false;
+        true         -> A >= B
     end.
 
 int_max(A, B) when A == pos_inf; B == pos_inf   -> pos_inf;
