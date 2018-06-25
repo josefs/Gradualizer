@@ -30,13 +30,13 @@ combine([Cs]) ->
     Cs;
 combine([C1, C2 | Cs]) ->
     C = #constraints{ lower_bounds =
-			  aux:merge_with(fun (_Var, Tys1, Tys2) ->
+			  gradualizer_lib:merge_with(fun (_Var, Tys1, Tys2) ->
 						 Tys1 ++ Tys2
 					 end
 					,C1#constraints.lower_bounds
 					,C2#constraints.lower_bounds)
 		    , upper_bounds =
-			  aux:merge_with(fun (_Var, Tys1, Tys2) ->
+			  gradualizer_lib:merge_with(fun (_Var, Tys1, Tys2) ->
 						 Tys1 ++ Tys2
 					 end
 					,C1#constraints.upper_bounds
