@@ -9,11 +9,10 @@ should_fail_test_() ->
     run_tests_in("test/should_fail", nok).
 
 run_tests_in(Dir, ExpectedRes) ->
-    {ok, Files} = file:list_dir(Dir),
+    Files = filelib:wildcard(filename:join(Dir, "*.erl")),
 
-    [{filename:basename(Dir) ++ ": " ++ File,
+    [{filename:basename(Dir) ++ ": " ++ filename:basename(File),
       fun() ->
-              FullFile = filename:join(Dir, File),
-              ?assert(ExpectedRes =:= gradualizer:type_check_file(FullFile))
+              ?assert(ExpectedRes =:= gradualizer:type_check_file(File))
       end}
      || File <- Files].
