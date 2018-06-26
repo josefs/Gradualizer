@@ -207,6 +207,20 @@ type_check_call_test_() ->
                                    "f() -> int_arg(int_term())."]))
     ].
 
+type_check_clause_test_() ->
+    [%% Basic `if' test, X can be any term as guards don't have to return boolean().
+     ?_assert(type_check_forms(["-spec f(term()) -> boolean().",
+                                "f(X) ->",
+                                "    if X -> false;",
+                                "       false -> true",
+                                "    end."])),
+     %% Each clause must return a subtype of ResType (atom())
+     ?_assertNot(type_check_forms(["-spec f(term()) -> atom().",
+                                   "f(X) ->",
+                                   "    if X -> 1;",
+                                   "       false -> a",
+                                   "    end."]))
+    ].
 add_type_pat_test_() ->
     [{"Pattern matching list against any()",
       ?_assert(type_check_forms(["f([E|_]) -> E."]))},
