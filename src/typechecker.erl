@@ -1540,15 +1540,36 @@ do_type_check_expr_in(Env, ResTy, {'catch', _, Arg}) ->
     % that we require ResTy to be any(), or perhaps also term().
     % But that would make exceptions and types almost incompatible!
     type_check_expr_in(Env, ResTy, Arg);
-do_type_check_expr_in(Env, ResTy, {'try', _, Block, CaseCs, CatchCs, AfterCs}) ->
-    {VB,   Cs1}  = type_check_block_in(Env, ResTy, Block),
-    Env2 = Env#env{ venv = add_var_binds(VB, Env#env.venv) },
-    {_VB2, Cs2} = check_clauses(Env2, {type, erl_anno:new(0), any, []}, ResTy, CaseCs),
-    {_VB3, Cs3} = check_clauses(Env2, {type, erl_anno:new(0), any, []}, ResTy, CatchCs),
-    {_VB4, Cs4} = check_clauses(Env2, {type, erl_anno:new(0), any, []}, ResTy, AfterCs),
-    % TODO: Check what variable bindings actually should be propagated
-    {VB
-    ,constraints:combine([Cs1,Cs2,Cs3,Cs4])}.
+do_type_check_expr_in(Env, ResTy, {'try', _, Block, CaseCs, CatchCs, AfterBlock}) ->
+    Cs =
+        case CaseCs of
+            [] ->
+                %% no `of' part, Block must return ResTy
+                {_VB,  Cs1} = type_check_block_in(Env, ResTy, Block),
+                Cs1;
+            _ ->
+                %% there is an `of' part, argument (pattern) of each clause must
+                %% accept the return type of Block
+                {BlockTy, _VB,  Cs1} = type_check_block(Env, Block),
+                %% stangely enough variable bindings are not propagated from Block
+                %% to CaseCs ("unsafe" compiler complaint)
+                {_VB2, Cs2} = check_clauses(Env, [BlockTy], ResTy, CaseCs),
+                constraints:combine(Cs1, Cs2)
+        end,
+    {_VB3, Cs3} = check_clauses(Env, [{type, erl_anno:new(0), tuple, any}], ResTy, CatchCs),
+    Cs5 =
+        case AfterBlock of
+            [] ->
+                constraints:empty();
+            _ ->
+                %% return value of after block is ignored
+                {_AfterTy, _VB4, Cs4} = type_check_block(Env, AfterBlock),
+                Cs4
+        end,
+    %% no variable bindings are propagated from a try expression
+    %% as that would be "unsafe"
+    {#{}
+    ,constraints:combine([Cs,Cs3,Cs5])}.
 
 
 type_check_arith_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
