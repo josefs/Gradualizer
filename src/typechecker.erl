@@ -1418,10 +1418,10 @@ do_type_check_expr_in(Env, ResTy, {record_index, LINE, Record, Field}) ->
 do_type_check_expr_in(Env, ResTy, {'case', _, Expr, Clauses}) ->
     {ExprTy, VarBinds, Cs1} = type_check_expr(Env, Expr),
     Env2 = Env#env{ venv = add_var_binds(Env#env.venv, VarBinds) },
-    {VB, Cs2} = check_clauses(Env2, ExprTy, ResTy, Clauses),
+    {VB, Cs2} = check_clauses(Env2, [ExprTy], ResTy, Clauses),
     {VB, constraints:combine(Cs1,Cs2)};
 do_type_check_expr_in(Env, ResTy, {'if', _, Clauses}) ->
-    check_clauses(Env, {type, erl_anno:new(0), any, []}, ResTy, Clauses);
+    check_clauses(Env, [], ResTy, Clauses);
 do_type_check_expr_in(Env, ResTy, {call, P, Name, Args}) ->
     {FunTy, VarBinds, Cs} = type_check_fun(Env, Name, length(Args)),
     case FunTy of
