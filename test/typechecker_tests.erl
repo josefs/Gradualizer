@@ -220,6 +220,40 @@ type_check_clause_test_() ->
                                    "    if X -> 1;",
                                    "       false -> a",
                                    "    end."])),
+
+    %% The try block has to return ResTy atom()
+     ?_assertNot(type_check_forms(["-spec f(term()) -> atom().",
+                                   "f(X) ->",
+                                   "    try 1",
+                                   "    catch _ -> error",
+                                   "    end."])),
+     %% The try clause has to return ResTy atom(),
+     %% but it returns the return type of g() via pattern matching
+     ?_assertNot(type_check_forms(["-spec f(term()) -> atom().",
+                                   "f(X) ->",
+                                   "    try g() of G -> G",
+                                   "    catch _ -> error",
+                                   "    end.",
+                                   "-spec g() -> float()."])),
+     %% The catch clause has to return ResTy integer()
+     ?_assertNot(type_check_forms(["-spec f(term()) -> integer().",
+                                   "f(X) ->",
+                                   "    try 1",
+                                   "    catch _ -> error",
+                                   "    end."])),
+     %% The return type of the after clause is ignored
+     ?_assert(type_check_forms(["-spec f(term()) -> integer().",
+                                "f(X) ->",
+                                "    try throw(error)",
+                                "    after error",
+                                "    end."])),
+     %% Correct try without an after block
+     ?_assert(type_check_forms(["-spec f(term()) -> atom().",
+                                "f(X) ->",
+                                "    try ok",
+                                "    catch _ -> error",
+                                "    end."])),
+
      %% should emmit: "The clause on line 3 is expected to have 1 argument(s) but it has 0
      ?_assertNot(type_check_forms(["-spec h() -> fun((integer()) -> atom()).",
                                    "h() ->",
