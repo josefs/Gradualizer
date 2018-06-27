@@ -443,7 +443,7 @@ expand_builtin_aliases(Type) ->
 %% * Remove subtypes of other types in the same union; keeping any() separate
 %% * Merge integer types, including singleton integers and ranges
 %%   1, 1..5, integer(), non_neg_integer(), pos_integer(), neg_integer()
--spec flatten_unions([type()], map()) -> [type()].
+-spec flatten_unions([type()], #tenv{}) -> [type()].
 flatten_unions([{type, _, union, UnionTs} | Ts], TEnv) ->
     UnionTs1 = [normalize(T, TEnv) || T <- UnionTs],
     flatten_unions(UnionTs1 ++ Ts, TEnv);
