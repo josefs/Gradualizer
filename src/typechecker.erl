@@ -324,7 +324,8 @@ normalize({user_type, P, Name, Args} = Type, TEnv) ->
             case TEnv#tenv.types of
                 #{TypeId := {Vars, Type0}} ->
                     VarMap = maps:from_list(lists:zip(Vars, Args)),
-                    typelib:substitute_type_vars(Type0, VarMap);
+                    Type1 = typelib:substitute_type_vars(Type0, VarMap),
+                    normalize(Type1, TEnv);
                 _NotFound ->
                     throw({undef, user_type, {Name, length(Args)}})
             end

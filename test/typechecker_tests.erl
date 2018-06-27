@@ -126,6 +126,16 @@ normalize_test_() ->
      ?_assertEqual(?t( 1..6 ), typechecker:normalize(?t( 1..3|4..6 )))
     ].
 
+normalize_e2e_test_() ->
+    [
+     {"Normalize local user types",
+      %% arg and return type should be both resolved to list(atom())
+      ?_assert(type_check_forms(["-type inner(T) :: list(T).",
+                                 "-type outer(T) :: inner(T).",
+                                 "-spec f(inner(atom())) -> outer(atom()).",
+                                 "f(A) -> A."]))}
+    ].
+
 handle_type_error_test_() ->
     [
      %% {type_error, nil, Line, Ty}
