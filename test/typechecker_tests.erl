@@ -44,6 +44,13 @@ subtype_test_() ->
      ?_assert(subtype(?t( a                 ), ?t( atom()           ))),
      ?_assert(subtype(?t( a                 ), ?t( a                ))),
 
+     %% Binary, bitstring
+     ?_assert(subtype(?t( binary()          ), ?t( bitstring()      ))),
+     ?_assert(subtype(?t( <<>>              ), ?t( binary()         ))),
+     ?_assert(subtype(?t( <<>>              ), ?t( bitstring()      ))),
+     ?_assert(subtype(?t( <<_:4>>           ), ?t( <<_:_*2>>        ))),
+     ?_assert(subtype(?t( <<_:6,_:_*4>>     ), ?t( <<_:4,_:_*2>>    ))),
+
      %% Union
      ?_assert(subtype(?t( b                 ), ?t( a|b              ))),
      ?_assert(subtype(?t( 1|a               ), ?t( integer()|atom() ))),
@@ -98,6 +105,12 @@ not_subtype_test_() ->
 
      %% Atom
      ?_assertNot(subtype(?t( a              ), ?t( b                ))),
+
+     %% Binary, bitstring
+     ?_assertNot(subtype(?t( bitstring()    ), ?t( binary()         ))),
+     ?_assertNot(subtype(?t( bitstring()    ), ?t( <<>>             ))),
+     ?_assertNot(subtype(?t( <<_:4,_:_*4>>  ), ?t( <<_:6,_:_*2>>    ))),
+     ?_assertNot(subtype(?t( <<_:6,_:_*2>>  ), ?t( <<_:4,_:_*4>>    ))),
 
      %% Union
      ?_assertNot(subtype(?t( a|b            ), ?t( b                ))),

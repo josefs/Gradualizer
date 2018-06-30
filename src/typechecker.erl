@@ -159,6 +159,28 @@ compat_ty(Ty1, Ty2, A, _TEnv) when ?is_int_type(Ty1), ?is_int_type(Ty2) ->
 compat_ty({atom, _, _Atom}, {type, _, atom, []}, A, _TEnv) ->
     ret(A);
 
+%% Binary, bitstring
+%%
+%% <<_:M, _:_*N>> means
+%% a bitstring with bit size M + K*N (for any K)
+%%
+%% <<_:M1, _:_*N1>> is subtype of <<_:M2, _:_*N2>> if
+%% for all K, there is an L such that
+%% M1 + K*N1 == M2 + L*N2
+%%
+%%                 M1      M1+N1   M1+2*N1
+%% T1 .............|.......|.......|...
+%% T2 .....|...|...|...|...|...|...|...
+%%         M2      M2+L*N2
+%%
+compat_ty({type, _, binary, [{integer, _, M1}, {integer, _, N1}]},
+          {type, _, binary, [{integer, _, M2}, {integer, _, N2}]},
+          A, _TEnv)
+  when N2 > 0, M1 >= M2,
+       N1 rem N2 == 0,
+       (M1 - M2) rem N2 == 0 ->
+    ret(A);
+
 %% Records with the same name, defined in differend modules
 %% TODO: Record equivallend on tuple form
 compat_ty({type, P1, record, [{atom, _, Name}]},
@@ -232,7 +254,7 @@ compat_ty(_Ty1, _Ty2, _, _) ->
 compat_tys([], [], A, _TEnv) ->
     ret(A);
 compat_tys([Ty1|Tys1], [Ty2|Tys2], A, TEnv) ->
-    {Ap, Cs} = 
+    {Ap, Cs} =
     compat(Ty1 ,Ty2, A, TEnv),
     {Aps, Css} = compat_tys(Tys1, Tys2, Ap, TEnv),
     {Aps, constraints:combine(Cs, Css)};
@@ -1245,8 +1267,8 @@ type_check_cons_union(Env, [_ | Tys], H, T) ->
     type_check_cons_union(Env, Tys, H, T).
 
 
-    
-    
+
+
 %% We don't use these function right now but they can be useful for
 %% implementing an approximation when typechecking unions of tuples.
 split_tuple_type(N, {type, P, tuple, any}) ->
