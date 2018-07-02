@@ -363,10 +363,10 @@ normalize({remote_type, _P, [{atom, _, M} = Module, {atom, _, N} = Name, Args]} 
         not_found ->
             throw({undef, remote_type, {Module, Name, length(Args)}})
     end;
-normalize({op, _, '-', {integer, Ann, I}}, _TEnv) ->
-    {integer, Ann, -I};
-normalize({op, _, '+', {integer, Ann, I}}, _TEnv) ->
-    {integer, Ann, I};
+normalize({op, _, _, _Arg} = Op, _TEnv) ->
+    erl_eval:partial_eval(Op);
+normalize({op, _, _, _Arg1, _Arg2} = Op, _TEnv) ->
+    erl_eval:partial_eval(Op);
 normalize({type, Ann, range, [T1, T2]}, TEnv) ->
     {type, Ann, range, [normalize(T1, TEnv), normalize(T2, TEnv)]};
 normalize(Type, _TEnv) ->
