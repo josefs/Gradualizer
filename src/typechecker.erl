@@ -59,8 +59,7 @@ compatible(Ty1, Ty2, TEnv) ->
 
 -spec subtype(type(), type(), #tenv{}) -> {true, any()} | false.
 subtype(Ty1, Ty2, TEnv) ->
-    try compat(typelib:remove_pos(Ty1), typelib:remove_pos(Ty2),
-               sets:new(), TEnv) of
+    try compat(Ty1, Ty2, sets:new(), TEnv) of
 	{_Memoization, Constraints} ->
 	    {true, Constraints}
     catch
@@ -89,8 +88,8 @@ subtypes([Ty1|Tys1], [Ty2|Tys2], TEnv) ->
 %% The function compat_ty is just a convenience function to be able to
 %% pattern match on types in a nice way.
 compat(T1, T2, A, TEnv) ->
-    Ty1 = normalize(T1, TEnv),
-    Ty2 = normalize(T2, TEnv),
+    Ty1 = typelib:remove_pos(normalize(T1, TEnv)),
+    Ty2 = typelib:remove_pos(normalize(T2, TEnv)),
     case sets:is_element({Ty1, Ty2}, A) of
 	true ->
 	    ret(A);
