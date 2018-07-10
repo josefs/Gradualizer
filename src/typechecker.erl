@@ -1444,7 +1444,8 @@ merge_types(Tys) ->
 add_types_pats([], [], _TEnv, VEnv) ->
     VEnv;
 add_types_pats([Pat | Pats], [Ty | Tys], TEnv, VEnv) ->
-    add_types_pats(Pats, Tys, TEnv, add_type_pat(Pat, Ty, TEnv, VEnv)).
+    NormTy = normalize(Ty, TEnv),
+    add_types_pats(Pats, Tys, TEnv, add_type_pat(Pat, NormTy, TEnv, VEnv)).
 
 add_type_pat({var, _, '_'}, _Ty, _TEnv, VEnv) ->
     VEnv;
