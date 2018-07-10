@@ -708,18 +708,18 @@ type_check_expr(Env, {map, _, Expr, Assocs}) ->
 
 %% Records
 type_check_expr(Env, {record_field, _P, Expr, Record, {atom, _, Field}}) ->
-    {VB, Cs} = type_check_expr_in(Env, {type, 0, record, [{atom, 0, Record}]}, Expr),
+    {VB, Cs} = type_check_expr_in(Env, {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Record}]}, Expr),
     Rec = maps:get(Record, Env#env.tenv#tenv.records),
     Ty = get_rec_field_type(Field, Rec),
     {Ty, VB, Cs};
 type_check_expr(Env, {record, _, Expr, Record, Fields}) ->
-    RecTy = {type, 0, record, [{atom, 0, Record}]},
+    RecTy = {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Record}]},
     {VB1, Cs1} = type_check_expr_in(Env, RecTy, Expr),
     Rec = maps:get(Record, Env#env.tenv#tenv.records),
     {VB2, Cs2} = type_check_fields(Env, Rec, Fields),
     {RecTy, union_var_binds([VB1, VB2]), constraints:combine(Cs1, Cs2)};
 type_check_expr(Env, {record, _, Record, Fields}) ->
-    RecTy    = {type, 0, record, [{atom, 0, Record}]},
+    RecTy    = {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Record}]},
     Rec      = maps:get(Record, Env#env.tenv#tenv.records),
     {VB, Cs} = type_check_fields(Env, Rec, Fields),
     {RecTy, VB, Cs};
@@ -1253,7 +1253,7 @@ type_check_block_in(Env, ResTy, [Expr | Exprs]) ->
 type_check_tuple_in(Env, {type, _, tuple, any}, TS) ->
     {VBs, Css} = lists:unzip(
       lists:map(fun (Expr) ->
-			type_check_expr_in(Env, {type, 0, any, []}, Expr)
+			type_check_expr_in(Env, {type, erl_anno:new(0), any, []}, Expr)
 		end, TS)),
     {union_var_binds(VBs), constraints:combine(Css)};
 type_check_tuple_in(Env, {type, _, tuple, Tys}, TS) ->
