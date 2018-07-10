@@ -942,11 +942,14 @@ type_check_lc(Env, Expr, [{generate, _, Pat, Gen} | Quals]) ->
 
 
 
+type_check_expr_in(Env, ResTy, Expr) ->
+    NormResTy = normalize(ResTy, Env#env.tenv),
+    do_type_check_expr_in(Env, NormResTy, Expr).
 
-type_check_expr_in(Env, {type, _, any, []}, Expr) ->
+do_type_check_expr_in(Env, {type, _, any, []}, Expr) ->
     {_Ty, VB, Cs} = type_check_expr(Env, Expr),
     {VB, Cs};
-type_check_expr_in(Env, Ty, {var, LINE, Var}) ->
+do_type_check_expr_in(Env, Ty, {var, LINE, Var}) ->
     VarTy = maps:get(Var, Env#env.venv),
     case subtype(VarTy, Ty, Env#env.tenv) of
 	{true, Cs} ->
@@ -954,28 +957,28 @@ type_check_expr_in(Env, Ty, {var, LINE, Var}) ->
 	false ->
 	    throw({type_error, tyVar, LINE, Var, VarTy, Ty})
     end;
-type_check_expr_in(Env, Ty, I = {integer, LINE, Int}) ->
+do_type_check_expr_in(Env, Ty, I = {integer, LINE, Int}) ->
     case subtype(I, Ty, Env#env.tenv) of
 	{true, Cs} ->
 	    {#{}, Cs};
 	false ->
 	    throw({type_error, int, Int, LINE, Ty})
     end;
-type_check_expr_in(Env, Ty, {float, LINE, _Int}) ->
+do_type_check_expr_in(Env, Ty, {float, LINE, _Int}) ->
     case subtype(Ty, {type, LINE, float, []}, Env#env.tenv) of
 	{true, Cs} ->
 	    {#{}, Cs};
 	false ->
 	    throw({type_error, float, LINE, Ty})
     end;
-type_check_expr_in(Env, Ty, Atom = {atom, LINE, _}) ->
+do_type_check_expr_in(Env, Ty, Atom = {atom, LINE, _}) ->
     case subtype(Atom, Ty, Env#env.tenv) of
 	{true, Cs} ->
 	    {#{}, Cs};
 	false ->
 	    throw({type_error, Atom, LINE, Ty})
     end;
-type_check_expr_in(Env, Ty, Cons = {cons, LINE, H, T}) ->
+do_type_check_expr_in(Env, Ty, Cons = {cons, LINE, H, T}) ->
     case subtype({type, LINE, nonempty_list, [{type, LINE, any, []}]}, Ty, Env#env.tenv) of
 	{true, Cs1} ->
 	    {VB, Cs2} = type_check_cons_in(Env, Ty, H, T),
@@ -983,14 +986,14 @@ type_check_expr_in(Env, Ty, Cons = {cons, LINE, H, T}) ->
 	false ->
 	    throw({type_error, cons, LINE, Cons, Ty})
     end;
-type_check_expr_in(Env, Ty, {nil, LINE}) ->
+do_type_check_expr_in(Env, Ty, {nil, LINE}) ->
     case subtype({type, LINE, nil, []}, Ty, Env#env.tenv) of
 	{true, Cs} ->
 	    {#{}, Cs};
 	false ->
 	    throw({type_error, nil, LINE, Ty})
     end;
-type_check_expr_in(Env, Ty, {bin, LINE, _BinElements} = Bin) ->
+do_type_check_expr_in(Env, Ty, {bin, LINE, _BinElements} = Bin) ->
     %% Accept any binary type regardless of bit size parameters.
     %% TODO: If we can compute the length of the bit expression, we get the
     %%       exact type and can require that it's a subtype of Ty.
@@ -1004,7 +1007,7 @@ type_check_expr_in(Env, Ty, {bin, LINE, _BinElements} = Bin) ->
 	  end,
     {_Ty, VarBinds, Cs2} = type_check_expr(Env, Bin),
     {VarBinds, constraints:combine(Cs1, Cs2)};
-type_check_expr_in(Env, ResTy, {tuple, LINE, TS}) ->
+do_type_check_expr_in(Env, ResTy, {tuple, LINE, TS}) ->
     case subtype({type, LINE, tuple, lists:duplicate(length(TS), {type, LINE, any, []})}
 		,ResTy, Env#env.tenv) of
 	false ->
@@ -1019,7 +1022,7 @@ type_check_expr_in(Env, ResTy, {tuple, LINE, TS}) ->
     end;
 
 %% Maps
-type_check_expr_in(Env, ResTy, {map, LINE, Assocs}) ->
+do_type_check_expr_in(Env, ResTy, {map, LINE, Assocs}) ->
     case subtype({type, LINE, map, any}, ResTy, Env#env.tenv) of
         {true, Cs1} ->
             %% TODO: check the type of the map fields
@@ -1028,7 +1031,7 @@ type_check_expr_in(Env, ResTy, {map, LINE, Assocs}) ->
         false ->
             throw({type_error, map, LINE, ResTy})
     end;
-type_check_expr_in(Env, ResTy, {map, LINE, Expr, Assocs}) ->
+do_type_check_expr_in(Env, ResTy, {map, LINE, Expr, Assocs}) ->
     {Ty, VBExpr,   Cs1} = type_check_expr(Env, Expr),
     {Ty, VBAssocs, Cs2} = type_check_assocs(Env, Assocs),
     % TODO: Update the type of the map.
@@ -1041,14 +1044,14 @@ type_check_expr_in(Env, ResTy, {map, LINE, Expr, Assocs}) ->
             throw({type_error, map, LINE, ResTy})
     end;
 
-type_check_expr_in(Env, ResTy, {'case', _, Expr, Clauses}) ->
+do_type_check_expr_in(Env, ResTy, {'case', _, Expr, Clauses}) ->
     {ExprTy, VarBinds, Cs1} = type_check_expr(Env, Expr),
     Env2 = Env#env{ venv = add_var_binds(Env#env.venv, VarBinds) },
     {VB, Cs2} = check_clauses(Env2, ExprTy, ResTy, Clauses),
     {VB, constraints:combine(Cs1,Cs2)};
-type_check_expr_in(Env, ResTy, {'if', _, Clauses}) ->
+do_type_check_expr_in(Env, ResTy, {'if', _, Clauses}) ->
     check_clauses(Env, {type, 0, any, []}, ResTy, Clauses);
-type_check_expr_in(Env, ResTy, {call, _, Name, Args}) ->
+do_type_check_expr_in(Env, ResTy, {call, _, Name, Args}) ->
     {FunTy, VarBinds, Cs} = type_check_fun(Env, Name, length(Args)),
     case FunTy of
 	{type, _, any, []} ->
@@ -1075,14 +1078,14 @@ type_check_expr_in(Env, ResTy, {call, _, Name, Args}) ->
 		    throw(type_error)
 	    end
     end;
-type_check_expr_in(Env, ResTy, {'receive', _, Clauses}) ->
+do_type_check_expr_in(Env, ResTy, {'receive', _, Clauses}) ->
     check_clauses(Env, [{type, 0, any, []}], ResTy, Clauses);
-type_check_expr_in(Env, ResTy, {op, _, '!', Arg1, Arg2}) ->
+do_type_check_expr_in(Env, ResTy, {op, _, '!', Arg1, Arg2}) ->
     % The first argument should be a pid.
     {_,  VarBinds1, Cs1} = type_check_expr(Env, Arg1),
     {VarBinds2, Cs2} = type_check_expr_in(Env, ResTy, Arg2),
     {union_var_binds([VarBinds1,VarBinds2]), constraints:combine(Cs1,Cs2)};
-type_check_expr_in(Env, ResTy, {op, P, 'not', Arg}) ->
+do_type_check_expr_in(Env, ResTy, {op, P, 'not', Arg}) ->
     case subtype({type, P, boolean, []}, ResTy, Env#env.tenv) of
 	{true, Cs1} ->
 	    {VB, Cs2} = type_check_expr_in(Env, ResTy, Arg),
@@ -1090,34 +1093,34 @@ type_check_expr_in(Env, ResTy, {op, P, 'not', Arg}) ->
 	false ->
 	    throw({type_error, not_user_with_wrong_type, P, ResTy})
     end;
-type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
+do_type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
       Op == '+' orelse Op == '-' orelse Op == '*' orelse Op == '/' ->
     type_check_arith_op_in(Env, ResTy, Op, P, Arg1, Arg2);
-type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
+do_type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
       Op == 'bnot' orelse Op == 'div' orelse Op == 'rem' orelse
       Op == 'band' orelse Op == 'bor' orelse Op == 'bxor' orelse
       Op == 'bsl'  orelse Op == 'bsr' ->
     type_check_int_op_in(Env, ResTy, Op, P, Arg1, Arg2);
-type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
+do_type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
       Op == 'and' orelse Op == 'or' orelse Op == 'xor' orelse
       Op == 'andalso' orelse Op == 'orelse' ->
     type_check_logic_op_in(Env, ResTy, Op, P, Arg1, Arg2);
-type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
+do_type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
       Op == '=:=' orelse Op == '==' orelse
       Op == '>=' orelse Op == '=<' orelse
       Op == '>' orelse Op == '<' ->
     type_check_rel_op_in(Env, ResTy, Op, P, Arg1, Arg2);
-type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
+do_type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
       Op == '++' orelse Op == '--' ->
     type_check_list_op_in(Env, ResTy, Op, P, Arg1, Arg2);
 
-type_check_expr_in(Env, ResTy, {'catch', _, Arg}) ->
+do_type_check_expr_in(Env, ResTy, {'catch', _, Arg}) ->
     % TODO: Should we require ResTy to also include the possibility of
     % exceptions? But exceptions can be of any type! That would mean
     % that we require ResTy to be any(), or perhaps also term().
     % But that would make exceptions and types almost incompatible!
     type_check_expr_in(Env, ResTy, Arg);
-type_check_expr_in(Env, ResTy, {'try', _, Block, CaseCs, CatchCs, AfterCs}) ->
+do_type_check_expr_in(Env, ResTy, {'try', _, Block, CaseCs, CatchCs, AfterCs}) ->
     {VB,   Cs1}  = type_check_block_in(Env, ResTy, Block),
     Env2 = Env#env{ venv = add_var_binds(VB, Env#env.venv) },
     {_VB2, Cs2} = check_clauses(Env2, {type, 0, any, []}, ResTy, CaseCs),
