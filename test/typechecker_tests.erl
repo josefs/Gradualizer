@@ -181,6 +181,40 @@ add_type_pat_test_() ->
      {"Pattern matching record against any()",
       ?_assert(type_check_forms(["-record(f, {r}).",
                                  "f(#r{f = F}) -> F."]))}
+     ].
+
+logic_op_test_() ->
+    [
+     [?_assert(type_check_forms(["-spec f(boolean(), any()) -> any().",
+                                 "f(A1, A2) -> A1 ",Op," A2."])),
+      ?_assert(type_check_forms(["-spec f(any(), boolean()) -> any().",
+                                 "f(A1, A2) -> A1 ",Op," A2."])),
+      ?_assert(type_check_forms(["-spec f(any(), any()) -> boolean().",
+                                 "f(A1, A2) -> A1 ",Op," A2."])),
+
+      ?_assertNot(type_check_forms(["-spec f(integer(), any()) -> any().",
+                                    "f(A1, A2) -> A1 ",Op," A2."])),
+      ?_assertNot(type_check_forms(["-spec f(any(), integer()) -> any().",
+                                    "f(A1, A2) -> A1 ",Op," A2."])),
+      ?_assertNot(type_check_forms(["-spec f(any(), any()) -> integer().",
+                                    "f(A1, A2) -> A1 ",Op," A2."]))
+     ]
+     || Op <- ["and", "or", "xor"]
+    ].
+
+lazy_logic_op_test_() ->
+    [?_assert(type_check_forms(["-spec f(boolean(), integer()) -> false | integer().",
+                                "f(B1, B2) -> B1 andalso B2."])),
+     ?_assert(type_check_forms(["-spec f(boolean(), integer()) -> true | integer().",
+                                "f(B1, B2) -> B1 orelse B2."])),
+     ?_assertNot(type_check_forms(["-spec f(boolean(), atom()) -> true | integer().",
+                                   "f(B1, B2) -> B1 orelse B2."])),
+     ?_assertNot(type_check_forms(["-spec f(boolean(), integer()) -> integer().",
+                                   "f(B1, B2) -> B1 andalso B2."]))
+     %% TODO this should fail because `(B1 + 1)' cannot return boolean()
+     %% but type interference (`type_check_expr') does not return exact type yet
+     %% ?_assertNot(type_check_forms(["-spec f(any(), any()) -> any().",
+     %%                               "f(B1, B2) -> B1 + 1 orelse B2."]))
     ].
 
 handle_type_error_test_() ->

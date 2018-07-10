@@ -775,7 +775,7 @@ type_check_expr(Env, {op, P, 'not', Arg}) ->
     end;
 type_check_expr(Env, {op, P, BoolOp, Arg1, Arg2}) when
       (BoolOp == 'andalso') or (BoolOp == 'and') or
-      (BoolOp == 'orelse')  or (BoolOp == 'or') ->
+      (BoolOp == 'orelse')  or (BoolOp == 'or') or (BoolOp == 'xor') ->
     type_check_logic_op(Env, BoolOp, P, Arg1, Arg2);
 type_check_expr(Env, {op, P, RelOp, Arg1, Arg2}) when
       (RelOp == '=:=') or (RelOp == '==') or
@@ -819,31 +819,47 @@ type_check_fields(Env, Rec, [{record_field, _, {atom, _, Field}, Expr} | Fields]
 type_check_fields(_Env, _Rec, []) ->
     {#{}, constraints:empty()}.
 
-type_check_logic_op(Env, Op, P, Arg1, Arg2) ->
-    % Bindings from the first argument are only passed along for
-    % 'andalso' and 'orelse', not 'and' or 'or'.
-    UnionVarBindsSecondArg =
-	fun (VB1, VB2) ->
-		if (Op == 'and') or (Op == 'or') ->
-			VB1;
-		   true ->
-			union_var_binds([VB1, VB2])
-		end
-	end,
+type_check_logic_op(Env, Op, P, Arg1, Arg2)
+  when Op =:= 'andalso'; Op =:= 'orelse' ->
+    %% andalso(boolean(), T) -> false | T
+    %% orelse(boolean(), T) -> true | T
+
+    TBool = {type, P, boolean, []},
     {Ty1, VB1, Cs1} = type_check_expr(Env, Arg1),
-    case subtype(Ty1, {type, P, bool, []}, Env#env.tenv) of
-	false ->
-	    throw({type_error, boolop, Op, P, Ty1});
-	{true, Cs2} ->
-	    {Ty2, VB2, Cs3} = type_check_expr(Env#env{ venv = UnionVarBindsSecondArg(Env#env.venv,VB1 )}, Arg2),
-	    case subtype(Ty2, {type, P, bool, []}, Env#env.tenv) of
-		false ->
-		    throw({type_error, boolop, Op, P, Ty1});
-		{true, Cs4} ->
-		    {merge_types([Ty1, Ty2])
+    case subtype(Ty1, TBool, Env#env.tenv) of
+        false ->
+            throw({type_error, boolop, Op, P, Ty1});
+        {true, Cs2} ->
+            %% variable bindings are propagated from Arg1 to Arg2
+            NewVEnv = union_var_binds([Env#env.venv, VB1]),
+            %% Arg2 can have any type
+            {Ty2, VB2, Cs3} = type_check_expr(Env#env{ venv = NewVEnv }, Arg2),
+            BoolRes = case Op of
+                          'andalso' -> {atom, P, false};
+                          'orelse' -> {atom, P, true}
+                      end,
+		    {merge_types([BoolRes, Ty2])
 		    ,union_var_binds([VB1, VB2])
-		    ,constraints:combine([Cs1,Cs2,Cs3,Cs4])}
-	    end
+		    ,constraints:combine([Cs1,Cs2,Cs3])}
+    end;
+type_check_logic_op(Env, Op, P, Arg1, Arg2)
+  when Op =:= 'and'; Op =:= 'or'; Op =:= 'xor' ->
+    %% (boolean(), boolean()) -> boolean()
+
+    TBool = {type, P, boolean, []},
+    %% variable bindings are NOT propagated from Arg1 to Arg2
+    {Ty1, VB1, Cs1} = type_check_expr(Env, Arg1),
+    {Ty2, VB2, Cs2} = type_check_expr(Env, Arg2),
+    case {subtype(Ty1, TBool, Env#env.tenv),
+          subtype(Ty2, TBool, Env#env.tenv)} of
+        {false, _} ->
+            throw({type_error, boolop, Op, P, Ty1});
+        {_, false} ->
+            throw({type_error, boolop, Op, P, Ty2});
+        {{true, Cs3}, {true, Cs4}} ->
+            {TBool
+            ,union_var_binds([VB1, VB2])
+            ,constraints:combine([Cs1,Cs2,Cs3,Cs4])}
     end.
 
 type_check_rel_op(Env, Op, P, Arg1, Arg2) ->
@@ -1169,17 +1185,45 @@ type_check_int_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
 	_ ->
 	  throw({type_error, int_error, Op, P, ResTy})
     end.
-type_check_logic_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
-    case ResTy of
-	{type, _, Ty, []} when Ty == 'boolean' orelse Ty == 'bool'
-			       orelse Ty == 'any' ->
-	  {VarBinds1, Cs1} = type_check_expr_in(Env, ResTy, Arg1),
-	  {VarBinds2, Cs2} = type_check_expr_in(Env, ResTy, Arg2),
-	  {union_var_binds([VarBinds1, VarBinds2])
-	  ,constraints:combine(Cs1, Cs2)};
-	_ ->
-	  throw({type_error, logic_error, Op, P, ResTy})
+
+type_check_logic_op_in(Env, ResTy, Op, P, Arg1, Arg2)
+  when Op =:= 'andalso'; Op =:= 'orelse' ->
+    %% andalso(boolean(), T) -> false | T
+    %% orelse(boolean(), T) -> true | T
+
+    TBool = {type, P, boolean, []},
+    {VarBinds1, Cs1} = type_check_expr_in(Env, TBool, Arg1),
+    %% variable bindings are propagated from Arg1 to Arg2
+    NewVEnv = union_var_binds([Env#env.venv, VarBinds1]),
+    %% the return type of the op is either the type of Arg2 or...
+    {VarBinds2, Cs2} = type_check_expr_in(Env#env{ venv = NewVEnv }, ResTy, Arg2),
+    %% ...the result of Arg1
+    BoolRes = case Op of
+                  'andalso' -> {atom, P, false};
+                  'orelse' -> {atom, P, true}
+              end,
+    case subtype(BoolRes, ResTy, Env#env.tenv) of
+        false ->
+            throw({type_error, lazy_logic_ret, Op, P, BoolRes, ResTy});
+        {true, Cs3} ->
+            {VarBinds2, constraints:combine([Cs1, Cs2, Cs3])}
+    end;
+type_check_logic_op_in(Env, ResTy, Op, P, Arg1, Arg2)
+  when Op =:= 'and'; Op =:= 'or'; Op =:= 'xor' ->
+    %% (boolean(), boolean()) -> boolean()
+
+    TBool = {type, P, boolean, []},
+    case subtype(TBool, ResTy, Env#env.tenv) of
+        {true, Cs1} ->
+            %% variable bindings are NOT propagated from Arg1 to Arg2
+            {VB1, Cs2} = type_check_expr_in(Env, TBool, Arg1),
+            {VB2, Cs3} = type_check_expr_in(Env, TBool, Arg2),
+            {union_var_binds([VB1, VB2]),
+             constraints:combine([Cs1, Cs2, Cs3])};
+        false ->
+            throw({type_error, logic_error, Op, P, ResTy})
     end.
+
 type_check_rel_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
     case ResTy of
 	{type, _, Ty, []} when Ty == 'boolean' orelse Ty == 'bool'
@@ -1825,8 +1869,12 @@ handle_type_error({type_error, int_error, IntOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-integer argument "
 	      "of type ~s~n", [IntOp, P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, logic_error, LogicOp, P, Ty}) ->
-    io:format("The operator ~p on line ~p is given a non-boolean argument "
-	      "of type ~s~n", [LogicOp, P, typelib:pp_type(Ty)]);
+    io:format("The operator ~p on line ~p used in a context where it is "
+	      "required to have type ~s~n", [LogicOp, P, typelib:pp_type(Ty)]);
+handle_type_error({type_error, lazy_logic_ret, LogicOp, P, BoolTy, Ty}) ->
+    io:format("The operator ~p on line ~p used in a context where it is "
+	      "required to return type ~s but it can also return ~s~n",
+              [LogicOp, P, typelib:pp_type(Ty), typelib:pp_type(BoolTy)]);
 handle_type_error({type_error, rel_error, LogicOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is used in a context where it is "
 	      "required to have type ~s~n", [LogicOp, P, typelib:pp_type(Ty)]);
