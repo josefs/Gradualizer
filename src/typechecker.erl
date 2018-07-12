@@ -1261,7 +1261,16 @@ type_check_tuple_in(Env, {type, _, tuple, Tys}, TS) ->
 		end, Tys, TS)),
     {union_var_binds(VBs), constraints:combine(Css)};
 type_check_tuple_in(Env, {type, _, union, Tys}, TS) ->
-    type_check_tuple_union(Env, Tys, TS).
+    type_check_tuple_union(Env, Tys, TS);
+type_check_tuple_in(Env, {var, _, Name}, TS) ->
+    {Tys, VarBindsList, Css} =
+	lists:unzip3(lists:map(fun (Expr) ->
+				   type_check_expr(Env, Expr)
+			       end, TS)),
+    {union_var_binds(VarBindsList)
+    ,constraints:combine([constraints:upper(Name, {type, 0, tuple, Tys})| Css])
+    }.
+
 
 type_check_tuple_union(Env, [Tuple = {type, _, tuple, _}|Union], TS) ->
     try type_check_tuple_in(Env, Tuple, TS)
