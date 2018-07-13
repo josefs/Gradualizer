@@ -2,6 +2,20 @@
 
 -include("typelib.hrl").
 
+-ifdef(OTP_RELEASE).
+-compile([{nowarn_deprecated_function,{erlang,get_stacktrace,0}}]).
+-endif.
+
+-define(throw_orig_type(EXPR, ORIGTYPE, NORMTYPE),
+        try EXPR
+        catch
+            throw:TypeError when element(size(TypeError), TypeError) =:= NORMTYPE ->
+                %% if the last element of the type_error tuple is the normalized type
+                %% replace it with the original result type
+                ST = erlang:get_stacktrace(),
+                erlang:raise(throw, setelement(size(TypeError), TypeError, ORIGTYPE), ST)
+        end).
+
 -export_type([typed_record_field/0]).
 
 -type type() :: erl_parse:abstract_type().
@@ -940,11 +954,10 @@ type_check_lc(Env, Expr, [{generate, _, Pat, Gen} | Quals]) ->
 				   Expr, Quals),
     {TyL, VB, constraints:combine(Cs1,Cs2)}.
 
-
-
 type_check_expr_in(Env, ResTy, Expr) ->
     NormResTy = normalize(ResTy, Env#env.tenv),
-    do_type_check_expr_in(Env, NormResTy, Expr).
+    ?throw_orig_type(do_type_check_expr_in(Env, NormResTy, Expr),
+                     ResTy, NormResTy).
 
 do_type_check_expr_in(Env, {type, _, any, []}, Expr) ->
     {_Ty, VB, Cs} = type_check_expr(Env, Expr),
@@ -1445,7 +1458,8 @@ add_types_pats([], [], _TEnv, VEnv) ->
     VEnv;
 add_types_pats([Pat | Pats], [Ty | Tys], TEnv, VEnv) ->
     NormTy = normalize(Ty, TEnv),
-    add_types_pats(Pats, Tys, TEnv, add_type_pat(Pat, NormTy, TEnv, VEnv)).
+    ?throw_orig_type(add_types_pats(Pats, Tys, TEnv, add_type_pat(Pat, NormTy, TEnv, VEnv)),
+                     Ty, NormTy).
 
 add_type_pat({var, _, '_'}, _Ty, _TEnv, VEnv) ->
     VEnv;
