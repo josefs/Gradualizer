@@ -113,6 +113,7 @@ import_otp() ->
                 records = #{} :: #{{module(), atom()} => [typechecker:typed_record_field()]},
                 opts    = ?default_opts :: opts(),
                 srcmap  = #{} :: #{module() => string()},
+                beammap = #{} :: #{module() => string()},
                 loaded  = #{} :: #{module() => boolean()}}).
 
 -type state() :: #state{}.
@@ -123,7 +124,7 @@ init(Opts0) ->
     State1 = #state{opts = Opts},
     State2 = case Opts of
                  #{autoimport := true} ->
-                    State1#state{srcmap = get_src_map()};
+                    State1#state{srcmap = get_src_map(), beammap = get_beam_map()};
                  _ ->
                     State1
              end,
@@ -279,17 +280,29 @@ autoimport(M, #state{opts = #{autoimport := true},
     end.
 
 import_module(Mod, State) ->
-    case State#state.srcmap of
-        #{Mod := Filename} ->
-            State1 = import_files([Filename], State),
-            {ok, State1};
-        _ ->
-            not_found
-    end.
+  case State#state.beammap of
+    #{Mod := Filename} ->
+      State1 = import_files([Filename], State),
+      {ok, State1};
+    _ ->
+      case State#state.srcmap of
+          #{Mod := Filename} ->
+              State1 = import_files([Filename], State),
+              {ok, State1};
+          _ ->
+              not_found
+      end
+  end.
 
 import_files([File | Files], State) ->
-    EppOpts = [{includes, guess_include_dirs(File)}],
-    {ok, Forms} = epp:parse_file(File, EppOpts),
+    {ok, Forms} =
+      case re:run(File, beam_file_regexp()) of
+        {match, _} ->
+          {ok, gradualizer:get_forms_from_beam(File)};
+        nomatch ->
+          EppOpts = [{includes, guess_include_dirs(File)}],
+          epp:parse_file(File, EppOpts)
+      end,
     [{attribute, _, file, _},
      {attribute, _, module, Module} | Forms1] = Forms,
     check_epp_errors(File, Forms1),
@@ -459,10 +472,29 @@ get_src_map() ->
                    RevPath         -> lists:reverse("lre.*/" ++ RevPath)
                end || Path <- code:get_path()],
     SrcFiles = lists:flatmap(fun filelib:wildcard/1, SrcDirs),
-    {ok, RE} = re:compile(<<"([^/.]*)\.erl$">>),
     Pairs = [begin
-                 {match, [Mod]} = re:run(Filename, RE,
+                 {match, [Mod]} = re:run(Filename, erl_file_regexp(),
                                          [{capture, all_but_first, list}]),
                  {list_to_atom(Mod), Filename}
              end || Filename <- SrcFiles],
     maps:from_list(Pairs).
+
+-spec get_beam_map() -> #{module() => file:filename()}.
+get_beam_map() ->
+  BeamDirs = code:get_path(),
+  BeamFiles = lists:flatmap(fun (Dir) -> filelib:wildcard(Dir ++ "/*.beam") end, BeamDirs),
+  BeamPairs = lists:map(fun (Filename) ->
+    {match, [Mod]} = re:run(Filename, beam_file_regexp(), [{capture, all_but_first, list}]),
+    {list_to_atom(Mod), Filename}
+  end, BeamFiles),
+  maps:from_list(BeamPairs).
+
+-spec beam_file_regexp() -> {re_pattern, _, _, _}.
+beam_file_regexp() ->
+  {ok, RE} = re:compile(<<"^.+\/([^/]+)\.beam$">>),
+  RE.
+
+-spec erl_file_regexp() -> {re_pattern, _, _, _}.
+erl_file_regexp() ->
+  {ok, RE} = re:compile(<<"([^/.]*)\.erl$">>),
+  RE.

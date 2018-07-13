@@ -13,7 +13,8 @@
          type_check_module/1,
          type_check_module/2,
          type_check_dir/1,
-         type_check_dir/2
+         type_check_dir/2,
+         get_forms_from_beam/1
         ]).
 
 -type options() :: proplists:proplist().
