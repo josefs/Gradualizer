@@ -11,7 +11,8 @@
          get_record_type/2,
          get_modules/0, get_types/1,
          save/1, load/1,
-         import_files/1, import_app/1, import_otp/0]).
+         import_erl_files/1, import_beam_files/1,
+         import_app/1, import_otp/0]).
 
 %% Callbacks
 -behaviour(gen_server).
@@ -90,8 +91,11 @@ save(Filename) ->
 load(Filename) ->
     call({load, Filename}).
 
-import_files(Files) ->
-    call({import_files, Files}, infinity).
+import_erl_files(Files) ->
+    call({import_erl_files, Files}, infinity).
+
+import_beam_files(Files) ->
+    call({import_beam_files, Files}, infinity).
 
 -spec import_app(App :: atom()) -> ok.
 import_app(App) ->
@@ -196,18 +200,23 @@ handle_call({import_module, Mod}, _From, State) ->
         not_found ->
             {reply, not_found, State}
     end;
-handle_call({import_files, Files}, _From, State) ->
-    State1 = import_files(Files, State),
+handle_call({import_erl_files, Files}, _From, State) ->
+    State1 = import_erl_files(Files, State),
     {reply, ok, State1};
+handle_call({import_beam_files, Files}, _From, State) ->
+    case import_beam_files(Files, State) of
+        {ok, State1} -> {reply, ok, State1};
+        Error = {_, _} -> {reply, Error, State}
+    end;
 handle_call({import_app, App}, _From, State) ->
     Pattern = code:lib_dir(App) ++ "/src/*.erl",
     Files = filelib:wildcard(Pattern),
-    State1 = import_files(Files, State),
+    State1 = import_erl_files(Files, State),
     {reply, ok, State1};
 handle_call(import_otp, _From, State) ->
     Pattern = code:lib_dir() ++ "/*/src/*.erl",
     Files = filelib:wildcard(Pattern),
-    State1 = import_files(Files, State),
+    State1 = import_erl_files(Files, State),
     {reply, ok, State1}.
 
 handle_cast(_Msg, State) ->
@@ -282,30 +291,44 @@ autoimport(M, #state{opts = #{autoimport := true},
 import_module(Mod, State) ->
     case State#state.beammap of
         #{Mod := Filename} ->
-            State1 = import_files([Filename], State),
-            {ok, State1};
+            case import_beam_files([Filename], State) of
+                {ok, State1} -> {ok, State1};
+                {_, _} -> import_module_from_erl(Mod, State)
+            end;
         _ ->
-            case State#state.srcmap of
-                #{Mod := Filename} ->
-                    State1 = import_files([Filename], State),
-                    {ok, State1};
-                _ ->
-                    not_found
-            end
+            import_module_from_erl(Mod, State)
     end.
 
-import_files([File | Files], State) ->
-    {ok, Forms} =
-        case re:run(File, beam_file_regexp()) of
-            {match, _} ->
-                {ok, gradualizer_file_utils:get_forms_from_beam(File)};
-            nomatch ->
-                EppOpts = [{includes, guess_include_dirs(File)}],
-                epp:parse_file(File, EppOpts)
-        end,
+import_module_from_erl(Mod, State) ->
+    case State#state.srcmap of
+        #{Mod := Filename} ->
+            State1 = import_erl_files([Filename], State),
+            {ok, State1};
+        _ ->
+            not_found
+    end.
+
+import_erl_files([File | Files], State) ->
+    EppOpts = [{includes, guess_include_dirs(File)}],
+    {ok, Forms} = epp:parse_file(File, EppOpts),
     [{attribute, _, file, _},
      {attribute, _, module, Module} | Forms1] = Forms,
     check_epp_errors(File, Forms1),
+    import_erl_files(Files, import_absform(Module, Forms1, State));
+import_erl_files([], St) ->
+    St.
+
+import_beam_files([File | Files], State) ->
+    case gradualizer_file_utils:get_forms_from_beam_safe(File) of
+        {ok, [{attribute, _, file, _}, {attribute, _, module, Module} | Forms1]} ->
+            import_beam_files(Files, import_absform(Module, Forms1, State));
+        Error = {Status, _} when (Status /= ok) ->
+            Error
+    end;
+import_beam_files([], St) ->
+    {ok, St}.
+
+import_absform(Module, Forms1, State) ->
     Specs    = collect_specs(Module, Forms1),
     SpecMap1 = add_entries_to_map(Specs, State#state.specs),
     Types    = collect_types(Module, Forms1),
@@ -313,13 +336,12 @@ import_files([File | Files], State) ->
     TypeMap1 = add_entries_to_map(Types, State#state.types),
     RecMap1  = add_entries_to_map(Records, State#state.records),
     Loaded1  = (State#state.loaded)#{Module => true},
-    State1   = State#state{specs   = SpecMap1,
-                           types   = TypeMap1,
-                           records = RecMap1,
-                           loaded  = Loaded1},
-    import_files(Files, State1);
-import_files([], St) ->
-    St.
+    State#state{
+        specs   = SpecMap1,
+        types   = TypeMap1,
+        records = RecMap1,
+        loaded  = Loaded1
+    }.
 
 %% Include dirs for OTP apps are given in makefiles. We can never
 %% guarrantee to get them right without extracting the types during
