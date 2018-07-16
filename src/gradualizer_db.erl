@@ -91,9 +91,11 @@ save(Filename) ->
 load(Filename) ->
     call({load, Filename}).
 
+-spec import_erl_files([file:filename()]) -> ok.
 import_erl_files(Files) ->
     call({import_erl_files, Files}, infinity).
 
+-spec import_beam_files([file:filename()]) -> ok | gradualizer_file_utils:parsed_file_error().
 import_beam_files(Files) ->
     call({import_beam_files, Files}, infinity).
 
@@ -288,6 +290,7 @@ autoimport(M, #state{opts = #{autoimport := true},
             end
     end.
 
+-spec import_module(module(), state()) -> {ok, state()} | not_found.
 import_module(Mod, State) ->
     case State#state.beammap of
         #{Mod := Filename} ->
@@ -299,6 +302,7 @@ import_module(Mod, State) ->
             import_module_from_erl(Mod, State)
     end.
 
+-spec import_module_from_erl(module(), state()) -> {ok, state()} | not_found.
 import_module_from_erl(Mod, State) ->
     case State#state.srcmap of
         #{Mod := Filename} ->
@@ -308,6 +312,7 @@ import_module_from_erl(Mod, State) ->
             not_found
     end.
 
+-spec import_erl_files([file:filename()], state()) -> state().
 import_erl_files([File | Files], State) ->
     EppOpts = [{includes, guess_include_dirs(File)}],
     {ok, Forms} = epp:parse_file(File, EppOpts),
@@ -318,6 +323,7 @@ import_erl_files([File | Files], State) ->
 import_erl_files([], St) ->
     St.
 
+-spec import_beam_files([file:filename()], state()) -> {ok, state()} | gradualizer_file_utils:parsed_file_error().
 import_beam_files([File | Files], State) ->
     case gradualizer_file_utils:get_forms_from_beam_safe(File) of
         {ok, [{attribute, _, file, _}, {attribute, _, module, Module} | Forms1]} ->
@@ -328,6 +334,7 @@ import_beam_files([File | Files], State) ->
 import_beam_files([], St) ->
     {ok, St}.
 
+-spec import_absform(module(), gradualizer_file_utils:abstract_form(), state()) -> state().
 import_absform(Module, Forms1, State) ->
     Specs    = collect_specs(Module, Forms1),
     SpecMap1 = add_entries_to_map(Specs, State#state.specs),

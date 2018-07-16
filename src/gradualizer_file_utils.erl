@@ -11,9 +11,13 @@
 
 -type abstract_form() :: [erl_parse:abstract_form() | erl_parse:form_info()].
 
+-type parsed_file_error() :: {file_not_found, file:filename()} |
+                             {file_open_error, {file:posix() | badarg | system_limit, file:filename()}}.
+
 -type parsed_file() :: {ok, abstract_form()} |
-                       {file_not_found, file:filename()} |
-                       {file_open_error, {file:posix() | badarg | system_limit, file:filename()}}.
+                       parsed_file_error().
+
+-export_type([parsed_file_error/0, abstract_form/0]).
 
 -spec get_forms_from_erl_safe(file:filename()) -> parsed_file().
 get_forms_from_erl_safe(File) ->
