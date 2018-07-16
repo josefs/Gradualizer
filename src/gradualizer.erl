@@ -13,8 +13,7 @@
          type_check_module/1,
          type_check_module/2,
          type_check_dir/1,
-         type_check_dir/2,
-         get_forms_from_beam/1
+         type_check_dir/2
         ]).
 
 -type options() :: proplists:proplist().
@@ -32,9 +31,9 @@ type_check_file(File, Opts) ->
     Forms =
         case filename:extension(File) of
             ".erl" ->
-                get_forms_from_erl(File);
+                gradualizer_file_utils:get_forms_from_erl(File);
             ".beam" ->
-                get_forms_from_beam(File);
+                gradualizer_file_utils:get_forms_from_beam(File);
             Ext ->
                 throw({unknown_file_extension, Ext})
         end,
@@ -82,30 +81,4 @@ type_check_dir(Dir, Opts) ->
               end, ok, filelib:wildcard(filename:join(Dir, "*.{erl,beam}")));
         false ->
             throw({dir_not_found, Dir})
-    end.
-
-%% Helper functions
-
-get_forms_from_erl(File) ->
-    case epp:parse_file(File, []) of
-        {ok, Forms} ->
-            Forms;
-        {error, enoent} ->
-            throw({file_not_found, File});
-        {error, Reason} ->
-            throw({file_open_error, {Reason, File}})
-    end.
-
-get_forms_from_beam(File) ->
-    case beam_lib:chunks(File, [abstract_code]) of
-        {ok, {_Module, [{abstract_code, {raw_abstract_v1, Forms}}]}} ->
-            Forms;
-        {ok, {_Module, [{abstract_code,no_abstract_code}]}} ->
-            throw({forms_not_found, File});
-        {error, beam_lib, {file_error, _, enoent}} ->
-            throw({file_not_found, File});
-        {error, beam_lib, {file_error, _, Reason}} ->
-            throw({file_open_error, {Reason, File}});
-        {error, beam_lib, Reason} ->
-            throw({forms_error, Reason})
     end.

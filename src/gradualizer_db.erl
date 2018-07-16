@@ -285,20 +285,20 @@ import_module(Mod, State) ->
             State1 = import_files([Filename], State),
             {ok, State1};
         _ ->
-          case State#state.srcmap of
-              #{Mod := Filename} ->
-                  State1 = import_files([Filename], State),
-                  {ok, State1};
-              _ ->
-                  not_found
-          end
+            case State#state.srcmap of
+                #{Mod := Filename} ->
+                    State1 = import_files([Filename], State),
+                    {ok, State1};
+                _ ->
+                    not_found
+            end
     end.
 
 import_files([File | Files], State) ->
     {ok, Forms} =
         case re:run(File, beam_file_regexp()) of
             {match, _} ->
-                {ok, gradualizer:get_forms_from_beam(File)};
+                {ok, gradualizer_file_utils:get_forms_from_beam(File)};
             nomatch ->
                 EppOpts = [{includes, guess_include_dirs(File)}],
                 epp:parse_file(File, EppOpts)
@@ -472,8 +472,9 @@ get_src_map() ->
                    RevPath         -> lists:reverse("lre.*/" ++ RevPath)
                end || Path <- code:get_path()],
     SrcFiles = lists:flatmap(fun filelib:wildcard/1, SrcDirs),
+    RE = erl_file_regexp(),
     Pairs = [begin
-                 {match, [Mod]} = re:run(Filename, erl_file_regexp(),
+                 {match, [Mod]} = re:run(Filename, RE,
                                          [{capture, all_but_first, list}]),
                  {list_to_atom(Mod), Filename}
              end || Filename <- SrcFiles],
@@ -483,19 +484,20 @@ get_src_map() ->
 get_beam_map() ->
     BeamDirs = code:get_path(),
     BeamFiles = lists:flatmap(fun (Dir) -> filelib:wildcard(Dir ++ "/*.beam") end, BeamDirs),
+    RE = beam_file_regexp(),
     BeamPairs = lists:map(fun (Filename) ->
-            {match, [Mod]} = re:run(Filename, beam_file_regexp(), [{capture, all_but_first, list}]),
+            {match, [Mod]} = re:run(Filename, RE, [{capture, all_but_first, list}]),
             {list_to_atom(Mod), Filename}
         end,
         BeamFiles),
     maps:from_list(BeamPairs).
 
--spec beam_file_regexp() -> {re_pattern, _, _, _}.
+-spec beam_file_regexp() -> {re_pattern, _, _, _, _}.
 beam_file_regexp() ->
     {ok, RE} = re:compile(<<"^.+\/([^/]+)\.beam$">>),
     RE.
 
--spec erl_file_regexp() -> {re_pattern, _, _, _}.
+-spec erl_file_regexp() -> {re_pattern, _, _, _, _}.
 erl_file_regexp() ->
     {ok, RE} = re:compile(<<"([^/.]*)\.erl$">>),
     RE.
