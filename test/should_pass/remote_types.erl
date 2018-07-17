@@ -22,3 +22,8 @@ h(A) -> A.
 %% test resolving built-in aliases within built-in aliases
 -spec i(my_mfa()) -> mfa().
 i(A) -> A.
+
+%% test resolving/matching opaque remote types
+-spec opaque_user() -> user_types:my_opaque().
+opaque_user() ->
+    user_types:new_opaque().
