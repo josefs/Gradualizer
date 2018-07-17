@@ -4,6 +4,10 @@
 %% as the type for all parameters and return values.
 -module(gradualizer_db).
 
+-ifdef(OTP_RELEASE).
+-compile([{nowarn_deprecated_function,{erlang,get_stacktrace,0}}]).
+-endif.
+
 %% API functions
 -export([start_link/0,
          get_spec/3,
