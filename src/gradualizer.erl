@@ -28,7 +28,7 @@ type_check_file(File) ->
 %% @doc Type check a source or beam file
 -spec type_check_file(file:filename(), options()) -> ok | nok.
 type_check_file(File, Opts) ->
-    Forms =
+    ParsedFile =
         case filename:extension(File) of
             ".erl" ->
                 gradualizer_file_utils:get_forms_from_erl(File);
@@ -37,8 +37,13 @@ type_check_file(File, Opts) ->
             Ext ->
                 throw({unknown_file_extension, Ext})
         end,
-    Opts2 = proplists:expand([{print_file, [{print_file, File}]}], Opts),
-    typechecker:type_check_forms(Forms, Opts2).
+    case ParsedFile of
+        {ok, Forms} ->
+            Opts2 = proplists:expand([{print_file, [{print_file, File}]}], Opts),
+            typechecker:type_check_forms(Forms, Opts2);
+        Error ->
+            throw(Error)
+    end.
 
 
 %% @doc Type check a module

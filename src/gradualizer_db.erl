@@ -333,7 +333,7 @@ import_erl_files([], St) ->
 
 -spec import_beam_files([file:filename()], state()) -> {ok, state()} | gradualizer_file_utils:parsed_file_error().
 import_beam_files([File | Files], State) ->
-    case gradualizer_file_utils:get_forms_from_beam_safe(File) of
+    case gradualizer_file_utils:get_forms_from_beam(File) of
         {ok, [{attribute, _, file, _}, {attribute, _, module, Module} | Forms1]} ->
             import_beam_files(Files, import_absform(Module, Forms1, State));
         Error = {Status, _} when (Status /= ok) ->
