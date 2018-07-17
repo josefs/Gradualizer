@@ -189,8 +189,8 @@ handle_call({load, Filename}, _From, State) ->
                                        types  = maps:merge(Ty1, Ty2),
                                        loaded = maps:merge(Loaded1, Loaded2)},
                 {reply, ok, NewState}
-            catch error:E ->
-                {reply, {error, E, erlang:get_stacktrace()}, State}
+            catch _:Exception:Stacktrace ->
+                {reply, {error, Exception, Stacktrace}, State}
             end;
         {error, Reason} ->
             {reply, {error, Reason}, State}
