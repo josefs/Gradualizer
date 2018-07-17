@@ -9,15 +9,15 @@
             get_forms_from_beam/1
         ]).
 
--type abstract_form() :: [erl_parse:abstract_form() | erl_parse:form_info()].
+-type abstract_forms() :: [erl_parse:abstract_form() | erl_parse:form_info()].
 
 -type parsed_file_error() :: {file_not_found, file:filename()} |
                              {file_open_error, {file:posix() | badarg | system_limit, file:filename()}}.
 
--type parsed_file() :: {ok, abstract_form()} |
+-type parsed_file() :: {ok, abstract_forms()} |
                        parsed_file_error().
 
--export_type([parsed_file_error/0, abstract_form/0]).
+-export_type([parsed_file_error/0, abstract_forms/0]).
 
 -spec get_forms_from_erl_safe(file:filename()) -> parsed_file().
 get_forms_from_erl_safe(File) ->
@@ -45,7 +45,7 @@ get_forms_from_beam_safe(File) ->
             {forms_error, Reason}
     end.
 
--spec get_forms_from_erl(file:filename()) -> abstract_form() | no_return().
+-spec get_forms_from_erl(file:filename()) -> abstract_forms() | no_return().
 get_forms_from_erl(File) ->
     case get_forms_from_erl_safe(File) of
         {ok, Forms} ->
@@ -54,7 +54,7 @@ get_forms_from_erl(File) ->
             throw(Error)
     end.
 
--spec get_forms_from_beam(file:filename()) -> abstract_form() | no_return().
+-spec get_forms_from_beam(file:filename()) -> abstract_forms() | no_return().
 get_forms_from_beam(File) ->
     case get_forms_from_beam_safe(File) of
         {ok, Forms} ->

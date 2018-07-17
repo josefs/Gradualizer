@@ -11,6 +11,7 @@
          get_record_type/2,
          get_modules/0, get_types/1,
          save/1, load/1,
+         import_module/1,
          import_erl_files/1, import_beam_files/1,
          import_app/1, import_otp/0]).
 
@@ -21,6 +22,9 @@
 
 %% Types for the Erlang Abstract Format
 -type type() :: erl_parse:abstract_type().
+
+%% Compiled regular expression
+-type regexp() :: {re_pattern, _, _, _, _}.
 
 %% Gen server local registered name
 -define(name, ?MODULE).
@@ -107,6 +111,10 @@ import_app(App) ->
 import_otp() ->
     call(import_otp, infinity).
 
+-spec import_module(module()) -> ok | not_found.
+import_module(Module) ->
+    call({import_module, Module}, infinity).
+
 %% ----------------------------------------------------------------------------
 
 %% Gen_server
@@ -189,8 +197,8 @@ handle_call({load, Filename}, _From, State) ->
                                        types  = maps:merge(Ty1, Ty2),
                                        loaded = maps:merge(Loaded1, Loaded2)},
                 {reply, ok, NewState}
-            catch _:Exception:Stacktrace ->
-                {reply, {error, Exception, Stacktrace}, State}
+            catch error:E ->
+                {reply, {error, E, erlang:get_stacktrace()}, State}
             end;
         {error, Reason} ->
             {reply, {error, Reason}, State}
@@ -334,7 +342,7 @@ import_beam_files([File | Files], State) ->
 import_beam_files([], St) ->
     {ok, St}.
 
--spec import_absform(module(), gradualizer_file_utils:abstract_form(), state()) -> state().
+-spec import_absform(module(), gradualizer_file_utils:abstract_forms(), state()) -> state().
 import_absform(Module, Forms1, State) ->
     Specs    = collect_specs(Module, Forms1),
     SpecMap1 = add_entries_to_map(Specs, State#state.specs),
@@ -521,12 +529,12 @@ get_beam_map() ->
         BeamFiles),
     maps:from_list(BeamPairs).
 
--spec beam_file_regexp() -> {re_pattern, _, _, _, _}.
+-spec beam_file_regexp() -> regexp().
 beam_file_regexp() ->
     {ok, RE} = re:compile(<<"^.+\/([^/]+)\.beam$">>),
     RE.
 
--spec erl_file_regexp() -> {re_pattern, _, _, _, _}.
+-spec erl_file_regexp() -> regexp().
 erl_file_regexp() ->
     {ok, RE} = re:compile(<<"([^/.]*)\.erl$">>),
     RE.
