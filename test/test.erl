@@ -3,6 +3,9 @@
 -include_lib("eunit/include/eunit.hrl").
 
 should_pass_test_() ->
+    %% user_types.erl references remote_types.erl
+    %% it is not in the sourcemap of the DB so let's import it manually
+    gradualizer_db:import_files(["test/should_pass/user_types.erl"]),
     run_tests_in("test/should_pass", ok).
 
 should_fail_test_() ->

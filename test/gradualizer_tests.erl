@@ -9,7 +9,12 @@ api_test_() ->
              {module, Mod} = code:load_abs("test/any"),
              ?assertEqual(ok, gradualizer:type_check_module(Mod))
      end,
-     ?_assertEqual(ok, gradualizer:type_check_dir("test/should_pass/")),
+     fun() ->
+             %% user_types.erl references remote_types.erl
+             %% it is not in the sourcemap of the DB so let's import it manually
+             gradualizer_db:import_files(["test/should_pass/user_types.erl"]),
+             ?assertEqual(ok, gradualizer:type_check_dir("test/should_pass/"))
+     end,
 
      %% Failure cases
      {"Not found",

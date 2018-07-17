@@ -8,3 +8,8 @@ tup({A,B,C}) ->
 
 tup2(A,B) ->
     {A,B}.
+
+-type tup() :: {atom(), integer()}.
+-spec tup3(atom(), integer()) -> tup().
+tup3(A,B) ->
+    {A,B}.
