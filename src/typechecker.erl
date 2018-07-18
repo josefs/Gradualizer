@@ -337,9 +337,9 @@ normalize(T) -> normalize(T, #tenv{}).
 normalize({type, _, union, _} = U, TEnv) ->
     Types = flatten_unions([U], TEnv),
     case merge_union_types(Types, TEnv) of
-        []  -> {type, 0, none, []};
+        []  -> {type, erl_anno:new(0), none, []};
         [T] -> T;
-        Ts  -> {type, 0, union, Ts}
+        Ts  -> {type, erl_anno:new(0), union, Ts}
     end;
 normalize({user_type, P, Name, Args} = Type, TEnv) ->
     case typelib:get_module_from_annotation(P) of
@@ -421,7 +421,7 @@ expand_builtin_aliases({type, Ann, iolist, []}) ->
     Union = [{type, Ann, byte, []},
              {type, Ann, binary, []},
              {type, Ann, iolist, []}],
-    {type, Ann, maybe_improper_list, [{union, Union}]};
+    {type, Ann, maybe_improper_list, [{type, Ann, union, Union}]};
 expand_builtin_aliases({type, Ann, function, []}) ->
     {type, Ann, 'fun', []};
 expand_builtin_aliases({type, Ann, module, []}) ->
@@ -1623,7 +1623,7 @@ bit_specifier_list_to_type(Specifiers) ->
 			end,
 			Specifiers),
     case TypeSpecifiers of
-	[]  -> {type, 0, integer, []}; %% default
+	[]  -> {type, erl_anno:new(0), integer, []}; %% default
 	[T] -> T
     end.
 
