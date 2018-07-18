@@ -1275,8 +1275,12 @@ type_check_tuple_in(Env, {type, _, tuple, Tys}, TS) ->
 			type_check_expr_in(Env, Ty, Expr)
 		end, Tys, TS)),
     {union_var_binds(VBs), constraints:combine(Css)};
-type_check_tuple_in(Env, {type, _, union, Tys}, TS) ->
-    type_check_tuple_union(Env, Tys, TS);
+type_check_tuple_in(Env, {type, _, union, Tys} = UTy, TS) ->
+    try type_check_tuple_union(Env, Tys, TS)
+    catch {type_error, tuple_error} ->
+            P = element(2, hd(TS)),
+            throw({type_error, tuple_error, P, TS, UTy})
+    end;
 type_check_tuple_in(Env, {var, _, Name}, TS) ->
     {Tys, VarBindsList, Css} =
 	lists:unzip3(lists:map(fun (Expr) ->
@@ -1296,7 +1300,6 @@ type_check_tuple_union(Env, [Tuple = {type, _, tuple, _}|Union], TS) ->
 type_check_tuple_union(Env, [_|Union], TS) ->
     type_check_tuple_union(Env, Union, TS);
 type_check_tuple_union(_Env, [], _TS) ->
-    %% TODO: Better error message
     throw({type_error, tuple_error}).
 
 type_check_cons_in(Env, Ty = {type, _, List, []}, H, T)
@@ -1829,8 +1832,9 @@ handle_type_error({type_error, rel_error, LogicOp, P, Ty1, Ty2}) ->
 handle_type_error({type_error, list_op_error, ListOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-list argument "
 	      "of type ~s~n", [ListOp, P, typelib:pp_type(Ty)]);
-handle_type_error({type_error, tuple_error}) ->
-    io:format("A tuple didn't match any of the types in a union~n");
+handle_type_error({type_error, tuple_error, P, Expr, Ty}) ->
+    io:format("A tuple {~s} at line ~p didn't match any of the types in the union ~s~n",
+              [erl_pp:exprs(Expr), P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, pattern, P, Pat, Ty}) ->
     io:format("The pattern ~s on line ~p doesn't have the type ~s~n",
 	      [erl_pp:expr(Pat), P, typelib:pp_type(Ty)]);
