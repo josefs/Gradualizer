@@ -165,6 +165,16 @@ normalize_e2e_test_() ->
                                  "f(A) -> A."]))}
     ].
 
+type_check_call_test_() ->
+    [%% Return type of a function call expr must be a subtype of expected result type
+     ?_assert(type_check_forms(["-spec f() -> number().",
+                                "f() -> g().",
+                                "-spec g() -> integer()."])),
+     ?_assertNot(type_check_forms(["-spec f() -> integer().",
+                                   "f() -> g().",
+                                   "-spec g() -> number()."]))
+    ].
+
 handle_type_error_test_() ->
     [
      %% {type_error, nil, Line, Ty}

@@ -1064,7 +1064,7 @@ do_type_check_expr_in(Env, ResTy, {'case', _, Expr, Clauses}) ->
     {VB, constraints:combine(Cs1,Cs2)};
 do_type_check_expr_in(Env, ResTy, {'if', _, Clauses}) ->
     check_clauses(Env, {type, 0, any, []}, ResTy, Clauses);
-do_type_check_expr_in(Env, ResTy, {call, _, Name, Args}) ->
+do_type_check_expr_in(Env, ResTy, {call, P, Name, Args}) ->
     {FunTy, VarBinds, Cs} = type_check_fun(Env, Name, length(Args)),
     case FunTy of
 	{type, _, any, []} ->
@@ -1083,12 +1083,12 @@ do_type_check_expr_in(Env, ResTy, {call, _, Name, Args}) ->
 				       type_check_expr_in(Env, ArgTy, Arg)
 			       end, ArgTys, Args)
 		 ),
-	    case subtype(ResTy, FunResTy, Env#env.tenv) of
+	    case subtype(FunResTy, ResTy, Env#env.tenv) of
 		{true, Cs3} ->
 		    { union_var_binds([VarBinds | VarBindsList])
 		    , constraints:combine([Cs, Cs2, Cs3 | Css]) };
 		false ->
-		    throw(type_error)
+		    throw({type_error, fun_res_type, P, Name, FunResTy, ResTy})
 	    end
     end;
 do_type_check_expr_in(Env, ResTy, {'receive', _, Clauses}) ->
@@ -1805,6 +1805,9 @@ handle_type_error({type_error, call, _P, Name, TyArgs, ArgTys}) ->
     io:format("The function ~p expects arguments of type~n~p~n but is given "
 	      "arguments of type~n~p~n",
 	      [Name, TyArgs, ArgTys]);
+handle_type_error({type_error, fun_res_type, P, {atom, _, Name}, FunResTy, ResTy}) ->
+    io:format("The function ~p in line ~p is expected to return ~s but it returns ~s~n",
+              [Name, P, typelib:pp_type(ResTy), typelib:pp_type(FunResTy)]);
 handle_type_error({type_error, boolop, BoolOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-boolean argument "
 	      "of type ~s~n", [BoolOp, P, typelib:pp_type(Ty)]);
