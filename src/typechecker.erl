@@ -1477,6 +1477,8 @@ add_type_pat({var, _, '_'}, _Ty, _TEnv, VEnv) ->
     VEnv;
 add_type_pat({var, _, A}, Ty, _TEnv, VEnv) ->
     VEnv#{ A => Ty };
+add_type_pat(Expr, {type, _, any, []}, _TEnv, VEnv) ->
+    add_any_types_pat(Expr, VEnv);
 add_type_pat({integer, _, _}, _Ty, _TEnv, VEnv) ->
     VEnv;
 add_type_pat(Tuple = {tuple, P, Pats}, Ty, TEnv, VEnv) ->

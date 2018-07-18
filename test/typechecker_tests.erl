@@ -175,6 +175,14 @@ type_check_call_test_() ->
                                    "-spec g() -> number()."]))
     ].
 
+add_type_pat_test_() ->
+    [{"Pattern matching list against any()",
+      ?_assert(type_check_forms(["f([E|_]) -> E."]))},
+     {"Pattern matching record against any()",
+      ?_assert(type_check_forms(["-record(f, {r}).",
+                                 "f(#r{f = F}) -> F."]))}
+    ].
+
 handle_type_error_test_() ->
     [
      %% {type_error, nil, Line, Ty}
@@ -191,4 +199,9 @@ subtype(T1, T2) ->
     end.
 
 type_check_forms(String) ->
-    ok =:= typechecker:type_check_forms(merl:quote(String), []).
+    ok =:= typechecker:type_check_forms(ensure_form_list(merl:quote(String)), []).
+
+ensure_form_list(List) when is_list(List) ->
+    List;
+ensure_form_list(Other) ->
+    [Other].
