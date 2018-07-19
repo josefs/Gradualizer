@@ -92,6 +92,10 @@ subtype_test_() ->
 
 not_subtype_test_() ->
     [
+     %% Term and none
+     ?_assert(subtype(?t( integer()         ), ?t( term()           ))),
+     ?_assert(subtype(?t( none()            ), ?t( integer()        ))),
+
      %% Numeric
      ?_assertNot(subtype(?t( 1              ), ?t( 2                ))),
      ?_assertNot(subtype(?t( integer()      ), ?t( 1                ))),
