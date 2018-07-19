@@ -775,7 +775,7 @@ type_check_expr(Env, {op, P, 'not', Arg}) ->
     end;
 type_check_expr(Env, {op, P, BoolOp, Arg1, Arg2}) when
       (BoolOp == 'andalso') or (BoolOp == 'and') or
-      (BoolOp == 'orelse')  or (BoolOp == 'or') ->
+      (BoolOp == 'orelse')  or (BoolOp == 'or') or (BoolOp == 'xor')  ->
     type_check_logic_op(Env, BoolOp, P, Arg1, Arg2);
 type_check_expr(Env, {op, P, RelOp, Arg1, Arg2}) when
       (RelOp == '=:=') or (RelOp == '==') or
@@ -824,7 +824,7 @@ type_check_logic_op(Env, Op, P, Arg1, Arg2) ->
     % 'andalso' and 'orelse', not 'and' or 'or'.
     UnionVarBindsSecondArg =
 	fun (VB1, VB2) ->
-		if (Op == 'and') or (Op == 'or') ->
+		if (Op == 'and') or (Op == 'or') or (Op == 'xor') ->
 			VB1;
 		   true ->
 			union_var_binds([VB1, VB2])
