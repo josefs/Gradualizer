@@ -838,7 +838,7 @@ type_check_logic_op(Env, Op, P, Arg1, Arg2) ->
 	    {Ty2, VB2, Cs3} = type_check_expr(Env#env{ venv = UnionVarBindsSecondArg(Env#env.venv,VB1 )}, Arg2),
 	    case subtype(Ty2, {type, P, bool, []}, Env#env.tenv) of
 		false ->
-		    throw({type_error, boolop, Op, P, Ty1});
+		    throw({type_error, boolop, Op, P, Ty2});
 		{true, Cs4} ->
 		    {merge_types([Ty1, Ty2])
 		    ,union_var_binds([VB1, VB2])
