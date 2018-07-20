@@ -176,7 +176,13 @@ type_check_call_test_() ->
                                 "-spec g() -> integer()."])),
      ?_assertNot(type_check_forms(["-spec f() -> integer().",
                                    "f() -> g().",
-                                   "-spec g() -> number()."]))
+                                   "-spec g() -> number()."])),
+     %% Passing an incompatible type to a spec'ed function
+     ?_assertNot(type_check_forms(["-spec int_term() -> term().",
+                                   "int_term() -> 5.",
+                                   "-spec int_arg(integer()) -> integer().",
+                                   "int_arg(I) -> I + 1.",
+                                   "f() -> int_arg(int_term())."]))
     ].
 
 add_type_pat_test_() ->
