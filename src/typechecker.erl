@@ -1425,18 +1425,18 @@ check_guards(Env, Guards) ->
 				    end, GuardSeq))
 		end, Guards)).
 
-type_check_function(FEnv, TEnv, {function,_, Name, NArgs, Clauses}) ->
-    case maps:find({Name, NArgs}, FEnv) of
+type_check_function(Env, {function,_, Name, NArgs, Clauses}) ->
+    case maps:find({Name, NArgs}, Env#env.fenv) of
     {ok, [{type, _, bounded_fun, [{type, _, 'fun',
                                    [{type, _, product, ArgsTy}, ResTy]},
                                   SCs2]}]} ->
 	    % TODO: Handle multi-clause function types
 	    Cs2 = constraints:convert(SCs2),
-	    {VarBinds, Cs} = check_clauses(#env{ fenv = FEnv, tenv = TEnv },
+	    {VarBinds, Cs} = check_clauses(Env,
 					   ArgsTy, ResTy, Clauses),
 	    {ResTy, VarBinds, constraints:combine(Cs,Cs2)};
 	{ok, {type, _, any, []}} ->
-	    infer_clauses(#env{ fenv = FEnv, tenv = TEnv }, Clauses);
+	    infer_clauses(Env, Clauses);
 	error ->
 	    throw({internal_error, missing_type_spec, Name, NArgs})
     end.
@@ -1689,18 +1689,12 @@ type_check_forms(Forms, Opts) ->
 	{ok, _Pid}                    -> ok;
 	{error, {already_started, _}} -> ok
     end,
-    #parsedata{specs     = Specs
-	      ,functions = Funs
-	      ,types     = Types
-	      ,opaques   = Opaques
-	      ,records   = Records
-	      } =
+    ParseData =
 	collect_specs_types_opaques_and_functions(Forms),
-    FEnv = create_fenv(Specs, Funs),
-    TEnv = create_tenv(Types ++ Opaques, Records),
+    Env = create_env(ParseData),
     lists:foldr(fun (Function, Res) when Res =:= ok;
                                          not StopOnFirstError ->
-			try type_check_function(FEnv, TEnv, Function) of
+			try type_check_function(Env, Function) of
 			    {_Ty, _VarBinds, _Cs} ->
 				Res
 			catch
@@ -1713,7 +1707,17 @@ type_check_forms(Forms, Opts) ->
 			end;
 		    (_Function, Err) ->
 			Err
-		end, ok, Funs).
+		end, ok, ParseData#parsedata.functions).
+
+create_env(#parsedata{specs     = Specs
+                     ,functions = Funs
+                     ,types     = Types
+                     ,opaques   = Opaques
+                     ,records   = Records
+                     }) ->
+    FEnv = create_fenv(Specs, Funs),
+    TEnv = create_tenv(Types ++ Opaques, Records),
+    #env{ fenv = FEnv, tenv = TEnv }.
 
 create_tenv(TypeDefs, RecordDefs) ->
     TypeMap =

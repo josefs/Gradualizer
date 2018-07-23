@@ -169,6 +169,23 @@ normalize_e2e_test_() ->
                                  "f(A) -> A."]))}
     ].
 
+infer_expr_test_() ->
+    [%% the inferred type of a literal tuple should be any()
+     ?_assertEqual("any()",
+                   type_check_expr(_Env = "",
+                                   _Expr = "{1, 2}")),
+     %% the inferred type of a tuple with a untyped function call
+     %% should also be any()
+     ?_assertMatch("any()",
+                   type_check_expr(_Env = "h() -> 2.",
+                                   _Expr = "{1, h()}")),
+     %% the inferred type of a tuple with a typed function call
+     %% should be {any(), restype()}
+     ?_assertMatch("{any(), integer()}",
+                   type_check_expr(_Env = "-spec h() -> integer().",
+                                   _Expr = "{1, h()}"))
+    ].
+
 type_check_call_test_() ->
     [%% Return type of a function call expr must be a subtype of expected result type
      ?_assert(type_check_forms(["-spec f() -> number().",
@@ -215,3 +232,14 @@ ensure_form_list(List) when is_list(List) ->
     List;
 ensure_form_list(Other) ->
     [Other].
+
+type_check_expr(EnvStr, ExprString) ->
+    Env = create_env(EnvStr),
+    Expr = merl:quote(ExprString),
+    {Ty, _VarBinds, _Cs} = typechecker:type_check_expr(Env, Expr),
+    typelib:pp_type(Ty).
+
+create_env(String) ->
+    Forms = ensure_form_list(merl:quote(String)),
+    ParseData = typechecker:collect_specs_types_opaques_and_functions(Forms),
+    typechecker:create_env(ParseData).
