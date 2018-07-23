@@ -601,6 +601,13 @@ int_range_to_types({I, J}) when I < J ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+%% @doc Infer type of expression
+%%
+%% Type information should always stem from user type annotation (function specs
+%% and type annotated record definitions). If an expression does not have a
+%% subexression that has a type inferred from these sources, its inferred type
+%% will be `any()'.
+%%
 %% Arguments: An environment for functions, an environment for variables
 %% and the expression to type check.
 %% Returns the type of the expression, a collection of variables bound in
@@ -625,10 +632,20 @@ type_check_expr(Env, {'case', _, Expr, Clauses}) ->
     {Ty, VB, constraints:combine(Cs1, Cs2)};
 type_check_expr(_Env, {integer, _, _N}) ->
     return({type, 0, any, []});
-type_check_expr(Env, {tuple, _, TS}) ->
+type_check_expr(Env, {tuple, P, TS}) ->
     { Tys, VarBindsList, Css} = lists:unzip3([ type_check_expr(Env, Expr)
 				        || Expr <- TS ]),
-    { {type, 0, tuple, Tys}, union_var_binds(VarBindsList), constraints:combine(Css) };
+    InferredTy =
+        case lists:all(fun({type, _, any, []}) -> true;
+                          (_) -> false
+                       end, Tys) of
+            true ->
+                {type, P, any, []};
+            false ->
+                %% at least one element in the tuple has a type inferred from a spec
+                {type, P, tuple, Tys}
+        end,
+    { InferredTy, union_var_binds(VarBindsList), constraints:combine(Css) };
 type_check_expr(Env, {cons, _, Head, Tail}) ->
     {Ty1, VB1, Cs1} = type_check_expr(Env, Head),
     {Ty2, VB2, Cs2} = type_check_expr(Env, Tail),
