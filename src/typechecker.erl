@@ -605,7 +605,7 @@ int_range_to_types({I, J}) when I < J ->
 %%
 %% Type information should always stem from user type annotation (function specs
 %% and type annotated record definitions). If an expression does not have a
-%% subexression that has a type inferred from these sources, its inferred type
+%% subexpression that has a type inferred from these sources, its inferred type
 %% will be `any()'.
 %%
 %% Arguments: An environment for functions, an environment for variables
