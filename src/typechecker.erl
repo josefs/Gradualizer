@@ -1188,8 +1188,8 @@ type_check_int_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
     end.
 type_check_logic_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
     case ResTy of
-	{type, _, Ty, []} when Ty == 'boolean' orelse Ty == 'bool'
-			       orelse Ty == 'any' ->
+	% Normalized boolean type
+	{type, _, union, [{atom, _, true}, {atom, _, false}]} ->
 	  {VarBinds1, Cs1} = type_check_expr_in(Env, ResTy, Arg1),
 	  {VarBinds2, Cs2} = type_check_expr_in(Env, ResTy, Arg2),
 	  {union_var_binds([VarBinds1, VarBinds2])
