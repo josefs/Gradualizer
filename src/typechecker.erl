@@ -94,6 +94,18 @@ subtypes([Ty1|Tys1], [Ty2|Tys2], TEnv) ->
 	    end
     end.
 
+%% Checks is a type is a subtype of at least one of the types in a list.
+%% Used when checking intersection types.
+any_subtype(_Ty, [], _TEnv) ->
+    false;
+any_subtype(Ty, [Ty1|Tys], TEnv) ->
+    case subtype(Ty, Ty1, TEnv) of
+	R={true, _} ->
+	    R;
+	false ->
+	    any_subtype(Ty, Tys, TEnv)
+    end.
+
 
 % This function throws an exception in case of a type error
 
@@ -1108,6 +1120,28 @@ do_type_check_expr_in(Env, ResTy, {call, P, Name, Args}) ->
 		    throw({type_error, fun_res_type, P, Name, FunResTy, ResTy})
 	    end
     end;
+
+%% Functions
+do_type_check_expr_in(Env, ResTy, {'fun', _, {clauses, Clauses}}) ->
+    check_clauses(Env, ResTy, Clauses);
+do_type_check_expr_in(Env, ResTy, {'fun', P, {function, Name, Arity}}) ->
+    BoundedFunTypeList = maps:get({Name, Arity}, Env#env.fenv),
+    case any_subtype(ResTy, BoundedFunTypeList, Env#env.tenv) of
+	{true, Cs} -> {#{}, Cs};
+	false -> throw({type_error, fun_res_type, P, {atom, P, Name},
+			ResTy, BoundedFunTypeList})
+    end;
+do_type_check_expr_in(Env, ResTy, {'fun', P, {function, {atom, _, M}, {atom, _, F}, {integer, _, A}}}) ->
+    case gradualizer_db:get_spec(M, F, A) of
+        {ok, BoundedFunTypeList} ->
+	    case any_subtype(ResTy, BoundedFunTypeList, Env#env.tenv) of
+		{true, Cs} -> {#{}, Cs};
+		false -> throw(fun_error)
+	    end;
+        not_found ->
+            throw({call_undef, P, M, F, A})
+    end;
+
 do_type_check_expr_in(Env, ResTy, {'receive', _, Clauses}) ->
     check_clauses(Env, [{type, 0, any, []}], ResTy, Clauses);
 do_type_check_expr_in(Env, ResTy, {op, _, '!', Arg1, Arg2}) ->
@@ -1383,6 +1417,29 @@ infer_clause(Env, {clause, _, Args, Guards, Block}) ->
 				end, GuardConj)
 	      end, Guards),
     type_check_block(EnvNew, Block).
+
+check_clauses(_Env, [], _Clauses) ->
+    %% TODO: Improve quality of type error
+    throw({typer_error, check_clauses});
+check_clauses(Env, [{type, _, 'fun', [{type, _, product, ArgsTy},ResTy]}|Tys], Clauses) ->
+    try
+	check_clauses(Env, ArgsTy, ResTy, Clauses)
+    catch
+	_ ->
+	    check_clauses(Env, Tys, Clauses)
+    end;
+check_clauses(Env, [{var, _, TyVar}|Tys], Clauses) ->
+    %%% We don't backtrack here in case of a type error, because the
+    %%% type error is not due to us pushing in a type. Hence, intersection
+    %%% types with type variables are rather weak in this case.
+    {Ty, VarBinds, Cs} = infer_clauses(Env, Clauses),
+    {VarBinds, constraints:combine(constraints:upper(TyVar, Ty), Cs)};
+check_clauses(Env, {type, _, 'fun', [{type, _, product, ArgsTy}, ResTy]}, Clauses) ->
+    check_clauses(Env, ArgsTy, ResTy, Clauses);
+check_clauses(Env, {var, _, TyVar}, Clauses) ->
+    {Ty, VarBinds, Cs} = infer_clauses(Env, Clauses),
+    {VarBinds, constraints:combine(constraints:upper(TyVar, Ty), Cs)}.
+
 
 
 check_clauses(Env, ArgsTy, ResTy, Clauses) when
@@ -1873,6 +1930,9 @@ handle_type_error({type_error, bit_type, Expr, P, Ty1, Ty2}) ->
     io:format("The expression ~s inside the bit expression on line ~p has type ~s "
 	      "but the type specifier indicates ~s~n",
 	      [erl_pp:expr(Expr), erl_anno:line(P), typelib:pp_type(Ty1), 		       typelib:pp_type(Ty2)]);
+handle_type_error({type_error, check_clauses}) ->
+    %%% TODO: Improve quality of type error
+    io:format("Type error in clauses").
 handle_type_error(type_error) ->
     io:format("TYPE ERROR~n").
 
