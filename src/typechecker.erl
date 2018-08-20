@@ -766,6 +766,8 @@ type_check_expr(Env, {record, _, Record, Fields}) ->
     Rec      = maps:get(Record, Env#env.tenv#tenv.records),
     {VB, Cs} = type_check_fields(Env, Rec, Fields),
     {RecTy, VB, Cs};
+type_check_expr(Env, {record_index, _, Record, Field}) ->
+    {{type, erl_anno:new(0), integer, []}, #{}, constraints:empty()};
 
 %% Functions
 type_check_expr(Env, {'fun', _, {clauses, Clauses}}) ->
@@ -1135,6 +1137,13 @@ do_type_check_expr_in(Env, ResTy, {record_field, _, Expr, Record, {atom, _, Fiel
 	false ->
 	    %% TODO: Improve quality of error message
 	    throw({type_error, record})
+    end;
+do_type_check_expr_in(Env, ResTy, {record_index, LINE, Record, Field}) ->
+    case subtype({type, erl_anno:new(0), integer, []}, ResTy, Env#env.tenv) of
+	{true, Cs} ->
+	    {#{}, Cs};
+	false ->
+	    throw({type_error, record_index, LINE, Record, Field})
     end;
 
 do_type_check_expr_in(Env, ResTy, {'case', _, Expr, Clauses}) ->

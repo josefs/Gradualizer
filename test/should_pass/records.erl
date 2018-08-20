@@ -19,3 +19,10 @@ g(R) ->
 -spec h() -> #r{}.
 h() ->
     #r{ f1 = apa, f2 = 3 }.
+
+i() ->
+    #r.f1.
+
+-spec j() -> integer().
+j() ->
+    #r.f2.
