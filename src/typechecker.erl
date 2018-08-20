@@ -1086,6 +1086,56 @@ do_type_check_expr_in(Env, ResTy, {map, LINE, Expr, Assocs}) ->
             throw({type_error, map, LINE, ResTy})
     end;
 
+%% Records
+do_type_check_expr_in(Env, ResTy, {record, _, Record, Fields}) ->
+    case subtype(ResTy, {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Record}]}, Env#env.tenv) of
+	{true, Cs} ->
+	    Rec = maps:get(Record, Env#env.tenv#tenv.records),
+	    {VarBindsList, Css}
+		= lists:unzip(
+		    lists:map(fun ({record_field, _, Field, Exp}) ->
+				      FieldTy = get_rec_field_type(Field, Rec),
+				      type_check_expr_in(Env, FieldTy, Exp)
+			      end
+			     ,Fields)
+		   ),
+	    {union_var_binds(VarBindsList), constraints:combine([Cs|Css])};
+	false ->
+	    %% TODO: Improve quality of error message
+	    throw({type_error, record})
+    end;
+do_type_check_expr_in(Env, ResTy, {record, _, Exp, Record, Fields}) ->
+    RecordTy = {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Record}]},
+    case subtype(ResTy, RecordTy, Env#env.tenv) of
+	{true, Cs} ->
+	    Rec = maps:get(Record, Env#env.tenv#tenv.records),
+	    {VarBindsList, Css}
+		= lists:unzip(
+		    lists:map(fun ({record_field, _, Field, Expr}) ->
+				      FieldTy = get_rec_field_type(Field, Rec),
+				      type_check_expr_in(Env, FieldTy, Expr)
+			      end
+			     ,Fields)
+		   ),
+	    {VarBinds, Cs} = type_check_expr_in(Env, RecordTy, Exp),
+	    {union_var_binds([VarBinds|VarBindsList])
+	    ,constraints:combine([Cs|Css])};
+	false ->
+	    %% TODO: Improve quality of error message
+	    throw({type_error, record})
+    end;
+do_type_check_expr_in(Env, ResTy, {record_field, _, Expr, Record, {atom, _, Field}}) ->
+    Rec = maps:get(Record, Env#env.tenv#tenv.records),
+    FieldTy = get_rec_field_type(Field, Rec),
+    case subtype(ResTy, FieldTy, Env#env.tenv) of
+	{true, Cs1} ->
+	    {VarBinds, Cs2} = type_check_expr_in(Env, Rec, Expr),
+	    {VarBinds, constraints:combine([Cs1,Cs2])};
+	false ->
+	    %% TODO: Improve quality of error message
+	    throw({type_error, record})
+    end;
+
 do_type_check_expr_in(Env, ResTy, {'case', _, Expr, Clauses}) ->
     {ExprTy, VarBinds, Cs1} = type_check_expr(Env, Expr),
     Env2 = Env#env{ venv = add_var_binds(Env#env.venv, VarBinds) },
@@ -1428,7 +1478,7 @@ check_clauses(Env, [{type, _, 'fun', [{type, _, product, ArgsTy},ResTy]}|Tys], C
 	_ ->
 	    check_clauses(Env, Tys, Clauses)
     end;
-check_clauses(Env, [{var, _, TyVar}|Tys], Clauses) ->
+check_clauses(Env, [{var, _, TyVar}|_Tys], Clauses) ->
     %%% We don't backtrack here in case of a type error, because the
     %%% type error is not due to us pushing in a type. Hence, intersection
     %%% types with type variables are rather weak in this case.
@@ -1932,7 +1982,7 @@ handle_type_error({type_error, bit_type, Expr, P, Ty1, Ty2}) ->
 	      [erl_pp:expr(Expr), erl_anno:line(P), typelib:pp_type(Ty1), 		       typelib:pp_type(Ty2)]);
 handle_type_error({type_error, check_clauses}) ->
     %%% TODO: Improve quality of type error
-    io:format("Type error in clauses").
+    io:format("Type error in clauses");
 handle_type_error(type_error) ->
     io:format("TYPE ERROR~n").
 
