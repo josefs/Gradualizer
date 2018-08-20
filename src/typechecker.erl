@@ -766,7 +766,7 @@ type_check_expr(Env, {record, _, Record, Fields}) ->
     Rec      = maps:get(Record, Env#env.tenv#tenv.records),
     {VB, Cs} = type_check_fields(Env, Rec, Fields),
     {RecTy, VB, Cs};
-type_check_expr(Env, {record_index, _, Record, Field}) ->
+type_check_expr(_Env, {record_index, _, _Record, _Field}) ->
     {{type, erl_anno:new(0), integer, []}, #{}, constraints:empty()};
 
 %% Functions
