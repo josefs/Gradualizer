@@ -1549,8 +1549,13 @@ type_check_function(Env, {function,_, Name, NArgs, Clauses}) ->
                                   SCs2]}]} ->
 	    % TODO: Handle multi-clause function types
 	    Cs2 = constraints:convert(SCs2),
+	    NormResTy  = normalize(ResTy, Env#env.tenv),
+	    NormArgsTy = lists:map(fun (ArgTy) ->
+					   normalize(ArgTy, Env#env.tenv)
+				   end
+				  ,ArgsTy),
 	    {VarBinds, Cs} = check_clauses(Env,
-					   ArgsTy, ResTy, Clauses),
+					   NormArgsTy, NormResTy, Clauses),
 	    {ResTy, VarBinds, constraints:combine(Cs,Cs2)};
 	{ok, {type, _, any, []}} ->
 	    infer_clauses(Env, Clauses);
