@@ -952,7 +952,7 @@ type_check_expr(Env, {op, P, '-', Arg}) ->
     end;
 type_check_expr(Env, {op, P, BoolOp, Arg1, Arg2}) when
       (BoolOp == 'andalso') or (BoolOp == 'and') or
-      (BoolOp == 'orelse')  or (BoolOp == 'or') or (BoolOp == 'xor')  ->
+      (BoolOp == 'orelse')  or (BoolOp == 'or') or (BoolOp == 'xor') ->
     type_check_logic_op(Env, BoolOp, P, Arg1, Arg2);
 type_check_expr(Env, {op, P, RelOp, Arg1, Arg2}) when
       (RelOp == '=:=') or (RelOp == '==') or
@@ -1570,7 +1570,14 @@ type_check_logic_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
     case subtype(ResTy, {type, erl_anno:new(0), 'bool', []}, Env#env.tenv) of
 	{true, Cs} ->
 	  {VarBinds1, Cs1} = type_check_expr_in(Env, ResTy, Arg1),
-	  {VarBinds2, Cs2} = type_check_expr_in(Env, ResTy, Arg2),
+	  EnvArg2 =
+	      if Op =:= 'andalso'; Op =:= 'orelse' ->
+	              %% variable bindings are propagated from Arg1 to Arg2
+	              Env#env{venv = union_var_binds([Env#env.venv, VarBinds1])};
+	         true ->
+	              Env
+	      end,
+	  {VarBinds2, Cs2} = type_check_expr_in(EnvArg2, ResTy, Arg2),
 	  {union_var_binds([VarBinds1, VarBinds2])
 	  ,constraints:combine([Cs, Cs1, Cs2])};
 	false ->
