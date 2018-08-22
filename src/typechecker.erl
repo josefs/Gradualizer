@@ -169,6 +169,8 @@ compat_ty({type, _, union, Tys1}, {type, _, union, Tys2}, A, TEnv) ->
                 end, {A, constraints:empty()}, Tys1);
 compat_ty(Ty1, {type, _, union, Tys2}, A, TEnv) ->
     any_type(Ty1, Tys2, A, TEnv);
+compat_ty({type, _, union, Tys1}, Ty2, A, TEnv) ->
+    all_type(Tys1, Ty2, A, TEnv);
 
 % Integer types
 compat_ty(Ty1, Ty2, A, _TEnv) when ?is_int_type(Ty1), ?is_int_type(Ty2) ->
@@ -314,6 +316,18 @@ any_type(Ty, [Ty1|Tys], A, TEnv) ->
 	nomatch ->
 	    any_type(Ty, Tys, A, TEnv)
     end.
+
+%% @doc All types in `Tys' must be compatible with `Ty'.
+%% Returns all the gather memoizations and constrains.
+%% Does not return (throws `nomatch') if any of the types is not compatible.
+all_type(Tys, Ty, A, TEnv) ->
+    all_type(Tys, Ty, A, [], TEnv).
+
+all_type([], _Ty, A, Css, _TEnv) ->
+    {A, constraints:combine(Css)};
+all_type([Ty1|Tys], Ty, AIn, Css, TEnv) ->
+    {AOut, Cs} = compat_ty(Ty1, Ty, AIn, TEnv),
+    all_type(Tys, Ty, AOut, [Cs|Css], TEnv).
 
 get_record_fields(RecName, Anno, #tenv{records = REnv}) ->
     case typelib:get_module_from_annotation(Anno) of
