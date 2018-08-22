@@ -1244,6 +1244,9 @@ do_type_check_expr_in(Env, Ty, {var, LINE, Var}) ->
 	false ->
 	    throw({type_error, tyVar, LINE, Var, VarTy, Ty})
     end;
+do_type_check_expr_in(Env, Ty, {match, _, Pat, Expr}) ->
+    {VarBinds, Cs} = type_check_expr_in(Env, Ty, Expr),
+    {add_type_pat(Pat, Ty, Env#env.tenv, VarBinds), Cs};
 do_type_check_expr_in(Env, Ty, I = {integer, LINE, Int}) ->
     case subtype(I, Ty, Env#env.tenv) of
 	{true, Cs} ->
@@ -1529,6 +1532,8 @@ do_type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
       Op == '++' orelse Op == '--' ->
     type_check_list_op_in(Env, ResTy, Op, P, Arg1, Arg2);
 
+do_type_check_expr_in(Env, ResTy, {block, _, Block}) ->
+    type_check_block_in(Env, ResTy, Block);
 do_type_check_expr_in(Env, ResTy, {'catch', _, Arg}) ->
     % TODO: Should we require ResTy to also include the possibility of
     % exceptions? But exceptions can be of any type! That would mean
@@ -1712,14 +1717,14 @@ type_check_block(Env, [Expr]) ->
 type_check_block(Env, [Expr | Exprs]) ->
     {_, VarBinds, Cs1} = type_check_expr(Env, Expr),
     {Ty, VB, Cs2} = type_check_block(Env#env{ venv = add_var_binds(Env#env.venv, VarBinds) }, Exprs),
-    {Ty, VB, constraints:combine(Cs1, Cs2)}.
+    {Ty, add_var_binds(VB, VarBinds), constraints:combine(Cs1, Cs2)}.
 
 type_check_block_in(Env, ResTy, [Expr]) ->
     type_check_expr_in(Env, ResTy, Expr);
 type_check_block_in(Env, ResTy, [Expr | Exprs]) ->
     {_, VarBinds, Cs1} = type_check_expr(Env, Expr),
     {VB, Cs2} = type_check_block_in(Env#env{ venv = add_var_binds(Env#env.venv, VarBinds) }, ResTy, Exprs),
-    {VB, constraints:combine(Cs1, Cs2)}.
+    {add_var_binds(VB, VarBinds), constraints:combine(Cs1, Cs2)}.
 
 type_check_union_in(Env, [Ty|Tys], Expr) ->
     try
