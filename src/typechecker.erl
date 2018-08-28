@@ -1052,6 +1052,13 @@ do_type_check_expr_in(Env, Ty, {nil, LINE}) ->
 	false ->
 	    throw({type_error, nil, LINE, Ty})
     end;
+do_type_check_expr_in(Env, Ty, {string, LINE, String}) ->
+    case subtype({type, LINE, string, []}, Ty, Env#env.tenv) of
+      {true, Cs} ->
+        {#{}, Cs};
+      false ->
+        throw({type_error, string, LINE, String, Ty})
+    end;
 do_type_check_expr_in(Env, Ty, {bin, LINE, _BinElements} = Bin) ->
     %% Accept any binary type regardless of bit size parameters.
     %% TODO: If we can compute the length of the bit expression, we get the
@@ -1941,6 +1948,9 @@ handle_type_error({type_error, tyVar, LINE, Var, VarTy, Ty}) ->
 handle_type_error({type_error, {atom, _, A}, LINE, Ty}) ->
     io:format("The atom ~p on line ~p does not have type ~s~n",
 	      [A, LINE, typelib:pp_type(Ty)]);
+handle_type_error({type_error, string, LINE, String, Ty}) ->
+    io:format("The string ~p on line ~p does not have type ~s~n",
+              [String, LINE, typelib:pp_type(Ty)]);
 handle_type_error({type_error, int, I, LINE, Ty}) ->
     io:format("The integer ~p on line ~p does not have type ~s~n",
 	      [I, LINE, typelib:pp_type(Ty)]);
