@@ -1278,71 +1278,49 @@ do_type_check_expr_in(Env, ResTy, {'try', _, Block, CaseCs, CatchCs, AfterCs}) -
 
 
 type_check_arith_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
-    case ResTy of
-	{type, _, Ty, []} when Ty == 'integer' orelse
-			       Ty == 'non_neg_integer' orelse
-			       Ty == 'pos_integer' orelse
-			       Ty == 'neg_integer' orelse
-			       Ty == 'float' orelse
-			       Ty == 'any' ->
+    case subtype({type, erl_anno:new(0), 'number', []}, ResTy, Env#env.tenv) of
+	{true, Cs} ->
 	  {VarBinds1, Cs1} = type_check_expr_in(Env, ResTy, Arg1),
 	  {VarBinds2, Cs2} = type_check_expr_in(Env, ResTy, Arg2),
 	  {union_var_binds([VarBinds1, VarBinds2])
-	  ,constraints:combine(Cs1, Cs2)};
-	_ ->
+	  ,constraints:combine([Cs, Cs1, Cs2])};
+	false ->
 	  throw({type_error, arith_error, Op, P, ResTy})
     end.
 type_check_int_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
-    case ResTy of
-	{type, _, Ty, []} when Ty == 'integer' orelse Ty == 'any' ->
+    case subtype({type, erl_anno:new(0), 'integer', []}, ResTy, Env#env.tenv) of
+	{true, Cs} ->
 	  {VarBinds1, Cs1} = type_check_expr_in(Env, ResTy, Arg1),
 	  {VarBinds2, Cs2} = type_check_expr_in(Env, ResTy, Arg2),
 	  {union_var_binds([VarBinds1, VarBinds2])
-	  ,constraints:combine(Cs1, Cs2)};
-	_ ->
+	  ,constraints:combine([Cs, Cs1, Cs2])};
+	false ->
 	  throw({type_error, int_error, Op, P, ResTy})
     end.
 type_check_logic_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
-    case ResTy of
-	% Normalized boolean type
-	{type, _, union, [{atom, _, true}, {atom, _, false}]} ->
+    case subtype({type, erl_anno:new(0), 'bool', []}, ResTy, Env#env.tenv) of
+	{true, Cs} ->
 	  {VarBinds1, Cs1} = type_check_expr_in(Env, ResTy, Arg1),
 	  {VarBinds2, Cs2} = type_check_expr_in(Env, ResTy, Arg2),
 	  {union_var_binds([VarBinds1, VarBinds2])
-	  ,constraints:combine(Cs1, Cs2)};
-	_ ->
+	  ,constraints:combine([Cs, Cs1, Cs2])};
+	false ->
 	  throw({type_error, logic_error, Op, P, ResTy})
     end.
 type_check_rel_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
-    case ResTy of
-	{type, _, Ty, []} when Ty == 'boolean' orelse Ty == 'bool'
-			orelse Ty == 'any' ->
+    case subtype({type, erl_anno:new(0), 'bool', []}, ResTy, Env#env.tenv) of
+	{true, Cs0} ->
 	  {ResTy1, VarBinds1, Cs1} = type_check_expr(Env, Arg1),
 	  {ResTy2, VarBinds2, Cs2} = type_check_expr(Env, Arg2),
 	  case compatible(ResTy1, ResTy2, Env#env.tenv) of
 	      {true, Cs} ->
 		  {union_var_binds([VarBinds1, VarBinds2])
-		  ,constraints:combine([Cs1, Cs2, Cs])};
+		  ,constraints:combine([Cs0, Cs1, Cs2, Cs])};
 	      false ->
 		  throw({type_error, rel_error, Op, P, ResTy1, ResTy2})
 	  end;
-	_ ->
+	false ->
 	  throw({type_error, rel_error, Op, P, ResTy})
-    end.
-type_check_list_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
-    case ResTy of
-	{type, _, 'list', [_Ty]} ->
-	  {VarBinds1, Cs1} = type_check_expr_in(Env, ResTy, Arg1),
-	  {VarBinds2, Cs2} = type_check_expr_in(Env, ResTy, Arg2),
-	  {union_var_binds([VarBinds1, VarBinds2])
-	  ,constraints:combine(Cs1, Cs2)};
-	{type, _, any, []} ->
-	  {VarBinds1, Cs1} = type_check_expr_in(Env, ResTy, Arg1),
-	  {VarBinds2, Cs2} = type_check_expr_in(Env, ResTy, Arg2),
-	  {union_var_binds([VarBinds1, VarBinds2])
-	  ,constraints:combine(Cs1, Cs2)};
-	_ ->
-	  throw({type_error, list_op_error, Op, P, ResTy})
     end.
 type_check_list_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
     case subtype({type, erl_anno:new(0), list, []}, ResTy, Env#env.tenv) of
