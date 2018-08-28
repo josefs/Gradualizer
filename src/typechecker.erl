@@ -824,6 +824,7 @@ type_check_expr(Env, {op, P, BoolOp, Arg1, Arg2}) when
     type_check_logic_op(Env, BoolOp, P, Arg1, Arg2);
 type_check_expr(Env, {op, P, RelOp, Arg1, Arg2}) when
       (RelOp == '=:=') or (RelOp == '==') or
+      (RelOp == '=/=') or (RelOp == '/=') or
       % It's debatable whether we should allow comparison between any types
       % but right now it's allowed
       (RelOp == '>=')  or (RelOp == '=<') or
