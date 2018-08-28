@@ -1344,6 +1344,16 @@ type_check_list_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
 	_ ->
 	  throw({type_error, list_op_error, Op, P, ResTy})
     end.
+type_check_list_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
+    case subtype({type, erl_anno:new(0), list, []}, ResTy, Env#env.tenv) of
+      {true, Cs} ->
+        {VarBinds1, Cs1} = type_check_expr_in(Env, ResTy, Arg1),
+	{VarBinds2, Cs2} = type_check_expr_in(Env, ResTy, Arg2),
+	  {union_var_binds([VarBinds1, VarBinds2])
+	  ,constraints:combine([Cs, Cs1, Cs2])};
+      false ->
+	  throw({type_error, list_op_error, Op, P, ResTy})
+    end.
 
 
 type_check_assocs(Env, [{Assoc, _, Key, Val}| Assocs])
