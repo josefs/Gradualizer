@@ -169,6 +169,8 @@ compat_ty({type, _, union, Tys1}, {type, _, union, Tys2}, A, TEnv) ->
                 end, {A, constraints:empty()}, Tys1);
 compat_ty(Ty1, {type, _, union, Tys2}, A, TEnv) ->
     any_type(Ty1, Tys2, A, TEnv);
+compat_ty({type, _, union, Tys1}, Ty2, A, TEnv) ->
+    all_type(Tys1, Ty2, A, TEnv);
 
 % Integer types
 compat_ty(Ty1, Ty2, A, _TEnv) when ?is_int_type(Ty1), ?is_int_type(Ty2) ->
@@ -314,6 +316,18 @@ any_type(Ty, [Ty1|Tys], A, TEnv) ->
 	nomatch ->
 	    any_type(Ty, Tys, A, TEnv)
     end.
+
+%% @doc All types in `Tys' must be compatible with `Ty'.
+%% Returns all the gather memoizations and constrains.
+%% Does not return (throws `nomatch') if any of the types is not compatible.
+all_type(Tys, Ty, A, TEnv) ->
+    all_type(Tys, Ty, A, [], TEnv).
+
+all_type([], _Ty, A, Css, _TEnv) ->
+    {A, constraints:combine(Css)};
+all_type([Ty1|Tys], Ty, AIn, Css, TEnv) ->
+    {AOut, Cs} = compat_ty(Ty1, Ty, AIn, TEnv),
+    all_type(Tys, Ty, AOut, [Cs|Css], TEnv).
 
 get_record_fields(RecName, Anno, #tenv{records = REnv}) ->
     case typelib:get_module_from_annotation(Anno) of
@@ -810,6 +824,7 @@ type_check_expr(Env, {op, P, BoolOp, Arg1, Arg2}) when
     type_check_logic_op(Env, BoolOp, P, Arg1, Arg2);
 type_check_expr(Env, {op, P, RelOp, Arg1, Arg2}) when
       (RelOp == '=:=') or (RelOp == '==') or
+      (RelOp == '=/=') or (RelOp == '/=') or
       % It's debatable whether we should allow comparison between any types
       % but right now it's allowed
       (RelOp == '>=')  or (RelOp == '=<') or
@@ -1036,6 +1051,13 @@ do_type_check_expr_in(Env, Ty, {nil, LINE}) ->
 	    {#{}, Cs};
 	false ->
 	    throw({type_error, nil, LINE, Ty})
+    end;
+do_type_check_expr_in(Env, Ty, {string, LINE, String}) ->
+    case subtype({type, LINE, string, []}, Ty, Env#env.tenv) of
+      {true, Cs} ->
+        {#{}, Cs};
+      false ->
+        throw({type_error, string, LINE, String, Ty})
     end;
 do_type_check_expr_in(Env, Ty, {bin, LINE, _BinElements} = Bin) ->
     %% Accept any binary type regardless of bit size parameters.
@@ -1320,6 +1342,16 @@ type_check_list_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
 	  {union_var_binds([VarBinds1, VarBinds2])
 	  ,constraints:combine(Cs1, Cs2)};
 	_ ->
+	  throw({type_error, list_op_error, Op, P, ResTy})
+    end.
+type_check_list_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
+    case subtype({type, erl_anno:new(0), list, []}, ResTy, Env#env.tenv) of
+      {true, Cs} ->
+        {VarBinds1, Cs1} = type_check_expr_in(Env, ResTy, Arg1),
+	{VarBinds2, Cs2} = type_check_expr_in(Env, ResTy, Arg2),
+	  {union_var_binds([VarBinds1, VarBinds2])
+	  ,constraints:combine([Cs, Cs1, Cs2])};
+      false ->
 	  throw({type_error, list_op_error, Op, P, ResTy})
     end.
 
@@ -1931,6 +1963,9 @@ handle_type_error({type_error, tyVar, LINE, Var, VarTy, Ty}) ->
 handle_type_error({type_error, {atom, _, A}, LINE, Ty}) ->
     io:format("The atom ~p on line ~p does not have type ~s~n",
 	      [A, LINE, typelib:pp_type(Ty)]);
+handle_type_error({type_error, string, LINE, String, Ty}) ->
+    io:format("The string ~p on line ~p does not have type ~s~n",
+              [String, LINE, typelib:pp_type(Ty)]);
 handle_type_error({type_error, int, I, LINE, Ty}) ->
     io:format("The integer ~p on line ~p does not have type ~s~n",
 	      [I, LINE, typelib:pp_type(Ty)]);
