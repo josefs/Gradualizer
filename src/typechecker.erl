@@ -1089,7 +1089,7 @@ do_type_check_expr_in(Env, ResTy, {tuple, LINE, TS}) ->
 
 %% Maps
 do_type_check_expr_in(Env, ResTy, {map, LINE, Assocs}) ->
-    case subtype({type, LINE, map, any}, ResTy, Env#env.tenv) of
+    case subtype(ResTy, {type, LINE, map, any}, Env#env.tenv) of
         {true, Cs1} ->
             %% TODO: check the type of the map fields
             {_AssocTy, VBs, Cs2} = type_check_assocs(Env, Assocs),
@@ -1161,7 +1161,7 @@ do_type_check_expr_in(Env, ResTy, {record_field, _, Expr, Record, {atom, _, Fiel
 	    throw({type_error, record})
     end;
 do_type_check_expr_in(Env, ResTy, {record_index, LINE, Record, Field}) ->
-    case subtype({type, erl_anno:new(0), integer, []}, ResTy, Env#env.tenv) of
+    case subtype(ResTy, {type, erl_anno:new(0), integer, []}, Env#env.tenv) of
 	{true, Cs} ->
 	    {#{}, Cs};
 	false ->
@@ -1232,7 +1232,7 @@ do_type_check_expr_in(Env, ResTy, {op, _, '!', Arg1, Arg2}) ->
     {VarBinds2, Cs2} = type_check_expr_in(Env, ResTy, Arg2),
     {union_var_binds([VarBinds1,VarBinds2]), constraints:combine(Cs1,Cs2)};
 do_type_check_expr_in(Env, ResTy, {op, P, 'not', Arg}) ->
-    case subtype({type, P, boolean, []}, ResTy, Env#env.tenv) of
+    case subtype(ResTy, {type, P, boolean, []}, Env#env.tenv) of
 	{true, Cs1} ->
 	    {VB, Cs2} = type_check_expr_in(Env, ResTy, Arg),
 	    {VB, constraints:combine(Cs1, Cs2)};
@@ -1278,7 +1278,7 @@ do_type_check_expr_in(Env, ResTy, {'try', _, Block, CaseCs, CatchCs, AfterCs}) -
 
 
 type_check_arith_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
-    case subtype({type, erl_anno:new(0), 'number', []}, ResTy, Env#env.tenv) of
+    case subtype(ResTy, {type, erl_anno:new(0), 'number', []}, Env#env.tenv) of
 	{true, Cs} ->
 	  {VarBinds1, Cs1} = type_check_expr_in(Env, ResTy, Arg1),
 	  {VarBinds2, Cs2} = type_check_expr_in(Env, ResTy, Arg2),
@@ -1288,7 +1288,7 @@ type_check_arith_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
 	  throw({type_error, arith_error, Op, P, ResTy})
     end.
 type_check_int_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
-    case subtype({type, erl_anno:new(0), 'integer', []}, ResTy, Env#env.tenv) of
+    case subtype(ResTy, {type, erl_anno:new(0), 'integer', []}, Env#env.tenv) of
 	{true, Cs} ->
 	  {VarBinds1, Cs1} = type_check_expr_in(Env, ResTy, Arg1),
 	  {VarBinds2, Cs2} = type_check_expr_in(Env, ResTy, Arg2),
@@ -1298,7 +1298,7 @@ type_check_int_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
 	  throw({type_error, int_error, Op, P, ResTy})
     end.
 type_check_logic_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
-    case subtype({type, erl_anno:new(0), 'bool', []}, ResTy, Env#env.tenv) of
+    case subtype(ResTy, {type, erl_anno:new(0), 'bool', []}, Env#env.tenv) of
 	{true, Cs} ->
 	  {VarBinds1, Cs1} = type_check_expr_in(Env, ResTy, Arg1),
 	  {VarBinds2, Cs2} = type_check_expr_in(Env, ResTy, Arg2),
@@ -1308,7 +1308,7 @@ type_check_logic_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
 	  throw({type_error, logic_error, Op, P, ResTy})
     end.
 type_check_rel_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
-    case subtype({type, erl_anno:new(0), 'bool', []}, ResTy, Env#env.tenv) of
+    case subtype(ResTy, {type, erl_anno:new(0), 'bool', []}, Env#env.tenv) of
 	{true, Cs0} ->
 	  {ResTy1, VarBinds1, Cs1} = type_check_expr(Env, Arg1),
 	  {ResTy2, VarBinds2, Cs2} = type_check_expr(Env, Arg2),
@@ -1323,7 +1323,7 @@ type_check_rel_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
 	  throw({type_error, rel_error, Op, P, ResTy})
     end.
 type_check_list_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
-    case subtype({type, erl_anno:new(0), list, []}, ResTy, Env#env.tenv) of
+    case subtype(ResTy, {type, erl_anno:new(0), list, []}, Env#env.tenv) of
       {true, Cs} ->
         {VarBinds1, Cs1} = type_check_expr_in(Env, ResTy, Arg1),
 	{VarBinds2, Cs2} = type_check_expr_in(Env, ResTy, Arg2),
