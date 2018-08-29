@@ -1202,6 +1202,8 @@ do_type_check_expr_in(Env, ResTy, {call, P, Name, Args}) ->
 		    throw({type_error, fun_res_type, P, Name, FunResTy, ResTy})
 	    end
     end;
+do_type_check_expr_in(Env, ResTy, {'lc', _, Expr, Qualifiers}) ->
+    type_check_lc_in(Env, ResTy, Expr, Qualifiers);
 
 %% Functions
 do_type_check_expr_in(Env, ResTy, {'fun', _, {clauses, Clauses}}) ->
@@ -1333,6 +1335,31 @@ type_check_list_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
 	  throw({type_error, list_op_error, Op, P, ResTy})
     end.
 
+type_check_lc_in(Env, ResTy, Expr, []) ->
+    case ResTy of
+      {type, _, list, []} ->
+        {_Ty, _VB, Cs} = type_check_expr(Env, Expr),
+	{#{}, Cs};
+      {type, _, list, [Ty]} ->
+        {_VB, Cs} = type_check_expr_in(Env, Ty, Expr),
+        {#{}, Cs}
+    %% TODO: support for union types.
+    end;
+type_check_lc_in(Env, ResTy, Expr, [{generate, _, Pat, Gen} | Quals]) ->
+    %% TODO
+    {Ty, _VB1, Cs1} = type_check_expr(Env, Gen),
+    {    _VB2, Cs2} = type_check_lc_in(Env#env{
+                                        venv =
+				          add_type_pat(Pat, Ty, Env#env.tenv
+					                      , Env#env.venv) }
+				      ,ResTy, Expr, Quals),
+    {#{}, constraints:combine(Cs1, Cs2)};
+type_check_lc_in(Env, ResTy, Expr, [Pred | Quals]) ->
+    %% We choose to check the type of the predicate here. Arguments can be
+    %% made either way on whether we should check the type here.
+    {_VB1, Cs1} = type_check_expr_in(Env, {type, erl_anno:new(0), 'boolean', []}, Pred),
+    { VB2, Cs2} = type_check_lc_in(Env, ResTy, Expr, Quals),
+    {VB2, constraints:combine(Cs1, Cs2)}.
 
 type_check_assocs(Env, [{Assoc, _, Key, Val}| Assocs])
   when Assoc == map_field_assoc orelse Assoc == map_field_exact ->
