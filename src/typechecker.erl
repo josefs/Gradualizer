@@ -1743,7 +1743,7 @@ add_type_pat(Nil = {nil, P}, Ty, TEnv, VEnv) ->
 	    throw({type_error, pattern, P, Nil, Ty})
     end;
 add_type_pat(CONS = {cons, P, PH, PT}, ListTy, TEnv, VEnv) ->
-    case subtype(ListTy, {type, erl_anno:new(0), nonempty_list, []}, TEnv) of
+    case subtype({type, erl_anno:new(0), nonempty_list, []}, ListTy, TEnv) of
       {true, _Cs} ->
         case ListTy of
 	  {type, _, T, []} when T == 'list' orelse T == 'any' orelse
