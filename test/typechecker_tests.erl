@@ -165,7 +165,8 @@ normalize_e2e_test_() ->
                                  "-spec f(t()) -> t().",
                                  "f(A) -> A."]))},
      {"Normalize literals in user types",
-      ?_assert(type_check_forms(["-type t() :: foo | 1 | $a.",
+      ?_assert(type_check_forms(["-type t() :: foo | 1.", %% | $a (char literal)
+                                                          %% added in OTP 20
                                  "-spec f(t()) -> t().",
                                  "f(A) -> A."]))}
     ].

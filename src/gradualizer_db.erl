@@ -526,9 +526,14 @@ get_beam_map() ->
     BeamDirs = code:get_path(),
     BeamFiles = lists:flatmap(fun (Dir) -> filelib:wildcard(Dir ++ "/*.beam") end, BeamDirs),
     RE = beam_file_regexp(),
-    BeamPairs = lists:map(fun (Filename) ->
-            {match, [Mod]} = re:run(Filename, RE, [{capture, all_but_first, list}]),
-            {list_to_atom(Mod), Filename}
+    BeamPairs = lists:filtermap(
+        fun (Filename) ->
+            case re:run(Filename, RE, [{capture, all_but_first, list}]) of
+                {match, [Mod]} ->
+                    {true, {list_to_atom(Mod), Filename}};
+                nomatch ->
+                    false
+            end
         end,
         BeamFiles),
     maps:from_list(BeamPairs).
