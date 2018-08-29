@@ -1,0 +1,26 @@
+# Editor configuration file
+# For Emacs install package `editorconfig`
+# For Atom install package `editorconfig`
+# For Sublime Text install package `EditorConfig`
+root = true
+
+[*]
+indent_style = space
+indent_size = 4
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+max_line_length = 100
+
+[*.md]
+indent_style = space
+indent_size = 2
+
+[*.yml]
+indent_style = space
+indent_size = 2
+
+[*.json]
+indent_style = space
+indent_size = 2

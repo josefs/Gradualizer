@@ -12,7 +12,7 @@ api_test_() ->
      fun() ->
              %% user_types.erl references remote_types.erl
              %% it is not in the sourcemap of the DB so let's import it manually
-             gradualizer_db:import_files(["test/should_pass/user_types.erl"]),
+             gradualizer_db:import_erl_files(["test/should_pass/user_types.erl"]),
              ?assertEqual(ok, gradualizer:type_check_dir("test/should_pass/"))
      end,
 

@@ -28,17 +28,22 @@ type_check_file(File) ->
 %% @doc Type check a source or beam file
 -spec type_check_file(file:filename(), options()) -> ok | nok.
 type_check_file(File, Opts) ->
-    Forms =
+    ParsedFile =
         case filename:extension(File) of
             ".erl" ->
-                get_forms_from_erl(File);
+                gradualizer_file_utils:get_forms_from_erl(File);
             ".beam" ->
-                get_forms_from_beam(File);
+                gradualizer_file_utils:get_forms_from_beam(File);
             Ext ->
                 throw({unknown_file_extension, Ext})
         end,
-    Opts2 = proplists:expand([{print_file, [{print_file, File}]}], Opts),
-    typechecker:type_check_forms(Forms, Opts2).
+    case ParsedFile of
+        {ok, Forms} ->
+            Opts2 = proplists:expand([{print_file, [{print_file, File}]}], Opts),
+            typechecker:type_check_forms(Forms, Opts2);
+        Error ->
+            throw(Error)
+    end.
 
 
 %% @doc Type check a module
@@ -81,30 +86,4 @@ type_check_dir(Dir, Opts) ->
               end, ok, filelib:wildcard(filename:join(Dir, "*.{erl,beam}")));
         false ->
             throw({dir_not_found, Dir})
-    end.
-
-%% Helper functions
-
-get_forms_from_erl(File) ->
-    case epp:parse_file(File, []) of
-        {ok, Forms} ->
-            Forms;
-        {error, enoent} ->
-            throw({file_not_found, File});
-        {error, Reason} ->
-            throw({file_open_error, {Reason, File}})
-    end.
-
-get_forms_from_beam(File) ->
-    case beam_lib:chunks(File, [abstract_code]) of
-        {ok, {_Module, [{abstract_code, {raw_abstract_v1, Forms}}]}} ->
-            Forms;
-        {ok, {_Module, [{abstract_code,no_abstract_code}]}} ->
-            throw({forms_not_found, File});
-        {error, beam_lib, {file_error, _, enoent}} ->
-            throw({file_not_found, File});
-        {error, beam_lib, {file_error, _, Reason}} ->
-            throw({file_open_error, {Reason, File}});
-        {error, beam_lib, Reason} ->
-            throw({forms_error, Reason})
     end.

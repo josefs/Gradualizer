@@ -11,3 +11,5 @@ rel/example_project
 .erlang.mk
 gradualizer.d
 cover/
+eunit.coverdata
+test/ct.cover.spec
