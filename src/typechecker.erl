@@ -716,29 +716,9 @@ type_check_expr(Env, {bin, _, BinElements}) ->
      union_var_binds(VarBinds),
      constraints:combine(Css)};
 type_check_expr(Env, {call, _, Name, Args}) ->
-    {FunTy, VarBinds, Cs} = type_check_fun(Env, Name, length(Args)),
-    case FunTy of
-	{type, _, any, []} ->
-	    { _ArgTys, VarBindsList, Css} =
-		lists:unzip3([ type_check_expr(Env, Arg) || Arg <- Args]),
-	    { {type, 0, any, []}
-	    , union_var_binds([VarBinds | VarBindsList])
-	    , constraints:combine([Cs | Css])};
-	[{type, _, bounded_fun, [{type, _, 'fun',
-				  [{type, _, product, ArgTys}, ResTy]}
-				,SCs2]}] ->
-	    % TODO: Handle multi-clause function types
-	    Cs2 = constraints:convert(SCs2),
-	    {VarBindsList, Css} =
-		lists:unzip(
-		  lists:zipwith(fun (ArgTy, Arg) ->
-				       type_check_expr_in(Env, ArgTy, Arg)
-			       end, ArgTys, Args)
-		 ),
-	    { ResTy
-	    , union_var_binds([VarBinds | VarBindsList])
-	    , constraints:combine([Cs, Cs2 | Css])}
-    end;
+    {FunTy, VarBinds1, Cs1} = type_check_fun(Env, Name, length(Args)),
+    {ResTy, VarBinds2, Cs2} = type_check_fun_ty(Env, FunTy, Name, Args),
+    {ResTy, union_var_binds([VarBinds1, VarBinds2]), constraints:combine(Cs1, Cs2)};
 type_check_expr(Env, {lc, _, Expr, Qualifiers}) ->
     type_check_lc(Env, Expr, Qualifiers);
 type_check_expr(Env, {block, _, Block}) ->
@@ -968,6 +948,39 @@ type_check_list_op(Env, Op, P, Arg1, Arg2) ->
       throw({type_error, list_op_error, Op, P, Ty2, Arg2})
   end.
 
+type_check_fun_ty(Env, {type, _, any, []}, _Name, Args) ->
+    { _ArgTys, VarBindsList, Css} =
+        lists:unzip3([ type_check_expr(Env, Arg) || Arg <- Args]),
+    { {type, 0, any, []}
+    , union_var_binds(VarBindsList)
+    , constraints:combine(Css)};
+type_check_fun_ty(Env, [{type, _, bounded_fun, [{type, _, 'fun',
+				  [{type, _, product, ArgTys}, ResTy]}
+				,SCs2]}], _Name, Args) ->
+    % TODO: Handle multi-clause function types
+    Cs2 = constraints:convert(SCs2),
+    {VarBindsList, Css} =
+	lists:unzip(
+	  lists:zipwith(fun (ArgTy, Arg) ->
+			       type_check_expr_in(Env, ArgTy, Arg)
+		       end, ArgTys, Args)
+	 ),
+    { ResTy
+    , union_var_binds(VarBindsList)
+    , constraints:combine([Cs2 | Css])};
+type_check_fun_ty(Env, {type, _, 'fun', [{type, _, 'product', ArgTys}, ResTy]}, _Name, Args) ->
+    {VarBindsList, Css} =
+	lists:unzip(
+	  lists:zipwith(fun (ArgTy, Arg) ->
+			       type_check_expr_in(Env, ArgTy, Arg)
+		       end, ArgTys, Args)
+	 ),
+    { ResTy
+    , union_var_binds(VarBindsList)
+    , constraints:combine(Css)};
+type_check_fun_ty(Env, {ann_type, _, [_Var, Ty]}, Name, Arg) ->
+    type_check_fun_ty(Env, Ty, Name, Arg).
+
 compat_arith_type(Any = {type, _, any, []}, {type, _, any, []}) ->
     Any;
 compat_arith_type(Any = {type, _, any, []}, Ty) ->
@@ -1015,12 +1028,16 @@ type_check_lc(Env, Expr, []) ->
     {{type, 0, any, []}, #{}, Cs};
 type_check_lc(Env, Expr, [{generate, _, Pat, Gen} | Quals]) ->
     {Ty,  _,  Cs1} = type_check_expr(Env, Gen),
-    {TyL, VB, Cs2} = type_check_lc(Env#env{ venv = add_type_pat(Pat,
-								Ty,
-								Env#env.tenv,
-								Env#env.venv) },
-				   Expr, Quals),
-    {TyL, VB, constraints:combine(Cs1,Cs2)}.
+    case Ty of
+      {type, _, list, [ElemTy]} ->
+        {TyL, VB, Cs2} = type_check_lc(Env#env{ venv = add_type_pat(Pat,
+								    ElemTy,
+								    Env#env.tenv,
+								    Env#env.venv) },
+				       Expr, Quals),
+        {TyL, VB, constraints:combine(Cs1,Cs2)}
+    %% TODO: Support for more list types
+    end.
 
 type_check_expr_in(Env, ResTy, Expr) ->
     NormResTy = normalize(ResTy, Env#env.tenv),
@@ -1222,6 +1239,20 @@ do_type_check_expr_in(Env, ResTy, {call, P, Name, Args}) ->
 		    , constraints:combine([Cs, Cs2, Cs3 | Css]) };
 		false ->
 		    throw({type_error, fun_res_type, P, Name, FunResTy, ResTy})
+	    end;
+	{type, _, 'fun', [{type, _, 'product', ArgTys}, FunResTy]} ->
+	    {VarBindsList, Css} =
+		lists:unzip(
+		  lists:zipwith(fun (ArgTy, Arg) ->
+				       type_check_expr_in(Env, ArgTy, Arg)
+			       end, ArgTys, Args)
+		 ),
+	    case subtype(FunResTy, ResTy, Env#env.tenv) of
+		{true, Cs3} ->
+		    { union_var_binds([VarBinds | VarBindsList])
+		    , constraints:combine([Cs, Cs3 | Css]) };
+		false ->
+		    throw({type_error, fun_res_type, P, Name, FunResTy, ResTy})
 	    end
     end;
 do_type_check_expr_in(Env, ResTy, {'lc', _, Expr, Qualifiers}) ->
@@ -1368,14 +1399,20 @@ type_check_lc_in(Env, ResTy, Expr, []) ->
     %% TODO: support for union types.
     end;
 type_check_lc_in(Env, ResTy, Expr, [{generate, _, Pat, Gen} | Quals]) ->
-    %% TODO
     {Ty, _VB1, Cs1} = type_check_expr(Env, Gen),
-    {    _VB2, Cs2} = type_check_lc_in(Env#env{
+    case Ty of
+      {type, _, list, [ElemTy]} ->
+        {    _VB2, Cs2} = type_check_lc_in(Env#env{
                                         venv =
-				          add_type_pat(Pat, Ty, Env#env.tenv
-					                      , Env#env.venv) }
+				          add_type_pat(Pat, ElemTy, Env#env.tenv
+					                          , Env#env.venv) }
 				      ,ResTy, Expr, Quals),
-    {#{}, constraints:combine(Cs1, Cs2)};
+        {#{}, constraints:combine(Cs1, Cs2)};
+      %% TODO: Fix
+      {ann_type, _, [_, Ty]} ->
+        {#{}, constraints:empty()}
+    %% TODO: Support more list types
+    end;
 type_check_lc_in(Env, ResTy, Expr, [Pred | Quals]) ->
     %% We choose to check the type of the predicate here. Arguments can be
     %% made either way on whether we should check the type here.
@@ -1483,7 +1520,9 @@ type_check_cons_in(Env, Ty = {type, _, List, [ElemTy]}, H, T)
     {VB2, Cs2} = type_check_expr_in(Env, Ty,     T),
     {union_var_binds([VB1, VB2]), constraints:combine(Cs1, Cs2)};
 type_check_cons_in(Env, {type, _, union, Tys}, H, T) ->
-    type_check_cons_union(Env, Tys, H, T).
+    type_check_cons_union(Env, Tys, H, T);
+type_check_cons_in(Env, {ann_type, _, [_, Ty]}, H, T) ->
+    type_check_cons_in(Env, Ty, H, T).
 
 type_check_cons_union(_Env, [], _H, _T) ->
     throw({type_error, cons_union});
@@ -1703,12 +1742,24 @@ add_type_pat(Nil = {nil, P}, Ty, TEnv, VEnv) ->
 	false ->
 	    throw({type_error, pattern, P, Nil, Ty})
     end;
-add_type_pat({cons, _, PH, PT}, ListTy = {type, _, list, [ElemTy]}, TEnv, VEnv) ->
-    VEnv2 = add_type_pat(PH, ElemTy, TEnv, VEnv),
-    add_type_pat(PT, ListTy, TEnv, VEnv2);
-add_type_pat({cons, _, PH, PT}, ListTy = {type, _, list, []}, TEnv, VEnv) ->
-    VEnv2 = add_any_types_pat(PH, VEnv),
-    add_type_pat(PT, ListTy, TEnv, VEnv2);
+add_type_pat(CONS = {cons, P, PH, PT}, ListTy, TEnv, VEnv) ->
+    case subtype(ListTy, {type, erl_anno:new(0), nonempty_list, []}, TEnv) of
+      {true, _Cs} ->
+        case ListTy of
+	  {type, _, T, []} when T == 'list' orelse T == 'any' orelse
+                                T == 'nonempty_list' orelse
+				T == 'maybe_improper_list' ->
+            VEnv2 = add_any_types_pat(PH, VEnv),
+            add_type_pat(PT, ListTy, TEnv, VEnv2);
+          {type, _, T, [ElemTy]} when T == 'list' orelse T == 'nonempty_list' ->
+	    VEnv2 = add_type_pat(PH, ElemTy, TEnv, VEnv),
+            add_type_pat(PT, ListTy, TEnv, VEnv2);
+	  {ann_type, _, [_, Ty]} ->
+            add_type_pat(CONS, Ty, TEnv, VEnv)
+        end;
+      false ->
+        throw({type_error, pattern, P, CONS, ListTy})
+    end;
 add_type_pat({bin, _, BinElements}, {type, _, binary, [_,_]}, TEnv, VEnv) ->
     %% TODO: Consider the bit size parameters
     lists:foldl(fun ({bin_element, _, Pat, _Size, Specifiers}, VEnv1) ->
