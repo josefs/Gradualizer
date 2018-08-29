@@ -1725,6 +1725,9 @@ add_type_pat({record, _, _Record, Fields}, {type, _, record, [{atom, _, _RecordN
 add_type_pat({match, _, Pat1, Pat2}, Ty, TEnv, VEnv) ->
     add_type_pat(Pat1, Ty, TEnv, add_type_pat(Pat2, Ty, TEnv, VEnv));
 
+add_type_pat(Pat, {ann_type, _, [_, Ty]}, TEnv, VEnv) ->
+    add_type_pat(Pat, Ty, TEnv, VEnv);
+
 add_type_pat(Pat, Ty, _TEnv, _VEnv) ->
     throw({type_error, pattern, element(2, Pat), Pat, Ty}).
 
