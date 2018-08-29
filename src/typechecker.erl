@@ -499,7 +499,7 @@ merge_union_types(Types, _TEnv) ->
                    Types) of
         true ->
             %% term() is among the types.
-            [{type, 0, term, []}];
+            [{type, erl_anno:new(0), term, []}];
         false ->
             {IntegerTypes, NonIntegerTypes} =
                 lists:partition(fun is_int_type/1, Types),
@@ -605,23 +605,26 @@ int_range_to_types({neg_inf, pos_inf}) ->
 int_range_to_types({neg_inf, -1}) ->
     [{type, erl_anno:new(0), neg_integer, []}];
 int_range_to_types({neg_inf, 0}) ->
-    [{type, erl_anno:new(0), neg_integer, []}, {integer, 0, 0}];
+    [{type, erl_anno:new(0), neg_integer, []}, {integer, erl_anno:new(0), 0}];
 int_range_to_types({neg_inf, I}) when I > 0 ->
     [{type, erl_anno:new(0), neg_integer, []},
-     {type, erl_anno:new(0), range, [{integer, 0, 0}, {integer, 0, I}]}];
+     {type, erl_anno:new(0), range, [{integer, erl_anno:new(0), 0}
+				    ,{integer, erl_anno:new(0), I}]}];
 int_range_to_types({I, pos_inf}) when I < -1 ->
-    [{type, erl_anno:new(0), range, [{integer, 0, I}, {integer, 0, -1}]},
+    [{type, erl_anno:new(0), range, [{integer, erl_anno:new(0), I}
+				    ,{integer, erl_anno:new(0), -1}]},
      {type, erl_anno:new(0), non_neg_integer, []}];
 int_range_to_types({-1, pos_inf}) ->
-    [{integer, 0, -1}, {type, erl_anno:new(0), non_neg_integer, []}];
+    [{integer, erl_anno:new(0), -1}, {type, erl_anno:new(0), non_neg_integer, []}];
 int_range_to_types({0, pos_inf}) ->
     [{type, erl_anno:new(0), non_neg_integer, []}];
 int_range_to_types({1, pos_inf}) ->
     [{type, erl_anno:new(0), pos_integer, []}];
 int_range_to_types({I, I}) ->
-    [{integer, 0, I}];
+    [{integer, erl_anno:new(0), I}];
 int_range_to_types({I, J}) when I < J ->
-    [{type, erl_anno:new(0), range, [{integer, 0, I}, {integer, 0, J}]}].
+    [{type, erl_anno:new(0), range, [{integer, erl_anno:new(0), I}
+				    ,{integer, erl_anno:new(0), J}]}].
 
 %% End of subtype help functions
 
@@ -657,7 +660,7 @@ type_check_expr(Env, {'case', _, Expr, Clauses}) ->
     {Ty, VB, Cs2} = infer_clauses(Env#env{ venv = VEnv}, Clauses),
     {Ty, VB, constraints:combine(Cs1, Cs2)};
 type_check_expr(_Env, {integer, _, _N}) ->
-    return({type, 0, any, []});
+    return({type, erl_anno:new(0), any, []});
 type_check_expr(Env, {tuple, P, TS}) ->
     { Tys, VarBindsList, Css} = lists:unzip3([ type_check_expr(Env, Expr)
 				        || Expr <- TS ]),
@@ -678,9 +681,9 @@ type_check_expr(Env, {cons, _, Head, Tail}) ->
     % TODO: Should we check the types here?
     case {Ty1, Ty2} of
 	{{type, _, any, []}, _} ->
-	    {{type, 0, any, []}, VB2, constraints:empty()};
+	    {{type, erl_anno:new(0), any, []}, VB2, constraints:empty()};
 	{_, {type, _, any, []}} ->
-	    {{type, 0, any, []}, VB2, constraints:empty()};
+	    {{type, erl_anno:new(0), any, []}, VB2, constraints:empty()};
 	{Ty1, TyList = {type, _, list, [Ty]}} ->
 	    case subtype(Ty1, Ty, Env#env.tenv) of
 		{true, Cs} ->
@@ -712,7 +715,7 @@ type_check_expr(Env, {bin, _, BinElements}) ->
 		  end,
 		  BinElements),
     {VarBinds, Css} = lists:unzip(VarBindAndCsList),
-    {{type, 0, any, []},
+    {{type, erl_anno:new(0), any, []},
      union_var_binds(VarBinds),
      constraints:combine(Css)};
 type_check_expr(Env, {call, _, Name, Args}) ->
@@ -727,11 +730,11 @@ type_check_expr(Env, {block, _, Block}) ->
 % Don't return the type of anything other than something
 % which ultimately comes from a function type spec.
 type_check_expr(_Env, {string, _, _}) ->
-    return({type, 0, any, []});
+    return({type, erl_anno:new(0), any, []});
 type_check_expr(_Env, {nil, _}) ->
-    return({type, 0, any, []});
+    return({type, erl_anno:new(0), any, []});
 type_check_expr(_Env, {atom, _, _Atom}) ->
-    return({type, 0, any, []});
+    return({type, erl_anno:new(0), any, []});
 
 %% Maps
 type_check_expr(Env, {map, _, Assocs}) ->
@@ -787,14 +790,14 @@ type_check_expr(Env, {op, _, '!', Proc, Val}) ->
     % Message passing is always untyped, which is why we discard the types
     {_, VB1, Cs1} = type_check_expr(Env, Proc),
     {_, VB2, Cs2} = type_check_expr(Env, Val),
-    {{type, 0, any, []}
+    {{type, erl_anno:new(0), any, []}
     ,union_var_binds([VB1, VB2])
     ,constraints:combine(Cs1, Cs2)};
 type_check_expr(Env, {op, P, 'not', Arg}) ->
     {Ty, VB, Cs1} = type_check_expr(Env, Arg),
     case subtype({type, P, boolean, []}, Ty, Env#env.tenv) of
 	{true, Cs2} ->
-	    {{type, 0, any, []}, VB, constraints:combine(Cs1, Cs2)};
+	    {{type, erl_anno:new(0), any, []}, VB, constraints:combine(Cs1, Cs2)};
 	false ->
 	    throw({type_error, non_boolean_argument_to_not, P, Ty})
     end;
@@ -885,13 +888,13 @@ type_check_rel_op(Env, Op, P, Arg1, Arg2) ->
 		    RetType =
 			case {Ty1, Ty2} of
 			    {{type, _, any, []},_} ->
-				{type, 0, any, []};
+				{type, erl_anno:new(0), any, []};
 			    {_,{type, _, any, []}} ->
-				{type, 0, any, []};
+				{type, erl_anno:new(0), any, []};
 			    {_,_} ->
 				% Return boolean() when both argument types
 				% are known, i.e. not any().
-				{type, 0, boolean, []}
+				{type, erl_anno:new(0), boolean, []}
 			end,
 		    {RetType
 		    ,union_var_binds([VB1, VB2])
@@ -951,7 +954,7 @@ type_check_list_op(Env, Op, P, Arg1, Arg2) ->
 type_check_fun_ty(Env, {type, _, any, []}, _Name, Args) ->
     { _ArgTys, VarBindsList, Css} =
         lists:unzip3([ type_check_expr(Env, Arg) || Arg <- Args]),
-    { {type, 0, any, []}
+    { {type, erl_anno:new(0), any, []}
     , union_var_binds(VarBindsList)
     , constraints:combine(Css)};
 type_check_fun_ty(Env, [{type, _, bounded_fun, [{type, _, 'fun',
@@ -1025,7 +1028,7 @@ type_check_lc(Env, Expr, []) ->
     {_Ty, _VB, Cs} = type_check_expr(Env, Expr),
     % We're returning any() here because we're in a context that doesn't
     % care what type we return. It's different for type_check_lc_in.
-    {{type, 0, any, []}, #{}, Cs};
+    {{type, erl_anno:new(0), any, []}, #{}, Cs};
 type_check_lc(Env, Expr, [{generate, _, Pat, Gen} | Quals]) ->
     {Ty,  _,  Cs1} = type_check_expr(Env, Gen),
     case Ty of
@@ -1213,7 +1216,7 @@ do_type_check_expr_in(Env, ResTy, {'case', _, Expr, Clauses}) ->
     {VB, Cs2} = check_clauses(Env2, ExprTy, ResTy, Clauses),
     {VB, constraints:combine(Cs1,Cs2)};
 do_type_check_expr_in(Env, ResTy, {'if', _, Clauses}) ->
-    check_clauses(Env, {type, 0, any, []}, ResTy, Clauses);
+    check_clauses(Env, {type, erl_anno:new(0), any, []}, ResTy, Clauses);
 do_type_check_expr_in(Env, ResTy, {call, P, Name, Args}) ->
     {FunTy, VarBinds, Cs} = type_check_fun(Env, Name, length(Args)),
     case FunTy of
@@ -1280,7 +1283,7 @@ do_type_check_expr_in(Env, ResTy, {'fun', P, {function, {atom, _, M}, {atom, _, 
     end;
 
 do_type_check_expr_in(Env, ResTy, {'receive', _, Clauses}) ->
-    check_clauses(Env, [{type, 0, any, []}], ResTy, Clauses);
+    check_clauses(Env, [{type, erl_anno:new(0), any, []}], ResTy, Clauses);
 do_type_check_expr_in(Env, ResTy, {op, _, '!', Arg1, Arg2}) ->
     % The first argument should be a pid.
     {_,  VarBinds1, Cs1} = type_check_expr(Env, Arg1),
@@ -1324,9 +1327,9 @@ do_type_check_expr_in(Env, ResTy, {'catch', _, Arg}) ->
 do_type_check_expr_in(Env, ResTy, {'try', _, Block, CaseCs, CatchCs, AfterCs}) ->
     {VB,   Cs1}  = type_check_block_in(Env, ResTy, Block),
     Env2 = Env#env{ venv = add_var_binds(VB, Env#env.venv) },
-    {_VB2, Cs2} = check_clauses(Env2, {type, 0, any, []}, ResTy, CaseCs),
-    {_VB3, Cs3} = check_clauses(Env2, {type, 0, any, []}, ResTy, CatchCs),
-    {_VB4, Cs4} = check_clauses(Env2, {type, 0, any, []}, ResTy, AfterCs),
+    {_VB2, Cs2} = check_clauses(Env2, {type, erl_anno:new(0), any, []}, ResTy, CaseCs),
+    {_VB3, Cs3} = check_clauses(Env2, {type, erl_anno:new(0), any, []}, ResTy, CatchCs),
+    {_VB4, Cs4} = check_clauses(Env2, {type, erl_anno:new(0), any, []}, ResTy, AfterCs),
     % TODO: Check what variable bindings actually should be propagated
     {VB
     ,constraints:combine([Cs1,Cs2,Cs3,Cs4])}.
@@ -1494,7 +1497,7 @@ type_check_tuple_in(Env, {var, _, Name}, TS) ->
 				   type_check_expr(Env, Expr)
 			       end, TS)),
     {union_var_binds(VarBindsList)
-    ,constraints:combine([constraints:upper(Name, {type, 0, tuple, Tys})| Css])
+    ,constraints:combine([constraints:upper(Name, {type, erl_anno:new(0), tuple, Tys})| Css])
     }.
 
 
@@ -1662,7 +1665,7 @@ type_check_function(Env, {function,_, Name, NArgs, Clauses}) ->
     end.
 
 merge_types([]) ->
-    {type, 0, any, []};
+    {type, erl_anno:new(0), any, []};
 merge_types([Ty]) ->
     Ty;
 merge_types(Tys) ->
@@ -1677,11 +1680,11 @@ merge_types(Tys) ->
 		[Ty={atom, _, A}, {atom, _, A} | Rest] ->
 		    merge_types([Ty | Rest]);
 		[{atom, _, false}, {atom, _, true} | Rest] ->
-		    merge_types([{type, 0, boolean, []} | Rest]);
+		    merge_types([{type, erl_anno:new(0), boolean, []} | Rest]);
 		[{atom, _, true}, {atom, _, false} | Rest] ->
-		    merge_types([{type, 0, boolean, []} | Rest]);
+		    merge_types([{type, erl_anno:new(0), boolean, []} | Rest]);
 		[{atom, _, _}, {type, _, _, _} | _] ->
-		    {type, 0, any, []};
+		    {type, erl_anno:new(0), any, []};
 		[{type, P, Ty, Args1}, {type, _, Ty, Args2}]
 		  when length(Args1) == length(Args2) ->
 		    {type, P, Ty, lists:zipwith(fun (A,B) -> merge_types([A,B])
@@ -1689,7 +1692,7 @@ merge_types(Tys) ->
 		[{type, P, tuple, Args1}, {type, _, tuple, Args2} | Rest] ->
 		    case length(Args1) == length(Args2) of
 			false ->
-			    {type, 0, any, []};
+			    {type, erl_anno:new(0), any, []};
 			true  ->
 			    merge_types([{type, P, tuple,
 					  lists:zipwith(fun (A1, A2) ->
@@ -1699,7 +1702,7 @@ merge_types(Tys) ->
 		    end;
 		[{type, _, map, Assocs}, {type, _, map, Assocs}] ->
 		    % TODO: Figure out how to merge field assocs properly
-		    [{type, 0, map, []}]
+		    [{type, erl_anno:new(0), map, []}]
 	    end
     end.
 
@@ -1772,7 +1775,7 @@ add_type_pat({bin, _, BinElements}, {type, _, binary, [_,_]}, TEnv, VEnv) ->
 add_type_pat({record, _, _Record, Fields}, {type, _, record, [{atom, _, _RecordName}]}, TEnv, VEnv) ->
     % TODO: We need the definitions of records here, to be able to add the
     % types of the matches in the record.
-    add_type_pat_fields(Fields, {type, 0, any, []}, TEnv, VEnv);
+    add_type_pat_fields(Fields, {type, erl_anno:new(0), any, []}, TEnv, VEnv);
 add_type_pat({match, _, Pat1, Pat2}, Ty, TEnv, VEnv) ->
     add_type_pat(Pat1, Ty, TEnv, add_type_pat(Pat2, Ty, TEnv, VEnv));
 
@@ -1805,7 +1808,7 @@ add_type_pat_tuple(Pats, {type, _, union, Tys}, TEnv, VEnv) ->
 %% TODO: This code approximates unions of tuples with tuples of unions
     Unions =
 	lists:map(fun (UnionTys) ->
-			  {type, 0, union, UnionTys}
+			  {type, erl_anno:new(0), union, UnionTys}
 		  end
 		 ,transpose([TS
 			   || {type, _, tuple, TS} <- Tys
@@ -1855,7 +1858,7 @@ add_any_types_pat({map, _, Fields}, VEnv) ->
 add_any_types_pat({var, _,'_'}, VEnv) ->
     VEnv;
 add_any_types_pat({var, _,A}, VEnv) ->
-    VEnv#{ A => {type, 0, any, []} }.
+    VEnv#{ A => {type, erl_anno:new(0), any, []} }.
 
 %% Get type from specifiers in a bit syntax, e.g. <<Foo/float-little>>
 -spec bit_specifier_list_to_type([atom()] | default) -> type().
@@ -1865,15 +1868,17 @@ bit_specifier_list_to_type(Specifiers) ->
     TypeSpecifiers =
 	lists:filtermap(fun
 			    (S) when S == integer; S == utf8; S == utf16 ->
-				{true, {type, 0, integer, []}};
+				{true, {type, erl_anno:new(0), integer, []}};
 			    (float) ->
 				{true, {type, 0, float, []}};
 			    (S) when S == binary; S == bytes ->
-				{true, {type, 0, binary, [{integer, 0, 0},
-							  {integer, 0, 8}]}};
+				{true, {type, erl_anno:new(0), binary,
+					[{integer, erl_anno:new(0), 0}
+					,{integer, erl_anno:new(0), 8}]}};
 			    (S) when S == bitstring; S == bits ->
-				{true, {type, 0, binary, [{integer, 0, 0},
-							  {integer, 0, 1}]}};
+				{true, {type, erl_anno:new(0), binary,
+					[{integer, erl_anno:new(0), 0}
+					,{integer, erl_anno:new(0), 1}]}};
 			    (_NotATypeSpecifier) ->
 				false
 			end,
@@ -1900,9 +1905,9 @@ add_var_binds(VEnv, VarBinds) ->
 % Is this the right function to use or should I always just return any()?
 glb_types(K, {type, _, N, Args1}, {type, _, N, Args2}) ->
     Args = [ glb_types(K, Arg1, Arg2) || {Arg1, Arg2} <- lists:zip(Args1, Args2) ],
-    {type, 0, N, Args};
+    {type, erl_anno:new(0), N, Args};
 glb_types(_, _, _) ->
-    {type, 0, any, []}.
+    {type, erl_anno:new(0), any, []}.
 
 get_rec_field_type(FieldName,
                    [{typed_record_field,
@@ -1975,7 +1980,7 @@ create_fenv(Specs, Funs) ->
 % in the list then it right-most occurrence will take precedence. In this
 % case it will mean that if there is a spec, then that will take precedence
 % over the default type any().
-    maps:from_list([ {{Name, NArgs}, {type, 0, any, []}}
+    maps:from_list([ {{Name, NArgs}, {type, erl_anno:new(0), any, []}}
 		     || {function,_, Name, NArgs, _Clauses} <- Funs
 		   ] ++
 		   [ {{Name, NArgs}, absform:normalize_function_type_list(Types)}
