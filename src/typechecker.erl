@@ -1709,7 +1709,9 @@ add_type_pat_tuple(Pats, {type, _, union, Tys}, TEnv, VEnv) ->
 			    , length(TS) == length(Pats)])),
     lists:foldl(fun ({Pat, Union}, Env) ->
 			add_type_pat(Pat, Union, TEnv, Env)
-		end, VEnv, lists:zip(Pats, Unions)).
+		end, VEnv, lists:zip(Pats, Unions));
+add_type_pat_tuple(Pats, {ann_type, _, [_, Ty]}, TEnv, VEnv) ->
+    add_type_pat_tuple(Pats, Ty, TEnv, VEnv).
 
 
 transpose([[]|_]) -> [];
