@@ -838,6 +838,9 @@ type_check_expr(Env, {op, P, Op, Arg1, Arg2}) when
       Op == 'band' orelse Op == 'bor' orelse Op == 'bxor' orelse
       Op == 'bsl'  orelse Op == 'bsr' ->
     type_check_int_op(Env, Op, P, Arg1, Arg2);
+type_check_expr(Env, {op, P, Op, Arg1, Arg2}) when
+      Op == '++' orelse Op == '--' ->
+    type_check_list_op(Env, Op, P, Arg1, Arg2);
 
 %% Exception constructs
 %% There is no typechecking of exceptions
@@ -945,6 +948,25 @@ type_check_int_op(Env, Op, P, Arg1, Arg2) ->
 	    ,union_var_binds([VB1, VB2])
 	    ,constraints:combine(Cs1, Cs2)}
     end.
+
+type_check_list_op(Env, Op, P, Arg1, Arg2) ->
+  {Ty1, VB1, Cs1} = type_check_expr(Env, Arg1),
+  {Ty2, VB2, Cs2} = type_check_expr(Env, Arg2),
+
+  ListTy = {type, erl_anno:new(0), list, []},
+
+  case {subtype(Ty1, ListTy, Env#env.tenv)
+       ,subtype(Ty2, ListTy, Env#env.tenv)} of
+    {{true, Cs3}, {true, Cs4}} ->
+      {merge_types([Ty1, Ty2])
+      ,union_var_binds([VB1, VB2])
+      ,constraints:combine([Cs1, Cs2, Cs3, Cs4])
+      };
+    {false, _} ->
+      throw({type_error, list_op_error, Op, P, Ty1, Arg1});
+    {_, false} ->
+      throw({type_error, list_op_error, Op, P, Ty2, Arg2})
+  end.
 
 compat_arith_type(Any = {type, _, any, []}, {type, _, any, []}) ->
     Any;
@@ -2020,8 +2042,13 @@ handle_type_error({type_error, rel_error, LogicOp, P, Ty1, Ty2}) ->
 	      "non-compatible types:~n~s~n~s~n",
 	      [LogicOp, P, typelib:pp_type(Ty1), typelib:pp_type(Ty2)]);
 handle_type_error({type_error, list_op_error, ListOp, P, Ty}) ->
-    io:format("The operator ~p on line ~p is given a non-list argument "
-	      "of type ~s~n", [ListOp, P, typelib:pp_type(Ty)]);
+    io:format("The operator ~p on line ~p is expected to have "
+              "a non-list argument of type ~s~n",
+              [ListOp, P, typelib:pp_type(Ty)]);
+handle_type_error({type_error, list_op_error, ListOp, P, Ty, _}) ->
+    io:format("The operator ~p on line ~p is given an argument "
+              "with a non-list type ~s~n",
+              [ListOp, P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, tuple_error, P, Expr, Ty}) ->
     io:format("A tuple {~s} at line ~p didn't match any of the types in the union ~s~n",
               [erl_pp:exprs(Expr), P, typelib:pp_type(Ty)]);
