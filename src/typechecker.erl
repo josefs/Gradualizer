@@ -628,6 +628,58 @@ int_range_to_types({I, J}) when I < J ->
 
 %% End of subtype help functions
 
+%% Pattern matching on types
+%%
+%% We sometimes need to pattern match on a type in order to get to
+%% its type parameter. One example is the list type, and there are
+%% cases where we need to get the type of the elements.
+
+-spec expect_list_type(type()) ->
+          {elem_ty,  type()}    %% There is exactly one element type
+	| {elem_tys, [type()]}  %% A union can give rise to multiple elem types
+	| any                   %% If we don't know the element type
+	| {type_error, type()}. %% If the argument is not compatible with lists
+
+expect_list_type({type, _, T, []})
+  when T == 'list' orelse T == 'any' orelse
+       T == 'nonempty_list' orelse T == 'maybe_improper_list' ->
+    any;
+expect_list_type({type, _, T, [ElemTy]})
+  when T == 'list' orelse T == 'nonempty_list' ->
+    {elem_ty, ElemTy};
+expect_list_type({type, _, maybe_improper_list, [ElemTy, _]}) ->
+    {elem_ty, ElemTy};
+expect_list_type({type, _, string, []}) ->
+    {elem_ty, {type, erl_anno:new(0), char, []}};
+expect_list_type({ann_type, _, [_, Ty]}) ->
+    expect_list_type(Ty);
+expect_list_type(Union = {type, _, union, UnionTys}) ->
+    Tys = lists:flatmap(fun (Ty) ->
+				case expect_list_type(Ty) of
+				    {type_error, _} ->
+					[];
+				    any ->
+					[{type, erl_anno:new(0), any, []}];
+				    {elem_ty, Ty} ->
+					[Ty];
+				    {elem_tys, Tys} ->
+					Tys
+				end
+			end, UnionTys),
+    case Tys of
+	[] ->
+	    {type_error, Union};
+	[Ty] ->
+	    {elem_ty, Ty};
+	_ ->
+	    {elem_tys, Tys}
+    end;
+expect_list_type({var, _, _Var}) ->
+    throw(variable_unimplemented);
+expect_list_type(Ty) ->
+    {type_error, Ty}.
+
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% @doc Infer type of expression
@@ -1029,20 +1081,31 @@ type_check_lc(Env, Expr, []) ->
     % We're returning any() here because we're in a context that doesn't
     % care what type we return. It's different for type_check_lc_in.
     {{type, erl_anno:new(0), any, []}, #{}, Cs};
-type_check_lc(Env, Expr, [{generate, _, Pat, Gen} | Quals]) ->
+type_check_lc(Env, Expr, [{generate, P, Pat, Gen} | Quals]) ->
     {Ty,  _,  Cs1} = type_check_expr(Env, Gen),
-    ElemTy = case Ty of
-		 %% TODO: Support for more list types
-		 {type, _, list, [ElemTy0]} -> ElemTy0;
-		 {type, _, list, []}        -> {type, erl_anno:new(0), any, []};
-		 {type, _, any, []}         -> {type, erl_anno:new(0), any, []}
-	     end,
-    {TyL, VB, Cs2} = type_check_lc(Env#env{ venv = add_type_pat(Pat,
-								ElemTy,
-								Env#env.tenv,
-								Env#env.venv) },
-				   Expr, Quals),
-    {TyL, VB, constraints:combine(Cs1,Cs2)}.
+    case expect_list_type(Ty) of
+	{elem_ty, ElemTy} ->
+	    {TyL, VB, Cs2} = type_check_lc(Env#env{
+					     venv = add_type_pat(Pat
+								,ElemTy
+								,Env#env.tenv
+								,Env#env.venv)
+					    }
+					  ,Expr, Quals),
+	    {TyL, VB, constraints:combine(Cs1,Cs2)};
+	any ->
+	    {TyL, VB, Cs2} = type_check_lc(Env#env{
+					     venv = add_any_types_pat(
+						      Pat
+						     ,Env#env.venv)
+					    }
+					  ,Expr, Quals),
+	    {TyL, VB, constraints:combine(Cs1,Cs2)};
+	{elem_tys, _ElemTys} ->
+	    throw(multiple_tys_not_supported_in_list_comprehension);
+	{type_error, Ty} ->
+	    throw({type_error, generator, P, Ty})
+    end.
 
 type_check_expr_in(Env, ResTy, Expr) ->
     NormResTy = normalize(ResTy, Env#env.tenv),
@@ -1260,8 +1323,8 @@ do_type_check_expr_in(Env, ResTy, {call, P, Name, Args}) ->
 		    throw({type_error, fun_res_type, P, Name, FunResTy, ResTy})
 	    end
     end;
-do_type_check_expr_in(Env, ResTy, {'lc', _, Expr, Qualifiers}) ->
-    type_check_lc_in(Env, ResTy, Expr, Qualifiers);
+do_type_check_expr_in(Env, ResTy, {'lc', P, Expr, Qualifiers}) ->
+    type_check_lc_in(Env, ResTy, Expr, P, Qualifiers);
 
 %% Functions
 do_type_check_expr_in(Env, ResTy, {'fun', _, {clauses, Clauses}}) ->
@@ -1393,36 +1456,50 @@ type_check_list_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
 	  throw({type_error, list_op_error, Op, P, ResTy})
     end.
 
-type_check_lc_in(Env, ResTy, Expr, []) ->
-    case ResTy of
-      {type, _, list, []} ->
-        {_Ty, _VB, Cs} = type_check_expr(Env, Expr),
-	{#{}, Cs};
-      {type, _, list, [Ty]} ->
-        {_VB, Cs} = type_check_expr_in(Env, Ty, Expr),
-        {#{}, Cs}
-    %% TODO: support for union types.
+type_check_lc_in(Env, ResTy, Expr, P, []) ->
+    case expect_list_type(ResTy) of
+	any ->
+	    {_Ty, _VB, Cs} = type_check_expr(Env, Expr),
+	    {#{}, Cs};
+	{elem_ty, ElemTy} ->
+	    {_VB, Cs} = type_check_expr_in(Env, ElemTy, Expr),
+	    {#{}, Cs};
+	{elem_tys, _ElemTys} ->
+	    throw(multiple_types_not_supported_in_list_comprehensions);
+	{type_error, Ty} ->
+	    throw({type_error, lc, P, Ty})
     end;
-type_check_lc_in(Env, ResTy, Expr, [{generate, _, Pat, Gen} | Quals]) ->
+type_check_lc_in(Env, ResTy, Expr, P, [{generate, P, Pat, Gen} | Quals]) ->
     {Ty, _VB1, Cs1} = type_check_expr(Env, Gen),
-    case Ty of
-      {type, _, list, [ElemTy]} ->
-        {    _VB2, Cs2} = type_check_lc_in(Env#env{
-                                        venv =
-				          add_type_pat(Pat, ElemTy, Env#env.tenv
-					                          , Env#env.venv) }
-				      ,ResTy, Expr, Quals),
-        {#{}, constraints:combine(Cs1, Cs2)};
-      %% TODO: Fix
-      {ann_type, _, _} ->
-        {#{}, constraints:empty()}
-    %% TODO: Support more list types
+    case expect_list_type(Ty) of
+	any ->
+	    {_VB2, Cs2} = type_check_lc_in(Env#env{
+					     venv =
+						 add_any_types_pat(Pat
+								  ,Env#env.venv)
+					    }
+					  ,ResTy, Expr, P, Quals),
+	    {#{}, constraints:combine(Cs1, Cs2)};
+	{elem_ty, ElemTy} ->
+	    {_VB2, Cs2} = type_check_lc_in(Env#env{
+					     venv =
+						 add_type_pat(Pat
+							     ,ElemTy
+							     ,Env#env.tenv
+							     ,Env#env.venv)
+					    }
+					  ,ResTy, Expr, P, Quals),
+	    {#{}, constraints:combine(Cs1, Cs2)};
+	{elem_tys, _ElemTys} ->
+	    throw(multiple_types_not_supported_in_list_comprehensions);
+	{type_error, Ty} ->
+	    throw({type_error, generator, P, Ty})
     end;
-type_check_lc_in(Env, ResTy, Expr, [Pred | Quals]) ->
+type_check_lc_in(Env, ResTy, Expr, P, [Pred | Quals]) ->
     %% We choose to check the type of the predicate here. Arguments can be
     %% made either way on whether we should check the type here.
     {_VB1, Cs1} = type_check_expr_in(Env, {type, erl_anno:new(0), 'boolean', []}, Pred),
-    { VB2, Cs2} = type_check_lc_in(Env, ResTy, Expr, Quals),
+    { VB2, Cs2} = type_check_lc_in(Env, ResTy, Expr, P, Quals),
     {VB2, constraints:combine(Cs1, Cs2)}.
 
 type_check_assocs(Env, [{Assoc, _, Key, Val}| Assocs])
@@ -1754,22 +1831,17 @@ add_type_pat(Nil = {nil, P}, Ty, TEnv, VEnv) ->
 	    throw({type_error, pattern, P, Nil, Ty})
     end;
 add_type_pat(CONS = {cons, P, PH, PT}, ListTy, TEnv, VEnv) ->
-    case subtype({type, erl_anno:new(0), nonempty_list, []}, ListTy, TEnv) of
-      {true, _Cs} ->
-        case ListTy of
-	  {type, _, T, []} when T == 'list' orelse T == 'any' orelse
-                                T == 'nonempty_list' orelse
-				T == 'maybe_improper_list' ->
+    case expect_list_type(ListTy) of
+	any ->
             VEnv2 = add_any_types_pat(PH, VEnv),
             add_type_pat(PT, ListTy, TEnv, VEnv2);
-          {type, _, T, [ElemTy]} when T == 'list' orelse T == 'nonempty_list' ->
+	{elem_ty, ElemTy} ->
 	    VEnv2 = add_type_pat(PH, ElemTy, TEnv, VEnv),
             add_type_pat(PT, ListTy, TEnv, VEnv2);
-	  {ann_type, _, [_, Ty]} ->
-            add_type_pat(CONS, Ty, TEnv, VEnv)
-        end;
-      false ->
-        throw({type_error, pattern, P, CONS, ListTy})
+	{elem_tys, _ElemTys} ->
+	    throw(union_types_not_supported_in_cons_pattern);
+	{type_error, Ty} ->
+	    throw({type_error, P, CONS, ListTy})
     end;
 add_type_pat({bin, _, BinElements}, {type, _, binary, [_,_]}, TEnv, VEnv) ->
     %% TODO: Consider the bit size parameters
@@ -2142,6 +2214,10 @@ handle_type_error({type_error, bit_type, Expr, P, Ty1, Ty2}) ->
     io:format("The expression ~s inside the bit expression on line ~p has type ~s "
 	      "but the type specifier indicates ~s~n",
 	      [erl_pp:expr(Expr), erl_anno:line(P), typelib:pp_type(Ty1), 		       typelib:pp_type(Ty2)]);
+handle_type_error({type_error, generator, P, Ty}) ->
+    io:format("The generator in a list comprehension on line ~p is expected "
+	      "to return a list type, but returns ~s~n",
+	      [erl_anno:line(P), typelib:pp_type(Ty)]);
 handle_type_error({type_error, check_clauses}) ->
     %%% TODO: Improve quality of type error
     io:format("Type error in clauses");
