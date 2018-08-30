@@ -2091,8 +2091,9 @@ handle_type_error({type_error, call, _P, Name, TyArgs, ArgTys}) ->
     io:format("The function ~p expects arguments of type~n~p~n but is given "
 	      "arguments of type~n~p~n",
 	      [Name, TyArgs, ArgTys]);
-handle_type_error({type_error, fun_res_type, P, {atom, _, Name}, FunResTy, ResTy}) ->
-    io:format("The function ~p in line ~p is expected to return ~s but it returns ~s~n",
+handle_type_error({type_error, fun_res_type, P, Func, FunResTy, ResTy}) ->
+    Name = erl_pp:expr(Func), %% {atom, _, Name} or {remote, Mod, Name}
+    io:format("The function ~s in line ~p is expected to return ~s but it returns ~s~n",
               [Name, P, typelib:pp_type(ResTy), typelib:pp_type(FunResTy)]);
 handle_type_error({type_error, boolop, BoolOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-boolean argument "
