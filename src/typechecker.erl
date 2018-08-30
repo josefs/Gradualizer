@@ -1961,9 +1961,19 @@ type_check_forms(Forms, Opts) ->
 			    Throw ->
 				% Useful for debugging
 				% io:format("~p~n", [erlang:get_stacktrace()]),
-                    File =/= undefined andalso io:format("~s: ", [File]),
+				File =/= undefined andalso io:format("~s: ", [File]),
 				handle_type_error(Throw),
-				nok
+				nok;
+			    error:Error ->
+				%% A hack to hide the (very large) #env{} in
+				%% error stacktraces. TODO: Add an opt for this.
+				Trace = case erlang:get_stacktrace() of
+				    [{M, F, [#env{}|Args], Pos} | RestTrace] ->
+					[{M, F, ['*environment excluded*', Args], Pos} | RestTrace];
+				    Trace0 ->
+					Trace0
+				end,
+				erlang:raise(error, Error, Trace)
 			end;
 		    (_Function, Err) ->
 			Err
