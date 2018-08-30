@@ -1412,7 +1412,7 @@ type_check_lc_in(Env, ResTy, Expr, [{generate, _, Pat, Gen} | Quals]) ->
 				      ,ResTy, Expr, Quals),
         {#{}, constraints:combine(Cs1, Cs2)};
       %% TODO: Fix
-      {ann_type, _, [_, Ty]} ->
+      {ann_type, _, _} ->
         {#{}, constraints:empty()}
     %% TODO: Support more list types
     end;
