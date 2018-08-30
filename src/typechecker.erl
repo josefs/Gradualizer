@@ -814,9 +814,6 @@ type_check_expr(Env, {op, P, RelOp, Arg1, Arg2}) when
       (RelOp == '>')  or (RelOp == '<') ->
     type_check_rel_op(Env, RelOp, P, Arg1, Arg2);
 type_check_expr(Env, {op, P, Op, Arg1, Arg2}) when
-      Op == '++' orelse Op == '--' ->
-    type_check_list_op(Env, Op, P, Arg1, Arg2);
-type_check_expr(Env, {op, P, Op, Arg1, Arg2}) when
       Op == '+' orelse Op == '-' orelse Op == '*' orelse Op == '/' ->
     type_check_arith_op(Env, Op, P, Arg1, Arg2);
 type_check_expr(Env, {op, P, Op, Arg1, Arg2}) when
@@ -905,21 +902,6 @@ type_check_rel_op(Env, Op, P, Arg1, Arg2) ->
 		_ ->
 		    throw({type_error, relop, Op, P, Ty1, Ty2})
 	    end
-    end.
-
-type_check_list_op(Env, Op, P, Arg1, Arg2) ->
-    {Ty1, VB1, Cs1} = type_check_expr(Env, Arg1),
-    {Ty2, VB2, Cs2} = type_check_expr(Env, Arg2),
-    case {subtype(Ty1, {type, erl_anno:new(0), list, []}, Env#env.tenv),
-          subtype(Ty2, {type, erl_anno:new(0), list, []}, Env#env.tenv)} of
-	{{true, Cs3}, {true, Cs4}} ->
-	    %% TODO: Propagate list types Ty1 and Ty2
-	    RetType = {type, erl_anno:new(0), any, []},
-	    {RetType,
-	     union_var_binds([VB1, VB2]),
-	     constraints:combine([Cs1, Cs2, Cs3, Cs4])};
-	_ ->
-	    throw({type_error, listop, Op, P, Ty1, Ty2})
     end.
 
 type_check_arith_op(Env, Op, P, Arg1, Arg2) ->
@@ -2112,11 +2094,6 @@ handle_type_error({type_error, relop, RelOp, P, Ty1, Ty2}) ->
 	      "compatible types.~nHowever, it has arguments "
 	      "of type ~s and ~s~n", [RelOp, P, typelib:pp_type(Ty1)
 				              , typelib:pp_type(Ty2)]);
-handle_type_error({type_error, listop, Op, P, Ty1, Ty2}) ->
-    io:format("The operator ~p on line ~p requires arguments of "
-	      "list types.~nHowever, it has arguments "
-	      "of type ~s and ~s~n", [Op, P, typelib:pp_type(Ty1)
-					   , typelib:pp_type(Ty2)]);
 handle_type_error({type_error, arith_error, ArithOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-numeric argument "
 	      "of type ~s~n", [ArithOp, P, typelib:pp_type(Ty)]);
