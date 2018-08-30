@@ -1493,6 +1493,8 @@ type_check_tuple_in(Env, {type, _, union, Tys} = UTy, TS) ->
             P = element(2, hd(TS)),
             throw({type_error, tuple_error, P, TS, UTy})
     end;
+type_check_tuple_in(Env, {ann_type, _, [_, Ty]}, TS) ->
+    type_check_tuple_in(Env, Ty, TS);
 type_check_tuple_in(Env, {var, _, Name}, TS) ->
     {Tys, VarBindsList, Css} =
 	lists:unzip3(lists:map(fun (Expr) ->
@@ -1500,7 +1502,11 @@ type_check_tuple_in(Env, {var, _, Name}, TS) ->
 			       end, TS)),
     {union_var_binds(VarBindsList)
     ,constraints:combine([constraints:upper(Name, {type, erl_anno:new(0), tuple, Tys})| Css])
-    }.
+    };
+type_check_tuple_in(Env, Ty, TS) when element(1, Ty) == user_type;
+                                      element(1, Ty) == remote_type ->
+    NormTy = normalize(Ty, Env#env.tenv),
+    type_check_tuple_in(Env, NormTy, TS).
 
 
 type_check_tuple_union(Env, [Tuple = {type, _, tuple, _}|Union], TS) ->
