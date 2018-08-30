@@ -1031,16 +1031,18 @@ type_check_lc(Env, Expr, []) ->
     {{type, erl_anno:new(0), any, []}, #{}, Cs};
 type_check_lc(Env, Expr, [{generate, _, Pat, Gen} | Quals]) ->
     {Ty,  _,  Cs1} = type_check_expr(Env, Gen),
-    case Ty of
-      {type, _, list, [ElemTy]} ->
-        {TyL, VB, Cs2} = type_check_lc(Env#env{ venv = add_type_pat(Pat,
-								    ElemTy,
-								    Env#env.tenv,
-								    Env#env.venv) },
-				       Expr, Quals),
-        {TyL, VB, constraints:combine(Cs1,Cs2)}
-    %% TODO: Support for more list types
-    end.
+    ElemTy = case Ty of
+		 %% TODO: Support for more list types
+		 {type, _, list, [ElemTy0]} -> ElemTy0;
+		 {type, _, list, []}        -> {type, erl_anno:new(0), any, []};
+		 {type, _, any, []}         -> {type, erl_anno:new(0), any, []}
+	     end,
+    {TyL, VB, Cs2} = type_check_lc(Env#env{ venv = add_type_pat(Pat,
+								ElemTy,
+								Env#env.tenv,
+								Env#env.venv) },
+				   Expr, Quals),
+    {TyL, VB, constraints:combine(Cs1,Cs2)}.
 
 type_check_expr_in(Env, ResTy, Expr) ->
     NormResTy = normalize(ResTy, Env#env.tenv),
