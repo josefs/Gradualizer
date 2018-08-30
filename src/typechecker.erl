@@ -1102,7 +1102,15 @@ type_check_lc(Env, Expr, [{generate, P, Pat, Gen} | Quals]) ->
 					  ,Expr, Quals),
 	    {TyL, VB, constraints:combine(Cs1,Cs2)};
 	{elem_tys, _ElemTys} ->
-	    throw(multiple_tys_not_supported_in_list_comprehension);
+	    %% TODO: As a hack, we treat a union type as any, just to
+	    %% allow the program to type check.
+	    {TyL, VB, Cs2} = type_check_lc(Env#env{
+					     venv = add_any_types_pat(
+						      Pat
+						     ,Env#env.venv)
+					    }
+					  ,Expr, Quals),
+	    {TyL, VB, constraints:combine(Cs1,Cs2)};
 	{type_error, Ty} ->
 	    throw({type_error, generator, P, Ty})
     end.
@@ -1465,7 +1473,10 @@ type_check_lc_in(Env, ResTy, Expr, P, []) ->
 	    {_VB, Cs} = type_check_expr_in(Env, ElemTy, Expr),
 	    {#{}, Cs};
 	{elem_tys, _ElemTys} ->
-	    throw(multiple_types_not_supported_in_list_comprehensions);
+	    %% TODO: As a hack, we treat a union type as any, just to
+	    %% allow the program to type check.
+	    {_Ty, _VB, Cs} = type_check_expr(Env, Expr),
+	    {#{}, Cs};
 	{type_error, Ty} ->
 	    throw({type_error, lc, P, Ty})
     end;
@@ -1491,7 +1502,15 @@ type_check_lc_in(Env, ResTy, Expr, P, [{generate, P, Pat, Gen} | Quals]) ->
 					  ,ResTy, Expr, P, Quals),
 	    {#{}, constraints:combine(Cs1, Cs2)};
 	{elem_tys, _ElemTys} ->
-	    throw(multiple_types_not_supported_in_list_comprehensions);
+	    %% TODO: As a hack, we treat a union type as any, just to
+	    %% allow the program to type check.
+	    {_VB2, Cs2} = type_check_lc_in(Env#env{
+					     venv =
+						 add_any_types_pat(Pat
+								  ,Env#env.venv)
+					    }
+					  ,ResTy, Expr, P, Quals),
+	    {#{}, constraints:combine(Cs1, Cs2)};
 	{type_error, Ty} ->
 	    throw({type_error, generator, P, Ty})
     end;
@@ -1839,7 +1858,10 @@ add_type_pat(CONS = {cons, P, PH, PT}, ListTy, TEnv, VEnv) ->
 	    VEnv2 = add_type_pat(PH, ElemTy, TEnv, VEnv),
             add_type_pat(PT, ListTy, TEnv, VEnv2);
 	{elem_tys, _ElemTys} ->
-	    throw(union_types_not_supported_in_cons_pattern);
+	    %% TODO: As a hack, we treat a union type as any, just to
+	    %% allow the program to type check.
+            VEnv2 = add_any_types_pat(PH, VEnv),
+            add_type_pat(PT, ListTy, TEnv, VEnv2);
 	{type_error, Ty} ->
 	    throw({type_error, P, CONS, ListTy})
     end;
