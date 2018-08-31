@@ -1862,9 +1862,17 @@ add_type_pat(CONS = {cons, P, PH, PT}, ListTy, TEnv, VEnv) ->
 	    %% allow the program to type check.
             VEnv2 = add_any_types_pat(PH, VEnv),
             add_type_pat(PT, ListTy, TEnv, VEnv2);
-	{type_error, Ty} ->
+	{type_error, _Ty} ->
 	    throw({type_error, P, CONS, ListTy})
     end;
+add_type_pat(String = {string, P, _}, Ty, _TEnv, VEnv) ->
+   case subtype({type, P, string, []}, Ty, VEnv) of
+     %% TODO: We should propagate the constraints here
+     {true, _Cs} ->
+       VEnv;
+     false ->
+       throw({type_error, pattern, P, String, Ty})
+   end;
 add_type_pat({bin, _, BinElements}, {type, _, binary, [_,_]}, TEnv, VEnv) ->
     %% TODO: Consider the bit size parameters
     lists:foldl(fun ({bin_element, _, Pat, _Size, Specifiers}, VEnv1) ->
@@ -1942,6 +1950,8 @@ add_any_types_pat({match, _, P1, P2}, VEnv) ->
     add_any_types_pats([P1, P2], VEnv);
 add_any_types_pat({cons, _, Head, Tail}, VEnv) ->
     add_any_types_pats([Head, Tail], VEnv);
+add_any_types_pat({string, _, _}, VEnv) ->
+    VEnv;
 add_any_types_pat({nil, _}, VEnv) ->
     VEnv;
 add_any_types_pat({tuple, _, Pats}, VEnv) ->
