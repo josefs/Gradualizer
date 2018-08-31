@@ -711,8 +711,6 @@ type_check_expr(Env, {'case', _, Expr, Clauses}) ->
     VEnv = add_var_binds(Env#env.venv, VarBinds),
     {Ty, VB, Cs2} = infer_clauses(Env#env{ venv = VEnv}, Clauses),
     {Ty, VB, constraints:combine(Cs1, Cs2)};
-type_check_expr(_Env, {integer, _, _N}) ->
-    return({type, erl_anno:new(0), any, []});
 type_check_expr(Env, {tuple, P, TS}) ->
     { Tys, VarBindsList, Css} = lists:unzip3([ type_check_expr(Env, Expr)
 				        || Expr <- TS ]),
@@ -787,6 +785,11 @@ type_check_expr(_Env, {nil, _}) ->
     return({type, erl_anno:new(0), any, []});
 type_check_expr(_Env, {atom, _, _Atom}) ->
     return({type, erl_anno:new(0), any, []});
+type_check_expr(_Env, {integer, _, _N}) ->
+    return({type, erl_anno:new(0), any, []});
+type_check_expr(_Env, {float, _, _F}) ->
+    return({type, erl_anno:new(0), any, []});
+
 
 %% Maps
 type_check_expr(Env, {map, _, Assocs}) ->
