@@ -1483,7 +1483,7 @@ type_check_lc_in(Env, ResTy, Expr, P, []) ->
 	{type_error, Ty} ->
 	    throw({type_error, lc, P, Ty})
     end;
-type_check_lc_in(Env, ResTy, Expr, P, [{generate, P, Pat, Gen} | Quals]) ->
+type_check_lc_in(Env, ResTy, Expr, P, [{generate, P_Gen, Pat, Gen} | Quals]) ->
     {Ty, _VB1, Cs1} = type_check_expr(Env, Gen),
     case expect_list_type(Ty) of
 	any ->
@@ -1515,7 +1515,7 @@ type_check_lc_in(Env, ResTy, Expr, P, [{generate, P, Pat, Gen} | Quals]) ->
 					  ,ResTy, Expr, P, Quals),
 	    {#{}, constraints:combine(Cs1, Cs2)};
 	{type_error, Ty} ->
-	    throw({type_error, generator, P, Ty})
+	    throw({type_error, generator, P_Gen, Ty})
     end;
 type_check_lc_in(Env, ResTy, Expr, P, [Pred | Quals]) ->
     %% We choose to check the type of the predicate here. Arguments can be
