@@ -711,8 +711,6 @@ type_check_expr(Env, {'case', _, Expr, Clauses}) ->
     VEnv = add_var_binds(Env#env.venv, VarBinds),
     {Ty, VB, Cs2} = infer_clauses(Env#env{ venv = VEnv}, Clauses),
     {Ty, VB, constraints:combine(Cs1, Cs2)};
-type_check_expr(_Env, {integer, _, _N}) ->
-    return({type, erl_anno:new(0), any, []});
 type_check_expr(Env, {tuple, P, TS}) ->
     { Tys, VarBindsList, Css} = lists:unzip3([ type_check_expr(Env, Expr)
 				        || Expr <- TS ]),
@@ -787,6 +785,11 @@ type_check_expr(_Env, {nil, _}) ->
     return({type, erl_anno:new(0), any, []});
 type_check_expr(_Env, {atom, _, _Atom}) ->
     return({type, erl_anno:new(0), any, []});
+type_check_expr(_Env, {integer, _, _N}) ->
+    return({type, erl_anno:new(0), any, []});
+type_check_expr(_Env, {float, _, _F}) ->
+    return({type, erl_anno:new(0), any, []});
+
 
 %% Maps
 type_check_expr(Env, {map, _, Assocs}) ->
@@ -1480,7 +1483,7 @@ type_check_lc_in(Env, ResTy, Expr, P, []) ->
 	{type_error, Ty} ->
 	    throw({type_error, lc, P, Ty})
     end;
-type_check_lc_in(Env, ResTy, Expr, P, [{generate, P, Pat, Gen} | Quals]) ->
+type_check_lc_in(Env, ResTy, Expr, P, [{generate, P_Gen, Pat, Gen} | Quals]) ->
     {Ty, _VB1, Cs1} = type_check_expr(Env, Gen),
     case expect_list_type(Ty) of
 	any ->
@@ -1512,7 +1515,7 @@ type_check_lc_in(Env, ResTy, Expr, P, [{generate, P, Pat, Gen} | Quals]) ->
 					  ,ResTy, Expr, P, Quals),
 	    {#{}, constraints:combine(Cs1, Cs2)};
 	{type_error, Ty} ->
-	    throw({type_error, generator, P, Ty})
+	    throw({type_error, generator, P_Gen, Ty})
     end;
 type_check_lc_in(Env, ResTy, Expr, P, [Pred | Quals]) ->
     %% We choose to check the type of the predicate here. Arguments can be
@@ -1873,6 +1876,14 @@ add_type_pat(CONS = {cons, P, PH, PT}, ListTy, TEnv, VEnv) ->
 	{type_error, _Ty} ->
 	    throw({type_error, P, CONS, ListTy})
     end;
+add_type_pat(String = {string, P, _}, Ty, _TEnv, VEnv) ->
+   case subtype({type, P, string, []}, Ty, VEnv) of
+     %% TODO: We should propagate the constraints here
+     {true, _Cs} ->
+       VEnv;
+     false ->
+       throw({type_error, pattern, P, String, Ty})
+   end;
 add_type_pat({bin, _, BinElements}, {type, _, binary, [_,_]}, TEnv, VEnv) ->
     %% TODO: Consider the bit size parameters
     lists:foldl(fun ({bin_element, _, Pat, _Size, Specifiers}, VEnv1) ->
@@ -1950,6 +1961,8 @@ add_any_types_pat({match, _, P1, P2}, VEnv) ->
     add_any_types_pats([P1, P2], VEnv);
 add_any_types_pat({cons, _, Head, Tail}, VEnv) ->
     add_any_types_pats([Head, Tail], VEnv);
+add_any_types_pat({string, _, _}, VEnv) ->
+    VEnv;
 add_any_types_pat({nil, _}, VEnv) ->
     VEnv;
 add_any_types_pat({tuple, _, Pats}, VEnv) ->
