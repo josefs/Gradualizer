@@ -1553,6 +1553,14 @@ type_check_fun(_Env, {remote, P, {atom,_,Module}, {atom,_,Fun}}, Arity) ->
 	{ok, Types} -> {Types, #{}, constraints:empty()};
 	not_found   -> throw({call_undef, P, Module, Fun, Arity})
     end;
+type_check_fun(_Env, {remote, _, {var, _, _Module}, _}, Arity)->
+    % Call to an unknown module. Revert to dynamic types.
+    {[{type, erl_anno:new(0), bounded_fun,
+       [{type, erl_anno:new(0), 'fun',
+	 [{type, erl_anno:new(0), product,
+	   lists:duplicate(Arity, {type, erl_anno:new(0), any, []})},
+	  {type,0,any,[]}]},
+	[]]}], #{}, constraints:empty()};
 type_check_fun(Env, Expr, _Arity) ->
     type_check_expr(Env, Expr).
 
