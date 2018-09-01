@@ -1870,7 +1870,7 @@ add_type_pat(CONS = {cons, P, PH, PT}, ListTy, TEnv, VEnv) ->
 	    %% allow the program to type check.
             VEnv2 = add_any_types_pat(PH, VEnv),
             add_type_pat(PT, ListTy, TEnv, VEnv2);
-	{type_error, Ty} ->
+	{type_error, _Ty} ->
 	    throw({type_error, P, CONS, ListTy})
     end;
 add_type_pat({bin, _, BinElements}, {type, _, binary, [_,_]}, TEnv, VEnv) ->
