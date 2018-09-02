@@ -893,7 +893,7 @@ type_check_expr(Env, {'try', _, Block, CaseCs, CatchCs, AfterCs}) ->
     % TODO: Should we check types against each other instead of
     % just merging them?
     % TODO: Check what variable bindings actually should be propagated
-    {merge_types([Ty, TyC, TyS, TyA])
+    {normalize({type, erl_anno:new(0), union, [Ty, TyC, TyS, TyA]})
     ,VB
     ,constraints:combine([Cs1,Cs2,Cs3,Cs4])}.
 
@@ -927,7 +927,7 @@ type_check_logic_op(Env, Op, P, Arg1, Arg2) ->
 		false ->
 		    throw({type_error, boolop, Op, P, Ty2});
 		{true, Cs4} ->
-		    {merge_types([Ty1, Ty2])
+		    {normalize({type, erl_anno:new(0), union, [Ty1, Ty2]})
 		    ,union_var_binds([VB1, VB2])
 		    ,constraints:combine([Cs1,Cs2,Cs3,Cs4])}
 	    end
@@ -996,7 +996,7 @@ type_check_list_op(Env, Op, P, Arg1, Arg2) ->
   case {subtype(Ty1, ListTy, Env#env.tenv)
        ,subtype(Ty2, ListTy, Env#env.tenv)} of
     {{true, Cs3}, {true, Cs4}} ->
-      {merge_types([Ty1, Ty2])
+      {normalize({type, erl_anno:new(0), union, [Ty1, Ty2]})
       ,union_var_binds([VB1, VB2])
       ,constraints:combine([Cs1, Cs2, Cs3, Cs4])
       };
@@ -1680,7 +1680,9 @@ infer_clauses(Env, Clauses) ->
 	lists:unzip3(lists:map(fun (Clause) ->
 				       infer_clause(Env, Clause)
 			       end, Clauses)),
-    {merge_types(Tys), union_var_binds(VarBindsList), constraints:combine(Css)}.
+    {normalize({type, erl_anno:new(0), union, Tys})
+    ,union_var_binds(VarBindsList)
+    ,constraints:combine(Css)}.
 
 infer_clause(Env, {clause, _, Args, Guards, Block}) ->
     EnvNew = Env#env{ venv = add_any_types_pats(Args, Env#env.venv) },
@@ -1777,48 +1779,6 @@ type_check_function(Env, {function,_, Name, NArgs, Clauses}) ->
 	    infer_clauses(Env, Clauses);
 	error ->
 	    throw({internal_error, missing_type_spec, Name, NArgs})
-    end.
-
-merge_types([]) ->
-    {type, erl_anno:new(0), any, []};
-merge_types([Ty]) ->
-    Ty;
-merge_types(Tys) ->
-    %%% TODO: We shouldn't be so eager to convert types to any().
-    %%% If we find any() in the list, it should simply vanish, if favour of
-    %%% the other types present in the list.
-    case lists:keyfind(any, 3, Tys) of
-	Any = {type, _, any, []} ->
-	    Any;
-	_ ->
-	    case Tys of
-		[Ty={atom, _, A}, {atom, _, A} | Rest] ->
-		    merge_types([Ty | Rest]);
-		[{atom, _, false}, {atom, _, true} | Rest] ->
-		    merge_types([{type, erl_anno:new(0), boolean, []} | Rest]);
-		[{atom, _, true}, {atom, _, false} | Rest] ->
-		    merge_types([{type, erl_anno:new(0), boolean, []} | Rest]);
-		[{atom, _, _}, {type, _, _, _} | _] ->
-		    {type, erl_anno:new(0), any, []};
-		[{type, P, Ty, Args1}, {type, _, Ty, Args2}]
-		  when length(Args1) == length(Args2) ->
-		    {type, P, Ty, lists:zipwith(fun (A,B) -> merge_types([A,B])
-						end, Args1, Args2)};
-		[{type, P, tuple, Args1}, {type, _, tuple, Args2} | Rest] ->
-		    case length(Args1) == length(Args2) of
-			false ->
-			    {type, erl_anno:new(0), any, []};
-			true  ->
-			    merge_types([{type, P, tuple,
-					  lists:zipwith(fun (A1, A2) ->
-								merge_types([A1,A2]) end,
-							Args1, Args2)}
-					 | Rest])
-		    end;
-		[{type, _, map, Assocs}, {type, _, map, Assocs}] ->
-		    % TODO: Figure out how to merge field assocs properly
-		    [{type, erl_anno:new(0), map, []}]
-	    end
     end.
 
 add_types_pats([], [], _TEnv, VEnv) ->
