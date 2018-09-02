@@ -937,9 +937,8 @@ type_check_rel_op(Env, Op, P, Arg1, Arg2) ->
     case {type_check_expr(Env, Arg1)
 	 ,type_check_expr(Env, Arg2)} of
 	{{Ty1, VB1, Cs1}, {Ty2, VB2, Cs2}} ->
-	    case {subtype(Ty1, Ty2, Env#env.tenv),
-		  subtype(Ty2, Ty1, Env#env.tenv)} of
-		{{true, Cs3}, {true, Cs4}} ->
+	    case compatible(Ty1, Ty2, Env#env.tenv) of
+	        {true, Cs} ->
 		    RetType =
 			case {Ty1, Ty2} of
 			    {{type, _, any, []},_} ->
@@ -953,7 +952,7 @@ type_check_rel_op(Env, Op, P, Arg1, Arg2) ->
 			end,
 		    {RetType
 		    ,union_var_binds([VB1, VB2])
-		    ,constraints:combine([Cs1,Cs2,Cs3,Cs4])};
+		    ,constraints:combine([Cs,Cs1,Cs2])};
 		_ ->
 		    throw({type_error, relop, Op, P, Ty1, Ty2})
 	    end
