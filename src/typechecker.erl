@@ -635,8 +635,8 @@ int_range_to_types({I, J}) when I < J ->
 %% cases where we need to get the type of the elements.
 
 -spec expect_list_type(type()) ->
-          {elem_ty,  type()}    %% There is exactly one element type
-	| {elem_tys, [type()]}  %% A union can give rise to multiple elem types
+          {elem_ty,  type(),   constraints:constraints()}    %% There is exactly one element type
+	| {elem_tys, [type()], constraints:constraints()}  %% A union can give rise to multiple elem types
 	| any                   %% If we don't know the element type
 	| {type_error, type()}. %% If the argument is not compatible with lists
 
@@ -646,39 +646,55 @@ expect_list_type({type, _, T, []})
     any;
 expect_list_type({type, _, T, [ElemTy]})
   when T == 'list' orelse T == 'nonempty_list' ->
-    {elem_ty, ElemTy};
+    {elem_ty, ElemTy, constraints:empty()};
 expect_list_type({type, _, maybe_improper_list, [ElemTy, _]}) ->
-    {elem_ty, ElemTy};
+    {elem_ty, ElemTy, constraints:empty()};
 expect_list_type({type, _, string, []}) ->
-    {elem_ty, {type, erl_anno:new(0), char, []}};
+    {elem_ty, {type, erl_anno:new(0), char, []}, constraints:empty()};
 expect_list_type({ann_type, _, [_, Ty]}) ->
     expect_list_type(Ty);
 expect_list_type(Union = {type, _, union, UnionTys}) ->
-    Tys = lists:flatmap(fun (Ty) ->
-				case expect_list_type(Ty) of
-				    {type_error, _} ->
-					[];
-				    any ->
-					[{type, erl_anno:new(0), any, []}];
-				    {elem_ty, Ty} ->
-					[Ty];
-				    {elem_tys, Tys} ->
-					Tys
-				end
-			end, UnionTys),
+    {Tys, Cs} = expect_list_union(UnionTys, [], constraints:empty()),
     case Tys of
 	[] ->
 	    {type_error, Union};
 	[Ty] ->
-	    {elem_ty, Ty};
+	    {elem_ty, Ty, Cs};
 	_ ->
-	    {elem_tys, Tys}
+	    {elem_tys, Tys, Cs}
     end;
-expect_list_type({var, _, _Var}) ->
-    throw(variable_unimplemented);
+expect_list_type({var, _, Var}) ->
+    TyVar = new_type_var(),
+    {elem_ty
+    ,{var, erl_anno:new(0), TyVar}
+    ,constraints:add_var(TyVar,
+      constraints:upper(Var, {type, erl_anno:new(0), list, [TyVar]}))
+    };
 expect_list_type(Ty) ->
     {type_error, Ty}.
 
+
+expect_list_union([Ty|Tys], AccTy, AccCs) ->
+    case expect_list_type(Ty) of
+	{type_error, _} ->
+	    expect_list_union(Tys, AccTy, AccCs);
+	any ->
+	    expect_list_union(Tys
+			     ,[{type, erl_anno:new(0), any, []} | AccTy]
+			     ,AccCs);
+	{elem_ty, Ty, Cs} ->
+	    expect_list_union(Tys, [Ty | AccTy], constraints:combine(Cs, AccCs));
+	{elem_tys, Tys, Cs} ->
+	    expect_list_union(Tys, Tys ++ AccTy, constraints:combine(Cs, AccCs))
+    end;
+expect_list_union([], AccTy, AccCs) ->
+    {AccTy, AccCs}.
+
+
+new_type_var() ->
+    I = get(gradualizer_fresh_var),
+    put(gradualizer_fresh_var, I+1),
+    "_TyVar" ++ integer_to_list(I).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -2008,6 +2024,9 @@ get_rec_field_type(FieldName, []) ->
 type_check_forms(Forms, Opts) ->
     StopOnFirstError = proplists:get_bool(stop_on_first_error, Opts),
     File = proplists:get_value(print_file, Opts),
+
+    %% Initialize fresh variable generation
+    put(gradualizer_fresh_var,0),
 
     case gradualizer_db:start_link() of
 	{ok, _Pid}                    -> ok;
