@@ -719,7 +719,8 @@ type_check_expr(Env, {var, P, Var}) ->
     end;
 type_check_expr(Env, {match, _, Pat, Expr}) ->
     {Ty, VarBinds, Cs} = type_check_expr(Env, Expr),
-    {Ty, add_type_pat(Pat, Ty, Env#env.tenv, VarBinds), Cs};
+    {Env2, Cs2} = add_type_pat(Pat, Ty, Env#env.tenv, VarBinds),
+    {Ty, Env2, constraints:combine(Cs,Cs2)};
 type_check_expr(Env, {'if', _, Clauses}) ->
     infer_clauses(Env, Clauses);
 type_check_expr(Env, {'case', _, Expr, Clauses}) ->
@@ -1103,14 +1104,15 @@ type_check_lc(Env, Expr, [{generate, P, Pat, Gen} | Quals]) ->
     {Ty,  _,  Cs1} = type_check_expr(Env, Gen),
     case expect_list_type(Ty) of
 	{elem_ty, ElemTy} ->
-	    {TyL, VB, Cs2} = type_check_lc(Env#env{
-					     venv = add_type_pat(Pat
-								,ElemTy
-								,Env#env.tenv
-								,Env#env.venv)
+	    {NewEnv, Cs2} = add_type_pat(Pat
+					,ElemTy
+					,Env#env.tenv
+					,Env#env.venv),
+	    {TyL, VB, Cs3} = type_check_lc(Env#env{
+					     venv = NewEnv
 					    }
 					  ,Expr, Quals),
-	    {TyL, VB, constraints:combine(Cs1,Cs2)};
+	    {TyL, VB, constraints:combine([Cs1, Cs2, Cs3])};
 	any ->
 	    {TyL, VB, Cs2} = type_check_lc(Env#env{
 					     venv = add_any_types_pat(
@@ -1510,15 +1512,15 @@ type_check_lc_in(Env, ResTy, Expr, P, [{generate, P_Gen, Pat, Gen} | Quals]) ->
 					  ,ResTy, Expr, P, Quals),
 	    {#{}, constraints:combine(Cs1, Cs2)};
 	{elem_ty, ElemTy} ->
-	    {_VB2, Cs2} = type_check_lc_in(Env#env{
-					     venv =
-						 add_type_pat(Pat
-							     ,ElemTy
-							     ,Env#env.tenv
-							     ,Env#env.venv)
+	    {NewEnv, Cs2} = add_type_pat(Pat
+					,ElemTy
+					,Env#env.tenv
+					,Env#env.venv),
+	    {_VB2, Cs3} = type_check_lc_in(Env#env{
+					     venv = NewEnv
 					    }
 					  ,ResTy, Expr, P, Quals),
-	    {#{}, constraints:combine(Cs1, Cs2)};
+	    {#{}, constraints:combine([Cs1, Cs2, Cs3])};
 	{elem_tys, _ElemTys} ->
 	    %% TODO: As a hack, we treat a union type as any, just to
 	    %% allow the program to type check.
@@ -1750,13 +1752,14 @@ check_clause(Env, ArgsTy, ResTy, {clause, _, Args, Guards, Block}) ->
 	false ->
 	    throw(argument_length_mismatch);
 	true ->
-	    EnvNew    = Env#env{ venv = add_types_pats(Args,
-	                                               ArgsTy,
-	                                               Env#env.tenv,
-	                                               Env#env.venv) },
-	    VarBinds  = check_guards(EnvNew, Guards),
-	    EnvNewest = EnvNew#env{ venv = add_var_binds(EnvNew#env.venv, VarBinds) },
-	    type_check_block_in(EnvNewest, ResTy, Block)
+	    {Env2, Cs1} = add_types_pats(Args, ArgsTy,
+					 Env#env.tenv, Env#env.venv),
+	    EnvNew      = Env#env{ venv =  Env2 },
+	    VarBinds1   = check_guards(EnvNew, Guards),
+	    EnvNewest   = EnvNew#env{ venv = add_var_binds(EnvNew#env.venv, VarBinds1) },
+	    {VarBinds2, Cs2} = type_check_block_in(EnvNewest, ResTy, Block),
+	    {union_var_binds(VarBinds1, VarBinds2)
+	    ,constraints:combine(Cs1, Cs2)}
     end;
 %% DEBUG
 check_clause(_Env, _ArgsTy, _ResTy, Term) ->
@@ -1797,41 +1800,42 @@ type_check_function(Env, {function,_, Name, NArgs, Clauses}) ->
     end.
 
 add_types_pats([], [], _TEnv, VEnv) ->
-    VEnv;
+    ret(VEnv);
 add_types_pats([Pat | Pats], [Ty | Tys], TEnv, VEnv) ->
     NormTy = normalize(Ty, TEnv),
-    ?throw_orig_type(add_types_pats(Pats, Tys, TEnv, add_type_pat(Pat, NormTy, TEnv, VEnv)),
-                     Ty, NormTy).
+    {VEnv2, Cs1} = add_type_pat(Pat, NormTy, TEnv, VEnv),
+    {VEnv3, Cs2} = ?throw_orig_type(add_types_pats(Pats, Tys, TEnv, VEnv2),
+				    Ty, NormTy),
+    {VEnv3, constraints:combine(Cs1, Cs2)}.
 
 add_type_pat({var, _, '_'}, _Ty, _TEnv, VEnv) ->
-    VEnv;
+    ret(VEnv);
 add_type_pat({var, _, A}, Ty, _TEnv, VEnv) ->
-    VEnv#{ A => Ty };
+    ret(VEnv#{ A => Ty });
 add_type_pat(Expr, {type, _, any, []}, _TEnv, VEnv) ->
-    add_any_types_pat(Expr, VEnv);
+    ret(add_any_types_pat(Expr, VEnv));
 add_type_pat({integer, _, _}, _Ty, _TEnv, VEnv) ->
-    VEnv;
+    ret(VEnv);
 add_type_pat(Tuple = {tuple, P, Pats}, Ty, TEnv, VEnv) ->
     case subtype({type,P,tuple,lists:duplicate(length(Pats),{type,0,any,[]})},
 		 Ty, TEnv) of
-	{true, _Cs} ->
-	    add_type_pat_tuple(Pats, Ty, TEnv, VEnv);
+	{true, Cs1} ->
+	    {VEnv2, Cs2} = add_type_pat_tuple(Pats, Ty, TEnv, VEnv),
+	    {VEnv2, constraints:combine(Cs1, Cs2)};
 	false ->
 	    throw({type_error, pattern, P, Tuple, Ty})
     end;
 add_type_pat(Atom = {atom, P, _}, Ty, TEnv, VEnv) ->
     case subtype(Atom, Ty, TEnv) of
-	% There cannot be any constraints generated in this case
-	{true, _Cs} ->
-	    VEnv;
+	{true, Cs} ->
+	    {VEnv, Cs};
 	false ->
 	    throw({type_error, pattern, P, Atom, Ty})
     end;
 add_type_pat(Nil = {nil, P}, Ty, TEnv, VEnv) ->
     case subtype({type, P, nil, []}, Ty, TEnv) of
-	% There cannot be any constraints generated in this case
-	{true, _Cs} ->
-	    VEnv;
+	{true, Cs} ->
+	    {VEnv, Cs};
 	false ->
 	    throw({type_error, pattern, P, Nil, Ty})
     end;
@@ -1840,40 +1844,44 @@ add_type_pat(CONS = {cons, P, PH, PT}, ListTy, TEnv, VEnv) ->
 	any ->
             VEnv2 = add_any_types_pat(PH, VEnv),
             add_type_pat(PT, ListTy, TEnv, VEnv2);
-	{elem_ty, ElemTy} ->
-	    VEnv2 = add_type_pat(PH, ElemTy, TEnv, VEnv),
-            add_type_pat(PT, ListTy, TEnv, VEnv2);
-	{elem_tys, _ElemTys} ->
+	{elem_ty, ElemTy, Cs1} ->
+	    {VEnv2, Cs2} = add_type_pat(PH, ElemTy, TEnv, VEnv),
+            {VEnv3, Cs3} = add_type_pat(PT, ListTy, TEnv, VEnv2),
+	    {VEnv3, constraints:combine([Cs1, Cs2, Cs3])};
+	{elem_tys, _ElemTys, Cs1} ->
 	    %% TODO: As a hack, we treat a union type as any, just to
 	    %% allow the program to type check.
             VEnv2 = add_any_types_pat(PH, VEnv),
-            add_type_pat(PT, ListTy, TEnv, VEnv2);
+            {VEnv3, Cs2} = add_type_pat(PT, ListTy, TEnv, VEnv2),
+	    {VEnv3, constraints:combine(Cs1, Cs2)};
 	{type_error, _Ty} ->
 	    throw({type_error, P, CONS, ListTy})
     end;
 add_type_pat(String = {string, P, _}, Ty, _TEnv, VEnv) ->
    case subtype({type, P, string, []}, Ty, VEnv) of
-     %% TODO: We should propagate the constraints here
-     {true, _Cs} ->
-       VEnv;
+     {true, Cs} ->
+       {VEnv, Cs};
      false ->
        throw({type_error, pattern, P, String, Ty})
    end;
 add_type_pat({bin, _, BinElements}, {type, _, binary, [_,_]}, TEnv, VEnv) ->
     %% TODO: Consider the bit size parameters
-    lists:foldl(fun ({bin_element, _, Pat, _Size, Specifiers}, VEnv1) ->
-			%% Check Pat against the bit syntax type specifiers
-			SpecTy = bit_specifier_list_to_type(Specifiers),
-			add_type_pat(Pat, SpecTy, TEnv, VEnv1)
-		end,
-		VEnv,
-		BinElements);
+    lists:foldl(fun ({bin_element, _, Pat, _Size, Specifiers}, {VEnv1, Cs1}) ->
+			    %% Check Pat against the bit syntax type specifiers
+			    SpecTy = bit_specifier_list_to_type(Specifiers),
+			    {VEnv2, Cs2} = add_type_pat(Pat, SpecTy, TEnv, VEnv1),
+			    {VEnv2, constraints:combine(Cs1, Cs2)}
+		    end,
+		    {VEnv, constraints:empty()},
+		    BinElements);
 add_type_pat({record, _, _Record, Fields}, {type, _, record, [{atom, _, _RecordName}]}, TEnv, VEnv) ->
     % TODO: We need the definitions of records here, to be able to add the
     % types of the matches in the record.
     add_type_pat_fields(Fields, {type, erl_anno:new(0), any, []}, TEnv, VEnv);
 add_type_pat({match, _, Pat1, Pat2}, Ty, TEnv, VEnv) ->
-    add_type_pat(Pat1, Ty, TEnv, add_type_pat(Pat2, Ty, TEnv, VEnv));
+    {VEnv1, Cs1} = add_type_pat(Pat2, Ty, TEnv, VEnv),
+    {VEnv2, Cs2} = add_type_pat(Pat1, Ty, TEnv, VEnv1),
+    {VEnv2, constraints:combine(Cs1, Cs2)};
 
 add_type_pat(Pat, {ann_type, _, [_, Ty]}, TEnv, VEnv) ->
     add_type_pat(Pat, Ty, TEnv, VEnv);
@@ -1882,22 +1890,25 @@ add_type_pat(Pat, Ty, _TEnv, _VEnv) ->
     throw({type_error, pattern, element(2, Pat), Pat, Ty}).
 
 add_type_pat_fields([], _, _TEnv, VEnv) ->
-    VEnv;
+    ret(VEnv);
 add_type_pat_fields([{record_field, _, _Field, Pat}|Fields], Ty, TEnv, VEnv) ->
-    add_type_pat_fields(Fields, Ty, TEnv, add_type_pat(Pat, Ty, TEnv, VEnv)).
+    {VEnv2, Cs1} = add_type_pat(Pat, Ty, TEnv, VEnv),
+    {VEnv3, Cs2} = add_type_pat_fields(Fields, Ty, TEnv, VEnv2),
+    {VEnv3, constraints:combine(Cs1, Cs2)}.
 
 
 
 add_type_pat_list([Pat|Pats], [Ty|Tys], TEnv, VEnv) ->
-    VEnv2 = add_type_pat(Pat, Ty, TEnv, VEnv),
-    add_type_pat_list(Pats, Tys, TEnv, VEnv2);
+    {VEnv2, Cs1} = add_type_pat(Pat, Ty, TEnv, VEnv),
+    {VEnv3, Cs2} = add_type_pat_list(Pats, Tys, TEnv, VEnv2),
+    {VEnv3, constraints:combine(Cs1, Cs2)};
 add_type_pat_list([], [], _TEnv, VEnv) ->
-    VEnv.
+    ret(VEnv).
 
 add_type_pat_tuple(Pats, {type, _, any, []}, _TEnv, VEnv) ->
-    add_any_types_pats(Pats, VEnv);
+    ret(add_any_types_pats(Pats, VEnv));
 add_type_pat_tuple(Pats, {type, _, tuple, any}, _TEnv, VEnv) ->
-    add_any_types_pats(Pats, VEnv);
+    ret(add_any_types_pats(Pats, VEnv));
 add_type_pat_tuple(Pats, {type, _, tuple, Tys}, TEnv, VEnv) ->
     add_types_pats(Pats, Tys, TEnv, VEnv);
 add_type_pat_tuple(Pats, {type, _, union, Tys}, TEnv, VEnv) ->
@@ -1909,9 +1920,11 @@ add_type_pat_tuple(Pats, {type, _, union, Tys}, TEnv, VEnv) ->
 		 ,transpose([TS
 			   || {type, _, tuple, TS} <- Tys
 			    , length(TS) == length(Pats)])),
-    lists:foldl(fun ({Pat, Union}, Env) ->
-			add_type_pat(Pat, Union, TEnv, Env)
-		end, VEnv, lists:zip(Pats, Unions));
+    lists:foldl(fun ({Pat, Union}, {Env1, Cs1}) ->
+			{Env2, Cs2} = add_type_pat(Pat, Union, TEnv, Env1),
+			{Env2, constraints:combine(Cs1, Cs2)}
+		end, {VEnv, constraints:empty()}, lists:zip(Pats, Unions));
+%add_type_pat_tuple(Pats, {var, _, Var}, 
 add_type_pat_tuple(Pats, {ann_type, _, [_, Ty]}, TEnv, VEnv) ->
     add_type_pat_tuple(Pats, Ty, TEnv, VEnv).
 
@@ -1990,6 +2003,9 @@ bit_specifier_list_to_type(Specifiers) ->
 
 return(X) ->
     { X, #{}, constraints:empty() }.
+
+union_var_binds(VB1, VB2) ->
+    union_var_binds([VB1, VB2]).
 
 union_var_binds([]) ->
     #{};
