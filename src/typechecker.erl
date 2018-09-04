@@ -360,8 +360,8 @@ normalize(T) -> normalize(T, #tenv{}).
 
 %% TEnv is currently not used. Type definitions are fetched from gradualizer_db.
 -spec normalize(type(), TEnv :: #tenv{}) -> type().
-normalize({type, _, union, _} = U, TEnv) ->
-    Types = flatten_unions([U], TEnv),
+normalize({type, _, union, Tys}, TEnv) ->
+    Types = flatten_unions(Tys, TEnv),
     case merge_union_types(Types, TEnv) of
         []  -> {type, erl_anno:new(0), none, []};
         [T] -> T;
@@ -483,13 +483,15 @@ expand_builtin_aliases(Type) ->
 %% * Merge integer types, including singleton integers and ranges
 %%   1, 1..5, integer(), non_neg_integer(), pos_integer(), neg_integer()
 -spec flatten_unions([type()], #tenv{}) -> [type()].
-flatten_unions([{type, _, union, UnionTs} | Ts], TEnv) ->
-    UnionTs1 = [normalize(T, TEnv) || T <- UnionTs],
-    flatten_unions(UnionTs1 ++ Ts, TEnv);
-flatten_unions([T | Ts], TEnv) ->
-    [T | flatten_unions(Ts, TEnv)];
-flatten_unions([], _TEnv) ->
-    [].
+flatten_unions(Tys, TEnv) ->
+    [ FTy || Ty <- Tys, FTy <- flatten_type(normalize(Ty, TEnv), TEnv) ].
+
+flatten_type({type, _, union, Tys}, TEnv) ->
+    flatten_unions(Tys, TEnv);
+flatten_type({ann_type, _, [_, Ty]}, TEnv) ->
+    flatten_type(normalize(Ty, TEnv), TEnv);
+flatten_type(Ty, _TEnv) ->
+    [Ty].
 
 %% Merges overlapping integer types (including ranges and singletons).
 %% (TODO) Removes all types that are subtypes of other types in the same union.

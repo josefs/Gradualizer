@@ -57,6 +57,7 @@ subtype_test_() ->
      ?_assert(subtype(?t( 1..5              ), ?t( 1..3|4..6        ))),
      ?_assert(subtype(?t( 1..5|a            ), ?t( 1..3|4..6|atom() ))),
      ?_assert(subtype(?t( a|b               ), ?t( atom()           ))),
+     ?_assert(subtype(?t( (A :: boolean())|(B :: boolean()) ), ?t( boolean() ))),
 
      %% Lists
      ?_assert(subtype(?t( [a]               ), ?t( list()           ))),
