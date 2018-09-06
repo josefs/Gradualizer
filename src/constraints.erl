@@ -18,7 +18,7 @@ empty() ->
     #constraints{}.
 
 add_var(Var, Cs) ->
-    Cs#constraints{ exist_vars = sets:add(Var, Cs#constraints.exist_vars) }.
+    Cs#constraints{ exist_vars = sets:add_element(Var, Cs#constraints.exist_vars) }.
 
 upper(Var, Ty) ->
     #constraints{ upper_bounds = #{ Var => [Ty] } }.
