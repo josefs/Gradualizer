@@ -636,27 +636,29 @@ int_range_to_types({I, J}) when I < J ->
 %% its type parameter. One example is the list type, and there are
 %% cases where we need to get the type of the elements.
 
--spec expect_list_type(type()) ->
+-spec expect_list_type(type(), allow_nil_type | dont_allow_nil_type) ->
           {elem_ty,  type(),   constraints:constraints()}    %% There is exactly one element type
 	| {elem_tys, [type()], constraints:constraints()}  %% A union can give rise to multiple elem types
 	| any                   %% If we don't know the element type
 	| {type_error, type()}. %% If the argument is not compatible with lists
 
-expect_list_type({type, _, T, []})
+expect_list_type({type, _, T, []}, _)
   when T == 'list' orelse T == 'any' orelse
        T == 'nonempty_list' orelse T == 'maybe_improper_list' ->
     any;
-expect_list_type({type, _, T, [ElemTy]})
+expect_list_type({type, _, T, [ElemTy]}, _)
   when T == 'list' orelse T == 'nonempty_list' ->
     {elem_ty, ElemTy, constraints:empty()};
-expect_list_type({type, _, maybe_improper_list, [ElemTy, _]}) ->
+expect_list_type({type, _, maybe_improper_list, [ElemTy, _]}, _) ->
     {elem_ty, ElemTy, constraints:empty()};
-expect_list_type({type, _, string, []}) ->
+expect_list_type({type, _, nil, []}, allow_nil_type) ->
+    any;
+expect_list_type({type, _, string, []}, _) ->
     {elem_ty, {type, erl_anno:new(0), char, []}, constraints:empty()};
-expect_list_type({ann_type, _, [_, Ty]}) ->
-    expect_list_type(Ty);
-expect_list_type(Union = {type, _, union, UnionTys}) ->
-    {Tys, Cs} = expect_list_union(UnionTys, [], constraints:empty()),
+expect_list_type({ann_type, _, [_, Ty]}, N) ->
+    expect_list_type(Ty, N);
+expect_list_type(Union = {type, _, union, UnionTys}, N) ->
+    {Tys, Cs} = expect_list_union(UnionTys, [], constraints:empty(), no_any, N),
     case Tys of
 	[] ->
 	    {type_error, Union};
@@ -665,32 +667,45 @@ expect_list_type(Union = {type, _, union, UnionTys}) ->
 	_ ->
 	    {elem_tys, Tys, Cs}
     end;
-expect_list_type({var, _, Var}) ->
+expect_list_type({var, _, Var}, _) ->
     TyVar = new_type_var(),
     {elem_ty
     ,{var, erl_anno:new(0), TyVar}
     ,constraints:add_var(TyVar,
       constraints:upper(Var, {type, erl_anno:new(0), list, [TyVar]}))
     };
-expect_list_type(Ty) ->
+expect_list_type(Ty, _) ->
     {type_error, Ty}.
 
 
-expect_list_union([Ty|Tys], AccTy, AccCs) ->
-    case expect_list_type(Ty) of
+expect_list_union([Ty|Tys], AccTy, AccCs, Any, N) ->
+    case expect_list_type(Ty, N) of
 	{type_error, _} ->
-	    expect_list_union(Tys, AccTy, AccCs);
+	    expect_list_union(Tys, AccTy, AccCs, Any, N);
 	any ->
 	    expect_list_union(Tys
 			     ,[{type, erl_anno:new(0), any, []} | AccTy]
-			     ,AccCs);
+			     ,AccCs
+			     ,any
+			     ,N);
 	{elem_ty, Ty, Cs} ->
-	    expect_list_union(Tys, [Ty | AccTy], constraints:combine(Cs, AccCs));
+	    expect_list_union(Tys
+			     ,[Ty | AccTy]
+			     ,constraints:combine(Cs, AccCs)
+			     ,Any
+			     ,N);
 	{elem_tys, Tys, Cs} ->
-	    expect_list_union(Tys, Tys ++ AccTy, constraints:combine(Cs, AccCs))
+	    expect_list_union(Tys
+			     ,Tys ++ AccTy
+			     ,constraints:combine(Cs, AccCs)
+			     ,Any
+			     ,N)
     end;
-expect_list_union([], AccTy, AccCs) ->
+expect_list_union([], AccTy, AccCs, any, _N) ->
+    {[{type, erl_anno:new(0), any, []} | AccTy], AccCs};
+expect_list_union([], AccTy, AccCs, _NoAny, _N) ->
     {AccTy, AccCs}.
+
 
 
 new_type_var() ->
@@ -1104,7 +1119,7 @@ type_check_lc(Env, Expr, []) ->
     {{type, erl_anno:new(0), any, []}, #{}, Cs};
 type_check_lc(Env, Expr, [{generate, P, Pat, Gen} | Quals]) ->
     {Ty,  _,  Cs1} = type_check_expr(Env, Gen),
-    case expect_list_type(Ty) of
+    case expect_list_type(Ty, allow_nil_type) of
 	{elem_ty, ElemTy} ->
 	    {NewEnv, Cs2} = add_type_pat(Pat
 					,ElemTy
@@ -1487,7 +1502,7 @@ type_check_list_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
     end.
 
 type_check_lc_in(Env, ResTy, Expr, P, []) ->
-    case expect_list_type(ResTy) of
+    case expect_list_type(ResTy, allow_nil_type) of
 	any ->
 	    {_Ty, _VB, Cs} = type_check_expr(Env, Expr),
 	    {#{}, Cs};
@@ -1504,7 +1519,7 @@ type_check_lc_in(Env, ResTy, Expr, P, []) ->
     end;
 type_check_lc_in(Env, ResTy, Expr, P, [{generate, P_Gen, Pat, Gen} | Quals]) ->
     {Ty, _VB1, Cs1} = type_check_expr(Env, Gen),
-    case expect_list_type(Ty) of
+    case expect_list_type(Ty, allow_nil_type) of
 	any ->
 	    {_VB2, Cs2} = type_check_lc_in(Env#env{
 					     venv =
@@ -1842,7 +1857,7 @@ add_type_pat(Nil = {nil, P}, Ty, TEnv, VEnv) ->
 	    throw({type_error, pattern, P, Nil, Ty})
     end;
 add_type_pat(CONS = {cons, P, PH, PT}, ListTy, TEnv, VEnv) ->
-    case expect_list_type(ListTy) of
+    case expect_list_type(ListTy, dont_allow_nil_type) of
 	any ->
             VEnv2 = add_any_types_pat(PH, VEnv),
             add_type_pat(PT, ListTy, TEnv, VEnv2);
