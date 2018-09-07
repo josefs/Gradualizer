@@ -706,7 +706,63 @@ expect_list_union([], AccTy, AccCs, any, _N) ->
 expect_list_union([], AccTy, AccCs, _NoAny, _N) ->
     {AccTy, AccCs}.
 
+expect_tuple_type({type, _, tuple, []}, _N) ->
+    any;
+expect_tuple_type({type, _, tuple, Tys}, N) when length(Tys) == N ->
+    {elem_ty, Tys, constraints:empty()};
+expect_tuple_type({ann_type, _, [_, Ty]}, N) ->
+    expect_tuple_type(Ty, N);
+expect_tuple_type(Union = {type, _, union, UnionTys}, N) ->
+    {Tyss, Cs} =
+	expect_tuple_union(UnionTys, [], constraints:empty(), no_any, N),
+    case Tyss of
+	[] ->
+	    {type_error, Union};
+	[Tys] ->
+	    {elem_ty, Tys, Cs};
+	_ ->
+	    {elem_tys, Tyss, Cs}
+    end;
+expect_tuple_type({var, _, Var}, N) ->
+    TyVars = [ new_type_var() || _ <- lists:seq(1,N) ],
+    {elem_ty
+    ,{var, erl_anno:new(0), TyVars}
+    ,lists:foldr(fun constraints:add_var/2
+		,constraints:upper(Var, {type, erl_anno:new(0), tuple, TyVars})
+		,TyVars
+		)
+    };
+expect_tuple_type(Ty, _N) ->
+    {type_error, Ty}.
 
+
+expect_tuple_union([Ty|Tys], AccTy, AccCs, Any, N) ->
+    case expect_tuple_type(Ty, N) of
+	{type_error, _} ->
+	    expect_tuple_union(Tys, AccTy, AccCs, Any, N);
+	any ->
+	    expect_tuple_union(Tys
+			     ,AccTy
+			     ,AccCs
+			     ,any
+			     ,N);
+	{elem_ty, TTy, Cs} ->
+	    expect_tuple_union(Tys
+			      ,[TTy | AccTy]
+			      ,constraints:combine(Cs, AccCs)
+			      ,Any
+			      ,N);
+	{elem_tys, TTys, Cs} ->
+	    expect_tuple_union(Tys
+			      ,TTys ++ AccTy
+			      ,constraints:combine(Cs, AccCs)
+			      ,Any
+			      ,N)
+    end;
+expect_tuple_union([], AccTy, AccCs, any, _N) ->
+    {[{type, erl_anno:new(0), any, []} | AccTy], AccCs};
+expect_tuple_union([], AccTy, AccCs, _NoAny, _N) ->
+    {AccTy, AccCs}.
 
 new_type_var() ->
     I = get(gradualizer_fresh_var),
@@ -1226,17 +1282,24 @@ do_type_check_expr_in(Env, Ty, {bin, LINE, _BinElements} = Bin) ->
     {_Ty, VarBinds, Cs2} = type_check_expr(Env, Bin),
     {VarBinds, constraints:combine(Cs1, Cs2)};
 do_type_check_expr_in(Env, ResTy, {tuple, LINE, TS}) ->
-    case subtype({type, LINE, tuple, lists:duplicate(length(TS), {type, LINE, any, []})}
-		,ResTy, Env#env.tenv) of
-	false ->
-	    throw({type_error, tuple, LINE, ResTy});
-	{true, Cs} ->
-	    % We re-typecheck the expression for every possible
-	    % tuple in a union. That's potentially inefficient.
-	    % Maybe we should have a flag to allow for approximation here
-	    % in the same way that dialyzer does it.
-	    {VBs, Cs2} = type_check_tuple_in(Env, ResTy, TS),
-	    {VBs, constraints:combine(Cs, Cs2)}
+    case expect_tuple_type(ResTy, length(TS)) of
+	{elem_ty, Tys, Cs} ->
+	    {VBs, Css} = lists:unzip([ type_check_expr_in(Env, Ty, Expr)
+		                    || {Ty, Expr} <- lists:zip(Tys, TS) ]),
+	    {union_var_binds(VBs), constraints:combine([Cs|Css])};
+	{elem_tys, Tyss, Cs} ->
+	    case type_check_tuple_union_in(Env, Tyss, TS) of
+		none ->
+		    throw({type_error, tuple, LINE, ResTy});
+		{VBs, Css} ->
+		    {union_var_binds(VBs), constraints:combine([Cs|Css])}
+	    end;
+	any ->
+	    {_Tys, VBs, Css} = lists:unzip3([type_check_expr(Env, Expr)
+					   || Expr <- TS ]),
+	    {union_var_binds(VBs), constraints:combine(Css)};
+	{type_error, _} ->
+	    throw({type_error, tuple, LINE, ResTy})
     end;
 
 %% Maps
@@ -1616,50 +1679,16 @@ type_check_block_in(Env, ResTy, [Expr | Exprs]) ->
     {VB, constraints:combine(Cs1, Cs2)}.
 
 
-type_check_tuple_in(Env, {type, _, tuple, any}, TS) ->
-    {VBs, Css} = lists:unzip(
-      lists:map(fun (Expr) ->
-			type_check_expr_in(Env, {type, erl_anno:new(0), any, []}, Expr)
-		end, TS)),
-    {union_var_binds(VBs), constraints:combine(Css)};
-type_check_tuple_in(Env, {type, _, tuple, Tys}, TS) ->
-    {VBs, Css} = lists:unzip(
-      lists:zipwith(fun (Ty, Expr) ->
-			type_check_expr_in(Env, Ty, Expr)
-		end, Tys, TS)),
-    {union_var_binds(VBs), constraints:combine(Css)};
-type_check_tuple_in(Env, {type, _, union, Tys} = UTy, TS) ->
-    try type_check_tuple_union(Env, Tys, TS)
-    catch {type_error, tuple_error} ->
-            P = element(2, hd(TS)),
-            throw({type_error, tuple_error, P, TS, UTy})
-    end;
-type_check_tuple_in(Env, {ann_type, _, [_, Ty]}, TS) ->
-    type_check_tuple_in(Env, Ty, TS);
-type_check_tuple_in(Env, {var, _, Name}, TS) ->
-    {Tys, VarBindsList, Css} =
-	lists:unzip3(lists:map(fun (Expr) ->
-				   type_check_expr(Env, Expr)
-			       end, TS)),
-    {union_var_binds(VarBindsList)
-    ,constraints:combine([constraints:upper(Name, {type, erl_anno:new(0), tuple, Tys})| Css])
-    };
-type_check_tuple_in(Env, Ty, TS) when element(1, Ty) == user_type;
-                                      element(1, Ty) == remote_type ->
-    NormTy = normalize(Ty, Env#env.tenv),
-    type_check_tuple_in(Env, NormTy, TS).
-
-
-type_check_tuple_union(Env, [Tuple = {type, _, tuple, _}|Union], TS) ->
-    try type_check_tuple_in(Env, Tuple, TS)
+type_check_tuple_union_in(Env, [Tys|Tyss], Elems) ->
+    try
+	lists:unzip([type_check_expr_in(Env, Ty, Expr)
+		   || {Ty, Expr} <- lists:zip(Tys, Elems)])
     catch
-	_ ->
-	    type_check_tuple_union(Env, Union, TS)
+	E when element(1,E) == type_error ->
+	    type_check_tuple_union_in(Env, Tyss, Elems)
     end;
-type_check_tuple_union(Env, [_|Union], TS) ->
-    type_check_tuple_union(Env, Union, TS);
-type_check_tuple_union(_Env, [], _TS) ->
-    throw({type_error, tuple_error}).
+type_check_tuple_union_in(_Env, [], _Elems) ->
+    none.
 
 type_check_cons_in(Env, Ty = {type, _, List, []}, H, T)
   when List == list orelse List == nonempty_list ->
