@@ -57,6 +57,9 @@ remove_pos({user_type, Anno, Name, Params}) when is_list(Params) ->
      lists:map(fun remove_pos/1, Params)};
 remove_pos({type, Anno, record, Params = [_Name]}) ->
     {type, anno_keep_only_filename(Anno), record, Params};
+remove_pos({type, _, bounded_fun, [FT, Cs]}) ->
+    {type, erl_anno:new(0), bounded_fun, [remove_pos(FT)
+					 ,lists:map(fun remove_pos/1, Cs)]};
 remove_pos({type, _, Type, Params}) when is_list(Params) ->
     {type, erl_anno:new(0), Type, lists:map(fun remove_pos/1, Params)};
 remove_pos({type, _, Type, any}) when Type == tuple; Type == map ->
