@@ -1879,12 +1879,30 @@ add_type_pat(Expr, {type, _, any, []}, _TEnv, VEnv) ->
 add_type_pat({integer, _, _}, _Ty, _TEnv, VEnv) ->
     ret(VEnv);
 add_type_pat(Tuple = {tuple, P, Pats}, Ty, TEnv, VEnv) ->
-    case subtype({type,P,tuple,lists:duplicate(length(Pats),{type,0,any,[]})},
-		 Ty, TEnv) of
-	{true, Cs1} ->
-	    {VEnv2, Cs2} = add_type_pat_tuple(Pats, Ty, TEnv, VEnv),
-	    {VEnv2, constraints:combine(Cs1, Cs2)};
-	false ->
+    case expect_tuple_type(Ty, length(Pats)) of
+	any ->
+	    {union_var_binds([add_any_types_pat(Pat, VEnv) || Pat <- Pats])
+	    ,constraints:empty()};
+	{elem_ty, Tys, Cs} ->
+	    lists:foldl(fun ({Pat, TTy}, {Env1, Cs1}) ->
+				{Env2, Cs2} = add_type_pat(Pat, TTy, TEnv, Env1),
+				{Env2, constraints:combine(Cs1, Cs2)}
+			end
+		       ,{VEnv, Cs}
+		       ,lists:zip(Pats, Tys));
+	{elem_tys, Tyss, Cs} ->
+	    %% TODO: This code approximates unions of tuples with tuples of unions
+	    Unions = lists:map(fun (UnionTys) ->
+				       {type, erl_anno:new(0), union, UnionTys}
+			       end
+			      ,transpose(Tyss)),
+	    lists:foldl(fun ({Pat, Union}, {Env1, Cs1}) ->
+				{Env2, Cs2} = add_type_pat(Pat, Union, TEnv, Env1),
+				{Env2, constraints:combine(Cs1, Cs2)}
+			end
+		       ,{VEnv, Cs}
+		       ,lists:zip(Pats, Unions));
+	{type_error, _Type} ->
 	    throw({type_error, pattern, P, Tuple, Ty})
     end;
 add_type_pat(Atom = {atom, P, _}, Ty, TEnv, VEnv) ->
