@@ -1176,7 +1176,7 @@ type_check_lc(Env, Expr, []) ->
 type_check_lc(Env, Expr, [{generate, P, Pat, Gen} | Quals]) ->
     {Ty,  _,  Cs1} = type_check_expr(Env, Gen),
     case expect_list_type(Ty, allow_nil_type) of
-	{elem_ty, ElemTy} ->
+	{elem_ty, ElemTy, Cs} ->
 	    {NewEnv, Cs2} = add_type_pat(Pat
 					,ElemTy
 					,Env#env.tenv
@@ -1185,7 +1185,7 @@ type_check_lc(Env, Expr, [{generate, P, Pat, Gen} | Quals]) ->
 					     venv = NewEnv
 					    }
 					  ,Expr, Quals),
-	    {TyL, VB, constraints:combine([Cs1, Cs2, Cs3])};
+	    {TyL, VB, constraints:combine([Cs, Cs1, Cs2, Cs3])};
 	any ->
 	    {TyL, VB, Cs2} = type_check_lc(Env#env{
 					     venv = add_any_types_pat(
@@ -1194,7 +1194,7 @@ type_check_lc(Env, Expr, [{generate, P, Pat, Gen} | Quals]) ->
 					    }
 					  ,Expr, Quals),
 	    {TyL, VB, constraints:combine(Cs1,Cs2)};
-	{elem_tys, _ElemTys} ->
+	{elem_tys, _ElemTys, Cs} ->
 	    %% TODO: As a hack, we treat a union type as any, just to
 	    %% allow the program to type check.
 	    {TyL, VB, Cs2} = type_check_lc(Env#env{
@@ -1203,7 +1203,7 @@ type_check_lc(Env, Expr, [{generate, P, Pat, Gen} | Quals]) ->
 						     ,Env#env.venv)
 					    }
 					  ,Expr, Quals),
-	    {TyL, VB, constraints:combine(Cs1,Cs2)};
+	    {TyL, VB, constraints:combine([Cs,Cs1,Cs2])};
 	{type_error, Ty} ->
 	    throw({type_error, generator, P, Ty})
     end.
@@ -1246,11 +1246,20 @@ do_type_check_expr_in(Env, Ty, Atom = {atom, LINE, _}) ->
 	    throw({type_error, Atom, LINE, Ty})
     end;
 do_type_check_expr_in(Env, Ty, Cons = {cons, LINE, H, T}) ->
-    case subtype({type, LINE, nonempty_list, [{type, LINE, any, []}]}, Ty, Env#env.tenv) of
-	{true, Cs1} ->
-	    {VB, Cs2} = type_check_cons_in(Env, Ty, H, T),
-	    {VB, constraints:combine(Cs1, Cs2)};
-	false ->
+    case expect_list_type(Ty, dont_allow_nil_type) of
+	{elem_ty, ETy, Cs} ->
+	    {VB1, Cs1} = type_check_expr_in(Env, ETy, H),
+	    {VB2, Cs2} = type_check_expr_in(Env, Ty,  T),
+	    {union_var_binds(VB1, VB2), constraints:combine([Cs, Cs1, Cs2])};
+	{elem_tys, ETys, Cs} ->
+	    {VB1, Cs1} = type_check_union_in(Env, ETys, H),
+	    {VB2, Cs2} = type_check_expr_in(Env, Ty,  T),
+	    {union_var_binds(VB1, VB2), constraints:combine([Cs, Cs1, Cs2])};
+	any ->
+	    {_Ty, VB1, Cs1} = type_check_expr   (Env, H),
+	    {     VB2, Cs2} = type_check_expr_in(Env, Ty, T),
+	    {union_var_binds(VB1, VB2), constraints:combine(Cs1, Cs2)};
+	{type_error, _} ->
 	    throw({type_error, cons, LINE, Cons, Ty})
     end;
 do_type_check_expr_in(Env, Ty, {nil, LINE}) ->
@@ -1569,14 +1578,12 @@ type_check_lc_in(Env, ResTy, Expr, P, []) ->
 	any ->
 	    {_Ty, _VB, Cs} = type_check_expr(Env, Expr),
 	    {#{}, Cs};
-	{elem_ty, ElemTy} ->
-	    {_VB, Cs} = type_check_expr_in(Env, ElemTy, Expr),
-	    {#{}, Cs};
-	{elem_tys, _ElemTys} ->
-	    %% TODO: As a hack, we treat a union type as any, just to
-	    %% allow the program to type check.
-	    {_Ty, _VB, Cs} = type_check_expr(Env, Expr),
-	    {#{}, Cs};
+	{elem_ty, ElemTy, Cs1} ->
+	    {_VB, Cs2} = type_check_expr_in(Env, ElemTy, Expr),
+	    {#{}, constraints:combine(Cs1, Cs2)};
+	{elem_tys, ElemTys, Cs1} ->
+	    {VB, Cs2} = type_check_union_in(Env, ElemTys, Expr),
+	    {VB, constraints:combine(Cs1, Cs2)};
 	{type_error, Ty} ->
 	    throw({type_error, lc, P, Ty})
     end;
@@ -1591,7 +1598,7 @@ type_check_lc_in(Env, ResTy, Expr, P, [{generate, P_Gen, Pat, Gen} | Quals]) ->
 					    }
 					  ,ResTy, Expr, P, Quals),
 	    {#{}, constraints:combine(Cs1, Cs2)};
-	{elem_ty, ElemTy} ->
+	{elem_ty, ElemTy, Cs} ->
 	    {NewEnv, Cs2} = add_type_pat(Pat
 					,ElemTy
 					,Env#env.tenv
@@ -1600,8 +1607,8 @@ type_check_lc_in(Env, ResTy, Expr, P, [{generate, P_Gen, Pat, Gen} | Quals]) ->
 					     venv = NewEnv
 					    }
 					  ,ResTy, Expr, P, Quals),
-	    {#{}, constraints:combine([Cs1, Cs2, Cs3])};
-	{elem_tys, _ElemTys} ->
+	    {#{}, constraints:combine([Cs, Cs1, Cs2, Cs3])};
+	{elem_tys, _ElemTys, Cs} ->
 	    %% TODO: As a hack, we treat a union type as any, just to
 	    %% allow the program to type check.
 	    {_VB2, Cs2} = type_check_lc_in(Env#env{
@@ -1610,7 +1617,7 @@ type_check_lc_in(Env, ResTy, Expr, P, [{generate, P_Gen, Pat, Gen} | Quals]) ->
 								  ,Env#env.venv)
 					    }
 					  ,ResTy, Expr, P, Quals),
-	    {#{}, constraints:combine(Cs1, Cs2)};
+	    {#{}, constraints:combine([Cs, Cs1, Cs2])};
 	{type_error, Ty} ->
 	    throw({type_error, generator, P_Gen, Ty})
     end;
@@ -1678,6 +1685,15 @@ type_check_block_in(Env, ResTy, [Expr | Exprs]) ->
     {VB, Cs2} = type_check_block_in(Env#env{ venv = add_var_binds(Env#env.venv, VarBinds) }, ResTy, Exprs),
     {VB, constraints:combine(Cs1, Cs2)}.
 
+type_check_union_in(Env, [Ty|Tys], Expr) ->
+    try
+	type_check_expr_in(Env, Ty, Expr)
+    catch
+	E when element(1,E) == type_error ->
+	    type_check_union_in(Env, Tys, Expr)
+    end;
+type_check_union_in(_Env, [], _Expr) ->
+    none.
 
 type_check_tuple_union_in(Env, [Tys|Tyss], Elems) ->
     try
