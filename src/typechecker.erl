@@ -726,7 +726,7 @@ expect_tuple_type(Union = {type, _, union, UnionTys}, N) ->
 expect_tuple_type({var, _, Var}, N) ->
     TyVars = [ new_type_var() || _ <- lists:seq(1,N) ],
     {elem_ty
-    ,{var, erl_anno:new(0), TyVars}
+    ,[ {var, erl_anno:new(0), TyVar} || TyVar <- TyVars ]
     ,lists:foldr(fun constraints:add_var/2
 		,constraints:upper(Var, {type, erl_anno:new(0), tuple, TyVars})
 		,TyVars
