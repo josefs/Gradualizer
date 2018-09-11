@@ -765,8 +765,7 @@ expect_tuple_union([], AccTy, AccCs, _NoAny, _N) ->
     {AccTy, AccCs}.
 
 new_type_var() ->
-    I = get(gradualizer_fresh_var),
-    put(gradualizer_fresh_var, I+1),
+    I = erlang:unique_integer(),
     "_TyVar" ++ integer_to_list(I).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -2120,9 +2119,6 @@ get_rec_field_type(FieldName, []) ->
 type_check_forms(Forms, Opts) ->
     StopOnFirstError = proplists:get_bool(stop_on_first_error, Opts),
     File = proplists:get_value(print_file, Opts),
-
-    %% Initialize fresh variable generation
-    put(gradualizer_fresh_var,0),
 
     case gradualizer_db:start_link() of
 	{ok, _Pid}                    -> ok;
