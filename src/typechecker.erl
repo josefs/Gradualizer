@@ -2144,7 +2144,7 @@ type_check_forms(Forms, Opts) ->
 				%% error stacktraces. TODO: Add an opt for this.
 				Trace = case erlang:get_stacktrace() of
 				    [{M, F, [#env{}|Args], Pos} | RestTrace] ->
-					[{M, F, ['*environment excluded*', Args], Pos} | RestTrace];
+					[{M, F, ['*environment excluded*'|Args], Pos} | RestTrace];
 				    Trace0 ->
 					Trace0
 				end,
