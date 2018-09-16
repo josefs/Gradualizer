@@ -945,6 +945,14 @@ type_check_expr(Env, {op, P, 'not', Arg}) ->
 	false ->
 	    throw({type_error, non_boolean_argument_to_not, P, Ty})
     end;
+type_check_expr(Env, {op, P, '-', Arg}) ->
+    {Ty, VB, Cs1} = type_check_expr(Env, Arg),
+    case subtype({type, P, number ,[]}, Ty, Env#env.tenv) of
+	{true, Cs2} ->
+	    {Ty, VB, constraints:combine(Cs1, Cs2)};
+	false ->
+	    throw({type_error, non_number_argument_to_minus, P, Ty})
+    end;
 type_check_expr(Env, {op, P, BoolOp, Arg1, Arg2}) when
       (BoolOp == 'andalso') or (BoolOp == 'and') or
       (BoolOp == 'orelse')  or (BoolOp == 'or') or (BoolOp == 'xor')  ->
@@ -1477,6 +1485,14 @@ do_type_check_expr_in(Env, ResTy, {op, P, 'not', Arg}) ->
 	    {VB, constraints:combine(Cs1, Cs2)};
 	false ->
 	    throw({type_error, not_user_with_wrong_type, P, ResTy})
+    end;
+do_type_check_expr_in(Env, ResTy, {op, P, '-', Arg}) ->
+    case subtype(ResTy, {type, P, number, []}, Env#env.tenv) of
+	{true, Cs1} ->
+	    {VB, Cs2} = type_check_expr_in(Env, ResTy, Arg),
+	    {VB, constraints:combine(Cs1, Cs2)};
+	false ->
+	    throw({type_error, non_number_exp_type_minus, P, ResTy})
     end;
 do_type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
       Op == '+' orelse Op == '-' orelse Op == '*' orelse Op == '/' ->
@@ -2294,6 +2310,12 @@ handle_type_error({type_error, arith_error, ArithOp, P, Ty}) ->
 handle_type_error({type_error, int_error, IntOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-integer argument "
 	      "of type ~s~n", [IntOp, P, typelib:pp_type(Ty)]);
+handle_type_error({type_error, non_number_exp_type_minus, P, Ty}) ->
+    io:format("The negated expression on line ~p is expected to have a "
+	      "non-numeric type:~n~s~n", [P, typelib:pp_type(Ty)]);
+handle_type_error({type_error, non_number_argument_to_minus, P, Ty}) ->
+    io:format("The negated expression on line ~p has a non-numeric argument "
+	      "of type:~n~s~n", [P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, logic_error, LogicOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-boolean argument "
 	      "of type ~s~n", [LogicOp, P, typelib:pp_type(Ty)]);
