@@ -688,15 +688,15 @@ expect_list_union([Ty|Tys], AccTy, AccCs, Any, N) ->
 			     ,AccCs
 			     ,any
 			     ,N);
-	{elem_ty, Ty, Cs} ->
+	{elem_ty, NTy, Cs} ->
 	    expect_list_union(Tys
-			     ,[Ty | AccTy]
+			     ,[NTy | AccTy]
 			     ,constraints:combine(Cs, AccCs)
 			     ,Any
 			     ,N);
-	{elem_tys, Tys, Cs} ->
+	{elem_tys, NTys, Cs} ->
 	    expect_list_union(Tys
-			     ,Tys ++ AccTy
+			     ,NTys ++ AccTy
 			     ,constraints:combine(Cs, AccCs)
 			     ,Any
 			     ,N)
