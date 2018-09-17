@@ -1362,7 +1362,7 @@ do_type_check_expr_in(Env, ResTy, {record, _, Record, Fields}) ->
 do_type_check_expr_in(Env, ResTy, {record, _, Exp, Record, Fields}) ->
     RecordTy = {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Record}]},
     case subtype(ResTy, RecordTy, Env#env.tenv) of
-	{true, Cs} ->
+	{true, Cs1} ->
 	    Rec = maps:get(Record, Env#env.tenv#tenv.records),
 	    {VarBindsList, Css}
 		= lists:unzip(
@@ -1372,9 +1372,9 @@ do_type_check_expr_in(Env, ResTy, {record, _, Exp, Record, Fields}) ->
 			      end
 			     ,Fields)
 		   ),
-	    {VarBinds, Cs} = type_check_expr_in(Env, RecordTy, Exp),
+	    {VarBinds, Cs2} = type_check_expr_in(Env, RecordTy, Exp),
 	    {union_var_binds([VarBinds|VarBindsList])
-	    ,constraints:combine([Cs|Css])};
+	    ,constraints:combine([Cs1,Cs2|Css])};
 	false ->
 	    %% TODO: Improve quality of error message
 	    throw({type_error, record})
