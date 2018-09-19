@@ -355,10 +355,7 @@ get_record_fields(RecName, Anno, #tenv{records = REnv}) ->
 %% * Expand user-defined and remote types on head level (except opaque types)
 %% * Replace built-in type synonyms
 %% * Flatten unions and merge overlapping types (e.g. ranges) in unions
--spec normalize(type()) -> type().
-normalize(T) -> normalize(T, #tenv{}).
 
-%% TEnv is currently not used. Type definitions are fetched from gradualizer_db.
 -spec normalize(type(), TEnv :: #tenv{}) -> type().
 normalize({type, _, union, Tys}, TEnv) ->
     Types = flatten_unions(Tys, TEnv),
@@ -990,7 +987,7 @@ type_check_expr(Env, {'try', _, Block, CaseCs, CatchCs, AfterCs}) ->
     % TODO: Should we check types against each other instead of
     % just merging them?
     % TODO: Check what variable bindings actually should be propagated
-    {normalize({type, erl_anno:new(0), union, [Ty, TyC, TyS, TyA]})
+    {normalize({type, erl_anno:new(0), union, [Ty, TyC, TyS, TyA]}, Env#env.tenv)
     ,VB
     ,constraints:combine([Cs1,Cs2,Cs3,Cs4])}.
 
@@ -1024,7 +1021,7 @@ type_check_logic_op(Env, Op, P, Arg1, Arg2) ->
 		false ->
 		    throw({type_error, boolop, Op, P, Ty2});
 		{true, Cs4} ->
-		    {normalize({type, erl_anno:new(0), union, [Ty1, Ty2]})
+		    {normalize({type, erl_anno:new(0), union, [Ty1, Ty2]}, Env#env.tenv)
 		    ,union_var_binds([VB1, VB2])
 		    ,constraints:combine([Cs1,Cs2,Cs3,Cs4])}
 	    end
@@ -1092,7 +1089,7 @@ type_check_list_op(Env, Op, P, Arg1, Arg2) ->
   case {subtype(Ty1, ListTy, Env#env.tenv)
        ,subtype(Ty2, ListTy, Env#env.tenv)} of
     {{true, Cs3}, {true, Cs4}} ->
-      {normalize({type, erl_anno:new(0), union, [Ty1, Ty2]})
+      {normalize({type, erl_anno:new(0), union, [Ty1, Ty2]}, Env#env.tenv)
       ,union_var_binds([VB1, VB2])
       ,constraints:combine([Cs1, Cs2, Cs3, Cs4])
       };
@@ -1774,7 +1771,7 @@ infer_clauses(Env, Clauses) ->
 	lists:unzip3(lists:map(fun (Clause) ->
 				       infer_clause(Env, Clause)
 			       end, Clauses)),
-    {normalize({type, erl_anno:new(0), union, Tys})
+    {normalize({type, erl_anno:new(0), union, Tys}, Env#env.tenv)
     ,union_var_binds(VarBindsList)
     ,constraints:combine(Css)}.
 
