@@ -1210,7 +1210,23 @@ type_check_lc(Env, Expr, [{generate, P, Pat, Gen} | Quals]) ->
 	    {TyL, VB, constraints:combine([Cs,Cs1,Cs2])};
 	{type_error, Ty} ->
 	    throw({type_error, generator, P, Ty})
-    end.
+    end;
+type_check_lc(Env, Expr, [{b_generate, _P, Pat, Gen} | Quals]) ->
+    BitStringTy = {type, erl_anno:new(0), bitstring, []},
+    {VarBinds1, Cs1} =
+        type_check_expr_in(Env, BitStringTy, Gen),
+    {NewEnv, Cs2} = add_type_pat(Pat, BitStringTy, Env#env.tenv, Env#env.venv),
+    {TyL, VarBinds2, Cs3} = type_check_lc(Env#env{ venv = NewEnv }, Expr, Quals),
+    {TyL
+    ,union_var_binds(VarBinds1, VarBinds2)
+    ,constraints:combine([Cs1, Cs2, Cs3])};
+type_check_lc(Env, Expr, [Guard | Quals]) ->
+    %% We don't require guards to return a boolean.
+    %% This decision is up for debate.
+    {_Ty, VarBinds1, Cs1} = type_check_expr(Env, Guard),
+    {TyL, VarBinds2, Cs2} = type_check_lc(Env#env{}, Expr, Quals),
+    {TyL, union_var_binds(VarBinds1, VarBinds2), constraints:combine(Cs1, Cs2)}.
+
 
 type_check_expr_in(Env, ResTy, Expr) ->
     NormResTy = normalize(ResTy, Env#env.tenv),
