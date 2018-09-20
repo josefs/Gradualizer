@@ -1505,6 +1505,7 @@ do_type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
     type_check_logic_op_in(Env, ResTy, Op, P, Arg1, Arg2);
 do_type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
       Op == '=:=' orelse Op == '==' orelse
+      Op == '=/=' orelse Op == '/=' orelse
       Op == '>=' orelse Op == '=<' orelse
       Op == '>' orelse Op == '<' ->
     type_check_rel_op_in(Env, ResTy, Op, P, Arg1, Arg2);
