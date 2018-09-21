@@ -219,7 +219,11 @@ type_check_clause_test_() ->
                                    "f(X) ->",
                                    "    if X -> 1;",
                                    "       false -> a",
-                                   "    end."]))
+                                   "    end."])),
+     %% should emmit: "The clause on line 3 is expected to have 1 argument(s) but it has 0
+     ?_assertNot(type_check_forms(["-spec h() -> fun((integer()) -> atom()).",
+                                   "h() ->",
+                                   "    fun() -> ok end."]))
     ].
 add_type_pat_test_() ->
     [{"Pattern matching list against any()",
