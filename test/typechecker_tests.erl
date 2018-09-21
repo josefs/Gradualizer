@@ -142,10 +142,12 @@ not_subtype_test_() ->
 
 normalize_test_() ->
     [
-     ?_assertEqual(?t( 1..6 ), typechecker:normalize(?t( 1..3|4..6 ))),
+     ?_assertEqual(?t( 1..6 ),
+                   typechecker:normalize(?t( 1..3|4..6 ), typechecker:create_tenv([], []))),
      %% ?t(-8) is parsed as {op,0,'-',{integer,0,8}}
      ?_assertEqual({integer, 0 , -8},
-                   typechecker:normalize(?t( (bnot 3) * (( + 7 ) rem ( 5 div - 2 ) ) bxor (1 bsl 6 bsr 4) )))
+                   typechecker:normalize(?t( (bnot 3) * (( + 7 ) rem ( 5 div - 2 ) ) bxor (1 bsl 6 bsr 4) ),
+                                         typechecker:create_tenv([], [])))
     ].
 
 normalize_e2e_test_() ->
