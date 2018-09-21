@@ -1850,11 +1850,9 @@ check_clauses(Env, ArgsTy, ResTy, Clauses) ->
 			  end, Clauses)),
     {union_var_binds(VarBindsList), constraints:combine(Css)}.
 
-check_clause(Env, ArgsTy, ResTy, {clause, _, Args, Guards, Block}) ->
-    case length(ArgsTy) =:= length(Args) of
-	false ->
-	    throw(argument_length_mismatch);
-	true ->
+check_clause(Env, ArgsTy, ResTy, {clause, P, Args, Guards, Block}) ->
+    case {length(ArgsTy), length(Args)} of
+	{L, L} ->
 	    {Env2, Cs1} = add_types_pats(Args, ArgsTy,
 					 Env#env.tenv, Env#env.venv),
 	    EnvNew      = Env#env{ venv =  Env2 },
@@ -1862,7 +1860,9 @@ check_clause(Env, ArgsTy, ResTy, {clause, _, Args, Guards, Block}) ->
 	    EnvNewest   = EnvNew#env{ venv = add_var_binds(EnvNew#env.venv, VarBinds1) },
 	    {VarBinds2, Cs2} = type_check_block_in(EnvNewest, ResTy, Block),
 	    {union_var_binds(VarBinds1, VarBinds2)
-	    ,constraints:combine(Cs1, Cs2)}
+	    ,constraints:combine(Cs1, Cs2)};
+        {LenTy, LenArgs} ->
+	    throw({argument_length_mismatch, P, LenTy, LenArgs})
     end;
 %% DEBUG
 check_clause(_Env, _ArgsTy, _ResTy, Term) ->
@@ -2314,6 +2314,10 @@ handle_type_error({type_error, list, _, Ty}) ->
 handle_type_error({type_error, nil, LINE, Ty}) ->
     io:format("The empty list on line ~p does not have type ~s~n",
 	      [LINE, typelib:pp_type(Ty)]);
+handle_type_error({argument_length_mismatch, P, LenTy, LenArgs}) ->
+    io:format("The clause on line ~p is expected to have ~p argument(s) "
+              "but it has ~p~n ",
+	      [P, LenTy, LenArgs]);
 handle_type_error({type_error, call, _P, Name, TyArgs, ArgTys}) ->
     io:format("The function ~p expects arguments of type~n~p~n but is given "
 	      "arguments of type~n~p~n",
