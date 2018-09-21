@@ -703,7 +703,7 @@ expect_list_union([], AccTy, AccCs, any, _N) ->
 expect_list_union([], AccTy, AccCs, _NoAny, _N) ->
     {AccTy, AccCs}.
 
-expect_tuple_type({type, _, tuple, []}, _N) ->
+expect_tuple_type({type, _, tuple, any}, _N) ->
     any;
 expect_tuple_type({type, _, tuple, Tys}, N) when length(Tys) == N ->
     {elem_ty, Tys, constraints:empty()};
@@ -1246,7 +1246,8 @@ do_type_check_expr_in(Env, Ty, {var, LINE, Var}) ->
     end;
 do_type_check_expr_in(Env, Ty, {match, _, Pat, Expr}) ->
     {VarBinds, Cs} = type_check_expr_in(Env, Ty, Expr),
-    {add_type_pat(Pat, Ty, Env#env.tenv, VarBinds), Cs};
+    {NewVEnv, Cs2} = add_type_pat(Pat, Ty, Env#env.tenv, Env#env.venv),
+    {union_var_binds(VarBinds, NewVEnv), constraints:combine(Cs, Cs2)};
 do_type_check_expr_in(Env, Ty, I = {integer, LINE, Int}) ->
     case subtype(I, Ty, Env#env.tenv) of
 	{true, Cs} ->
