@@ -924,7 +924,7 @@ type_check_expr(_Env, {'fun', P, {function, {atom, _, M}, {atom, _, F}, {integer
     end;
 type_check_expr(Env, {named_fun, _, FunName, Clauses}) ->
     NewEnv = Env#env{ venv = add_var_binds(#{FunName =>
-                                             {type, erl_anno:new(0), any, []} 
+                                             {type, erl_anno:new(0), any, []} }
                                           ,Env#env.venv) },
     infer_clauses(NewEnv, Clauses);
 
