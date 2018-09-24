@@ -1702,7 +1702,6 @@ type_check_assocs(_Env, []) ->
     {{type, erl_anno:new(0), any, []}, #{}, constraints:empty()}.
 
 
-% TODO: Collect constraints
 type_check_fun(Env, {atom, P, Name}, Arity) ->
     % Local function call
     case maps:find({Name, Arity}, Env#env.fenv) of
