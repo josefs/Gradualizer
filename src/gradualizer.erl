@@ -16,6 +16,8 @@
          type_check_dir/2
         ]).
 
+-export_type([options/0]).
+
 -type options() :: proplists:proplist().
 
 %% API functions

@@ -5,6 +5,12 @@
 # start a shell
 # > make shell
 #
+# build cli
+# > make escript
+#
+# run cli
+# > gradualizer
+#
 # run unit tests
 # > make eunit
 #
@@ -24,6 +30,9 @@ PROJECT = gradualizer
 
 PLT_APPS = kernel stdlib compiler crypto
 DIALYZER_OPTS = -Werror_handling
+
+ESCRIPT_NAME = gradualizer_cli
+ESCRIPT_FILE = $(PROJECT)
 
 include erlang.mk
 
