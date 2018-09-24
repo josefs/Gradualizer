@@ -922,6 +922,11 @@ type_check_expr(_Env, {'fun', P, {function, {atom, _, M}, {atom, _, F}, {integer
         not_found ->
             throw({call_undef, P, M, F, A})
     end;
+type_check_expr(Env, {named_fun, _, FunName, Clauses}) ->
+    NewEnv = Env#env{ venv = add_var_binds(#{FunName =>
+                                             {type, erl_anno:new(0), any, []} 
+                                          ,Env#env.venv) },
+    infer_clauses(NewEnv, Clauses);
 
 type_check_expr(Env, {'receive', _, Clauses}) ->
     infer_clauses(Env, Clauses);
@@ -1487,6 +1492,9 @@ do_type_check_expr_in(Env, ResTy, {'fun', P, {function, {atom, _, M}, {atom, _, 
         not_found ->
             throw({call_undef, P, M, F, A})
     end;
+do_type_check_expr_in(Env, ResTy, {named_fun, _, FunName, Clauses}) ->
+    NewEnv = Env#env{ venv = add_var_binds(#{ FunName => ResTy }, Env#env.venv) },
+    check_clauses(NewEnv, ResTy, Clauses);
 
 do_type_check_expr_in(Env, ResTy, {'receive', _, Clauses}) ->
     check_clauses(Env, [{type, erl_anno:new(0), any, []}], ResTy, Clauses);
