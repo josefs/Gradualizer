@@ -761,6 +761,86 @@ expect_tuple_union([], AccTy, AccCs, any, _N) ->
 expect_tuple_union([], AccTy, AccCs, _NoAny, _N) ->
     {AccTy, AccCs}.
 
+-spec expect_fun_type(type()) -> any
+			       | {type_error, type()}
+			       | {fun_ty, type(), type(), constraints:constraints()}
+			       | {fun_ty_any_args, type(), constraints:constraints()}
+			       | {fun_ty_intersection, [type()], constraints:constraints()}
+			       | {fun_ty_union, [any()]}
+			       .
+expect_fun_type({type, _, bounded_fun, [Ft, Fc]}) ->
+    case expect_fun_type(Ft) of
+	{fun_ty, ArgsTy, ResTy, Cs} ->
+	    {fun_ty, ArgsTy, ResTy, constraints:combine(Cs, constraints:convert(Fc))};
+	{fun_ty_any_args, ResTy, Cs} ->
+	    {fun_ty_any_args, ResTy, constraints:combine(Cs, constraints:convert(Fc))};
+	{fun_ty_intersection, Tys, Cs} ->
+	    {fun_ty_intersection, Tys, constraints:combine(Cs, constraints:convert(Fc))};
+	Err ->
+	    Err
+    end;
+expect_fun_type({type, _, 'fun', [{type, _, product, ArgsTy}, ResTy]}) ->
+    {fun_ty, ArgsTy, ResTy, constraints:empty()};
+expect_fun_type({type, _, 'fun', []}) ->
+    any;
+expect_fun_type({type, _, 'fun', [{type, _, any}, ResTy]}) ->
+    {fun_ty_any_args, ResTy, constraints:empty()};
+expect_fun_type(Tys) when is_list(Tys) ->
+    case expect_intersection_type(Tys) of
+	{type_error, _} ->
+	    {type_error, Tys};
+	Tyss ->
+	    {fun_ty_intersection, Tyss, constraints:empty()}
+    end;
+expect_fun_type({type, _, union, UnionTys} = Union) ->
+    case expect_fun_type_union(UnionTys) of
+	{type_error, _} ->
+	    {type_error, Union};
+	[Ty] ->
+	    Ty;
+	Tys ->
+	    {fun_ty_union, Tys}
+    end;
+expect_fun_type({ann_type, _, [_, Ty]}) ->
+    expect_fun_type(Ty);
+expect_fun_type({var, _, Var}) ->
+    ResTy = new_type_var(),
+    {fun_ty_any_args, ResTy
+    ,constraints:add_var(Var,
+       constraints:upper(ResTy,
+	 {type, erl_anno:new(0), 'fun', [{type, erl_anno:new(0), any}
+					,{var,  erl_anno:new(0), ResTy}]}))};
+expect_fun_type({type, _, any, []}) ->
+    any;
+expect_fun_type(Ty) ->
+    {type_error, Ty}.
+
+expect_intersection_type([]) ->
+    [];
+expect_intersection_type([FunTy|Tys]) ->
+    case expect_fun_type(FunTy) of
+	Err = {type_error, _} ->
+	    Err;
+	Ty ->
+	    case expect_intersection_type(Tys) of
+		Err = {type_error,_} ->
+		    Err;
+		Tys ->
+		    [Ty|Tys]
+	    end
+    end.
+
+expect_fun_type_union([]) ->
+    [];
+expect_fun_type_union([Ty|Tys]) ->
+    case expect_fun_type(Ty) of
+	{type_error, _} ->
+	    expect_fun_type_union(Tys);
+	Ty ->
+	    [Ty | expect_fun_type_union(Tys)]
+    end.
+
+
 new_type_var() ->
     I = erlang:unique_integer(),
     "_TyVar" ++ integer_to_list(I).
@@ -1427,54 +1507,31 @@ do_type_check_expr_in(Env, ResTy, {'case', _, Expr, Clauses}) ->
     {VB, Cs2} = check_clauses(Env2, [ExprTy], ResTy, Clauses),
     {VB, constraints:combine(Cs1,Cs2)};
 do_type_check_expr_in(Env, ResTy, {'if', _, Clauses}) ->
-    check_clauses(Env, [], ResTy, Clauses);
+    check_clauses(Env, ResTy, Clauses);
 do_type_check_expr_in(Env, ResTy, {call, P, Name, Args}) ->
     {FunTy, VarBinds, Cs} = type_check_fun(Env, Name, length(Args)),
-    case FunTy of
-	{type, _, any, []} ->
-	    {_, VarBindsList, Css} =
-		lists:unzip3([ type_check_expr(Env, Arg) || Arg <- Args]),
-	    { union_var_binds([VarBinds |  VarBindsList])
-	    , constraints:combine([Cs|Css]) };
-	[{type, _, bounded_fun, [{type, _, 'fun',
-				  [{type, _, product, ArgTys}, FunResTy]}
-				,SCs2]}] ->
-	    % TODO: Handle multi-clause function types
-	    Cs2 = constraints:convert(SCs2),
-	    {VarBindsList, Css} =
-		lists:unzip(
-		  lists:zipwith(fun (ArgTy, Arg) ->
-				       type_check_expr_in(Env, ArgTy, Arg)
-			       end, ArgTys, Args)
-		 ),
-	    case subtype(FunResTy, ResTy, Env#env.tenv) of
-		{true, Cs3} ->
-		    { union_var_binds([VarBinds | VarBindsList])
-		    , constraints:combine([Cs, Cs2, Cs3 | Css]) };
-		false ->
-		    throw({type_error, fun_res_type, P, Name, FunResTy, ResTy})
-	    end;
-	{type, _, 'fun', [{type, _, 'product', ArgTys}, FunResTy]} ->
-	    {VarBindsList, Css} =
-		lists:unzip(
-		  lists:zipwith(fun (ArgTy, Arg) ->
-				       type_check_expr_in(Env, ArgTy, Arg)
-			       end, ArgTys, Args)
-		 ),
-	    case subtype(FunResTy, ResTy, Env#env.tenv) of
-		{true, Cs3} ->
-		    { union_var_binds([VarBinds | VarBindsList])
-		    , constraints:combine([Cs, Cs3 | Css]) };
-		false ->
-		    throw({type_error, fun_res_type, P, Name, FunResTy, ResTy})
-	    end
-    end;
+    {VarBinds2, Cs2} = type_check_call(Env, ResTy, expect_fun_type(FunTy), Args,
+				       {P, Name, FunTy}),
+    {union_var_binds(VarBinds, VarBinds2), constraints:combine(Cs, Cs2)};
 do_type_check_expr_in(Env, ResTy, {'lc', P, Expr, Qualifiers}) ->
     type_check_lc_in(Env, ResTy, Expr, P, Qualifiers);
 
 %% Functions
-do_type_check_expr_in(Env, ResTy, {'fun', _, {clauses, Clauses}}) ->
-    check_clauses(Env, ResTy, Clauses);
+do_type_check_expr_in(Env, Ty, {'fun', P, {clauses, Clauses}}) ->
+    case expect_fun_type(Ty) of
+	{fun_ty, ArgsTy, ResTy, Cs1} ->
+	    {VB, Cs2} = check_clauses(Env, ArgsTy, ResTy, Clauses),
+	    {VB, constraints:combine(Cs1, Cs2)};
+	{fun_ty_any_args, ResTy, Cs1} ->
+	    {VB, Cs2} = check_clauses(Env, any, ResTy, Clauses),
+	    {VB, constraints:combine(Cs1, Cs2)};
+	%% TODO: Can this case actually happen?
+	{fun_ty_intersection, Tyss, Cs1} ->
+	    {VB, Cs2} = check_clauses_intersect(Env, Tyss, Clauses),
+	    {VB, constraints:combine(Cs1, Cs2)};
+	{type_error, _} ->
+	    throw({type_error, lambda, P, Ty})
+    end;
 do_type_check_expr_in(Env, ResTy, {'fun', P, {function, Name, Arity}}) ->
     BoundedFunTypeList = maps:get({Name, Arity}, Env#env.fenv),
     case any_subtype(ResTy, BoundedFunTypeList, Env#env.tenv) of
@@ -1492,12 +1549,25 @@ do_type_check_expr_in(Env, ResTy, {'fun', P, {function, {atom, _, M}, {atom, _, 
         not_found ->
             throw({call_undef, P, M, F, A})
     end;
-do_type_check_expr_in(Env, ResTy, {named_fun, _, FunName, Clauses}) ->
-    NewEnv = Env#env{ venv = add_var_binds(#{ FunName => ResTy }, Env#env.venv) },
-    check_clauses(NewEnv, ResTy, Clauses);
+do_type_check_expr_in(Env, Ty, {named_fun, P, FunName, Clauses}) ->
+    NewEnv = Env#env{ venv = add_var_binds(#{ FunName => Ty }, Env#env.venv) },
+    case expect_fun_type(Ty) of
+	{fun_ty, ArgsTy, ResTy, Cs1} ->
+	    {VB, Cs2} = check_clauses(NewEnv, ArgsTy, ResTy, Clauses),
+	    {VB, constraints:combine(Cs1, Cs2)};
+	{fun_ty_any_args, ResTy, Cs1} ->
+	    {VB, Cs2} = check_clauses(NewEnv, any, ResTy, Clauses),
+	    {VB, constraints:combine(Cs1, Cs2)};
+	%% TODO: Can this case actually happen?
+	{fun_ty_intersection, Tyss, Cs1} ->
+	    {VB, Cs2} = check_clauses_intersect(NewEnv, Tyss, Clauses),
+	    {VB, constraints:combine(Cs1, Cs2)};
+	{type_error, _} ->
+	    throw({type_error, lambda, P, Ty})
+    end;
 
 do_type_check_expr_in(Env, ResTy, {'receive', _, Clauses}) ->
-    check_clauses(Env, [{type, erl_anno:new(0), any, []}], ResTy, Clauses);
+    check_clauses(Env, any, ResTy, Clauses);
 do_type_check_expr_in(Env, ResTy, {op, _, '!', Arg1, Arg2}) ->
     % The first argument should be a pid.
     {_,  VarBinds1, Cs1} = type_check_expr(Env, Arg1),
@@ -1565,7 +1635,7 @@ do_type_check_expr_in(Env, ResTy, {'try', _, Block, CaseCs, CatchCs, AfterBlock}
                 {_VB2, Cs2} = check_clauses(Env, [BlockTy], ResTy, CaseCs),
                 constraints:combine(Cs1, Cs2)
         end,
-    {_VB3, Cs3} = check_clauses(Env, [{type, erl_anno:new(0), tuple, any}], ResTy, CatchCs),
+    {_VB3, Cs3} = check_clauses(Env, any, ResTy, CatchCs),
     Cs5 =
         case AfterBlock of
             [] ->
@@ -1741,6 +1811,75 @@ type_check_fun(_Env, {remote, _, {var, _, _Module}, _}, Arity)->
 type_check_fun(Env, Expr, _Arity) ->
     type_check_expr(Env, Expr).
 
+type_check_call_intersection(_Env, _ResTy, [], _Args, {P, Name, Ty}) ->
+    throw({type_error, no_type_match_intersection, P, Name, Ty});
+type_check_call_intersection(Env, ResTy, [Ty | Tys], Args, E) ->
+    try
+	type_check_call(Env, ResTy, Ty, Args, E)
+    catch
+	Error when element(1, Error) == type_error ->
+	    type_check_call_intersection(Env, ResTy, Tys, Args, E)
+    end.
+
+type_check_call(Env, ResTy, {fun_ty, ArgsTy, FunResTy, Cs}, Args, {P, Name, _}) ->
+    {VarBindsList, Css} =
+	lists:unzip(
+	  lists:zipwith(fun (ArgTy, Arg) ->
+				type_check_expr_in(Env, ArgTy, Arg)
+			end, ArgsTy, Args)
+	 ),
+    case subtype(FunResTy, ResTy, Env#env.tenv) of
+	{true, Cs1} ->
+	    { union_var_binds(VarBindsList)
+	    , constraints:combine([Cs, Cs1 | Css]) };
+	false ->
+	    throw({type_error, fun_res_type, P, Name, FunResTy, ResTy})
+    end;
+type_check_call(Env, ResTy, {fun_ty_any_args, FunResTy, Cs}, Args, {P, Name, _})  ->
+    {_Tys, VarBindsList, Css} =
+	lists:unzip3(
+	  lists:map(fun (Arg) ->
+			    type_check_expr(Env, Arg)
+		    end, Args)
+	 ),
+    case subtype(FunResTy, ResTy, Env#env.tenv) of
+	{true, Cs1} ->
+	    { union_var_binds(VarBindsList)
+	    , constraints:combine([Cs, Cs1 | Css]) };
+	false ->
+	    throw({type_error, fun_res_type, P, Name, FunResTy, ResTy})
+    end;
+type_check_call(Env, _ResTy, any, Args, _E) ->
+    {_Tys, VarBindsList, Css} =
+	lists:unzip3(
+	  lists:map(fun (Arg) ->
+			    type_check_expr(Env, Arg)
+		    end, Args)
+	 ),
+    {union_var_binds(VarBindsList), constraints:combine(Css)};
+type_check_call(Env, ResTy, {fun_ty_intersection, Tys, Cs1}, Args, E) ->
+    {VB, Cs2} = type_check_call_intersection(Env, ResTy, Tys, Args, E),
+    {VB, constraints:combine(Cs1, Cs2)};
+type_check_call(Env, ResTy, {fun_ty_union, Tys}, Args, E) ->
+    type_check_call_union(Env, ResTy, Tys, Args, E);
+type_check_call(_Env, _ResTy, {type_error, _}, _Args, {P, Name, FunTy}) ->
+    throw({type_error, expected_fun_type, P, Name, FunTy}).
+
+
+type_check_call_union(_Env, _ResTy, [], _Args, _E) ->
+    {#{}, constraints:empty()};
+type_check_call_union(Env, ResTy, [Ty|Tys], Args, E) ->
+    {VB1, Cs1} = type_check_call(Env, ResTy, Ty, Args, E),
+    {VB2, Cs2} = type_check_call_union(Env, ResTy, Tys, Args, E),
+    %% TODO: It's not clear to me what should be returned here.
+    %% When combining all the varbinds we should really create
+    %% a union of all types for a variable.
+    {union_var_binds(VB1, VB2)
+    ,constraints:combine(Cs1, Cs2)
+    }.
+
+
+
 type_check_block(Env, [Expr]) ->
     type_check_expr(Env, Expr);
 type_check_block(Env, [Expr | Exprs]) ->
@@ -1845,32 +1984,32 @@ infer_clause(Env, {clause, _, Args, Guards, Block}) ->
 	      end, Guards),
     type_check_block(EnvNew, Block).
 
-check_clauses(_Env, [], _Clauses) ->
+
+check_clauses_intersect(Env, Ty, Clauses) when not is_list(Ty) ->
+    check_clauses(Env, Ty, Clauses);
+check_clauses_intersect(_Env, [], _Clauses) ->
     %% TODO: Improve quality of type error
     throw({typer_error, check_clauses});
-check_clauses(Env, [{type, _, 'fun', [{type, _, product, ArgsTy},ResTy]}|Tys], Clauses) ->
+check_clauses_intersect(Env, [Ty|Tys], Clauses) ->
     try
-	check_clauses(Env, ArgsTy, ResTy, Clauses)
+	check_clauses(Env, Ty, Clauses)
     catch
 	_ ->
 	    check_clauses(Env, Tys, Clauses)
-    end;
-check_clauses(Env, [{var, _, TyVar}|_Tys], Clauses) ->
-    %%% We don't backtrack here in case of a type error, because the
-    %%% type error is not due to us pushing in a type. Hence, intersection
-    %%% types with type variables are rather weak in this case.
-    {Ty, VarBinds, Cs} = infer_clauses(Env, Clauses),
-    {VarBinds, constraints:combine(constraints:upper(TyVar, Ty), Cs)};
-check_clauses(Env, {type, _, 'fun', [{type, _, product, ArgsTy}, ResTy]}, Clauses) ->
-    check_clauses(Env, ArgsTy, ResTy, Clauses);
+    end.
+
 check_clauses(Env, {var, _, TyVar}, Clauses) ->
     {Ty, VarBinds, Cs} = infer_clauses(Env, Clauses),
-    {VarBinds, constraints:combine(constraints:upper(TyVar, Ty), Cs)}.
-
-
+    {VarBinds, constraints:combine(constraints:upper(TyVar, Ty), Cs)};
+check_clauses(Env, Ty, Clauses) ->
+    {VarBindsList, Css} =
+	lists:unzip(lists:map(fun (Clause) ->
+				      check_clause(Env, Ty, Clause)
+			      end, Clauses)),
+    {union_var_binds(VarBindsList), constraints:combine(Css)}.
 
 check_clauses(Env, ArgsTy, ResTy, Clauses) when
-      not is_list(ArgsTy) ->
+      not is_list(ArgsTy) andalso ArgsTy /= any ->
     check_clauses(Env, [ArgsTy], ResTy, Clauses);
 check_clauses(Env, ArgsTy, ResTy, Clauses) ->
     {VarBindsList, Css} =
@@ -1879,6 +2018,12 @@ check_clauses(Env, ArgsTy, ResTy, Clauses) ->
 			  end, Clauses)),
     {union_var_binds(VarBindsList), constraints:combine(Css)}.
 
+%% This version of check_clause is for "function-like" clauses, which
+%% takes arguments. That includes case clauses and function clauses
+%% but not if clauses.
+check_clause(Env, any,    ResTy, {clause, _, Args,      _,     _} = Clause) ->
+    ArgsTy = lists:duplicate(length(Args), {type, erl_anno:new(0), any, []}),
+    check_clause(Env, ArgsTy, ResTy, Clause);
 check_clause(Env, ArgsTy, ResTy, {clause, P, Args, Guards, Block}) ->
     case {length(ArgsTy), length(Args)} of
 	{L, L} ->
@@ -1897,6 +2042,14 @@ check_clause(Env, ArgsTy, ResTy, {clause, P, Args, Guards, Block}) ->
 check_clause(_Env, _ArgsTy, _ResTy, Term) ->
     io:format("DEBUG: check_clause term: ~p~n", [Term]),
     throw(check_clause).
+
+%% This version, with only three arguments, is for if clauses. Those
+%% clauses don't take any arguments.
+check_clause(Env, ResTy, {clause, _, [], Guards, Block}) ->
+    VarBinds1 = check_guards(Env, Guards),
+    NewEnv    = Env#env{ venv = add_var_binds(Env#env.venv, VarBinds1) },
+    {VarBinds2, Cs2} = type_check_block_in(NewEnv, ResTy, Block),
+    {union_var_binds(VarBinds1, VarBinds2), Cs2}.
 
 
 %% TODO: implement proper checking of guards.
@@ -1949,7 +2102,7 @@ add_type_pat(Expr, {type, _, any, []}, _TEnv, VEnv) ->
 add_type_pat({integer, _, _}, _Ty, _TEnv, VEnv) ->
     ret(VEnv);
 add_type_pat(Tuple = {tuple, P, Pats}, Ty, TEnv, VEnv) ->
-    case expect_tuple_type(Ty, length(Pats)) of
+    case expect_tuple_type(normalize(Ty, TEnv), length(Pats)) of
 	any ->
 	    {union_var_binds([add_any_types_pat(Pat, VEnv) || Pat <- Pats])
 	    ,constraints:empty()};
@@ -1990,7 +2143,7 @@ add_type_pat(Nil = {nil, P}, Ty, TEnv, VEnv) ->
 	    throw({type_error, pattern, P, Nil, Ty})
     end;
 add_type_pat(CONS = {cons, P, PH, PT}, ListTy, TEnv, VEnv) ->
-    case expect_list_type(ListTy, dont_allow_nil_type) of
+    case expect_list_type(normalize(ListTy, TEnv), dont_allow_nil_type) of
 	any ->
             VEnv2 = add_any_types_pat(PH, VEnv),
             add_type_pat(PT, ListTy, TEnv, VEnv2);
@@ -2353,8 +2506,18 @@ handle_type_error({type_error, call, _P, Name, TyArgs, ArgTys}) ->
 	      [Name, TyArgs, ArgTys]);
 handle_type_error({type_error, fun_res_type, P, Func, FunResTy, ResTy}) ->
     Name = erl_pp:expr(Func), %% {atom, _, Name} or {remote, Mod, Name}
-    io:format("The function ~s in line ~p is expected to return ~s but it returns ~s~n",
+    io:format("The function ~s on line ~p is expected to return ~s but it returns ~s~n",
               [Name, P, typelib:pp_type(ResTy), typelib:pp_type(FunResTy)]);
+handle_type_error({type_error, expected_fun_type, P, Func, FunTy}) ->
+    Name = erl_pp:expr(Func),
+    io:format("Expected function ~s on line ~p to have a function type,~n"
+	      "but it has the following type:~n~s~n",
+	      [Name, P, typelib:pp_type(FunTy)]);
+handle_type_error({type_error, no_type_match_intersection, P, Func, FunTy}) ->
+    Name = erl_pp:expr(Func),
+    io:format("None of the types of the function ~s at line ~p matches the "
+	      "call site. Here's the types of the function:~n~s~n",
+	      [Name, P, typelib:pp_type(FunTy)]);
 handle_type_error({type_error, boolop, BoolOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-boolean argument "
 	      "of type ~s~n", [BoolOp, P, typelib:pp_type(Ty)]);
