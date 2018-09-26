@@ -805,7 +805,7 @@ expect_fun_type({ann_type, _, [_, Ty]}) ->
     expect_fun_type(Ty);
 expect_fun_type({var, _, Var}) ->
     ResTy = new_type_var(),
-    {fun_ty_any_args, ResTy
+    {fun_ty_any_args, {var, erl_anno:new(0), ResTy}
     ,constraints:add_var(Var,
        constraints:upper(ResTy,
 	 {type, erl_anno:new(0), 'fun', [{type, erl_anno:new(0), any}
