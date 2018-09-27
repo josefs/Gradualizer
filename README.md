@@ -11,7 +11,17 @@ This tool is a type checker for Erlang.
 
 # Usage
 
-Right now the user experience is not very polished. Here's how to get started:
+To run gradualizer as from the command line:
+
+* Compile the project as an escript:
+
+  `make escript`
+
+* Run gradualizer:
+
+  `gradualizer`
+
+To run gradualizer from the Erlang shell:
 
 * Compile the project by:
 
@@ -37,7 +47,7 @@ are most welcome!
 
 A non-exhaustive list of things which need fixing:
 
-* Making it a real Erlang application
+* Integrate gradualizer with editors and build tools
 * Support for intersection types
 * Support for subtype polymorphism
 * Support for all language constructs in Erlang
