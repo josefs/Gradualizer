@@ -96,6 +96,8 @@ subtypes([Ty1|Tys1], [Ty2|Tys2], TEnv) ->
 
 %% Checks is a type is a subtype of at least one of the types in a list.
 %% Used when checking intersection types.
+any_subtype(Ty, Tys, TEnv) when not is_list(Tys) ->
+    any_subtype(Ty, [Tys], TEnv);
 any_subtype(_Ty, [], _TEnv) ->
     false;
 any_subtype(Ty, [Ty1|Tys], TEnv) ->
