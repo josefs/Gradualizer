@@ -758,8 +758,8 @@ expect_tuple_union([Ty|Tys], AccTy, AccCs, Any, N) ->
 			      ,Any
 			      ,N)
     end;
-expect_tuple_union([], AccTy, AccCs, any, _N) ->
-    {[{type, erl_anno:new(0), any, []} | AccTy], AccCs};
+expect_tuple_union([], AccTy, AccCs, any, N) ->
+    {[ lists:duplicate(N, {type, erl_anno:new(0), any, []}) | AccTy], AccCs};
 expect_tuple_union([], AccTy, AccCs, _NoAny, _N) ->
     {AccTy, AccCs}.
 
