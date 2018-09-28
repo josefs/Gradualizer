@@ -2220,7 +2220,7 @@ add_type_pat(CONS = {cons, P, PH, PT}, ListTy, TEnv, VEnv) ->
             {VEnv3, Cs2} = add_type_pat(PT, ListTy, TEnv, VEnv2),
 	    {VEnv3, constraints:combine(Cs1, Cs2)};
 	{type_error, _Ty} ->
-	    throw({type_error, P, CONS, ListTy})
+	    throw({type_error, cons_pat, P, CONS, ListTy})
     end;
 add_type_pat(String = {string, P, _}, Ty, _TEnv, VEnv) ->
    case subtype({type, P, string, []}, Ty, VEnv) of
@@ -2557,6 +2557,12 @@ handle_type_error({type_error, list, _, Ty1, Ty}) ->
 handle_type_error({type_error, list, _, Ty}) ->
     io:format("The type ~s on line ~p is not a list type~n",
 	      [typelib:pp_type(Ty), line_no(Ty)]);
+handle_type_error({type_error, cons_pat, P, Cons, Ty}) ->
+    io:format("The pattern ~s on line ~p does not have type:~n~s~n"
+             ,[erl_pp:expr(Cons),P, typelib:pp_type(Ty)]);
+handle_type_error({type_error, cons, P, Cons, Ty}) ->
+    io:format("The expression ~s on line ~p does not have type ~s~n"
+             ,[erl_pp:expr(Cons), P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, nil, LINE, Ty}) ->
     io:format("The empty list on line ~p does not have type ~s~n",
 	      [LINE, typelib:pp_type(Ty)]);
