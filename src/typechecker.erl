@@ -2140,6 +2140,8 @@ add_type_pat(Expr, {type, _, any, []}, _TEnv, VEnv) ->
     ret(add_any_types_pat(Expr, VEnv));
 add_type_pat({integer, _, _}, _Ty, _TEnv, VEnv) ->
     ret(VEnv);
+add_type_pat({char, _, _}, _Ty, _TEnv, VEnv) ->
+    ret(VEnv);
 add_type_pat(Tuple = {tuple, P, Pats}, Ty, TEnv, VEnv) ->
     case expect_tuple_type(normalize(Ty, TEnv), length(Pats)) of
 	any ->
@@ -2286,6 +2288,8 @@ add_any_types_pat(A, VEnv) when is_atom(A) -> % Is this case needed?
 add_any_types_pat({atom, _, _}, VEnv) ->
     VEnv;
 add_any_types_pat({integer, _, _}, VEnv) ->
+    VEnv;
+add_any_types_pat({char, _, _}, VEnv) ->
     VEnv;
 add_any_types_pat({match, _, P1, P2}, VEnv) ->
     add_any_types_pats([P1, P2], VEnv);
