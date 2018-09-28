@@ -1585,7 +1585,7 @@ do_type_check_expr_in(Env, ResTy, {'fun', P, {function, {atom, _, M}, {atom, _, 
         {ok, BoundedFunTypeList} ->
 	    case any_subtype(ResTy, BoundedFunTypeList, Env#env.tenv) of
 		{true, Cs} -> {#{}, Cs};
-		false -> throw(fun_error)
+		false -> throw({type_error, mfa, P, M, F, A, ResTy, BoundedFunTypeList})
 	    end;
         not_found ->
             throw({call_undef, P, M, F, A})
@@ -2568,10 +2568,16 @@ handle_type_error({type_error, call, _P, Name, TyArgs, ArgTys}) ->
     io:format("The function ~p expects arguments of type~n~p~n but is given "
 	      "arguments of type~n~p~n",
 	      [Name, TyArgs, ArgTys]);
-handle_type_error({type_error, call, P, Name, FunTy}) ->
+handle_type_error({type_error, call, P, FunTy, Name}) ->
     io:format("The function ~s, called on line ~p doesn't have a function type~n"
-	      "Rather, it has the following type~n~p~n"
-	     ,[erl_pp:expr(Name), P, typelib:pp_type(FunTy)]);
+             "Rather, it has the following type~n~s~n"
+            ,[erl_pp:expr(Name), P, pp_intersection_type(FunTy)]);
+handle_type_error({type_error, mfa, P, M, F, A, ResTy, FunTy}) ->
+    io:format("The mfa ~p:~p/~p on line ~s is expected to have type : ~n~s~n"
+              "but has type : ~n"
+              "~s~n"
+             ,[M, F, A, erl_anno:line(P),typelib:pp_type(ResTy)
+              ,pp_intersection_type(FunTy)]);
 handle_type_error({type_error, fun_res_type, P, Func, FunResTy, ResTy}) ->
     Name = erl_pp:expr(Func), %% {atom, _, Name} or {remote, Mod, Name}
     io:format("The function ~s on line ~p is expected to return ~s but it returns ~s~n",
@@ -2656,9 +2662,11 @@ handle_type_error({type_error, receive_after, P, TyClauses, TyBlock}) ->
 handle_type_error(type_error) ->
     io:format("TYPE ERROR~n").
 
-%% TODO: pp_type seems to have problems printing bounded types.
 pp_intersection_type([]) ->
     "";
+%% TODO: pp_type seems to have problems printing bounded types.
+pp_intersection_type([{type, _, bounded_fun, [Ty, []]} | Tys]) ->
+    typelib:pp_type(Ty) ++ pp_intersection_type(Tys);
 pp_intersection_type([Ty|Tys]) ->
     typelib:pp_type(Ty) ++ pp_intersection_type(Tys).
 
