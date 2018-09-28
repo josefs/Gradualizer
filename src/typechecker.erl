@@ -2646,6 +2646,13 @@ handle_type_error({type_error, generator, P, Ty}) ->
 handle_type_error({type_error, check_clauses}) ->
     %%% TODO: Improve quality of type error
     io:format("Type error in clauses");
+handle_type_error({type_error, receive_after, P, TyClauses, TyBlock}) ->
+    io:format("The types in the clauses and the after block are incompatible~n"
+              "in the receive statement on line ~p.~n"
+             "The type of the clauses is : ~s~n"
+             "The type of the after block is : ~s~n"
+            ,[erl_anno:line(P), typelib:pp_type(TyClauses)
+                               , typelib:pp_type(TyBlock)]);
 handle_type_error(type_error) ->
     io:format("TYPE ERROR~n").
 
