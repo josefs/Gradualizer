@@ -1014,6 +1014,19 @@ type_check_expr(Env, {named_fun, _, FunName, Clauses}) ->
 
 type_check_expr(Env, {'receive', _, Clauses}) ->
     infer_clauses(Env, Clauses);
+type_check_expr(Env, {'receive', P, Clauses, _After, Block}) ->
+    {TyClauses, VarBinds1, Cs1} = infer_clauses(Env, Clauses),
+    {TyBlock,   VarBinds2, Cs2} = type_check_block(Env, Block),
+    case compatible(TyClauses, TyBlock, Env#env.tenv) of
+      {true, Cs3} ->
+        % TODO: Which type should we return here? Most likely the weakest one
+        % We need to augment compatible/3 to return that information.
+        {TyClauses
+        ,union_var_binds(VarBinds1, VarBinds2)
+        ,constraints:combine([Cs1, Cs2, Cs3])};
+      false ->
+        throw({type_error, receive_after, P, TyClauses, TyBlock})
+    end;
 
 %% Operators
 type_check_expr(Env, {op, _, '!', Proc, Val}) ->
@@ -1596,6 +1609,14 @@ do_type_check_expr_in(Env, Ty, {named_fun, P, FunName, Clauses}) ->
 
 do_type_check_expr_in(Env, ResTy, {'receive', _, Clauses}) ->
     check_clauses(Env, any, ResTy, Clauses);
+do_type_check_expr_in(Env, ResTy, {'receive', _, Clauses, After, Block}) ->
+    {VarBinds1, Cs1} = check_clauses(Env, any, ResTy, Clauses),
+    {VarBinds2, Cs2} = type_check_expr_in(Env
+                                         ,{type, erl_anno:new(0), integer, []}
+                                         ,After),
+    {VarBinds3, Cs3} = type_check_block_in(Env, ResTy, Block),
+    {union_var_binds([VarBinds1, VarBinds2, VarBinds3])
+                    ,constraints:combine([Cs1, Cs2, Cs3])};
 do_type_check_expr_in(Env, ResTy, {op, _, '!', Arg1, Arg2}) ->
     % The first argument should be a pid.
     {_,  VarBinds1, Cs1} = type_check_expr(Env, Arg1),
