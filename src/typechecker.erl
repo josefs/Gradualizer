@@ -1014,19 +1014,12 @@ type_check_expr(Env, {named_fun, _, FunName, Clauses}) ->
 
 type_check_expr(Env, {'receive', _, Clauses}) ->
     infer_clauses(Env, Clauses);
-type_check_expr(Env, {'receive', P, Clauses, _After, Block}) ->
+type_check_expr(Env, {'receive', _, Clauses, _After, Block}) ->
     {TyClauses, VarBinds1, Cs1} = infer_clauses(Env, Clauses),
     {TyBlock,   VarBinds2, Cs2} = type_check_block(Env, Block),
-    case compatible(TyClauses, TyBlock, Env#env.tenv) of
-      {true, Cs3} ->
-        % TODO: Which type should we return here? Most likely the weakest one
-        % We need to augment compatible/3 to return that information.
-        {TyClauses
-        ,union_var_binds(VarBinds1, VarBinds2)
-        ,constraints:combine([Cs1, Cs2, Cs3])};
-      false ->
-        throw({type_error, receive_after, P, TyClauses, TyBlock})
-    end;
+    {normalize({type, erl_anno:new(0), union, [TyClauses, TyBlock]}, Env#env.tenv)
+    ,union_var_binds(VarBinds1, VarBinds2)
+    ,constraints:combine(Cs1, Cs2)};
 
 %% Operators
 type_check_expr(Env, {op, _, '!', Proc, Val}) ->
