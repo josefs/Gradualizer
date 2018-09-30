@@ -11,17 +11,17 @@ This tool is a type checker for Erlang.
 
 # Usage
 
-To run gradualizer as from the command line:
+To run Gradualizer from the command line:
 
 * Compile the project as an escript:
 
   `make escript`
 
-* Run gradualizer:
+* Run Gradualizer:
 
   `gradualizer`
 
-To run gradualizer from the Erlang shell:
+To run Gradualizer from the Erlang shell:
 
 * Compile the project by:
 
@@ -36,6 +36,8 @@ To run gradualizer from the Erlang shell:
   `gradualizer:type_check_file(<path/to/some_file.erl>).`
 
   You can try typechecking some of the example modules in the `test` directory.
+
+To run Gradualizer from rebar3, read `examples/rebar3/README.md`.
 
 The Gradualizer requires at least OTP 19.
 

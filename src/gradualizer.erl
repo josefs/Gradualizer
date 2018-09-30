@@ -13,7 +13,9 @@
          type_check_module/1,
          type_check_module/2,
          type_check_dir/1,
-         type_check_dir/2
+         type_check_dir/2,
+         type_check_files/1,
+         type_check_files/2
         ]).
 
 -export_type([options/0]).
@@ -75,17 +77,29 @@ type_check_dir(Dir) ->
 type_check_dir(Dir, Opts) ->
     case filelib:is_dir(Dir) of
         true ->
-            StopOnFirstError = proplists:get_bool(stop_on_first_error, Opts),
-            lists:foldl(
-              fun(File, Res) when Res =:= ok;
-                                  not StopOnFirstError ->
-                      case type_check_file(File, [print_file|Opts]) of
-                          ok -> Res;
-                          nok -> nok
-                      end;
-                 (_, Error) ->
-                      Error
-              end, ok, filelib:wildcard(filename:join(Dir, "*.{erl,beam}")));
+            type_check_files(filelib:wildcard(filename:join(Dir, "*.{erl,beam}")), Opts);
         false ->
             throw({dir_not_found, Dir})
     end.
+
+%% @doc Type check a source or beam file
+%% (Option `print_file' is implicitely true)
+-spec type_check_files([file:filename()]) -> ok | nok.
+type_check_files(Files) ->
+    type_check_files(Files, []).
+
+%% @doc Type check a source or beam
+%% (Option `print_file' is implicitely true)
+-spec type_check_files([file:filename()], options()) -> ok | nok.
+type_check_files(Files, Opts) ->
+    StopOnFirstError = proplists:get_bool(stop_on_first_error, Opts),
+    lists:foldl(
+        fun(File, Res) when Res =:= ok;
+                            not StopOnFirstError ->
+                case type_check_file(File, [print_file|Opts]) of
+                    ok -> Res;
+                    nok -> nok
+                end;
+            (_, nok) ->
+                nok
+        end, ok, Files).

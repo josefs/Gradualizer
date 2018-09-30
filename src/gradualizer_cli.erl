@@ -11,20 +11,15 @@ handle_args(Args) ->
     {Rest, Opts} = parse_opts(Args, []),
     HasHelp = proplists:get_bool(help, Opts),
     HasVersion = proplists:get_bool(version, Opts),
-    KeepGoing = not proplists:get_bool(stop_on_first_error, Opts),
-    {_, Exit} = if
-        HasHelp -> print_usage(), {true, 0};
-        HasVersion -> print_version(), {true, 0};
-        true -> lists:foldl(
-            fun(_, {false, Exit}) -> {false, Exit};
-            (File, {true, Exit}) ->
-                case gradualizer:type_check_file(File, Opts) of
-                    ok  -> {true, Exit};
-                    nok -> {KeepGoing, 1}
-                end
-            end, {true, 0}, Rest)
+    Status = if
+        HasHelp -> print_usage(), ok;
+        HasVersion -> print_version(), ok;
+        true -> gradualizer:type_check_files(Rest, Opts)
     end,
-    halt(Exit).
+    case Status of
+        ok -> halt(0);
+        nok -> halt(1)
+    end.
  
 -spec get_ver(atom()) -> string().
 get_ver(App) ->
@@ -77,4 +72,3 @@ handle_path_add(A, [Path | Args], Opts) ->
         true       -> parse_opts(Args, Opts);
         {error, _} -> erlang:error(string:join(["Bad directory for ", A, ": ", Path], ""))
     end.
-    
