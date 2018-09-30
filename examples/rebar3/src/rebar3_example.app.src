@@ -1,0 +1,11 @@
+{application, rebar3_example,
+ [{description, "An example rebar3 project"},
+  {vsn, "1.0.0"},
+  {registered, []},
+  {applications,
+   [kernel,
+    stdlib
+   ]},
+  {env,[]},
+  {modules, []}
+ ]}.

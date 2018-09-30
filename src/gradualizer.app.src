@@ -6,6 +6,8 @@
    [kernel,
     stdlib
    ]},
-  {env,[]},
+  {env,[
+      {providers, [rebar_prv_gradualizer]}
+  ]},
   {modules, []}
  ]}.
