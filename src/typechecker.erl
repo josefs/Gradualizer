@@ -844,6 +844,28 @@ expect_fun_type_union([Ty|Tys]) ->
 	    [Ty | expect_fun_type_union(Tys)]
     end.
 
+expect_record_type(Record, {type, Anno, record, [{atom, _, Name}]}, TEnv) ->
+    if Record == Name ->
+         get_record_fields(Record, Anno, TEnv);
+       true ->
+         type_error
+    end;
+expect_record_type(_Record, {type, _, tuple, []}, _TEnv) ->
+    any;
+expect_record_type(Record, {type, _, union, Tys}, TEnv) ->
+    expect_record_union(Record, Tys, TEnv);
+expect_record_type(_, _, _) ->
+    type_error.
+
+expect_record_union(Record, [Ty | Tys], TEnv) ->
+    case expect_record_type(Record, Ty, TEnv) of
+      type_error ->
+        expect_record_union(Record, Tys, TEnv);
+      Res ->
+        Res
+    end;
+expect_record_union(_Record, [], _TEnv) ->
+    type_error.
 
 new_type_var() ->
     I = erlang:unique_integer(),
@@ -2247,10 +2269,15 @@ add_type_pat({bin, _, BinElements}, {type, _, binary, [_,_]}, TEnv, VEnv) ->
 		    end,
 		    {VEnv, constraints:empty()},
 		    BinElements);
-add_type_pat({record, _, _Record, Fields}, {type, _, record, [{atom, _, _RecordName}]}, TEnv, VEnv) ->
-    % TODO: We need the definitions of records here, to be able to add the
-    % types of the matches in the record.
-    add_type_pat_fields(Fields, {type, erl_anno:new(0), any, []}, TEnv, VEnv);
+add_type_pat({record, P, Record, Fields}, Ty, TEnv, VEnv) ->
+    case expect_record_type(Record, Ty, TEnv) of
+        type_error -> throw({type_error, record_pattern, P, Record, Ty});
+        any ->
+          add_any_types_pats(
+            [Value || {record_field, _, _Name, Value} <- Fields], VEnv);
+        FieldTypes ->
+          add_type_pat_fields(Fields, FieldTypes, TEnv, VEnv)
+    end;
 add_type_pat({match, _, Pat1, Pat2}, Ty, TEnv, VEnv) ->
     {VEnv1, Cs1} = add_type_pat(Pat2, Ty, TEnv, VEnv),
     {VEnv2, Cs2} = add_type_pat(Pat1, Ty, TEnv, VEnv1),
@@ -2264,9 +2291,11 @@ add_type_pat(Pat, Ty, _TEnv, _VEnv) ->
 
 add_type_pat_fields([], _, _TEnv, VEnv) ->
     ret(VEnv);
-add_type_pat_fields([{record_field, _, _Field, Pat}|Fields], Ty, TEnv, VEnv) ->
-    {VEnv2, Cs1} = add_type_pat(Pat, Ty, TEnv, VEnv),
-    {VEnv3, Cs2} = add_type_pat_fields(Fields, Ty, TEnv, VEnv2),
+add_type_pat_fields([{record_field, _, Field, Pat}|Fields], FieldTys, TEnv, VEnv) ->
+    [FieldTy]
+      = [ Ty || {typed_record_field, {record_field, _, FieldName, _}, Ty} <- FieldTys, FieldName == Field ],
+    {VEnv2, Cs1} = add_type_pat(Pat, FieldTy, TEnv, VEnv),
+    {VEnv3, Cs2} = add_type_pat_fields(Fields, FieldTys, TEnv, VEnv2),
     {VEnv3, constraints:combine(Cs1, Cs2)}.
 
 
