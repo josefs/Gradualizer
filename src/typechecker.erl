@@ -1235,7 +1235,7 @@ type_check_call_ty(_Env, {type_error, _}, _Args, {Name, P, FunTy}) ->
     throw({type_error, call, P, FunTy, Name}).
 
 type_check_call_ty_intersect(_Env, [], _Args, {Name, P, FunTy}) ->
-    throw({type_error, call, P, FunTy, Name});
+    throw({type_error, call_intersect, P, FunTy, Name});
 type_check_call_ty_intersect(Env, [Ty | Tys], Args, E) ->
     try
 	type_check_call_ty(Env, Ty, Args, E)
@@ -2589,6 +2589,11 @@ handle_type_error({type_error, call, P, FunTy, Name}) ->
     io:format("The function ~s, called on line ~p doesn't have a function type~n"
              "Rather, it has the following type~n~s~n"
             ,[erl_pp:expr(Name), P, pp_intersection_type(FunTy)]);
+handle_type_error({type_error, call_intersect, P, FunTy, Name}) ->
+    io:format("The type of the function ~s, called on line ~p doesn't match "
+              "the surrounding calling context.~n"
+              "It has the following type~n~s~n"
+             ,[erl_pp:expr(Name), P, pp_intersection_type(FunTy)]);
 handle_type_error({type_error, mfa, P, M, F, A, ResTy, FunTy}) ->
     io:format("The mfa ~p:~p/~p on line ~s is expected to have type : ~n~s~n"
               "but has type : ~n"
