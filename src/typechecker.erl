@@ -959,6 +959,8 @@ type_check_expr(_Env, {integer, _, _N}) ->
     return({type, erl_anno:new(0), any, []});
 type_check_expr(_Env, {float, _, _F}) ->
     return({type, erl_anno:new(0), any, []});
+type_check_expr(_Env, {char, _, _C}) ->
+    return({type, erl_anno:new(0), any, []});
 
 
 %% Maps
@@ -1387,6 +1389,13 @@ do_type_check_expr_in(Env, Ty, Atom = {atom, LINE, _}) ->
 	    {#{}, Cs};
 	false ->
 	    throw({type_error, Atom, LINE, Ty})
+    end;
+do_type_check_expr_in(Env, Ty, Char = {char, LINE, _}) ->
+    case subtype({type, erl_anno:new(0), char, []}, Ty, Env#env.tenv) of
+        {true, Cs} ->
+           {#{}, Cs};
+       false ->
+           throw({type_error, char_expr, LINE, Char, Ty})
     end;
 do_type_check_expr_in(Env, Ty, Cons = {cons, LINE, H, T}) ->
     case expect_list_type(Ty, dont_allow_nil_type) of
@@ -2532,6 +2541,9 @@ handle_type_error({type_error, tyVar, LINE, Var, VarTy, Ty}) ->
     io:format("The variable ~p on line ~p has type ~s "
 	      "but is expected to have type ~s~n",
 	      [Var, LINE, typelib:pp_type(VarTy), typelib:pp_type(Ty)]);
+handle_type_error({type_error, char_expr, LINE, Char, Ty}) ->
+    io:format("The character ~p on line ~p does not have type ~s~n"
+             ,[erl_pp:expr(Char), LINE, typelib:pp_type(Ty)]);
 handle_type_error({type_error, {atom, _, A}, LINE, Ty}) ->
     io:format("The atom ~p on line ~p does not have type ~s~n",
 	      [A, LINE, typelib:pp_type(Ty)]);
