@@ -2595,10 +2595,10 @@ handle_type_error({type_error, call_intersect, P, FunTy, Name}) ->
               "It has the following type~n~s~n"
              ,[erl_pp:expr(Name), P, pp_intersection_type(FunTy)]);
 handle_type_error({type_error, mfa, P, M, F, A, ResTy, FunTy}) ->
-    io:format("The mfa ~p:~p/~p on line ~s is expected to have type : ~n~s~n"
+    io:format("The mfa ~p:~p/~p on line ~p is expected to have type : ~n~s~n"
               "but has type : ~n"
               "~s~n"
-             ,[M, F, A, erl_anno:line(P),typelib:pp_type(ResTy)
+             ,[M, F, A, P,typelib:pp_type(ResTy)
               ,pp_intersection_type(FunTy)]);
 handle_type_error({type_error, fun_res_type, P, Func, FunResTy, ResTy}) ->
     Name = erl_pp:expr(Func), %% {atom, _, Name} or {remote, Mod, Name}
