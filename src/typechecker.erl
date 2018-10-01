@@ -791,6 +791,8 @@ expect_fun_type(Tys) when is_list(Tys) ->
     case expect_intersection_type(Tys) of
 	{type_error, _} ->
 	    {type_error, Tys};
+    [Ty] ->
+        Ty;
 	Tyss ->
 	    {fun_ty_intersection, Tyss, constraints:empty()}
     end;
@@ -1862,14 +1864,18 @@ type_check_fun(_Env, {remote, _, {var, _, _Module}, _}, Arity)->
 type_check_fun(Env, Expr, _Arity) ->
     type_check_expr(Env, Expr).
 
-type_check_call_intersection(_Env, _ResTy, [], _Args, {P, Name, Ty}) ->
+type_check_call_intersection(Env, ResTy, [Ty], Args, E) ->
+    type_check_call(Env, ResTy, Ty, Args, E);
+type_check_call_intersection(Env, ResTy, Tys, Args, E) ->
+    type_check_call_intersection_(Env, ResTy, Tys, Args, E).
+type_check_call_intersection_(_Env, _ResTy, [], _Args, {P, Name, Ty}) ->
     throw({type_error, no_type_match_intersection, P, Name, Ty});
-type_check_call_intersection(Env, ResTy, [Ty | Tys], Args, E) ->
+type_check_call_intersection_(Env, ResTy, [Ty | Tys], Args, E) ->
     try
-	type_check_call(Env, ResTy, Ty, Args, E)
+        type_check_call(Env, ResTy, Ty, Args, E)
     catch
 	Error when element(1, Error) == type_error ->
-	    type_check_call_intersection(Env, ResTy, Tys, Args, E)
+	    type_check_call_intersection_(Env, ResTy, Tys, Args, E)
     end.
 
 type_check_call(Env, ResTy, {fun_ty, ArgsTy, FunResTy, Cs}, Args, {P, Name, _}) ->
