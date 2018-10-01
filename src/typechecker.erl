@@ -2349,7 +2349,7 @@ add_type_pat_tuple(Pats, {type, _, union, Tys}, TEnv, VEnv) ->
 			{Env2, Cs2} = add_type_pat(Pat, Union, TEnv, Env1),
 			{Env2, constraints:combine(Cs1, Cs2)}
 		end, {VEnv, constraints:empty()}, lists:zip(Pats, Unions));
-%add_type_pat_tuple(Pats, {var, _, Var}, 
+%add_type_pat_tuple(Pats, {var, _, Var},
 add_type_pat_tuple(Pats, {ann_type, _, [_, Ty]}, TEnv, VEnv) ->
     add_type_pat_tuple(Pats, Ty, TEnv, VEnv).
 
