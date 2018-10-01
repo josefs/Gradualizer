@@ -20,7 +20,7 @@ handle_args(Args) ->
         ok -> halt(0);
         nok -> halt(1)
     end.
- 
+
 -spec get_ver(atom()) -> string().
 get_ver(App) ->
     {_, _, Ver} = lists:keyfind(App, 1, application:loaded_applications()),
