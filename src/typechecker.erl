@@ -1549,7 +1549,7 @@ do_type_check_expr_in(Env, ResTy, {record, P, Exp, Record, Fields}) ->
 		   ),
 	    {VarBinds, Cs} = type_check_expr_in(Env, RecordTy, Exp),
 	    {union_var_binds([VarBinds|VarBindsList])
-	    ,constraints:combine([Cs|Css])};
+	    ,constraints:combine([Cs|Css])}
     end;
 do_type_check_expr_in(Env, ResTy, {record_field, _, Expr, Record, {atom, _, Field}}) ->
     Rec = maps:get(Record, Env#env.tenv#tenv.records),
