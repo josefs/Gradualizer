@@ -2291,7 +2291,7 @@ add_type_pat(Pat, Ty, _TEnv, _VEnv) ->
 
 add_type_pat_fields([], _, _TEnv, VEnv) ->
     ret(VEnv);
-add_type_pat_fields([{record_field, _, Field, Pat}|Fields], Record, TEnv, VEnv) ->
+add_type_pat_fields([{record_field, _, {atom, _, Field}, Pat}|Fields], Record, TEnv, VEnv) ->
     Rec = maps:get(Record, TEnv#tenv.records),
     FieldTy = get_rec_field_type(Field, Rec),
     {VEnv2, Cs1} = add_type_pat(Pat, FieldTy, TEnv, VEnv),
