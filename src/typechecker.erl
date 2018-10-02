@@ -218,6 +218,9 @@ compat_ty({type, P1, record, [{atom, _, Name}]},
     Fields2 = get_record_fields(Name, P2, TEnv),
     compat_record_fields(Fields1, Fields2, A, TEnv);
 
+compat_ty({type, _, record, _}, {type, _, tuple, any}, A, _TEnv) ->
+    ret(A);
+
 %% Lists
 compat_ty({type, _, list, [_Ty]}, {type, _, list, []}, A, _TEnv) ->
     ret(A);
@@ -850,10 +853,12 @@ expect_record_type(Record, {type, Anno, record, [{atom, _, Name}]}, TEnv) ->
        true ->
          type_error
     end;
-expect_record_type(_Record, {type, _, tuple, []}, _TEnv) ->
+expect_record_type(_Record, {type, _, tuple, any}, _TEnv) ->
     any;
 expect_record_type(Record, {type, _, union, Tys}, TEnv) ->
     expect_record_union(Record, Tys, TEnv);
+expect_record_type(Record, {ann_type, _, [_, Ty]}, TEnv) ->
+    expect_record_type(Record, Ty, TEnv);
 expect_record_type(_, _, _) ->
     type_error.
 
@@ -1511,27 +1516,28 @@ do_type_check_expr_in(Env, ResTy, {map, LINE, Expr, Assocs}) ->
     end;
 
 %% Records
-do_type_check_expr_in(Env, ResTy, {record, _, Record, Fields}) ->
-    case subtype(ResTy, {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Record}]}, Env#env.tenv) of
-	{true, Cs} ->
-	    Rec = maps:get(Record, Env#env.tenv#tenv.records),
-	    {VarBindsList, Css}
-		= lists:unzip(
-		    lists:map(fun ({record_field, _, {atom, _, Field}, Exp}) ->
+do_type_check_expr_in(Env, ResTy, {record, P, Record, Fields}) ->
+    Rec = maps:get(Record, Env#env.tenv#tenv.records),
+    case expect_record_type(Record, ResTy, Env#env.tenv) of
+      type_error ->
+        throw({type_error, record, P, Record, ResTy});
+      _ ->
+        {VarBindsList, Css}
+          = lists:unzip(
+                      lists:map(fun ({record_field, _, {atom, _, Field}, Exp}) ->
 				      FieldTy = get_rec_field_type(Field, Rec),
 				      type_check_expr_in(Env, FieldTy, Exp)
 			      end
 			     ,Fields)
 		   ),
-	    {union_var_binds(VarBindsList), constraints:combine([Cs|Css])};
-	false ->
-	    %% TODO: Improve quality of error message
-	    throw({type_error, record})
+        {union_var_binds(VarBindsList), constraints:combine(Css)}
     end;
-do_type_check_expr_in(Env, ResTy, {record, _, Exp, Record, Fields}) ->
+do_type_check_expr_in(Env, ResTy, {record, P, Exp, Record, Fields}) ->
     RecordTy = {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Record}]},
-    case subtype(ResTy, RecordTy, Env#env.tenv) of
-	{true, Cs1} ->
+    case expect_record_type(Record, ResTy, Env#env.tenv) of
+      type_error ->
+        throw({type_error, record_update, P, Record, ResTy});
+      _ ->
 	    Rec = maps:get(Record, Env#env.tenv#tenv.records),
 	    {VarBindsList, Css}
 		= lists:unzip(
@@ -1541,12 +1547,9 @@ do_type_check_expr_in(Env, ResTy, {record, _, Exp, Record, Fields}) ->
 			      end
 			     ,Fields)
 		   ),
-	    {VarBinds, Cs2} = type_check_expr_in(Env, RecordTy, Exp),
+	    {VarBinds, Cs} = type_check_expr_in(Env, RecordTy, Exp),
 	    {union_var_binds([VarBinds|VarBindsList])
-	    ,constraints:combine([Cs1,Cs2|Css])};
-	false ->
-	    %% TODO: Improve quality of error message
-	    throw({type_error, record})
+	    ,constraints:combine([Cs|Css])};
     end;
 do_type_check_expr_in(Env, ResTy, {record_field, _, Expr, Record, {atom, _, Field}}) ->
     Rec = maps:get(Record, Env#env.tenv#tenv.records),
@@ -2272,11 +2275,8 @@ add_type_pat({bin, _, BinElements}, {type, _, binary, [_,_]}, TEnv, VEnv) ->
 add_type_pat({record, P, Record, Fields}, Ty, TEnv, VEnv) ->
     case expect_record_type(Record, Ty, TEnv) of
         type_error -> throw({type_error, record_pattern, P, Record, Ty});
-        any ->
-          add_any_types_pats(
-            [Value || {record_field, _, _Name, Value} <- Fields], VEnv);
-        FieldTypes ->
-          add_type_pat_fields(Fields, FieldTypes, TEnv, VEnv)
+        _FieldTypes ->
+          add_type_pat_fields(Fields, Record, TEnv, VEnv)
     end;
 add_type_pat({match, _, Pat1, Pat2}, Ty, TEnv, VEnv) ->
     {VEnv1, Cs1} = add_type_pat(Pat2, Ty, TEnv, VEnv),
@@ -2291,11 +2291,11 @@ add_type_pat(Pat, Ty, _TEnv, _VEnv) ->
 
 add_type_pat_fields([], _, _TEnv, VEnv) ->
     ret(VEnv);
-add_type_pat_fields([{record_field, _, Field, Pat}|Fields], FieldTys, TEnv, VEnv) ->
-    [FieldTy]
-      = [ Ty || {typed_record_field, {record_field, _, FieldName, _}, Ty} <- FieldTys, FieldName == Field ],
+add_type_pat_fields([{record_field, _, Field, Pat}|Fields], Record, TEnv, VEnv) ->
+    Rec = maps:get(Record, TEnv#tenv.records),
+    FieldTy = get_rec_field_type(Field, Rec),
     {VEnv2, Cs1} = add_type_pat(Pat, FieldTy, TEnv, VEnv),
-    {VEnv3, Cs2} = add_type_pat_fields(Fields, FieldTys, TEnv, VEnv2),
+    {VEnv3, Cs2} = add_type_pat_fields(Fields, Record, TEnv, VEnv2),
     {VEnv3, constraints:combine(Cs1, Cs2)}.
 
 
@@ -2703,6 +2703,17 @@ handle_type_error({type_error, generator, P, Ty}) ->
 handle_type_error({type_error, check_clauses}) ->
     %%% TODO: Improve quality of type error
     io:format("Type error in clauses");
+handle_type_error({type_error, record, P, Record, ResTy}) ->
+    io:format("The record #~p on line ~p is expected to have type ~s.~n"
+             ,[Record, P, typelib:pp_type(ResTy)]);
+handle_type_error({type_error, record_pattern, P, Record, Ty}) ->
+    io:format("The record patterns for record #~p on line ~p is expected to have"
+              " type ~s.~n"
+             ,[Record, P, typelib:pp_type(Ty)]);
+handle_type_error({type_error, record_update, P, Record, ResTy}) ->
+    io:format("The record update of the record #~p on line ~p is expected to have type:"
+              "~n~s~n"
+             ,[Record, P, typelib:pp_type(ResTy)]);
 handle_type_error({type_error, receive_after, P, TyClauses, TyBlock}) ->
     io:format("The types in the clauses and the after block are incompatible~n"
               "in the receive statement on line ~p.~n"
