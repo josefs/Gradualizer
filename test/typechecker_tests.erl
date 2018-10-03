@@ -207,6 +207,34 @@ type_check_call_test_() ->
                                    "f() -> int_arg(int_term())."]))
     ].
 
+type_check_fun_test_() ->
+    [%% Anonimous fun - union fun type
+     ?_assert(type_check_forms(["-spec f() -> fun() | fun().",
+                                "f() -> fun(A) -> A end."])),
+     %% Anonimous fun - union + any fun type
+     ?_assert(type_check_forms(["-spec f(fun() | fun()) -> fun().",
+                                "f(F) -> F = fun(A) -> A end."])),
+     %% Named fun - union fun type
+     ?_assert(type_check_forms(["-spec f() -> fun() | fun().",
+                                "f() -> fun NF(A) -> A end."])),
+     %% Named fun - union + any fun type
+     ?_assert(type_check_forms(["-spec f(fun() | fun()) -> fun().",
+                                "f(F) -> F = fun NF(A) -> A end."])),
+     ?_assert(type_check_forms(["-spec f(fun() | fun()) -> any().",
+                                "f(F) -> F()."])),
+     %% Fun application with wrong number of arguments
+     ?_assertNot(type_check_forms(["-spec f(fun((integer()) -> integer())) -> any().",
+                                   "f(F) -> F()."])),
+     %% Calling multiclause fun
+     ?_assert(type_check_forms(["-spec g(integer()) -> integer();",
+                                "       (atom()) -> atom().",
+                                "-spec f() -> {integer(), atom()}.",
+                                "f() -> {g(1), g(a)}."])),
+     %% Applying fun with any args
+     ?_assert(type_check_forms(["-spec f(fun((...) -> integer())) -> integer().",
+                                "f(F) -> F(1, 2)."]))
+    ].
+
 type_check_clause_test_() ->
     [%% Basic `if' test, X can be any term as guards don't have to return boolean().
      ?_assert(type_check_forms(["-spec f(term()) -> boolean().",
