@@ -801,7 +801,7 @@ expect_fun_type(Tys) when is_list(Tys) ->
     end;
 expect_fun_type({type, _, union, UnionTys} = Union) ->
     case expect_fun_type_union(UnionTys) of
-	{type_error, _} ->
+	[] ->
 	    {type_error, Union};
 	[Ty] ->
 	    Ty;
@@ -843,8 +843,8 @@ expect_fun_type_union([Ty|Tys]) ->
     case expect_fun_type(Ty) of
 	{type_error, _} ->
 	    expect_fun_type_union(Tys);
-	Ty ->
-	    [Ty | expect_fun_type_union(Tys)]
+	TyOut ->
+	    [TyOut | expect_fun_type_union(Tys)]
     end.
 
 expect_record_type(Record, {type, Anno, record, [{atom, _, Name}]}, TEnv) ->
@@ -1271,13 +1271,13 @@ type_check_call_ty_intersect(Env, [Ty | Tys], Args, E) ->
 	    type_check_call_ty_intersect(Env, Tys, Args, E)
     end.
 
-type_check_call_ty_union(_Env, [], _Args, _E) ->
-    {#{}, constraints:empty()};
-type_check_call_ty_union(Env, [Ty | Tys], Args, E) ->
-    {VB1, Cs1} = type_check_call_ty(Env, Ty, Args, E),
-    {VB2, Cs2} = type_check_call_ty_union(Env, Tys, Args, E),
-    {union_var_binds(VB1, VB2), constraints:combine(Cs1, Cs2)}.
-
+type_check_call_ty_union(Env, Tys, Args, E) ->
+    {ResTys, VBs, Css} =
+        lists:unzip3([type_check_call_ty(Env, Ty, Args, E)
+                      || Ty <- Tys]),
+    {normalize({type, erl_anno:new(0), union, ResTys}, Env#env.tenv),
+     union_var_binds(VBs),
+     constraints:combine(Css)}.
 
 compat_arith_type(Any = {type, _, any, []}, {type, _, any, []}) ->
     Any;
