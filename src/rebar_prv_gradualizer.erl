@@ -3,7 +3,7 @@
 -export([init/1, do/1, format_error/1]).
 
 -define(PROVIDER, gradualizer).
--define(DEPS, [app_discovery]).
+-define(DEPS, [compile]).
 
 -spec init(rebar_state:t()) -> {ok, rebar_state:t()}.
 init(State) ->
@@ -21,6 +21,7 @@ init(State) ->
 
 -spec do(rebar_state:t()) -> {ok, rebar_state:t()} | {error, string()}.
 do(State) ->
+    code:add_pathsa(rebar_state:code_paths(State, all_deps)),
     CheckedApps = lists:map(fun gradualizer_check_app/1, rebar_state:project_apps(State)),
     HasNok = lists:member(nok, CheckedApps),
     if
