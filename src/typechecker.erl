@@ -2282,6 +2282,29 @@ add_type_pat({match, _, Pat1, Pat2}, Ty, TEnv, VEnv) ->
     {VEnv1, Cs1} = add_type_pat(Pat2, Ty, TEnv, VEnv),
     {VEnv2, Cs2} = add_type_pat(Pat1, Ty, TEnv, VEnv1),
     {VEnv2, constraints:combine(Cs1, Cs2)};
+add_type_pat({op, _, '++', Pat1, Pat2}, Ty, TEnv, VEnv) ->
+    {VEnv1, Cs1} = add_type_pat(Pat1, Ty, TEnv, VEnv),
+    {VEnv2, Cs2} = add_type_pat(Pat2, Ty, TEnv, VEnv1),
+    {VEnv2, constraints:combine(Cs1,Cs2)};
+add_type_pat(Expr={op, P, _Op, _Pat1, _Pat2}, Ty, TEnv, VEnv) ->
+    %% Operator patterns are evaluated at compile-time by the compiler.
+    %% So we simply evaluate them and check the type of the resulting value.
+    %% This simplified situations like this: suppose Ty = non_neg_integer() and
+    %% the pattern is 12 - 13. Is this pattern of the correct type? It is not
+    %% enough to just check the two arguments to the operator (which would say that
+    %% the pattern has the correct type) but we also need to check that the left
+    %% argument is not smaller than the right argument. But instead of implementing
+    %% such a check, we simply evaluate the pattern as an expression.
+    {value, Val, _} = erl_eval:expr(Expr, orddict:new()),
+    ValType = if is_integer(Val) -> {integer, erl_anno:new(0), Val};
+                 is_float(Val)   -> {type,    erl_anno:new(0), float, []}
+              end,
+    case subtype(ValType, Ty, TEnv) of
+      {true, Cs} ->
+        {VEnv, Cs};
+      false ->
+        throw({type_error, operator_pattern, P, Expr, Ty})
+    end;
 
 add_type_pat(Pat, {ann_type, _, [_, Ty]}, TEnv, VEnv) ->
     add_type_pat(Pat, Ty, TEnv, VEnv);
@@ -2373,7 +2396,13 @@ add_any_types_pat({map, _, Fields}, VEnv) ->
 add_any_types_pat({var, _,'_'}, VEnv) ->
     VEnv;
 add_any_types_pat({var, _,A}, VEnv) ->
-    VEnv#{ A => {type, erl_anno:new(0), any, []} }.
+    VEnv#{ A => {type, erl_anno:new(0), any, []} };
+add_any_types_pat({op, _, '++', _Pat1, Pat2}, VEnv) ->
+   %% Pat1 cannot contain any variables so there is no need to traverse it.
+   add_any_types_pat(Pat2, VEnv);
+add_any_types_pat({op, _, _Op, _Pat1, _Pat2}, VEnv) ->
+   %% These patterns cannot contain variables.
+   VEnv.
 
 %% Get type from specifiers in a bit syntax, e.g. <<Foo/float-little>>
 -spec bit_specifier_list_to_type([atom()] | default) -> type().
@@ -2681,6 +2710,10 @@ handle_type_error({type_error, list_op_error, ListOp, P, Ty, _}) ->
     io:format("The operator ~p on line ~p is given an argument "
               "with a non-list type ~s~n",
               [ListOp, P, typelib:pp_type(Ty)]);
+handle_type_error({type_error, operator_pattern, P, Expr, Ty}) ->
+    io:format("The operator pattern ~s on line ~p is expected to have type "
+              "~s~n"
+             ,[erl_pp:expr(Expr), P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, tuple_error, P, Expr, Ty}) ->
     io:format("A tuple {~s} at line ~p didn't match any of the types in the union ~s~n",
               [erl_pp:exprs(Expr), P, typelib:pp_type(Ty)]);
