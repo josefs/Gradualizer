@@ -2396,6 +2396,16 @@ add_any_types_pat({map, _, Fields}, VEnv) ->
                 [Name, Value]
         end, Fields),
       VEnv);
+add_any_types_pat({bin, _, BinElements}, VEnv) ->
+    lists:foldl(fun ({bin_element, _, Pat, _Size, _Specifiers}, VEnv1) ->
+			%% TODO: Ideally, we should use the bit specifiers to
+			%% add types to the variables in Pat. But we don't
+			%% have access to the TEnv here, so we cannot call
+			%% add_type_pat. Perhaps we should change that.
+			add_any_types_pat(Pat, VEnv1)
+		    end,
+		    VEnv,
+		    BinElements);
 add_any_types_pat({var, _,'_'}, VEnv) ->
     VEnv;
 add_any_types_pat({var, _,A}, VEnv) ->
