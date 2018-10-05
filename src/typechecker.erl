@@ -771,7 +771,7 @@ expect_tuple_union([], AccTy, AccCs, _NoAny, _N) ->
 			       | {fun_ty, type(), type(), constraints:constraints()}
 			       | {fun_ty_any_args, type(), constraints:constraints()}
 			       | {fun_ty_intersection, [type()], constraints:constraints()}
-			       | {fun_ty_union, [any()]}
+			       | {fun_ty_union, [any()], constraints:constrainst()}
 			       .
 expect_fun_type({type, _, bounded_fun, [Ft, Fc]}) ->
     case expect_fun_type(Ft) of
@@ -781,6 +781,8 @@ expect_fun_type({type, _, bounded_fun, [Ft, Fc]}) ->
 	    {fun_ty_any_args, ResTy, constraints:combine(Cs, constraints:convert(Fc))};
 	{fun_ty_intersection, Tys, Cs} ->
 	    {fun_ty_intersection, Tys, constraints:combine(Cs, constraints:convert(Fc))};
+	{fun_ty_union, Tys, Cs} ->
+	    {fun_ty_union, Tys, constraints:combine(Cs, constaints:convert(Fc))};
 	Err ->
 	    Err
     end;
@@ -806,7 +808,7 @@ expect_fun_type({type, _, union, UnionTys} = Union) ->
 	[Ty] ->
 	    Ty;
 	Tys ->
-	    {fun_ty_union, Tys}
+	    {fun_ty_union, Tys, constraints:empty()}
     end;
 expect_fun_type({ann_type, _, [_, Ty]}) ->
     expect_fun_type(Ty);
@@ -1942,8 +1944,9 @@ type_check_call(Env, _ResTy, any, Args, _E) ->
 type_check_call(Env, ResTy, {fun_ty_intersection, Tys, Cs1}, Args, E) ->
     {VB, Cs2} = type_check_call_intersection(Env, ResTy, Tys, Args, E),
     {VB, constraints:combine(Cs1, Cs2)};
-type_check_call(Env, ResTy, {fun_ty_union, Tys}, Args, E) ->
-    type_check_call_union(Env, ResTy, Tys, Args, E);
+type_check_call(Env, ResTy, {fun_ty_union, Tys, Cs1}, Args, E) ->
+    {VB, Cs2} = type_check_call_union(Env, ResTy, Tys, Args, E),
+    {VB, constraints:combine(Cs1, Cs2)};
 type_check_call(_Env, _ResTy, {type_error, _}, _Args, {P, Name, FunTy}) ->
     throw({type_error, expected_fun_type, P, Name, FunTy}).
 
