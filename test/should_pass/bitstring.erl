@@ -2,9 +2,7 @@
 
 -compile([export_all]).
 
-%% TODO: Normalize types in pattern matching so we can handle
-%% binary() as a synonym for <<_:0, _:_*8>> in patterns.
--spec bin1(<<_:0, _:_*8>>) -> any().
+-spec bin1(binary()) -> any().
 bin1(<<A:4, B:4, _/binary>>) ->
     A+B.
 
