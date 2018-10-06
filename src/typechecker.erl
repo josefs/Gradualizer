@@ -1030,8 +1030,8 @@ type_check_expr(_Env, {record_index, _, _Record, _Field}) ->
 %% Functions
 type_check_expr(Env, {'fun', _, {clauses, Clauses}}) ->
     infer_clauses(Env, Clauses);
-type_check_expr(Env, {'fun', _, {function, Name, Arity}}) ->
-    BoundedFunTypeList = maps:get({Name, Arity}, Env#env.fenv),
+type_check_expr(Env, {'fun', P, {function, Name, Arity}}) ->
+    BoundedFunTypeList = get_type_from_name_arity(Name, Arity, Env#env.fenv, P),
     {Ty, Cs} = absform:function_type_list_to_fun_types(BoundedFunTypeList),
     {Ty, #{}, Cs};
 type_check_expr(_Env, {'fun', P, {function, {atom, _, M}, {atom, _, F}, {integer, _, A}}}) ->
@@ -1608,7 +1608,7 @@ do_type_check_expr_in(Env, Ty, {'fun', P, {clauses, Clauses}}) ->
 	    throw({type_error, lambda, P, Ty})
     end;
 do_type_check_expr_in(Env, ResTy, {'fun', P, {function, Name, Arity}}) ->
-    BoundedFunTypeList = maps:get({Name, Arity}, Env#env.fenv),
+    BoundedFunTypeList = get_type_from_name_arity(Name, Arity, Env#env.fenv, P),
     case any_subtype(ResTy, BoundedFunTypeList, Env#env.tenv) of
 	{true, Cs} -> {#{}, Cs};
 	false -> throw({type_error, fun_res_type, P, {atom, P, Name},
@@ -1865,18 +1865,8 @@ type_check_assocs(_Env, []) ->
 
 type_check_fun(Env, {atom, P, Name}, Arity) ->
     % Local function call
-    case maps:find({Name, Arity}, Env#env.fenv) of
-	{ok, Types} ->
-	    {Types, #{}, constraints:empty()};
-	error ->
-	    case erl_internal:bif(Name, Arity) of
-		true ->
-		    {ok, Types} = gradualizer_db:get_spec(erlang, Name, Arity),
-		    {Types, #{}, constraints:empty()};
-		false ->
-		    throw({call_undef, P, Name, Arity})
-	    end
-    end;
+    Types = get_type_from_name_arity(Name, Arity, Env#env.fenv, P),
+    {Types, #{}, constraints:empty()};
 type_check_fun(_Env, {remote, P, {atom,_,Module}, {atom,_,Fun}}, Arity) ->
     % Module:function call
     case gradualizer_db:get_spec(Module, Fun, Arity) of
@@ -2031,6 +2021,19 @@ type_check_cons_union(Env, [_ | Tys], H, T) ->
     type_check_cons_union(Env, Tys, H, T).
 
 
+get_type_from_name_arity(Name, Arity, FEnv, P) ->
+    case maps:find({Name, Arity}, FEnv) of
+	{ok, Types} ->
+	    Types;
+	error ->
+	    case erl_internal:bif(Name, Arity) of
+		true ->
+		    {ok, Types} = gradualizer_db:get_spec(erlang, Name, Arity),
+		    Types;
+		false ->
+		    throw({call_undef, P, Name, Arity})
+	    end
+    end.
 
 
 %% We don't use these function right now but they can be useful for
