@@ -60,6 +60,9 @@ remove_pos({type, Anno, record, Params = [_Name]}) ->
 remove_pos({type, _, bounded_fun, [FT, Cs]}) ->
     {type, erl_anno:new(0), bounded_fun, [remove_pos(FT)
 					 ,lists:map(fun remove_pos/1, Cs)]};
+remove_pos({type, _, constraint, [{atom, _, is_subtype}, [V, T]]}) ->
+    {type, erl_anno:new(0), constraint, [{atom, erl_anno:new(0), is_subtype}
+                                        ,[remove_pos(V), remove_pos(T)]]};
 remove_pos({type, _, Type, Params}) when is_list(Params) ->
     {type, erl_anno:new(0), Type, lists:map(fun remove_pos/1, Params)};
 remove_pos({type, _, Type, any}) when Type == tuple; Type == map ->
