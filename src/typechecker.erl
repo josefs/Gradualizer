@@ -1031,9 +1031,13 @@ type_check_expr(_Env, {record_index, _, _Record, _Field}) ->
 type_check_expr(Env, {'fun', _, {clauses, Clauses}}) ->
     infer_clauses(Env, Clauses);
 type_check_expr(Env, {'fun', P, {function, Name, Arity}}) ->
-    BoundedFunTypeList = get_type_from_name_arity(Name, Arity, Env#env.fenv, P),
-    {Ty, Cs} = absform:function_type_list_to_fun_types(BoundedFunTypeList),
-    {Ty, #{}, Cs};
+    case get_type_from_name_arity(Name, Arity, Env#env.fenv, P) of
+	AnyType = {type, _, any, []} ->
+	    {AnyType, #{}, constraints:empty()};
+	BoundedFunTypeList ->
+	    {Ty, Cs} = absform:function_type_list_to_fun_types(BoundedFunTypeList),
+	    {Ty, #{}, Cs}
+    end;
 type_check_expr(_Env, {'fun', P, {function, {atom, _, M}, {atom, _, F}, {integer, _, A}}}) ->
     case gradualizer_db:get_spec(M, F, A) of
         {ok, BoundedFunTypeList} ->
