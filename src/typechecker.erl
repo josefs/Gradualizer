@@ -2319,7 +2319,17 @@ add_type_pat(Expr={op, P, _Op, _Pat1, _Pat2}, Ty, TEnv, VEnv) ->
       false ->
         throw({type_error, operator_pattern, P, Expr, Ty})
     end;
-
+add_type_pat(Expr={op, P, '-', _Pat}, Ty, TEnv, VEnv) ->
+    {value, Val, _} = erl_eval:expr(Expr, orddict:new()),
+    ValType = if is_integer(Val) -> {integer, erl_anno:new(0), Val};
+                 is_float(Val)   -> {type,    erl_anno:new(0), float, []}
+              end,
+    case subtype(ValType, Ty, TEnv) of
+      {true, Cs} ->
+        {VEnv, Cs};
+      false ->
+        throw({type_error, operator_pattern, P, Expr, Ty})
+    end;
 add_type_pat(Pat, {ann_type, _, [_, Ty]}, TEnv, VEnv) ->
     add_type_pat(Pat, Ty, TEnv, VEnv);
 
