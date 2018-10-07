@@ -771,7 +771,7 @@ expect_tuple_union([], AccTy, AccCs, _NoAny, _N) ->
 			       | {fun_ty, type(), type(), constraints:constraints()}
 			       | {fun_ty_any_args, type(), constraints:constraints()}
 			       | {fun_ty_intersection, [type()], constraints:constraints()}
-			       | {fun_ty_union, [any()], constraints:constrainst()}
+			       | {fun_ty_union, [any()], constraints:constraints()}
 			       .
 expect_fun_type({type, _, bounded_fun, [Ft, Fc]}) ->
     case expect_fun_type(Ft) of
