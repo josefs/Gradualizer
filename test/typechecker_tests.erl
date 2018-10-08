@@ -171,7 +171,13 @@ normalize_e2e_test_() ->
       ?_assert(type_check_forms(["-type t() :: foo | 1.", %% | $a (char literal)
                                                           %% added in OTP 20
                                  "-spec f(t()) -> t().",
-                                 "f(A) -> A."]))}
+                                 "f(A) -> A."]))},
+     {"Normalize fun with any args",
+      %% matching [] as arg is needed to enforce checking if
+      %% [] is subtype of normalised t()
+      ?_assertNot(type_check_forms(["-type t() :: fun((...) -> integer()).",
+                                    "-spec f(t()) -> integer().",
+                                    "f([]) -> 1."]))}
     ].
 
 infer_expr_test_() ->
