@@ -2540,7 +2540,10 @@ type_check_forms(Forms, Opts) ->
 			    Throw ->
 				% Useful for debugging
 				% io:format("~p~n", [erlang:get_stacktrace()]),
-				File =/= undefined andalso io:format("~s: ", [File]),
+                                case File of
+                                    undefined -> ok;
+                                    _ -> io:format("~s: ", [File])
+                                end,
 				handle_type_error(Throw),
 				nok;
 			    error:Error ->
