@@ -2571,13 +2571,18 @@ create_fenv(Specs, Funs) ->
 % in the list then it right-most occurrence will take precedence. In this
 % case it will mean that if there is a spec, then that will take precedence
 % over the default type any().
-    maps:from_list([ {{Name, NArgs}, {type, erl_anno:new(0), any, []}}
-		     || {function,_, Name, NArgs, _Clauses} <- Funs
-		   ] ++
-		   [ {{Name, NArgs}, absform:normalize_function_type_list(Types)}
-             || {{Name, NArgs}, Types} <- Specs
-		   ]
-		  ).
+    maps:from_list(
+      % Built-in macro. TODO: Improve the type. We could provide a very
+      % exact type for record_info by evaluating the call at compile time.
+      [ {{record_info, 2}, {type, erl_anno:new(0), any, []}}
+      ] ++
+      [ {{Name, NArgs}, {type, erl_anno:new(0), any, []}}
+	|| {function,_, Name, NArgs, _Clauses} <- Funs
+      ] ++
+      [ {{Name, NArgs}, absform:normalize_function_type_list(Types)}
+	|| {{Name, NArgs}, Types} <- Specs
+      ]
+     ).
 
 %% Collect the top level parse tree stuff returned by epp:parse_file/2.
 -spec collect_specs_types_opaques_and_functions(Forms :: list()) -> #parsedata{}.
