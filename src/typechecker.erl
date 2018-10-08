@@ -1270,8 +1270,9 @@ type_check_call_ty(Env, any, Args, _E) ->
 type_check_call_ty(Env, {fun_ty_intersection, Tyss, Cs}, Args, E) ->
     {ResTy, VarBinds, CsI} = type_check_call_ty_intersect(Env, Tyss, Args, E),
     {ResTy, VarBinds, constraints:combine(Cs, CsI)};
-type_check_call_ty(Env, {fun_ty_union, Tyss}, Args, E) ->
-    type_check_call_ty_union(Env, Tyss, Args, E);
+type_check_call_ty(Env, {fun_ty_union, Tyss, Cs}, Args, E) ->
+    {ResTy, VarBinds, CsI} = type_check_call_ty_union(Env, Tyss, Args, E),
+    {ResTy, VarBinds, constraints:combine(Cs, CsI)};
 type_check_call_ty(_Env, {type_error, _}, _Args, {Name, P, FunTy}) ->
     throw({type_error, call, P, FunTy, Name}).
 
@@ -1615,8 +1616,9 @@ do_type_check_expr_in(Env, Ty, {'fun', P, {clauses, Clauses}}) ->
 	{fun_ty_intersection, Tyss, Cs1} ->
 	    {VB, Cs2} = check_clauses_intersect(Env, Tyss, Clauses),
 	    {VB, constraints:combine(Cs1, Cs2)};
-        {fun_ty_union, Tyss} ->
-	    check_clauses_union(Env, Tyss, Clauses);
+        {fun_ty_union, Tyss, Cs1} ->
+	    {VB, Cs2} = check_clauses_union(Env, Tyss, Clauses),
+	    {VB, constraints:combine(Cs1, Cs2)};
 	{type_error, _} ->
 	    throw({type_error, lambda, P, Ty})
     end;
@@ -1652,8 +1654,9 @@ do_type_check_expr_in(Env, Ty, {named_fun, P, FunName, Clauses}) ->
 	{fun_ty_intersection, Tyss, Cs1} ->
 	    {VB, Cs2} = check_clauses_intersect(NewEnv, Tyss, Clauses),
 	    {VB, constraints:combine(Cs1, Cs2)};
-        {fun_ty_union, Tyss} ->
-	    check_clauses_union(Env, Tyss, Clauses);
+        {fun_ty_union, Tyss, Cs1} ->
+	    {VB, Cs2} = check_clauses_union(Env, Tyss, Clauses),
+	    {VB, constraints:combine(Cs1, Cs2)};
 	{type_error, _} ->
 	    throw({type_error, lambda, P, Ty})
     end;
