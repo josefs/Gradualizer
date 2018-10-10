@@ -1046,6 +1046,19 @@ type_check_expr(_Env, {'fun', P, {function, {atom, _, M}, {atom, _, F}, {integer
         not_found ->
             throw({call_undef, P, M, F, A})
     end;
+type_check_expr(Env, {'fun', P, {function, {atom, _, M}, {var, _, F}, {integer, _, A}}}) ->
+    case maps:get(F, Env#env.venv) of
+	{atom, _, AtomF} ->
+	    case gradualizer_db:get_spec(M, AtomF, A) of
+		{ok, BoundedFunTypeList} ->
+		    {Ty, Cs} = absform:function_type_list_to_fun_types(BoundedFunTypeList),
+		    {Ty, #{}, Cs};
+		not_found ->
+		    throw({call_undef, P, M, AtomF, A})
+	    end;
+	_ -> %% We don't have enough information to check the type.
+	    {{type, erl_anno:new(0), any, []}, #{}, constraints:empty()}
+    end;
 type_check_expr(Env, {named_fun, _, FunName, Clauses}) ->
     NewEnv = Env#env{ venv = add_var_binds(#{FunName =>
                                              {type, erl_anno:new(0), any, []} }
@@ -1638,6 +1651,25 @@ do_type_check_expr_in(Env, ResTy, {'fun', P, {function, {atom, _, M}, {atom, _, 
 	    end;
         not_found ->
             throw({call_undef, P, M, F, A})
+    end;
+do_type_check_expr_in(Env, ResTy, {'fun', P, {function, {atom, _, M}, {var, _, F}, {integer, _, A}}}) ->
+    case maps:get(F, Env#env.venv) of
+	%% We check if the variable for the function is of a singleton type
+	%% containing an atom. In that case we know what function the
+	%% expression represents and we can look up the type.
+	{atom, _, AtomF} ->
+	    case gradualizer_db:get_spec(M, AtomF, A) of
+		{ok, BoundedFunTypeList} ->
+		    case any_subtype(ResTy, BoundedFunTypeList, Env#env.tenv) of
+			{true, Cs} -> {#{}, Cs};
+			false -> throw({type_error, mfa, P, M, F, A, ResTy
+				       ,BoundedFunTypeList})
+		    end;
+		not_found ->
+		    throw({call_undef, P, M, AtomF, A})
+	    end;
+	_ -> % We don't have enough information to check the type.
+	    {#{}, constraints:empty()}
     end;
 do_type_check_expr_in(Env, Ty, {named_fun, P, FunName, Clauses}) ->
     NewEnv = Env#env{ venv = add_var_binds(#{ FunName => Ty }, Env#env.venv) },
