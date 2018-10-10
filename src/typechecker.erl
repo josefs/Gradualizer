@@ -2691,6 +2691,9 @@ handle_type_error({undef, Type, {{atom, LINE, Module}, {atom, _, Name}, Arity}})
 handle_type_error({undef, user_type, {{atom, LINE, Name}, Arity}}) ->
     io:format("Undefined user type ~p/~p on line ~p~n",
               [Name, Arity, LINE]);
+handle_type_error({not_exported, remote_type, {Module, Name, Arity}}) ->
+    io:format("The type ~p:~p/~p is not exported~n"
+	     ,[Module, Name, Arity]);
 handle_type_error({type_error, tyVar, LINE, Var, VarTy, Ty}) ->
     io:format("The variable ~p on line ~p has type ~s "
 	      "but is expected to have type ~s~n",
