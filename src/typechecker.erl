@@ -1139,14 +1139,32 @@ type_check_expr(Env, {'try', _, Block, CaseCs, CatchCs, AfterCs}) ->
     ,VB
     ,constraints:combine([Cs1,Cs2,Cs3,Cs4])}.
 
+type_check_fields(Env, Rec, Fields) ->
+    UnAssignedFields = get_unassigned_fields(Fields, Rec),
+    type_check_fields(Env, Rec, Fields, UnAssignedFields).
 
-type_check_fields(Env, Rec, [{record_field, _, {atom, _, Field}, Expr} | Fields]) ->
+type_check_fields(Env, Rec, [{record_field, _, {atom, _, Field}, Expr} | Fields]
+		 ,UnAssignedFields) ->
     FieldTy = get_rec_field_type(Field, Rec),
     {VB1, Cs1} = type_check_expr_in(Env, FieldTy, Expr),
-    {VB2, Cs2} = type_check_fields(Env, Rec, Fields),
+    {VB2, Cs2} = type_check_fields(Env, Rec, Fields, UnAssignedFields),
     {union_var_binds([VB1, VB2]), constraints:combine(Cs1,Cs2)};
-type_check_fields(_Env, _Rec, []) ->
+type_check_fields(Env, Rec, [{record_field, _, {var, _, '_'}, Expr} | Fields]
+		 ,UnAssignedFields) ->
+    {VB1, Cs1} = type_check_fields(Env, Rec
+				  ,[ {record_field, erl_anno:new(0)
+				     ,{atom, erl_anno:new(0), Field}, Expr}
+				     || Field <- UnAssignedFields]
+				  ,should_not_be_inspected),
+    {VB2, Cs2} = type_check_fields(Env, Rec, Fields, UnAssignedFields),
+    {union_var_binds([VB1, VB2]), constraints:combine(Cs1,Cs2)};
+type_check_fields(_Env, _Rec, [], _U) ->
     {#{}, constraints:empty()}.
+
+get_unassigned_fields(Fields, All) ->
+    [ Field || {typed_record_field,
+		{record_field, _, {atom, _, Field}, _}, _} <- All] --
+	[ Field || {record_field, _, {atom, _, Field}, _} <- Fields].
 
 type_check_logic_op(Env, Op, P, Arg1, Arg2) ->
     % Bindings from the first argument are only passed along for
@@ -1548,17 +1566,10 @@ do_type_check_expr_in(Env, ResTy, {record, P, Record, Fields}) ->
     Rec = maps:get(Record, Env#env.tenv#tenv.records),
     case expect_record_type(Record, ResTy, Env#env.tenv) of
       type_error ->
-        throw({type_error, record, P, Record, ResTy});
-      {ok, Cs} ->
-        {VarBindsList, Css}
-          = lists:unzip(
-                      lists:map(fun ({record_field, _, {atom, _, Field}, Exp}) ->
-				      FieldTy = get_rec_field_type(Field, Rec),
-				      type_check_expr_in(Env, FieldTy, Exp)
-			      end
-			     ,Fields)
-		   ),
-        {union_var_binds(VarBindsList), constraints:combine([Cs|Css])}
+	    throw({type_error, record, P, Record, ResTy});
+      {ok, Cs1} ->
+	    {VarBinds, Cs2} = type_check_fields(Env, Rec, Fields),
+	    {VarBinds, constraints:combine(Cs1, Cs2)}
     end;
 do_type_check_expr_in(Env, ResTy, {record, P, Exp, Record, Fields}) ->
     RecordTy = {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Record}]},
