@@ -1,0 +1,53 @@
+sudo: false
+
+language: erlang
+
+matrix:
+  fast_finish: true
+    
+  # Jobs that are allowed to fail:
+  allow_failures:
+    - env: TEST=".travis/travis_has_latest_otp_version"
+    - env: TEST="make gradualize"
+
+  include:
+
+  # Check that the latest Erlang version is tested
+
+  # This test will fail with 'X' when a new version is available via kerl.
+  # At that point, update THIS test's otp_release to the new one.
+  # The test will keep failing with '!', until Travis has the new version.
+  # When the test starts failing with 'X' again, Travis has the new version.
+  # At that point, update otp_release in the corresponding list below
+
+  - env: TEST=".travis/travis_has_latest_otp_version"
+    otp_release: 21.1
+
+  # Run coverage report for the latest OTP release
+  - env: TEST="make tests COVER=1" ENABLE_COVER=true
+    otp_release: 21.1
+  
+  - env: TEST="make gradualize"
+    otp_release: 21.1
+
+# otp releases that we test in the same way.
+# The latest OTP version is special and therefore explicitly
+# included above instead.
+otp_release:
+  
+  - 21.0
+  # Last minor version of older OTP releases
+  - 20.3
+  - 19.3
+
+env:
+  - TEST="make tests"
+
+before_script:
+  - .travis/before_script
+
+script:
+ - $TEST
+
+after_success:
+  - .travis/after_success
