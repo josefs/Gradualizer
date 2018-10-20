@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+if [ "$ENABLE_COVER" = true ]; then
+  echo "Exporting coverage report..."
+  make all.coverdata
+  covertool/covertool -cover all.coverdata -appname gradualizer
+  bash <(curl -s https://codecov.io/bash) -f "./coverage.xml"
+  echo "Report sent!"
+fi

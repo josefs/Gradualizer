@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+if [ "$ENABLE_COVER" = true ]; then
+  echo "Preparing to collect coverage data."
+  git clone https://github.com/covertool/covertool.git
+  cd covertool
+  make compile
+  echo "Ready to collect coverage data!"
+fi

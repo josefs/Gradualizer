@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+curl -sO https://raw.githubusercontent.com/kerl/kerl/master/kerl
+chmod a+x kerl
+LATEST=`./kerl update releases | tr ' ' '\n' | tail -n1`
+rm ./kerl
+
+if [ "$LATEST" != "$TRAVIS_OTP_RELEASE" ]; then
+    printf "\nA newer OTP release is available via kerl ($LATEST)!\n"
+    printf " (.travis.yml uses $TRAVIS_OTP_RELEASE for this test)\n\n"
+    printf "See .travis.yml for instructions about how to fix this.\n"
+    false
+fi
