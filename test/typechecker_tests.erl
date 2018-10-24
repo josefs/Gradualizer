@@ -194,7 +194,14 @@ infer_expr_test_() ->
      %% should be {any(), restype()}
      ?_assertMatch("{any(), integer()}",
                    type_check_expr(_Env = "-spec h() -> integer().",
-                                   _Expr = "{1, h()}"))
+                                   _Expr = "{1, h()}")),
+
+     %% List. The element type is the union of the element types.
+     ?_assertMatch("[1..3, ...]",
+		   type_check_expr(_Env = "-spec a() -> 1.\n"
+					  "-spec b() -> 2.\n"
+					  "-spec c() -> 3.",
+				   _Expr = "[a(), b(), c()]"))
     ].
 
 type_check_in_test_() ->

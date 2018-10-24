@@ -930,25 +930,36 @@ type_check_expr(Env, {tuple, P, TS}) ->
 type_check_expr(Env, {cons, _, Head, Tail}) ->
     {Ty1, VB1, Cs1} = type_check_expr(Env, Head),
     {Ty2, VB2, Cs2} = type_check_expr(Env, Tail),
-    % TODO: Should we check the types here?
+    VB = union_var_binds([VB1, VB2]),
+    Cs = constraints:combine([Cs1, Cs2]),
     case {Ty1, Ty2} of
-	{{type, _, any, []}, _} ->
-	    {{type, erl_anno:new(0), any, []}, VB2, constraints:empty()};
+	{{type, _, any, []}, {type, _, any, []}} ->
+	    %% No type information to propagate
+	    {{type, erl_anno:new(0), any, []}, VB, Cs};
 	{_, {type, _, any, []}} ->
-	    {{type, erl_anno:new(0), any, []}, VB2, constraints:empty()};
-	{Ty1, TyList = {type, _, list, [Ty]}} ->
-	    case subtype(Ty1, Ty, Env#env.tenv) of
-		{true, Cs} ->
-		    {TyList
-		    ,union_var_binds([VB1, VB2])
-		    ,constraints:combine([Cs1, Cs2, Cs])};
-		false ->
-		    throw({type_error, list, 0, Ty1, Ty})
-	    end;
+	    %% Propagate type information from head
+	    {{type, erl_anno:new(0), nonempty_list, [Ty1]}, VB, Cs};
 	{_, _} ->
-	    throw({type_error, list, 0, Ty2})
-		% We throw a type error here because Tail is not of type list
-		% (nor is it of type any()).
+	    %% Propagate type information from tail, which must be a list type
+	    TailElemTy =
+		case Ty2 of
+		    {type, _, nil, []} ->
+			{type, erl_anno:new(0), none, []};
+		    {type, _, L, []} when L == list;
+					  L == nonempty_list ->
+			{type, erl_anno:new(0), any, []};
+		    {type, _, L, [TailElemTy0]} when L == list;
+						     L == nonempty_list ->
+			TailElemTy0;
+		    _ ->
+			throw({type_error, list, 0, Ty2})
+			%% We throw a type error here because Tail is not of type list
+			%% (nor is it of type any()).
+			%% TODO: Improper list?
+		end,
+	    ElemTy = normalize({type, erl_anno:new(0), union, [Ty1, TailElemTy]},
+			       Env#env.tenv),
+	    {{type, erl_anno:new(0), nonempty_list, [ElemTy]}, VB, Cs}
     end;
 type_check_expr(Env, {bin, _, BinElements}) ->
     %% <<Expr:Size/TypeSpecifierList, ...>>
