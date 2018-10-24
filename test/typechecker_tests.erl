@@ -197,6 +197,16 @@ infer_expr_test_() ->
                                    _Expr = "{1, h()}"))
     ].
 
+type_check_in_test_() ->
+    %% Test checking an expression against a known type
+    %% implemented by the function typechecker:type_check_expr_in.
+    [
+     ?_assert(type_check_forms(["-spec f(float() | foo) -> ok.",
+                                "g() -> f(3.14)."])),
+     ?_assertNot(type_check_forms(["-spec f(foo) -> ok.",
+                                   "g() -> f(3.14)."]))
+    ].
+
 type_check_call_test_() ->
     [%% Return type of a function call expr must be a subtype of expected result type
      ?_assert(type_check_forms(["-spec f() -> number().",

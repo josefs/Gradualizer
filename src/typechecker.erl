@@ -1451,12 +1451,12 @@ do_type_check_expr_in(Env, Ty, I = {integer, LINE, Int}) ->
 	false ->
 	    throw({type_error, int, Int, LINE, Ty})
     end;
-do_type_check_expr_in(Env, Ty, {float, LINE, _Int}) ->
-    case subtype(Ty, {type, LINE, float, []}, Env#env.tenv) of
+do_type_check_expr_in(Env, Ty, {float, LINE, F}) ->
+    case subtype({type, LINE, float, []}, Ty, Env#env.tenv) of
 	{true, Cs} ->
 	    {#{}, Cs};
 	false ->
-	    throw({type_error, float, LINE, Ty})
+	    throw({type_error, float, F, LINE, Ty})
     end;
 do_type_check_expr_in(Env, Ty, Atom = {atom, LINE, _}) ->
     case subtype(Atom, Ty, Env#env.tenv) of
@@ -2721,6 +2721,9 @@ handle_type_error({type_error, string, LINE, String, Ty}) ->
 handle_type_error({type_error, int, I, LINE, Ty}) ->
     io:format("The integer ~p on line ~p does not have type ~s~n",
 	      [I, LINE, typelib:pp_type(Ty)]);
+handle_type_error({type_error, float, F, LINE, Ty}) ->
+    io:format("The float ~p on line ~p does not have type ~s~n",
+	      [F, LINE, typelib:pp_type(Ty)]);
 handle_type_error({type_error, compat, _LINE, Ty1, Ty2}) ->
     io:format("The type ~s is not compatible with type ~s~n"
 	     ,[typelib:pp_type(Ty1), typelib:pp_type(Ty2)]);
