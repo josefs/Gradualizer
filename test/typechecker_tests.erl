@@ -215,8 +215,35 @@ propagate_types_test_() ->
 				   _Expr = "fun (A, B) -> i(B) end")),
      ?_assertMatch("fun((any(), any()) -> integer())",
 		   type_check_expr(_Env = "-spec i(integer()) -> integer().",
-				   _Expr = "fun F(A, B) -> i(B) end"))
+				   _Expr = "fun F(A, B) -> i(B) end")),
 
+     %% inferred type of boolean negation
+     ?_assertMatch("any()",
+                   type_check_expr(_Env = "-spec f() -> any().",
+                                   _Expr = "not f()")),
+     ?_assertMatch("boolean()",
+                   type_check_expr(_Env = "-spec f() -> boolean().",
+                                   _Expr = "not f()")),
+     ?_assertMatch("false",
+                   type_check_expr(_Env = "-spec f() -> true.",
+                                   _Expr = "not f()")),
+
+     %% infered type of number negation
+     ?_assertMatch("any()",
+                   type_check_expr(_Env = "-spec f() -> any().",
+                                   _Expr = "- f()")),
+     ?_assertMatch("float()",
+                   type_check_expr(_Env = "-spec f() -> float().",
+                                   _Expr = "- f()")),
+     ?_assertMatch("integer()",
+                   type_check_expr(_Env = "-spec f() -> integer().",
+                                   _Expr = "- f()")),
+     ?_assertMatch("1",
+                   type_check_expr(_Env = "-spec f() -> -1.",
+                                   _Expr = "- f()")),
+     ?_assertMatch("-3..1",
+                   type_check_expr(_Env = "-spec f() -> -1..(1+2).",
+                                   _Expr = "- f()"))
     ].
 
 type_check_in_test_() ->

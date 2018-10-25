@@ -601,7 +601,23 @@ int_type_to_range({type, _, pos_integer, []})          -> {1, pos_inf};
 int_type_to_range({type, _, range, [{integer, _, I1},
                                     {integer, _, I2}]})
                                         when I1 =< I2  -> {I1, I2};
-int_type_to_range({integer, _, I})                     -> {I, I}.
+int_type_to_range({type, _, range, _} = Range) ->
+    %% lower and upper bounds might have operators
+    case normalize(Range, #tenv{}) of
+        Range ->
+            error({not_int_type, Range});
+        NormRange ->
+            int_type_to_range(NormRange)
+    end;
+int_type_to_range({integer, _, I})                     -> {I, I};
+int_type_to_range(Int) ->
+    %% integer might have operators
+    case normalize(Int, #tenv{}) of
+        Int ->
+            error({not_int_type, Int});
+        NormInt ->
+            int_type_to_range(NormInt)
+    end.
 
 %% Converts a range back to a type. Creates two types in some cases.
 -spec int_range_to_types(int_range()) -> [type()].
@@ -630,6 +646,33 @@ int_range_to_types({I, I}) ->
 int_range_to_types({I, J}) when I < J ->
     [{type, erl_anno:new(0), range, [{integer, erl_anno:new(0), I}
 				    ,{integer, erl_anno:new(0), J}]}].
+
+negate_num_type({type, _, TyName, []} = Ty) when
+      TyName =:= any;
+      TyName =:= integer;
+      TyName =:= float ->
+    Ty;
+negate_num_type({integer, P, I}) ->
+    {integer, P, -I};
+negate_num_type(IntTy) ->
+    {L, U} = int_type_to_range(IntTy),
+    L2 = case U of
+             pos_inf -> neg_inf;
+             _ -> -U
+         end,
+    U2 = case L of
+             neg_inf -> pos_inf;
+             _ -> -L
+         end,
+    normalize({type, erl_anno:new(0), union, int_range_to_types({L2, U2})},
+              #tenv{}).
+
+negate_bool_type({atom, P, true}) ->
+    {atom, P, false};
+negate_bool_type({atom, P, false}) ->
+    {atom, P, true};
+negate_bool_type(Ty) ->
+    Ty.
 
 %% End of subtype help functions
 
@@ -1135,17 +1178,17 @@ type_check_expr(Env, {op, _, '!', Proc, Val}) ->
     ,constraints:combine(Cs1, Cs2)};
 type_check_expr(Env, {op, P, 'not', Arg}) ->
     {Ty, VB, Cs1} = type_check_expr(Env, Arg),
-    case subtype({type, P, boolean, []}, Ty, Env#env.tenv) of
+    case subtype(Ty, {type, P, boolean, []}, Env#env.tenv) of
 	{true, Cs2} ->
-	    {{type, erl_anno:new(0), any, []}, VB, constraints:combine(Cs1, Cs2)};
+	    {negate_bool_type(Ty), VB, constraints:combine(Cs1, Cs2)};
 	false ->
 	    throw({type_error, non_boolean_argument_to_not, P, Ty})
     end;
 type_check_expr(Env, {op, P, '-', Arg}) ->
     {Ty, VB, Cs1} = type_check_expr(Env, Arg),
-    case subtype({type, P, number ,[]}, Ty, Env#env.tenv) of
+    case subtype(Ty, {type, P, number ,[]}, Env#env.tenv) of
 	{true, Cs2} ->
-	    {Ty, VB, constraints:combine(Cs1, Cs2)};
+	    {negate_num_type(Ty), VB, constraints:combine(Cs1, Cs2)};
 	false ->
 	    throw({type_error, non_number_argument_to_minus, P, Ty})
     end;
