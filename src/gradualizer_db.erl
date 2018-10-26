@@ -492,8 +492,11 @@ collect_specs(Module, Forms) ->
 normalize_spec({{Func, Arity}, Types}, Module) ->
     {{Module, Func, Arity}, Types};
 normalize_spec(Spec = {{M, F, A}, _Types}, Module) ->
-    M /= Module andalso error_logger:info_report([{spec_for, {M,F,A}},
-                                                  {found_in, Module}]),
+    case M of
+        Module -> ok;
+        _ -> error_logger:info_report([{spec_for, {M,F,A}},
+                                       {found_in, Module}])
+    end,
     Spec.
 
 -spec make_spec(module(), atom(), arity()) -> {mfa(), [type()]}.
