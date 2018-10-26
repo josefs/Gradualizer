@@ -130,8 +130,8 @@ import_module(Module) ->
                 types   = #{} :: #{mfa() => #typeinfo{}},
                 records = #{} :: #{{module(), atom()} => [typechecker:typed_record_field()]},
                 opts    = ?default_opts :: opts(),
-                srcmap  = #{} :: #{module() => string()},
-                beammap = #{} :: #{module() => string()},
+                srcmap  = #{} :: #{module() => file:filename()},
+                beammap = #{} :: #{module() => file:filename()},
                 loaded  = #{} :: #{module() => boolean()}}).
 
 -type state() :: #state{}.
