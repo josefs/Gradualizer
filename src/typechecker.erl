@@ -2591,9 +2591,16 @@ add_var_binds(VEnv, VarBinds) ->
 
 % TODO: improve
 % Is this the right function to use or should I always just return any()?
-glb_types(K, {type, _, N, Args1}, {type, _, N, Args2}) ->
+glb_types(K, {type, _, N, Args1}, {type, _, N, Args2})
+  when is_list(Args1), is_list(Args2) ->
     Args = [ glb_types(K, Arg1, Arg2) || {Arg1, Arg2} <- lists:zip(Args1, Args2) ],
     {type, erl_anno:new(0), N, Args};
+glb_types(K, {type, _, N, any}, {type, _, N, _} = Ty2)
+  when N =:= tuple; N =:= map ->
+    Ty2;
+glb_types(K, {type, _, N, _} = Ty1, {type, _, N, any})
+  when N =:= tuple; N =:= map ->
+    Ty1;
 glb_types(_, _, _) ->
     {type, erl_anno:new(0), any, []}.
 
