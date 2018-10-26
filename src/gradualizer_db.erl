@@ -369,9 +369,9 @@ import_absform(Module, Forms1, State) ->
 guess_include_dirs(File) ->
     Dir = filename:dirname(File),
     case filename:basename(Dir) of
-        "src" -> [Dir ++ "/../include"];
+        "src" -> [filename:join(Dir, "../include")];
         _     -> []
-    end ++ [code:lib_dir(M) ++ "/include" || M <- [erts, kernel, stdlib]].
+    end ++ [code:lib_dir(App, include) || App <- [erts, kernel, stdlib]].
 
 %% Log warnings for epp errors among the given forms
 %% Bad errors are failed includes due to bad include paths.
