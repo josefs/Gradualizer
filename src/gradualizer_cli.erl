@@ -35,6 +35,10 @@ print_usage() ->
     io:format("A type checker for Erlang/Elixir~n~n"),
     io:format("       PATH                      Files or directories to type check~n"),
     io:format("  -h,  --help                    display this help and exit~n"),
+    io:format("       --infer                   Infer type information from literals and other~n"),
+    io:format("                                 language constructs~n"),
+    io:format("       --no-infer                Only use type information from function specs~n"),
+    io:format("                                  - the default behaviour~n"),
     io:format("  -pa, --path-add                Add the specified directory to the beginning of~n"),
     io:format("                                 the code path; see erl -pa             [string]~n"),
     io:format("       --print-file              prefix error printouts with the file name the~n"),
@@ -52,6 +56,8 @@ parse_opts([A | Args], Opts) ->
     case A of
         "-h"                       -> {[], [help]};
         "--help"                   -> {[], [help]};
+        "--infer"                  -> parse_opts(Args, [infer | Opts]);
+        "--no-infer"               -> parse_opts(Args, [{infer, false} | Opts]);
         "-pa"                      -> handle_path_add(A, Args, Opts);
         "--path-add"               -> handle_path_add(A, Args, Opts);
         "--print-file"             -> parse_opts(Args, [print_file | Opts]);

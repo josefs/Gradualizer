@@ -180,7 +180,9 @@ normalize_e2e_test_() ->
                                     "f([]) -> 1."]))}
     ].
 
-infer_expr_test_() ->
+propagate_types_test_() ->
+    %% Checking type_check_expr, which propagates type information but doesn't
+    %% infer types of literals and language constructs.
     [%% the inferred type of a literal tuple should be any()
      ?_assertEqual("any()",
                    type_check_expr(_Env = "",
@@ -212,6 +214,30 @@ type_check_in_test_() ->
                                 "g() -> f(3.14)."])),
      ?_assertNot(type_check_forms(["-spec f(foo) -> ok.",
                                    "g() -> f(3.14)."]))
+    ].
+
+infer_types_test_() ->
+    %% Checking type_check_expr with inference enabled
+    [?_assertEqual("{1, 2}",
+                   type_check_expr(_Env = "",
+                                   _Expr = "{1, 2}",
+                                   [infer])),
+     %% the inferred type of a tuple with a untyped function call
+     %% should be any()
+     ?_assertMatch("{1, any()}",
+                   type_check_expr(_Env = "h() -> 2.",
+                                   _Expr = "{1, h()}",
+                                   [infer])),
+     %% the inferred type of a tuple with a typed function call
+     ?_assertMatch("{1, integer()}",
+                   type_check_expr(_Env = "-spec h() -> integer().",
+                                   _Expr = "{1, h()}",
+                                   [infer])),
+     %% catch a type error that isn't caught without this inference.
+     ?_assertNot(type_check_forms(["f() -> V = [1, 2], g(V).",
+				   "-spec g(integer()) -> any().",
+				   "g(Int) -> Int + 1."],
+				  [infer]))
     ].
 
 type_check_call_test_() ->
@@ -334,7 +360,11 @@ subtype(T1, T2) ->
     end.
 
 type_check_forms(String) ->
-    ok =:= typechecker:type_check_forms(ensure_form_list(merl:quote(String)), []).
+    type_check_forms(String, []).
+
+type_check_forms(String, Opts) ->
+    ok =:= typechecker:type_check_forms(ensure_form_list(merl:quote(String)),
+					Opts).
 
 ensure_form_list(List) when is_list(List) ->
     List;
@@ -342,12 +372,15 @@ ensure_form_list(Other) ->
     [Other].
 
 type_check_expr(EnvStr, ExprString) ->
-    Env = create_env(EnvStr),
+    type_check_expr(EnvStr, ExprString, []).
+
+type_check_expr(EnvStr, ExprString, Opts) ->
+    Env = create_env(EnvStr, Opts),
     Expr = merl:quote(ExprString),
     {Ty, _VarBinds, _Cs} = typechecker:type_check_expr(Env, Expr),
     typelib:pp_type(Ty).
 
-create_env(String) ->
+create_env(String, Opts) ->
     Forms = ensure_form_list(merl:quote(String)),
     ParseData = typechecker:collect_specs_types_opaques_and_functions(Forms),
-    typechecker:create_env(ParseData).
+    typechecker:create_env(ParseData, Opts).

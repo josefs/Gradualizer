@@ -46,9 +46,10 @@
 	      }).
 
 %%% The environment passed around during typechecking.
--record(env, {fenv   = #{}
-	     ,venv   = #{}
-	     ,tenv   :: #tenv{}
+-record(env, {fenv  = #{}
+	     ,venv  = #{}
+	     ,tenv          :: #tenv{}
+	     ,infer = false :: boolean()
 	     %,tyvenv = #{}
 	     }).
 
@@ -860,6 +861,7 @@ expect_record_type(_Record, {type, _, tuple, any}, _TEnv) ->
 expect_record_type(Record, {type, _, union, Tys}, TEnv) ->
     expect_record_union(Record, Tys, TEnv);
 expect_record_type(Record, {var, _, Var}, _TEnv) ->
+
     {ok, constraints:add_var(Var,
            constraints:upper(Var, {record, erl_anno:new(0), Record}))};
 expect_record_type(Record, {ann_type, _, [_, Ty]}, TEnv) ->
@@ -885,10 +887,13 @@ new_type_var() ->
 
 %% @doc Infer type of expression
 %%
-%% Type information should always stem from user type annotation (function specs
+%% Type information should* stem from user type annotation (function specs
 %% and type annotated record definitions). If an expression does not have a
 %% subexpression that has a type inferred from these sources, its inferred type
 %% will be `any()'.
+%%
+%%   *) When the option 'infer' is true, the types of literals and other
+%%      constructs are also propagated.
 %%
 %% Arguments: An environment for functions, an environment for variables
 %% and the expression to type check.
@@ -917,7 +922,8 @@ type_check_expr(Env, {tuple, P, TS}) ->
     { Tys, VarBindsList, Css} = lists:unzip3([ type_check_expr(Env, Expr)
 				        || Expr <- TS ]),
     InferredTy =
-        case lists:all(fun({type, _, any, []}) -> true;
+        case not Env#env.infer andalso
+             lists:all(fun({type, _, any, []}) -> true;
                           (_) -> false
                        end, Tys) of
             true ->
@@ -933,7 +939,7 @@ type_check_expr(Env, {cons, _, Head, Tail}) ->
     VB = union_var_binds([VB1, VB2]),
     Cs = constraints:combine([Cs1, Cs2]),
     case {Ty1, Ty2} of
-	{{type, _, any, []}, {type, _, any, []}} ->
+	{{type, _, any, []}, {type, _, any, []}} when not Env#env.infer ->
 	    %% No type information to propagate
 	    {{type, erl_anno:new(0), any, []}, VB, Cs};
 	{_, {type, _, any, []}} ->
@@ -978,7 +984,16 @@ type_check_expr(Env, {bin, _, BinElements}) ->
 		  end,
 		  BinElements),
     {VarBinds, Css} = lists:unzip(VarBindAndCsList),
-    {{type, erl_anno:new(0), any, []},
+    RetTy = if
+		Env#env.infer ->
+		    %% TODO: Infer the size parameters of the bitstring
+		    {type, erl_anno:new(0), binary,
+		     [{integer, erl_anno:new(0), 0},
+		      {integer, erl_anno:new(0), 1}]};
+		not Env#env.infer ->
+		    {type, erl_anno:new(0), any, []}
+	    end,
+    {RetTy,
      union_var_binds(VarBinds),
      constraints:combine(Css)};
 type_check_expr(Env, {call, P, Name, Args}) ->
@@ -994,19 +1009,33 @@ type_check_expr(Env, {block, _, Block}) ->
 
 % Don't return the type of anything other than something
 % which ultimately comes from a function type spec.
-type_check_expr(_Env, {string, _, _}) ->
+type_check_expr(#env{infer = false}, {string, _, _}) ->
     return({type, erl_anno:new(0), any, []});
-type_check_expr(_Env, {nil, _}) ->
+type_check_expr(#env{infer = false}, {nil, _}) ->
     return({type, erl_anno:new(0), any, []});
-type_check_expr(_Env, {atom, _, _Atom}) ->
+type_check_expr(#env{infer = false}, {atom, _, _Atom}) ->
     return({type, erl_anno:new(0), any, []});
-type_check_expr(_Env, {integer, _, _N}) ->
+type_check_expr(#env{infer = false}, {integer, _, _N}) ->
     return({type, erl_anno:new(0), any, []});
-type_check_expr(_Env, {float, _, _F}) ->
+type_check_expr(#env{infer = false}, {float, _, _F}) ->
     return({type, erl_anno:new(0), any, []});
-type_check_expr(_Env, {char, _, _C}) ->
+type_check_expr(#env{infer = false}, {char, _, _C}) ->
     return({type, erl_anno:new(0), any, []});
 
+%% When infer = true, we do propagate the types of literals,
+%% list cons, tuples, etc.
+type_check_expr(#env{infer = true}, {string, _, _}) ->
+    return({type, erl_anno:new(0), string, []});
+type_check_expr(#env{infer = true}, {nil, _}) ->
+    return({type, erl_anno:new(0), nil, []});
+type_check_expr(#env{infer = true}, {atom, _, _} = Atom) ->
+    return(Atom);
+type_check_expr(#env{infer = true}, {integer, _, _N} = Integer) ->
+    return(Integer);
+type_check_expr(#env{infer = true}, {float, _, _F}) ->
+    return({type, erl_anno:new(0), float, []});
+type_check_expr(#env{infer = true}, {char, _, _C} = Char) ->
+    return(Char);
 
 %% Maps
 type_check_expr(Env, {map, _, Assocs}) ->
@@ -1377,10 +1406,18 @@ compat_arith_type(Ty1, Ty2) ->
     end.
 
 type_check_lc(Env, Expr, []) ->
-    {_Ty, _VB, Cs} = type_check_expr(Env, Expr),
-    % We're returning any() here because we're in a context that doesn't
-    % care what type we return. It's different for type_check_lc_in.
-    {{type, erl_anno:new(0), any, []}, #{}, Cs};
+    {Ty, _VB, Cs} = type_check_expr(Env, Expr),
+    RetTy = case Ty of
+		{type, _, any, []} when not Env#env.infer ->
+		    %% No type information to propagate. We don't infer a
+		    %% list type of the list comprehension when inference
+		    %% is disabled.
+		    {type, erl_anno:new(0), any, []};
+		_ ->
+		    %% Propagate the type information
+		    {type, erl_anno:new(0), list, [Ty]}
+	    end,
+    {RetTy, #{}, Cs};
 type_check_lc(Env, Expr, [{generate, P, Pat, Gen} | Quals]) ->
     {Ty,  _,  Cs1} = type_check_expr(Env, Gen),
     case expect_list_type(Ty, allow_nil_type) of
@@ -2584,7 +2621,7 @@ type_check_forms(Forms, Opts) ->
     end,
     ParseData =
 	collect_specs_types_opaques_and_functions(Forms),
-    Env = create_env(ParseData),
+    Env = create_env(ParseData, Opts),
     lists:foldr(fun (Function, Res) when Res =:= ok;
                                          not StopOnFirstError ->
 			try type_check_function(Env, Function) of
@@ -2620,10 +2657,13 @@ create_env(#parsedata{specs     = Specs
                      ,types     = Types
                      ,opaques   = Opaques
                      ,records   = Records
-                     }) ->
+                     }, Opts) ->
     FEnv = create_fenv(Specs, Funs),
     TEnv = create_tenv(Types ++ Opaques, Records),
-    #env{ fenv = FEnv, tenv = TEnv }.
+    #env{fenv = FEnv,
+         tenv = TEnv,
+         %% Store some type checking options in the environment
+         infer = proplists:get_bool(infer, Opts)}.
 
 create_tenv(TypeDefs, RecordDefs) ->
     TypeMap =
