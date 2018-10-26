@@ -36,8 +36,8 @@ ESCRIPT_FILE = $(PROJECT)
 
 include erlang.mk
 
-gradualize: app
-	$(ERL) -pa $(CURDIR)/ebin -eval 'gradualizer:type_check_file("src/typechecker.erl"), halt().'
+gradualize: escript
+	./gradualizer -pa $(CURDIR)/ebin/ $(CURDIR)/ebin/*beam
 check:: gradualize
 
 # We want warnings to be warnings, not errors.
