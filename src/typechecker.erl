@@ -1013,7 +1013,7 @@ type_check_expr(Env, {map, _, Assocs}) ->
     type_check_assocs(Env, Assocs);
 type_check_expr(Env, {map, _, Expr, Assocs}) ->
     {Ty, VBExpr,   Cs1} = type_check_expr(Env, Expr),
-    {Ty, VBAssocs, Cs2} = type_check_assocs(Env, Assocs),
+    {_AssocTy, VBAssocs, Cs2} = type_check_assocs(Env, Assocs),
     % TODO: Update the type of the map.
     % TODO: Check the type of the map.
     {Ty, union_var_binds([VBExpr, VBAssocs]), constraints:combine(Cs1, Cs2)};
@@ -1561,7 +1561,7 @@ do_type_check_expr_in(Env, ResTy, {map, LINE, Assocs}) ->
     end;
 do_type_check_expr_in(Env, ResTy, {map, LINE, Expr, Assocs}) ->
     {Ty, VBExpr,   Cs1} = type_check_expr(Env, Expr),
-    {Ty, VBAssocs, Cs2} = type_check_assocs(Env, Assocs),
+    {_AssocTy, VBAssocs, Cs2} = type_check_assocs(Env, Assocs),
     % TODO: Update the type of the map.
     % TODO: Check the type of the map.
     case subtype(Ty, ResTy, Env#env.tenv) of
