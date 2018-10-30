@@ -221,7 +221,8 @@ propagate_types_test_() ->
      ?_assertMatch("any()",
                    type_check_expr(_Env = "-spec f() -> any().",
                                    _Expr = "not f()")),
-     ?_assertMatch("boolean()",
+     %% (returns a normalised type, in this case of boolean())
+     ?_assertMatch("true | false",
                    type_check_expr(_Env = "-spec f() -> boolean().",
                                    _Expr = "not f()")),
      ?_assertMatch("false",
@@ -243,6 +244,9 @@ propagate_types_test_() ->
                                    _Expr = "- f()")),
      ?_assertMatch("-3..1",
                    type_check_expr(_Env = "-spec f() -> -1..(1+2).",
+                                   _Expr = "- f()")),
+     ?_assertMatch("neg_integer() | 0",
+                   type_check_expr(_Env = "-spec f() -> non_neg_integer().",
                                    _Expr = "- f()"))
     ].
 
