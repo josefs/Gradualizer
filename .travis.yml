@@ -23,8 +23,10 @@ matrix:
   - env: TEST=".travis/travis_has_latest_otp_version"
     otp_release: 21.1
 
-  # Run coverage report for the latest OTP release
-  - env: TEST="make tests COVER=1" ENABLE_COVER=true
+  # Run make target specialized for the checks we want to make in Travis for
+  # the latest OTP release.
+  # Includes coverage report and dialyzer .
+  - env: TEST="make travischeck" ENABLE_COVER=true
     otp_release: 21.1
   
   - env: TEST="make gradualize"
