@@ -53,3 +53,7 @@ EUNIT_TEST_SOURCES = $(shell ls $(TEST_DIR)/*.erl)
 # (Other it tried to compile and run all source files
 #  recursively in all subdirs of test)
 EUNIT_TEST_MODS = $(notdir $(basename $(EUNIT_TEST_SOURCES)))
+
+travischeck:
+	$(MAKE) tests COVER=1
+	$(MAKE) dialyze
