@@ -797,8 +797,8 @@ expect_fun_type(Tys) when is_list(Tys) ->
     case expect_intersection_type(Tys) of
 	{type_error, _} ->
 	    {type_error, Tys};
-    [Ty] ->
-        Ty;
+	[Ty] ->
+	    Ty;
 	Tyss ->
 	    {fun_ty_intersection, Tyss, constraints:empty()}
     end;
@@ -1069,7 +1069,7 @@ type_check_expr(_Env, {record_index, _, _Record, _Field}) ->
 
 %% Functions
 type_check_expr(Env, {'fun', _, {clauses, Clauses}}) ->
-    infer_clauses(Env, Clauses);
+    type_check_fun(Env, Clauses);
 type_check_expr(Env, {'fun', P, {function, Name, Arity}}) ->
     case get_type_from_name_arity(Name, Arity, Env#env.fenv, P) of
 	AnyType = {type, _, any, []} ->
@@ -1100,10 +1100,21 @@ type_check_expr(Env, {'fun', P, {function, {atom, _, M}, {var, _, F}, {integer, 
 	    {{type, erl_anno:new(0), any, []}, #{}, constraints:empty()}
     end;
 type_check_expr(Env, {named_fun, _, FunName, Clauses}) ->
-    NewEnv = Env#env{ venv = add_var_binds(#{FunName =>
-                                             {type, erl_anno:new(0), any, []} }
+    %% Pick a type for the fun itself, to be used when checking references to
+    %% itself inside the fun, e.g. recursive calls.
+    FunTy = if
+		Env#env.infer ->
+		    %% Create a fun type of the correct arity
+		    %% on the form fun((_,_,_) -> any()).
+		    [{clause, _, Params, _Guards, _Block} | _] = Clauses,
+		    Arity = length(Params),
+		    create_fun_type(Arity, {type, erl_anno:new(0), any, []});
+		not Env#env.infer ->
+		    {type, erl_anno:new(0), any, []}
+	    end,
+    NewEnv = Env#env{ venv = add_var_binds(#{FunName => FunTy}
                                           ,Env#env.venv) },
-    infer_clauses(NewEnv, Clauses);
+    type_check_fun(NewEnv, Clauses);
 
 type_check_expr(Env, {'receive', _, Clauses}) ->
     infer_clauses(Env, Clauses);
@@ -1178,6 +1189,32 @@ type_check_expr(Env, {'try', _, Block, CaseCs, CatchCs, AfterCs}) ->
     {normalize({type, erl_anno:new(0), union, [Ty, TyC, TyS, TyA]}, Env#env.tenv)
     ,VB
     ,constraints:combine([Cs1,Cs2,Cs3,Cs4])}.
+
+%% Helper for type_check_expr for funs
+type_check_fun(Env, Clauses) ->
+    {RetTy, _VB, _Cs} = infer_clauses(Env, Clauses),
+    FunTy = case RetTy of
+		{type, _, any, []} when not Env#env.infer ->
+		    {type, erl_anno:new(0), any, []};
+		_SomeTypeToPropagate ->
+		    %% Create a fun type with the correct arity on the form
+		    %% fun((any(), any(), ...) -> RetTy).
+		    %% TODO: Infer the types of the parameters in each clause.
+		    %% TODO: Modify OTP's type syntax to allow intersection
+		    %%       types for fun types.
+		    [{clause, _, Params, _Guards, _Body} | _] = Clauses,
+		    Arity = length(Params),
+		    create_fun_type(Arity, RetTy)
+	    end,
+    %% Variable bindings inside the fun clauses are local inside the fun.
+    %% Can the fun introduce any constraints on variables in surrounding scope?
+    {FunTy, #{}, constraints:empty()}.
+
+%% Creates a type on the form fun((_,_,_) -> RetTy) with the given arity.
+create_fun_type(Arity, RetTy) when is_integer(Arity) ->
+    ParTys = lists:duplicate(Arity, {type, erl_anno:new(0), any, []}),
+    {type, erl_anno:new(0), 'fun',
+     [{type, erl_anno:new(0), product, ParTys}, RetTy]}.
 
 type_check_fields(Env, Rec, Fields) ->
     UnAssignedFields = get_unassigned_fields(Fields, Rec),
@@ -2164,7 +2201,7 @@ split_tuple_union(N, [{type, _, union, Tys1} | Tys2]) ->
     split_tuple_union(N, Tys1 ++ Tys2).
 
 
-
+%% Infers (or at least propagates types from) fun, receive and try clauses.
 infer_clauses(Env, Clauses) ->
     {Tys, VarBindsList, Css} =
 	lists:unzip3(lists:map(fun (Clause) ->

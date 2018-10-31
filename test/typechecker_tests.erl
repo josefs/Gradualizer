@@ -203,7 +203,20 @@ propagate_types_test_() ->
 		   type_check_expr(_Env = "-spec a() -> 1.\n"
 					  "-spec b() -> 2.\n"
 					  "-spec c() -> 3.",
-				   _Expr = "[a(), b(), c()]"))
+				   _Expr = "[a(), b(), c()]")),
+     %% Fun.
+     ?_assertMatch("any()",
+		   type_check_expr(_Env = "",
+				   _Expr = "fun (_A, _B) ->\n"
+					   "    receive C -> C end\n"
+					   "end")),
+     ?_assertMatch("fun((any(), any()) -> integer())",
+		   type_check_expr(_Env = "-spec i(integer()) -> integer().",
+				   _Expr = "fun (A, B) -> i(B) end")),
+     ?_assertMatch("fun((any(), any()) -> integer())",
+		   type_check_expr(_Env = "-spec i(integer()) -> integer().",
+				   _Expr = "fun F(A, B) -> i(B) end"))
+
     ].
 
 type_check_in_test_() ->
