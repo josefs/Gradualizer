@@ -783,7 +783,7 @@ expect_fun_type({type, _, bounded_fun, [Ft, Fc]}) ->
 	{fun_ty_intersection, Tys, Cs} ->
 	    {fun_ty_intersection, Tys, constraints:combine(Cs, constraints:convert(Fc))};
 	{fun_ty_union, Tys, Cs} ->
-	    {fun_ty_union, Tys, constraints:combine(Cs, constaints:convert(Fc))};
+	    {fun_ty_union, Tys, constraints:combine(Cs, constraints:convert(Fc))};
 	Err ->
 	    Err
     end;
