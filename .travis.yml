@@ -45,9 +45,6 @@ otp_release:
 env:
   - TEST="make tests"
 
-before_script:
-  - .travis/before_script
-
 script:
  - $TEST
 

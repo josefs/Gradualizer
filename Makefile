@@ -9,13 +9,18 @@
 # > make escript
 #
 # run cli
-# > gradualizer
+# > ./gradualizer
 #
 # run unit tests
-# > make eunit
+# > make tests
 #
-# run tests with coverage
-# > make tests COVER=1 && open cover/index.html
+# generate coverage
+# > make cover
+#
+# show coverage (Linux)
+# > make showcover 
+# show coverage (OS X)
+# > make osxshowcover
 #
 # run dialyzer
 # > make dialyze
@@ -23,37 +28,55 @@
 # run gradualizer on itself
 # > make gradualize
 #
-# run all checks (including tests, dialyze and gradualize)
+# run all checks (tests, dialyze and gradualize)
 # > make check
 #
-PROJECT = gradualizer
 
-PLT_APPS = kernel stdlib compiler crypto
-DIALYZER_OPTS = -Werror_handling
+.PHONY: app
+app:
+	rebar3 compile
 
-ESCRIPT_NAME = gradualizer_cli
-ESCRIPT_FILE = $(PROJECT)
+.PHONY: shell
+shell:
+	rebar3 shell
 
-include erlang.mk
+.PHONY: escript
+escript:
+	rebar3 escriptize
+	cp _build/default/bin/gradualizer .
 
+.PHONY: gradualize
 gradualize: escript
-	./gradualizer -pa $(CURDIR)/ebin/ $(CURDIR)/ebin/*beam
-check:: gradualize
+	./gradualizer -pa $(CURDIR)/src/ $(CURDIR)/src/*.erl
 
-# We want warnings to be warnings, not errors.
-ERLC_OPTS := $(filter-out -Werror,$(ERLC_OPTS))
+.PHONY: clean
+clean:
+	rebar3 clean
+	rm -rf _build
+	rm -f gradualizer
 
-EUNIT_OPTS = verbose
+.PHONY: tests
+tests:
+	rebar3 eunit
 
-# Unit test files to run
-EUNIT_TEST_SOURCES = $(shell ls $(TEST_DIR)/*.erl)
+.PHONY: cover
+cover:
+	rebar3 do eunit -c, cover
 
-# Override erlang.mk variable to only run unit test modules
-# (results in a bit less noisy output)
-# (Other it tried to compile and run all source files
-#  recursively in all subdirs of test)
-EUNIT_TEST_MODS = $(notdir $(basename $(EUNIT_TEST_SOURCES)))
+.PHONY: showcover
+showcover: cover
+	xdg-open _build/test/cover/index.html
 
-travischeck:
-	$(MAKE) tests COVER=1
-	$(MAKE) dialyze
+.PHONY: osxshowcover
+osxshowcover: cover
+	open _build/test/cover/index.html
+
+.PHONY: dialyze
+dialyze:
+	rebar3 dialyzer
+
+.PHONY: check
+check: tests dialyze gradualize
+
+.PHONY: travischeck
+travischeck: cover dialyze

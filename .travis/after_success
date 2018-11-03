@@ -2,8 +2,7 @@
 
 if [ "$ENABLE_COVER" = true ]; then
   echo "Exporting coverage report..."
-  make all.coverdata
-  covertool/covertool -cover all.coverdata -appname gradualizer
-  bash <(curl -s https://codecov.io/bash) -f "./coverage.xml"
+  rebar3 covertool generate
+  bash <(curl -s https://codecov.io/bash) -f "./_build/test/covertool/gradualizer.covertool.xml"
   echo "Report sent!"
 fi
