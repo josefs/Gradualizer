@@ -4,9 +4,10 @@
 
 api_test_() ->
     [?_assertEqual(ok, gradualizer:type_check_file("test/should_pass/any.erl")),
-     ?_assertEqual(ok, gradualizer:type_check_file("test/any.beam")),
+     % TODO: Test fixture is not meant to depend on the build results
+     ?_assertEqual(ok, gradualizer:type_check_file("_build/test/lib/gradualizer/test/any.beam")),
      fun() ->
-             {module, Mod} = code:load_abs("test/any"),
+             {module, Mod} = code:load_abs("_build/test/lib/gradualizer/test/any"),
              ?assertEqual(ok, gradualizer:type_check_module(Mod))
      end,
      fun() ->

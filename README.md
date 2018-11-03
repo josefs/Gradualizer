@@ -30,13 +30,9 @@ To run Gradualizer from the command line:
 
 * Run Gradualizer:
 
-  `gradualizer`
+  `./gradualizer`
 
 To run Gradualizer from the Erlang shell:
-
-* Compile the project by:
-
-  `make app`
 
 * Launch the interactive prompt with all the relevant modules in the path:
 
@@ -50,7 +46,7 @@ To run Gradualizer from the Erlang shell:
 
 To run Gradualizer from rebar3, read `examples/rebar3/README.md`.
 
-The Gradualizer requires at least OTP 19.
+The Gradualizer requires at least OTP 19 and is built using [rebar3](https://www.rebar3.org/).
 
 # Status
 
