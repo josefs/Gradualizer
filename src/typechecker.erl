@@ -638,6 +638,7 @@ int_range_to_types({I, J}) when I < J ->
     [{type, erl_anno:new(0), range, [{integer, erl_anno:new(0), I}
 				    ,{integer, erl_anno:new(0), J}]}].
 
+%% Input arg must be already normalized
 negate_num_type({type, _, TyName, []} = Ty) when
       TyName =:= any;
       TyName =:= integer;
@@ -645,6 +646,13 @@ negate_num_type({type, _, TyName, []} = Ty) when
     Ty;
 negate_num_type({integer, P, I}) ->
     {integer, P, -I};
+negate_num_type({type, P, union, Tys}) ->
+    %% We normalize the result only to merge `0 | pos_integer()` =>
+    %% `non_neg_integer()` and to have a nice increasing order of Tys.
+    %% The incoming union type must be already normalized so it shouldn't
+    %% contain any unresolved types. So it is ok to normalize the result with an
+    %% empty TEnv.
+    normalize({type, P, union, [negate_num_type(Ty)||Ty <- Tys]}, #tenv{});
 negate_num_type(RangeTy) ->
     %% some kind of range type like `1..3' or `neg_integer()'
     {L, U} = int_type_to_range(RangeTy),
@@ -654,7 +662,8 @@ negate_num_type(RangeTy) ->
         [Ty] ->
             Ty;
         Tys = [_, _] ->
-            %% in some cases the result is two mutually exclusive type
+            %% In some cases the result is two mutually exclusive type.
+            %% (Currently only when `non_neg_integer()` => `neg_integer() | 0`)
             {type, erl_anno:new(0), union, Tys}
     end.
 

@@ -247,6 +247,12 @@ propagate_types_test_() ->
                                    _Expr = "- f()")),
      ?_assertMatch("neg_integer() | 0",
                    type_check_expr(_Env = "-spec f() -> non_neg_integer().",
+                                   _Expr = "- f()")),
+     ?_assertMatch("-7..-5 | -3..-1",
+                   type_check_expr(_Env = "-spec f() -> 1..3 | 5..7.",
+                                   _Expr = "- f()")),
+     ?_assertMatch("-2..-1 | non_neg_integer()",
+                   type_check_expr(_Env = "-spec f() -> neg_integer() | 0..2.",
                                    _Expr = "- f()"))
     ].
 
