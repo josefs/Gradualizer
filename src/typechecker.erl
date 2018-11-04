@@ -1192,6 +1192,15 @@ type_check_expr(Env, {'try', _, Block, CaseCs, CatchCs, AfterCs}) ->
 
 %% Helper for type_check_expr for funs
 type_check_fun(Env, Clauses) ->
+    %% TODO: Infer the types of the parameters in each clause. A potential way
+    %% to improve the inference for function arguments would be to give them a
+    %% type variable as type. Once the constraint solver is in place it would
+    %% improve the inference is certain situations.
+    %% For example, if foo/1 takes arguments of type integer() and we're
+    %% inferring the expression fun (X) -> foo(X) end then we can conclude that
+    %% the type of X must be (a subtype of) integer() and we can give a more
+    %% accurate type to the whole expression.
+    %% TODO: Modify OTP's type syntax to allow returning an intersection type.
     {RetTy, _VB, _Cs} = infer_clauses(Env, Clauses),
     FunTy = case RetTy of
 		{type, _, any, []} when not Env#env.infer ->
@@ -1199,15 +1208,13 @@ type_check_fun(Env, Clauses) ->
 		_SomeTypeToPropagate ->
 		    %% Create a fun type with the correct arity on the form
 		    %% fun((any(), any(), ...) -> RetTy).
-		    %% TODO: Infer the types of the parameters in each clause.
-		    %% TODO: Modify OTP's type syntax to allow intersection
-		    %%       types for fun types.
 		    [{clause, _, Params, _Guards, _Body} | _] = Clauses,
 		    Arity = length(Params),
 		    create_fun_type(Arity, RetTy)
 	    end,
     %% Variable bindings inside the fun clauses are local inside the fun.
-    %% Can the fun introduce any constraints on variables in surrounding scope?
+    %% TODO: Solve constraints on the vars bound in each clause of the fun
+    %% and propagate the rest of the constraints.
     {FunTy, #{}, constraints:empty()}.
 
 %% Creates a type on the form fun((_,_,_) -> RetTy) with the given arity.
@@ -1250,7 +1257,7 @@ type_check_logic_op(Env, Op, P, Arg1, Arg2) ->
 	fun (VB1, VB2) ->
 		if (Op == 'and') or (Op == 'or') or (Op == 'xor') ->
 			VB1;
-		   true ->
+		   (Op == 'andalso') or (Op == 'orelse') ->
 			union_var_binds([VB1, VB2])
 		end
 	end,
