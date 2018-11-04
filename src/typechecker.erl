@@ -2977,27 +2977,6 @@ pp_intersection_type([Ty|Tys]) ->
 
 
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%% Interface files
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
--spec store_interface_file(map(), #parsedata{}) -> ok | {error, term()}.
-store_interface_file(FEnv, ParseData) ->
-    Filename = io_lib:format("~p.Gr", [ParseData#parsedata.module]),
-    FEnv1 = remove_unexported(FEnv, ParseData),
-    FileContents = io_lib:format("~p.~n", [FEnv1]),
-    file:write_file(Filename, FileContents).
-
-%% Remove unexported function from an FEnv
--spec remove_unexported(map(), #parsedata{}) -> map().
-remove_unexported(FEnv, #parsedata{export_all = true}) ->
-    FEnv;
-remove_unexported(FEnv, #parsedata{exports = Exports}) ->
-    maps:filter(fun (Key, _Value) ->
-			lists:member(Key, Exports)
-		end,
-		FEnv).
-
 line_no(Ty) ->
     element(2,Ty).
 
