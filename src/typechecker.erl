@@ -2547,6 +2547,8 @@ add_any_types_pat({integer, _, _}, VEnv) ->
     VEnv;
 add_any_types_pat({char, _, _}, VEnv) ->
     VEnv;
+add_any_types_pat({float, _, _}, VEnv) ->
+    VEnv;
 add_any_types_pat({match, _, P1, P2}, VEnv) ->
     add_any_types_pats([P1, P2], VEnv);
 add_any_types_pat({cons, _, Head, Tail}, VEnv) ->
