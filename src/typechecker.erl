@@ -2356,10 +2356,27 @@ add_type_pat({var, _, A}, Ty, _TEnv, VEnv) ->
     ret(VEnv#{ A => Ty });
 add_type_pat(Expr, {type, _, any, []}, _TEnv, VEnv) ->
     ret(add_any_types_pat(Expr, VEnv));
-add_type_pat({integer, _, _}, _Ty, _TEnv, VEnv) ->
-    ret(VEnv);
-add_type_pat({char, _, _}, _Ty, _TEnv, VEnv) ->
-    ret(VEnv);
+add_type_pat(Lit = {integer, P, _}, Ty, TEnv, VEnv) ->
+    case subtype(Lit, Ty, TEnv) of
+      {true, Cs} ->
+         {VEnv, Cs};
+     false ->
+         throw({type_error, pattern, P, Lit, Ty})
+    end;
+add_type_pat(Lit = {char, P, Val}, Ty, TEnv, VEnv) ->
+    case subtype({integer, P, Val}, Ty, TEnv) of
+      {true, Cs} ->
+	    {VEnv, Cs};
+	false ->
+	    throw({type_error, pattern, P, Lit, Ty})
+    end;
+add_type_pat(Lit = {float, P, _}, Ty, TEnv, VEnv) ->
+    case subtype({type, erl_anno:new(0), float, []}, Ty, TEnv) of
+      {true, Cs} ->
+	    {VEnv, Cs};
+	false ->
+	    throw({type_error, pattern, P, Lit, Ty})
+    end;
 add_type_pat(Tuple = {tuple, P, Pats}, Ty, TEnv, VEnv) ->
     case expect_tuple_type(normalize(Ty, TEnv), length(Pats)) of
 	any ->
