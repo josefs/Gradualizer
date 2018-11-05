@@ -125,6 +125,8 @@ import_module(Module) ->
 
 -type opts() :: #{autoimport => boolean()}.
 -define(default_opts, #{autoimport => true}).
+-define(prelude_erl, filename:join(code:priv_dir(gradualizer),
+                                   "otp_spec_fix.erl")).
 
 -record(state, {specs   = #{} :: #{mfa() => [type()]},
                 types   = #{} :: #{mfa() => #typeinfo{}},
@@ -146,7 +148,8 @@ init(Opts0) ->
                  _ ->
                     State1
              end,
-    {ok, State2}.
+    State3 = import_erl_files([?prelude_erl], State2),
+    {ok, State3}.
 
 -spec handle_call(any(), {pid(), term()}, state()) -> {reply, term(), state()}.
 handle_call({get_spec, M, F, A}, _From, State) ->
@@ -391,12 +394,19 @@ check_epp_errors(File, Forms) ->
             ok
     end.
 
+%% Add pairs to a map, without overwriting existing values in the map.
 -spec add_entries_to_map([{Key, Value}], #{K => V}) -> #{K => V}
                                              when Key :: K, Value :: V.
 add_entries_to_map(Entries, Map) ->
     lists:foldl(fun ({MFA, Types}, MapAcc) ->
-                    %% Maybe TODO: Warn if an element is overwritten
-                    MapAcc#{MFA => Types}
+		    maps:update_with(MFA,
+				     fun (OldTypes) ->
+					     %% Key already present. Keep the
+					     %% old value.
+					     %% Maybe TODO: Warn if an element
+					     %% is already present
+					     OldTypes
+				     end, Types, MapAcc)
                 end,
                 Map,
                 Entries).
@@ -491,12 +501,7 @@ collect_specs(Module, Forms) ->
 
 normalize_spec({{Func, Arity}, Types}, Module) ->
     {{Module, Func, Arity}, Types};
-normalize_spec(Spec = {{M, F, A}, _Types}, Module) ->
-    case M of
-        Module -> ok;
-        _ -> error_logger:info_report([{spec_for, {M,F,A}},
-                                       {found_in, Module}])
-    end,
+normalize_spec(Spec = {{_M, _F, _A}, _Types}, _Module) ->
     Spec.
 
 -spec make_spec(module(), atom(), arity()) -> {mfa(), [type()]}.
