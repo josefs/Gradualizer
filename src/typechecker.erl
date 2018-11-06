@@ -1222,12 +1222,12 @@ type_check_expr(Env, {op, P, Op, Arg1, Arg2}) when
 %% There is no typechecking of exceptions
 type_check_expr(Env, {'catch', _, Arg}) ->
     type_check_expr(Env, Arg);
-type_check_expr(Env, {'try', _, Block, CaseCs, CatchCs, AfterCs}) ->
-    {Ty,  VB,   Cs1}  = type_check_block(Env, Block),
+type_check_expr(Env, {'try', _, Block, CaseCs, CatchCs, AfterBlock}) ->
+    {Ty,  VB,   Cs1} = type_check_block(Env, Block),
     Env2 = Env#env{ venv = add_var_binds(VB, Env#env.venv) },
     {TyC, _VB2, Cs2} = infer_clauses(Env2, CaseCs),
     {TyS, _VB3, Cs3} = infer_clauses(Env2, CatchCs),
-    {TyA, _VB4, Cs4} = infer_clauses(Env2, AfterCs),
+    {TyA, _VB4, Cs4} = type_check_block(Env2, AfterBlock),
     % TODO: Should we check types against each other instead of
     % just merging them?
     % TODO: Check what variable bindings actually should be propagated
