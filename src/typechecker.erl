@@ -1121,25 +1121,17 @@ type_check_expr(Env, {'fun', P, {function, Name, Arity}}) ->
 	    {Ty, Cs} = absform:function_type_list_to_fun_types(BoundedFunTypeList),
 	    {Ty, #{}, Cs}
     end;
-type_check_expr(_Env, {'fun', P, {function, {atom, _, M}, {atom, _, F}, {integer, _, A}}}) ->
-    case gradualizer_db:get_spec(M, F, A) of
-        {ok, BoundedFunTypeList} ->
-            {Ty, Cs} = absform:function_type_list_to_fun_types(BoundedFunTypeList),
-            {Ty, #{}, Cs};
-        not_found ->
-            throw({call_undef, P, M, F, A})
-    end;
-type_check_expr(Env, {'fun', P, {function, {atom, _, M}, {var, _, F}, {integer, _, A}}}) ->
-    case maps:get(F, Env#env.venv) of
-	{atom, _, AtomF} ->
-	    case gradualizer_db:get_spec(M, AtomF, A) of
+type_check_expr(Env, {'fun', P, {function, M, F, A}}) ->
+    case {get_atom(Env, M), get_atom(Env, F), A} of
+	{{true, Module}, {true, Function}, {integer, _, Arity}} ->
+	    case gradualizer_db:get_spec(Module, Function, Arity) of
 		{ok, BoundedFunTypeList} ->
 		    {Ty, Cs} = absform:function_type_list_to_fun_types(BoundedFunTypeList),
 		    {Ty, #{}, Cs};
 		not_found ->
-		    throw({call_undef, P, M, AtomF, A})
+		    throw({call_undef, P, M, F, A})
 	    end;
-	_ -> %% We don't have enough information to check the type.
+	_ -> %% Not enough information to check the type of the call.
 	    {{type, erl_anno:new(0), any, []}, #{}, constraints:empty()}
     end;
 type_check_expr(Env, {named_fun, _, FunName, Clauses}) ->
@@ -1806,31 +1798,19 @@ do_type_check_expr_in(Env, ResTy, {'fun', P, {function, Name, Arity}}) ->
 	false -> throw({type_error, fun_res_type, P, {atom, P, Name},
 			ResTy, BoundedFunTypeList})
     end;
-do_type_check_expr_in(Env, ResTy, {'fun', P, {function, {atom, _, M}, {atom, _, F}, {integer, _, A}}}) ->
-    case gradualizer_db:get_spec(M, F, A) of
-        {ok, BoundedFunTypeList} ->
-	    case any_subtype(ResTy, BoundedFunTypeList, Env#env.tenv) of
-		{true, Cs} -> {#{}, Cs};
-		false -> throw({type_error, mfa, P, M, F, A, ResTy, BoundedFunTypeList})
-	    end;
-        not_found ->
-            throw({call_undef, P, M, F, A})
-    end;
-do_type_check_expr_in(Env, ResTy, {'fun', P, {function, {atom, _, M}, {var, _, F}, {integer, _, A}}}) ->
-    case maps:get(F, Env#env.venv) of
-	%% We check if the variable for the function is of a singleton type
-	%% containing an atom. In that case we know what function the
-	%% expression represents and we can look up the type.
-	{atom, _, AtomF} ->
-	    case gradualizer_db:get_spec(M, AtomF, A) of
+do_type_check_expr_in(Env, ResTy, {'fun', P, {function, M, F, A}}) ->
+    case {get_atom(Env, M), get_atom(Env, F), A} of
+	{{atom, _, Module}, {atom, _, Function}, {integer, _,Arity}} ->
+	    case gradualizer_db:get_spec(Module, Function, Arity) of
 		{ok, BoundedFunTypeList} ->
 		    case any_subtype(ResTy, BoundedFunTypeList, Env#env.tenv) of
 			{true, Cs} -> {#{}, Cs};
-			false -> throw({type_error, mfa, P, M, F, A, ResTy
+			false -> throw({type_error, mfa, P
+				       ,Module, Function, Arity, ResTy
 				       ,BoundedFunTypeList})
 		    end;
 		not_found ->
-		    throw({call_undef, P, M, AtomF, A})
+		    throw({call_undef, P, Module, Function, Arity})
 	    end;
 	_ -> % We don't have enough information to check the type.
 	    {#{}, constraints:empty()}
@@ -2266,6 +2246,18 @@ get_type_from_name_arity(Name, Arity, FEnv, P) ->
 		    throw({call_undef, P, Name, Arity})
 	    end
     end.
+
+get_atom(_Env, Atom = {atom, _, _}) ->
+    Atom;
+get_atom(Env, {var, _, Var}) ->
+    case maps:get(Var, Env#env.venv) of
+	Atom = {atom, _, _} ->
+	    Atom;
+	_ ->
+	    false
+    end;
+get_atom(_Env, _) ->
+    false.
 
 
 %% We don't use these function right now but they can be useful for

@@ -10,6 +10,12 @@ g() ->
     F = apa,
     fun ?MODULE:F/1.
 
+h() ->
+    M = ?MODULE,
+    F = apa,
+    A = 1,
+    fun M:F/A.
+
 apa(X) ->
     X * 2.
 
