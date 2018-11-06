@@ -2647,11 +2647,15 @@ add_any_types_pat({var, _,'_'}, VEnv) ->
 add_any_types_pat({var, _,A}, VEnv) ->
     VEnv#{ A => {type, erl_anno:new(0), any, []} };
 add_any_types_pat({op, _, '++', _Pat1, Pat2}, VEnv) ->
-   %% Pat1 cannot contain any variables so there is no need to traverse it.
-   add_any_types_pat(Pat2, VEnv);
+    %% Pat1 cannot contain any variables so there is no need to traverse it.
+    add_any_types_pat(Pat2, VEnv);
 add_any_types_pat({op, _, _Op, _Pat1, _Pat2}, VEnv) ->
-   %% These patterns cannot contain variables.
-   VEnv.
+    %% These patterns cannot contain variables.
+    VEnv;
+add_any_types_pat({op, _, _Op, _Pat}, VEnv) ->
+    %% Cannot contain variables.
+    VEnv.
+
 
 %% Get type from specifiers in a bit syntax, e.g. <<Foo/float-little>>
 -spec bit_specifier_list_to_type([atom()] | default) -> type().
