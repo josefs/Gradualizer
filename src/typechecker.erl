@@ -1185,6 +1185,14 @@ type_check_expr(Env, {op, P, 'not', Arg}) ->
 	false ->
 	    throw({type_error, non_boolean_argument_to_not, P, Ty})
     end;
+type_check_expr(Env, {op, P, '+', Arg}) ->
+    {Ty, VB, Cs1} = type_check_expr(Env, Arg),
+    case subtype(Ty, {type, P, number ,[]}, Env#env.tenv) of
+	{true, Cs2} ->
+            {Ty, VB, constraints:combine(Cs1, Cs2)};
+	false ->
+	    throw({type_error, non_number_argument_to_plus, P, Ty})
+    end;
 type_check_expr(Env, {op, P, '-', Arg}) ->
     {Ty, VB, Cs1} = type_check_expr(Env, Arg),
     case subtype(Ty, {type, P, number ,[]}, Env#env.tenv) of
@@ -1863,6 +1871,14 @@ do_type_check_expr_in(Env, ResTy, {op, P, 'not', Arg}) ->
 	    {VB, constraints:combine(Cs1, Cs2)};
 	false ->
 	    throw({type_error, not_user_with_wrong_type, P, ResTy})
+    end;
+do_type_check_expr_in(Env, ResTy, {op, P, '+', Arg}) ->
+    case subtype(ResTy, {type, P, number, []}, Env#env.tenv) of
+	{true, Cs1} ->
+	    {VB, Cs2} = type_check_expr_in(Env, ResTy, Arg),
+	    {VB, constraints:combine(Cs1, Cs2)};
+	false ->
+	    throw({type_error, non_number_exp_type_plus, P, ResTy})
     end;
 do_type_check_expr_in(Env, ResTy, {op, P, '-', Arg}) ->
     case subtype(ResTy, {type, P, number, []}, Env#env.tenv) of
@@ -2963,6 +2979,12 @@ handle_type_error({type_error, arith_error, ArithOp, P, Ty}) ->
 handle_type_error({type_error, int_error, IntOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is given a non-integer argument "
 	      "of type ~s~n", [IntOp, P, typelib:pp_type(Ty)]);
+handle_type_error({type_error, non_number_exp_type_plus, P, Ty}) ->
+    io:format("The plus expression on line ~p is expected to have a "
+	      "non-numeric type:~n~s~n", [P, typelib:pp_type(Ty)]);
+handle_type_error({type_error, non_number_argument_to_plus, P, Ty}) ->
+    io:format("The plus expression on line ~p has a non-numeric argument "
+	      "of type:~n~s~n", [P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, non_number_exp_type_minus, P, Ty}) ->
     io:format("The negated expression on line ~p is expected to have a "
 	      "non-numeric type:~n~s~n", [P, typelib:pp_type(Ty)]);
