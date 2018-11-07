@@ -1123,7 +1123,7 @@ type_check_expr(Env, {'fun', P, {function, Name, Arity}}) ->
     end;
 type_check_expr(Env, {'fun', P, {function, M, F, A}}) ->
     case {get_atom(Env, M), get_atom(Env, F), A} of
-	{{true, Module}, {true, Function}, {integer, _, Arity}} ->
+	{{atom, _, Module}, {atom, _, Function}, {integer, _, Arity}} ->
 	    case gradualizer_db:get_spec(Module, Function, Arity) of
 		{ok, BoundedFunTypeList} ->
 		    {Ty, Cs} = absform:function_type_list_to_fun_types(BoundedFunTypeList),
