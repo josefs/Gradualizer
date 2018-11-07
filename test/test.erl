@@ -22,7 +22,7 @@ known_problem_should_pass_test_() ->
         Result =
             try gradualizer:type_check_file(File) of
                 V -> V
-            catch E -> nok
+            catch _:_ -> nok
             end,
         ?_assertEqual(nok, Result)
         end, "test/known_problems/should_pass").
@@ -34,7 +34,7 @@ known_problem_should_fail_test_() ->
         Result =
             try gradualizer:type_check_file(File) of
                 V -> V
-            catch E -> ok
+            catch _:_ -> ok
             end,
         ?_assertEqual(ok, Result)
         end, "test/known_problems/should_fail").
