@@ -42,3 +42,11 @@ r()->
     %% B. unsafe
     %% C. unsafe
     %% D. unsafe
+
+s() ->
+    try ok of
+	ok ->
+	    ok
+    catch _:_ ->
+	    nok
+    end.

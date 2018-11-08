@@ -1235,11 +1235,14 @@ type_check_expr(Env, {'try', _, Block, CaseCs, CatchCs, AfterBlock}) ->
     Env2 = Env#env{ venv = add_var_binds(VB, Env#env.venv) },
     {TyC, _VB2, Cs2} = infer_clauses(Env2, CaseCs),
     {TyS, _VB3, Cs3} = infer_clauses(Env2, CatchCs),
-    {TyA, _VB4, Cs4} = type_check_block(Env2, AfterBlock),
-    % TODO: Should we check types against each other instead of
-    % just merging them?
-    % TODO: Check what variable bindings actually should be propagated
-    {normalize({type, erl_anno:new(0), union, [Ty, TyC, TyS, TyA]}, Env#env.tenv)
+    Cs4 = case AfterBlock of
+	      [] ->
+		  constraints:empty();
+	      _ ->
+		  {_TyA, _VB4, Cs5} = type_check_block(Env2, AfterBlock),
+		  Cs5
+	  end,
+    {normalize({type, erl_anno:new(0), union, [Ty, TyC, TyS]}, Env#env.tenv)
     ,VB
     ,constraints:combine([Cs1,Cs2,Cs3,Cs4])}.
 
