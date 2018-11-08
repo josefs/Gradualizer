@@ -11,5 +11,5 @@ unknown_map2(M) -> M.
 -spec mandatory_ok(#{a := b}) -> #{a => b}.
 mandatory_ok(M) -> M.
 
--spec mandatory_fail(#{a => b}) -> #{a := b}.
-mandatory_fail(M) -> M.
+-spec union_value(#{a => b} | #{a => c}) -> #{a => b | c}.
+union_value(M) -> M.
