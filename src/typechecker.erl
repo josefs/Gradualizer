@@ -1065,6 +1065,8 @@ type_check_expr(Env, {call, P, Name, Args}) ->
 
 type_check_expr(Env, {lc, _, Expr, Qualifiers}) ->
     type_check_lc(Env, Expr, Qualifiers);
+type_check_expr(Env, {bc, _, Expr, Qualifiers}) ->
+    type_check_bc(Env, Expr, Qualifiers);
 type_check_expr(Env, {block, _, Block}) ->
     type_check_block(Env, Block);
 
@@ -1586,6 +1588,74 @@ type_check_lc(Env, Expr, [Guard | Quals]) ->
     {TyL, VarBinds2, Cs2} = type_check_lc(Env#env{}, Expr, Quals),
     {TyL, union_var_binds(VarBinds1, VarBinds2), constraints:combine(Cs1, Cs2)}.
 
+%% Binary comprehension. This function is very similar to type_check_lc.
+type_check_bc(Env, Expr, []) ->
+    {Ty, _VB, Cs} = type_check_expr(Env, Expr),
+    RetTy = case normalize(Ty, Env#env.tenv) of
+		{type, _, any, []} = Any ->
+		    Any;
+		{type, _, binary, [{integer, _, 0}, {integer, _, _N}]} = BinType ->
+		    %% A multiple of N bits.
+		    BinType;
+		{type, _, binary, [{integer, _, M}, {integer, _, 0}]} ->
+		    %% A fixed size of M bits that we repeat multiple times
+		    {type, erl_anno:new(0), binary,
+		     [{integer, erl_anno:new(0), 0},
+		      {integer, erl_anno:new(0), M}]};
+		_ ->
+		    %% A bitstring of some combined size, a union of bitstring
+		    %% types or something else that might be ok, for now.
+		    {type, erl_anno:new(0), any, []}
+	    end,
+    {RetTy, #{}, Cs};
+type_check_bc(Env, Expr, [{generate, P, Pat, Gen} | Quals]) ->
+    {Ty,  _,  Cs1} = type_check_expr(Env, Gen),
+    case expect_list_type(Ty, allow_nil_type) of
+	{elem_ty, ElemTy, Cs} ->
+	    {NewVEnv, Cs2} = add_type_pat(Pat, ElemTy, Env#env.tenv, Env#env.venv),
+	    NewEnv = Env#env{venv = NewVEnv},
+	    {TyL, VB, Cs3} = type_check_bc(NewEnv, Expr, Quals),
+	    {TyL, VB, constraints:combine([Cs, Cs1, Cs2, Cs3])};
+	any ->
+	    NewVEnv = add_any_types_pat(Pat, Env#env.venv),
+	    NewEnv = Env#env{venv = NewVEnv},
+	    {TyL, VB, Cs2} = type_check_bc(NewEnv, Expr, Quals),
+	    {TyL, VB, constraints:combine(Cs1, Cs2)};
+	{elem_tys, _ElemTys, Cs} ->
+	    %% As a hack, we treat a union type as any, just to
+	    %% allow the program to type check.
+	    %% TODO: Rewrite the union outside the comprehention,
+	    %%
+	    NewVEnv = add_any_types_pat(Pat, Env#env.venv),
+	    NewEnv = Env#env{venv = NewVEnv},
+	    {TyL, VB, Cs2} = type_check_bc(NewEnv, Expr, Quals),
+	    {TyL, VB, constraints:combine([Cs,Cs1,Cs2])};
+	{type_error, Ty} ->
+	    throw({type_error, generator, P, Ty})
+    end;
+type_check_bc(Env, Expr, [{b_generate, P, Pat, Gen} | Quals]) ->
+    %% We want to require that Gen is a binary type of any size,
+    %% i.e. <<_:M,_:_*N>> for any M, N but it is not possible to represent
+    %% this in the type language. M and N must be interger literals. If we
+    %% extend type(), we could allow M and N to be type variables or we can
+    %% introduce {type, _, binary, any} for binaries of any size.
+    {GenTy, VarBinds1, Cs1} = type_check_expr(Env, Gen),
+    case GenTy of
+	{type, _, any, []} -> ok;
+	{type, _, binary, _} -> ok;
+	_ -> throw({type_error, b_generate, P, GenTy})
+    end,
+    NewEnv = Env#env{venv = add_any_types_pat(Pat, Env#env.venv)},
+    {TyL, VarBinds2, Cs2} = type_check_bc(NewEnv, Expr, Quals),
+    {TyL
+    ,union_var_binds(VarBinds1, VarBinds2)
+    ,constraints:combine(Cs1, Cs2)};
+type_check_bc(Env, Expr, [Guard | Quals]) ->
+    %% We don't require guards to return a boolean.
+    {_Ty, VarBinds1, Cs1} = type_check_expr(Env, Guard),
+    {TyL, VarBinds2, Cs2} = type_check_bc(Env#env{}, Expr, Quals),
+    {TyL, union_var_binds(VarBinds1, VarBinds2), constraints:combine(Cs1, Cs2)}.
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Checking the type of an expression
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1790,6 +1860,8 @@ do_type_check_expr_in(Env, ResTy, {call, P, Name, Args}) ->
     {union_var_binds(VarBinds, VarBinds2), constraints:combine(Cs, Cs2)};
 do_type_check_expr_in(Env, ResTy, {'lc', P, Expr, Qualifiers}) ->
     type_check_lc_in(Env, ResTy, Expr, P, Qualifiers);
+do_type_check_expr_in(Env, ResTy, {bc, P, Expr, Qualifiers}) ->
+    type_check_bc_in(Env, ResTy, Expr, P, Qualifiers);
 
 %% Functions
 do_type_check_expr_in(Env, Ty, {'fun', P, {clauses, Clauses}}) ->
@@ -2084,6 +2156,66 @@ type_check_lc_in(Env, ResTy, Expr, P, [Pred | Quals]) ->
     {_VB1, Cs1} = type_check_expr_in(Env, {type, erl_anno:new(0), 'boolean', []}, Pred),
     { VB2, Cs2} = type_check_lc_in(Env, ResTy, Expr, P, Quals),
     {VB2, constraints:combine(Cs1, Cs2)}.
+
+type_check_bc_in(Env, ResTy, Expr, P, []) ->
+    case ResTy of
+	{type, _, binary, [{integer, _, 0}, {integer, _, _N}]} ->
+	    %% The result is a multiple of N bits.
+	    %% Expr must be a multiple of N bits, i.e.
+	    %% a subtype to the same type.
+	    %% e.g. fixed size of N bits or N*2 bits
+	    {_VB, Cs} = type_check_expr_in(Env, ResTy, Expr),
+	    {#{}, Cs};
+	{type, _, binary, [{integer, _, M}, {integer, _, _N}]} when M > 0 ->
+	    %% The result is a binary with a minimum size of M. This requires
+	    %% that the generators are non-empty. We don't do that.
+	    {_Ty, _VB, Cs} = type_check_expr(Env, Expr),
+	    %% TODO: We could require that _Ty is a binary (any size) or any().
+	    {#{}, Cs};
+	_ ->
+	    throw({type_error, bc, P, ResTy})
+    end;
+type_check_bc_in(Env, ResTy, Expr, P, [{generate, P_Gen, Pat, Gen} | Quals]) ->
+    {Ty, _VB1, Cs1} = type_check_expr(Env, Gen),
+    case expect_list_type(Ty, allow_nil_type) of
+	any ->
+	    NewEnv = Env#env{venv = add_any_types_pat(Pat, Env#env.venv)},
+	    {_VB2, Cs2} = type_check_bc_in(NewEnv, ResTy, Expr, P, Quals),
+	    {#{}, constraints:combine(Cs1, Cs2)};
+	{elem_ty, ElemTy, Cs} ->
+	    {NewVEnv, Cs2} = add_type_pat(Pat, ElemTy, Env#env.tenv, Env#env.venv),
+	    NewEnv = Env#env{venv = NewVEnv},
+	    {_VB2, Cs3} = type_check_bc_in(NewEnv, ResTy, Expr, P, Quals),
+	    {#{}, constraints:combine([Cs, Cs1, Cs2, Cs3])};
+	{elem_tys, _ElemTys, Cs} ->
+	    %% TODO: As a hack, we treat a union type as any, just to
+	    %% allow the program to type check.
+	    NewEnv = Env#env{venv = add_any_types_pat(Pat, Env#env.venv)},
+	    {_VB2, Cs2} = type_check_bc_in(NewEnv, ResTy, Expr, P, Quals),
+	    {#{}, constraints:combine([Cs, Cs1, Cs2])};
+	{type_error, Ty} ->
+	    throw({type_error, generator, P_Gen, Ty})
+    end;
+type_check_bc_in(Env, ResTy, Expr, P, [{b_generate, P_Gen, Pat, Gen} | Quals]) ->
+    %% Binary generator: Pat <= Gen
+    %% Gen should be binaries of any size.
+    {GenTy, _VarBindsGen, Cs1} = type_check_expr(Env, Gen),
+    case GenTy of
+	{type, _, any, []} -> ok;
+	{type, _, binary, _} -> ok;
+	_ -> throw({type_error, b_generate, P_Gen, GenTy})
+    end,
+    %% TODO: Check that Pat is a be binariy pattern of any size.
+    NewEnv = Env#env{venv = add_any_types_pat(Pat, Env#env.venv)},
+    {VarBinds, Cs2} = type_check_bc_in(NewEnv, ResTy, Expr, P, Quals),
+    {VarBinds, constraints:combine(Cs1, Cs2)};
+type_check_bc_in(Env, ResTy, Expr, P, [Pred | Quals]) ->
+    %% We choose to check the type of the predicate here, as we do for lc.
+    %% TODO: As a non-boolean predicates don't give runtime errors, we should
+    %% probably add a configuration parameter to toggle these checks.
+    {VB1, Cs1} = type_check_expr_in(Env, {type, erl_anno:new(0), 'boolean', []}, Pred),
+    {VB2, Cs2} = type_check_bc_in(Env, ResTy, Expr, P, Quals),
+    {union_var_binds([VB1, VB2]), constraints:combine(Cs1, Cs2)}.
 
 type_check_assocs(Env, [{Assoc, _, Key, Val}| Assocs])
   when Assoc == map_field_assoc orelse Assoc == map_field_exact ->
@@ -2440,6 +2572,12 @@ add_types_pats([Pat | Pats], [Ty | Tys], TEnv, VEnv) ->
 				    Ty, NormTy),
     {VEnv3, constraints:combine(Cs1, Cs2)}.
 
+%% Add variable bindings from the pattern
+-spec add_type_pat(erl_type:abstract_expr(),
+                   type(),
+                   TEnv :: #tenv{},
+                   VEnv :: #{}) ->
+          {NewVEnv :: #{}, constraints:constraints()}.
 add_type_pat({var, _, '_'}, _Ty, _TEnv, VEnv) ->
     ret(VEnv);
 add_type_pat({var, _, A}, Ty, _TEnv, VEnv) ->
@@ -2729,6 +2867,7 @@ bit_specifier_list_to_type(Specifiers) ->
 	[]  -> {type, erl_anno:new(0), integer, []}; %% default
 	[T] -> T
     end.
+
 
 %%% Helper functions
 
@@ -3072,6 +3211,10 @@ handle_type_error({type_error, bit_type, Expr, P, Ty1, Ty2}) ->
 handle_type_error({type_error, generator, P, Ty}) ->
     io:format("The generator in a list comprehension on line ~p is expected "
 	      "to return a list type, but returns ~s~n",
+	      [erl_anno:line(P), typelib:pp_type(Ty)]);
+handle_type_error({type_error, b_generate, P, Ty}) ->
+    io:format("The binary generator on line ~p is expected "
+	      "to return a bitstring type, but returns ~s~n",
 	      [erl_anno:line(P), typelib:pp_type(Ty)]);
 handle_type_error({type_error, check_clauses}) ->
     %%% TODO: Improve quality of type error
