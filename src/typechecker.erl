@@ -962,11 +962,11 @@ new_type_var() ->
 %% the expression together with their type and constraints.
 %-spec type_check_expr(#env, any()) -> { any(), #{ any() => any()}, #{ any() => any()} }.
 type_check_expr(Env, {var, P, Var}) ->
-    case catch maps:get(Var, Env#env.venv) of
-	{'EXIT', {{badkey, _}, _}} ->
-	    throw({unknown_variable, P, Var});
-	Ty ->
-	    return(Ty)
+    case Env#env.venv of
+	#{Var := Ty} ->
+	    return(Ty);
+	#{} ->
+	    throw({unknown_variable, P, Var})
     end;
 type_check_expr(Env, {match, _, Pat, Expr}) ->
     {Ty, VarBinds, Cs} = type_check_expr(Env, Expr),
