@@ -15,3 +15,7 @@ bin3(A) ->
 
 bin4(A,B) ->
     <<A,B>>.
+
+bin5() ->
+    <<"abc", 42, "abc"/utf32, "abc"/float, 42/float-little,
+      (<<"abc">>):8/bits, (<<"abc">>)/bytes>>.
