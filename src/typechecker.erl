@@ -1600,7 +1600,10 @@ type_check_bc(Env, Expr, []) ->
 		    {type, erl_anno:new(0), any, []};
 		{type, _, union, _} ->
 		    %% Possibly a union of bitstring types; ok for now.
-		    {type, erl_anno:new(0), any, []}
+		    {type, erl_anno:new(0), any, []};
+		NormTy ->
+		    P = line_no(Expr),
+		    throw({type_error, bc, P, Expr, NormTy})
 	    end,
     {RetTy, #{}, Cs};
 type_check_bc(Env, Expr, [{generate, P, Pat, Gen} | Quals]) ->
@@ -3245,6 +3248,10 @@ handle_type_error({type_error, b_generate, P, Ty}) ->
     io:format("The binary generator on line ~p is expected "
 	      "to return a bitstring type, but returns ~s~n",
 	      [erl_anno:line(P), typelib:pp_type(Ty)]);
+handle_type_error({type_error, bc, P, Expr, Ty}) ->
+    io:format("The expression ~s in the bit string comprehension on line ~p "
+	      "has type ~s but a bit type is expected.~n",
+	      [erl_pp:expr(Expr), erl_anno:line(P), typelib:pp_type(Ty)]);
 handle_type_error({type_error, check_clauses}) ->
     %%% TODO: Improve quality of type error
     io:format("Type error in clauses");
