@@ -1030,18 +1030,11 @@ type_check_expr(Env, {cons, _, Head, Tail}) ->
     end;
 type_check_expr(Env, {bin, _, BinElements}) ->
     %% <<Expr:Size/TypeSpecifierList, ...>>
-    TEnv = Env#env.tenv,
     VarBindAndCsList =
-	lists:map(fun ({bin_element, P, Expr, _Size, Specifiers}) ->
-			  {Ty, VB, Cs1} = type_check_expr(Env, Expr),
-			  %% Check Ty against the list of specifiers
-			  SpecTy = bit_specifier_list_to_type(Specifiers),
-			  case subtype(Ty, SpecTy, TEnv) of
-				{true, Cs2} ->
-				    {VB, constraints:combine(Cs1, Cs2)};
-				false ->
-				    throw({type_error, bit_type, P, Ty, SpecTy})
-			  end
+	lists:map(fun ({bin_element, _P, Expr, _Size, _Specif} = BinElem) ->
+			  %% Treat bin type specifier as type annotation
+			  Ty = type_of_bin_element(BinElem),
+			  type_check_expr_in(Env, Ty, Expr)
 		  end,
 		  BinElements),
     {VarBinds, Css} = lists:unzip(VarBindAndCsList),
@@ -1602,9 +1595,11 @@ type_check_bc(Env, Expr, []) ->
 		    {type, erl_anno:new(0), binary,
 		     [{integer, erl_anno:new(0), 0},
 		      {integer, erl_anno:new(0), M}]};
-		_ ->
-		    %% A bitstring of some combined size, a union of bitstring
-		    %% types or something else that might be ok, for now.
+		{type, _, binary, [{integer, _, _M}, {integer, _, _N}]} ->
+		    %% A bitstring of some combined size
+		    {type, erl_anno:new(0), any, []};
+		{type, _, union, _} ->
+		    %% Possibly a union of bitstring types; ok for now.
 		    {type, erl_anno:new(0), any, []}
 	    end,
     {RetTy, #{}, Cs};
@@ -2673,14 +2668,15 @@ add_type_pat(String = {string, P, _}, Ty, _TEnv, VEnv) ->
    end;
 add_type_pat({bin, _, BinElements}, {type, _, binary, [_,_]}, TEnv, VEnv) ->
     %% TODO: Consider the bit size parameters
-    lists:foldl(fun ({bin_element, _, Pat, _Size, Specifiers}, {VEnv1, Cs1}) ->
-			    %% Check Pat against the bit syntax type specifiers
-			    SpecTy = bit_specifier_list_to_type(Specifiers),
-			    {VEnv2, Cs2} = add_type_pat(Pat, SpecTy, TEnv, VEnv1),
-			    {VEnv2, constraints:combine(Cs1, Cs2)}
-		    end,
-		    {VEnv, constraints:empty()},
-		    BinElements);
+    lists:foldl(fun ({bin_element, _, Pat, _Size, _Specifiers} = BinElem,
+		     {VEnv1, Cs1}) ->
+			%% Check Pat against the bit syntax type specifiers
+			ElemTy = type_of_bin_element(BinElem),
+			{VEnv2, Cs2} = add_type_pat(Pat, ElemTy, TEnv, VEnv1),
+			{VEnv2, constraints:combine(Cs1, Cs2)}
+		end,
+		{VEnv, constraints:empty()},
+		BinElements);
 add_type_pat({record, P, Record, Fields}, Ty, TEnv, VEnv) ->
     case expect_record_type(Record, Ty, TEnv) of
         type_error -> throw({type_error, record_pattern, P, Record, Ty});
@@ -2841,21 +2837,47 @@ add_any_types_pat({op, _, _Op, _Pat}, VEnv) ->
 
 
 %% Get type from specifiers in a bit syntax, e.g. <<Foo/float-little>>
--spec bit_specifier_list_to_type([atom()] | default) -> type().
-bit_specifier_list_to_type(default) ->
-    bit_specifier_list_to_type([integer]);
-bit_specifier_list_to_type(Specifiers) ->
-    TypeSpecifiers =
+-spec type_of_bin_element({bin_element,
+			   Anno       :: erl_anno:anno(),
+			   Expr       :: erl_parse:abstract_expr(),
+			   Size       :: non_neg_integer() |
+					 default,
+			   Specifiers :: [atom() | {unit, pos_integer()}] |
+					 default}) -> type().
+type_of_bin_element({bin_element, Anno, Expr, Size, default}) ->
+    type_of_bin_element({bin_element, Anno, Expr, Size, []});
+type_of_bin_element({bin_element, _P, Expr, _Size, Specifiers}) ->
+    %% String literal is syntactic sugar for multiple char literals,
+    IsStringLiteral = case Expr of
+			  {string, _, _} -> true;
+			  _              -> false
+		      end,
+    Types =
 	lists:filtermap(fun
-			    (S) when S == integer; S == utf8; S == utf16 ->
-				{true, {type, erl_anno:new(0), integer, []}};
+			    (S) when S == integer;
+				     S == utf8;
+				     S == utf16;
+				     S == utf32 ->
+				if
+				    IsStringLiteral ->
+					%% <<"ab"/utf8>> == <<$a/utf8, $b/utf8>>.
+					{true, {type, erl_anno:new(0), string, []}};
+				    not IsStringLiteral ->
+					{true, {type, erl_anno:new(0), integer, []}}
+				end;
+			    (float) when IsStringLiteral ->
+				%% <<"abc"/float>> is integers to floats conversion
+				{true, {type, erl_anno:new(0), string, []}};
 			    (float) ->
-				{true, {type, 0, float, []}};
+				%% Integers can be cast to floats in this way.
+				{true, {type, erl_anno:new(0), number, []}};
 			    (S) when S == binary; S == bytes ->
+			        %% TODO: Consider Size and Unit
 				{true, {type, erl_anno:new(0), binary,
 					[{integer, erl_anno:new(0), 0}
 					,{integer, erl_anno:new(0), 8}]}};
 			    (S) when S == bitstring; S == bits ->
+			        %% TODO: Consider Size and Unit
 				{true, {type, erl_anno:new(0), binary,
 					[{integer, erl_anno:new(0), 0}
 					,{integer, erl_anno:new(0), 1}]}};
@@ -2863,9 +2885,15 @@ bit_specifier_list_to_type(Specifiers) ->
 				false
 			end,
 			Specifiers),
-    case TypeSpecifiers of
-	[]  -> {type, erl_anno:new(0), integer, []}; %% default
-	[T] -> T
+    case Types of
+	[] when IsStringLiteral ->
+	    %% <<"abc">>
+	    {type, erl_anno:new(0), string, []};
+	[] ->
+	    %% <<X>>
+	    {type, erl_anno:new(0), integer, []};
+	[T] ->
+	    T
     end.
 
 
@@ -3207,7 +3235,8 @@ handle_type_error({unknown_variable, P, Var}) ->
 handle_type_error({type_error, bit_type, Expr, P, Ty1, Ty2}) ->
     io:format("The expression ~s inside the bit expression on line ~p has type ~s "
 	      "but the type specifier indicates ~s~n",
-	      [erl_pp:expr(Expr), erl_anno:line(P), typelib:pp_type(Ty1), 		       typelib:pp_type(Ty2)]);
+	      [erl_pp:expr(Expr), erl_anno:line(P), typelib:pp_type(Ty1),
+	       typelib:pp_type(Ty2)]);
 handle_type_error({type_error, generator, P, Ty}) ->
     io:format("The generator in a list comprehension on line ~p is expected "
 	      "to return a list type, but returns ~s~n",
