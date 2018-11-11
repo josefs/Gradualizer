@@ -13,5 +13,4 @@ gradualizer.d
 cover/
 eunit.coverdata
 test/ct.cover.spec
-/gradualizer
 /_build

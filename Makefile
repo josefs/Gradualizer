@@ -5,9 +5,6 @@
 # start a shell
 # > make shell
 #
-# build cli
-# > make escript
-#
 # run cli
 # > ./gradualizer
 #
@@ -40,20 +37,14 @@ app:
 shell:
 	rebar3 shell
 
-.PHONY: escript
-escript:
-	rebar3 escriptize
-	cp _build/default/bin/gradualizer .
-
 .PHONY: gradualize
-gradualize: escript
+gradualize: app
 	./gradualizer -pa $(CURDIR)/src/ $(CURDIR)/src/*.erl
 
 .PHONY: clean
 clean:
 	rebar3 clean
 	rm -rf _build
-	rm -f gradualizer
 
 .PHONY: tests
 tests:

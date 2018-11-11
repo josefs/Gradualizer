@@ -1,10 +1,26 @@
--module(gradualizer_cli).
--export([main/1]).
+#!/usr/bin/env escript
+%% -*- erlang -*-
+%%!
+
+-define(ebin_dir, "_build/default/lib/gradualizer/ebin").
+-define(gradualizer_root, filename:dirname(?FILE)).
 
 -spec main([string()]) -> ok.
 main([]) ->
     print_usage();
-main(Args) -> handle_args(Args).
+main(Args) ->
+    add_gradualizer_code_path(),
+    handle_args(Args).
+
+add_gradualizer_code_path() ->
+    Ebin = filename:join(?gradualizer_root, ?ebin_dir),
+    case filelib:is_dir(Ebin) of
+	true ->
+	    code:add_patha(Ebin);
+	false ->
+	    io:format("Beams not found. Have you compiled gradualizer?~n"),
+	    halt(2)
+    end.
 
 -spec handle_args([string()]) -> no_return().
 handle_args(Args) ->
