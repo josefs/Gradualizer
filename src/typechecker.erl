@@ -2150,7 +2150,7 @@ type_check_arith_op_in(Env, Kind, ResTy, Op, P, Arg1, Arg2) ->
                     {union_var_binds([VarBinds1, VarBinds2]),
                      constraints:combine([Cs1, Cs2])};
                 false ->
-                    throw({type_error, arith_type_too_precise, Op, P, ResTy1})
+                    throw({type_error, op_type_too_precise, Op, P, ResTy1})
             end;
         true ->
             Tag = if Kind == integer -> int_error;
@@ -2286,14 +2286,46 @@ type_check_rel_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
     end.
 
 type_check_list_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
-    case subtype(ResTy, type(list), Env#env.tenv) of
-      {true, Cs} ->
-        {VarBinds1, Cs1} = type_check_expr_in(Env, ResTy, Arg1),
-        {VarBinds2, Cs2} = type_check_expr_in(Env, ResTy, Arg2),
-          {union_var_binds([VarBinds1, VarBinds2])
-          ,constraints:combine([Cs, Cs1, Cs2])};
-      false ->
-          throw({type_error, list_op_error, Op, P, ResTy})
+    Target =
+        %% '--' always produces a proper list, but '++' gives you an improper
+        %% list if the second argument is improper.
+        case Op of
+            '--' -> type(list, [type(term)]);
+            '++' -> type(maybe_improper_list, [type(term), type(term)])
+        end,
+    ResTy1 = glb(Target, ResTy, Env#env.tenv),
+    IsNone =
+        case ResTy1 of
+            {type, _, none, []} -> true;
+            _                   -> false
+        end,
+    case IsNone of
+        false ->
+            case list_op_arg_types(Op, ResTy1) of
+                {ArgTy1, ArgTy2} ->
+                    {VarBinds1, Cs1} = type_check_expr_in(Env, ArgTy1, Arg1),
+                    {VarBinds2, Cs2} = type_check_expr_in(Env, ArgTy2, Arg2),
+                    {union_var_binds([VarBinds1, VarBinds2]),
+                     constraints:combine([Cs1, Cs2])};
+                false ->
+                    throw({type_error, op_type_too_precise, Op, P, ResTy1})
+            end;
+        true ->
+            throw({type_error, list_op_error, Op, P, ResTy})
+    end.
+
+list_op_arg_types('++', Ty) ->
+    case list_view(Ty) of
+        {empty, _, _}       -> {type(nil), type(nil)};
+        {Empty, Elem, _} ->
+            Arg1 = from_list_view({Empty, Elem, type(nil)}),
+            {Arg1, Ty}
+    end;
+list_op_arg_types('--', Ty) ->
+    case list_view(Ty) of   %% Could go with [A] -- [term()] :: [A], but would miss legitimate errors
+        {any, Elem, _}   -> {type(list, [Elem]), type(list, [Elem])};
+        {empty, _, _}    -> {type(nil), type(list, [type(term)])};
+        {nonempty, _, _} -> false
     end.
 
 type_check_unary_op_in(Env, ResTy, Op, P, Arg) ->
@@ -3413,9 +3445,9 @@ handle_type_error({type_error, relop, RelOp, P, Ty1, Ty2}) ->
               "compatible types.~nHowever, it has arguments "
               "of type ~s and ~s~n", [RelOp, P, typelib:pp_type(Ty1)
                                               , typelib:pp_type(Ty2)]);
-handle_type_error({type_error, arith_type_too_precise, IntOp, P, Ty}) ->
+handle_type_error({type_error, op_type_too_precise, Op, P, Ty}) ->
     io:format("The operator ~p on line ~p is expected to have type "
-              "~s which is too precise to be statically checked~n", [IntOp, P, typelib:pp_type(Ty)]);
+              "~s which is too precise to be statically checked~n", [Op, P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, arith_error, ArithOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is expected to have type "
               "~s which has no numeric subtypes~n", [ArithOp, P, typelib:pp_type(Ty)]);
@@ -3448,8 +3480,8 @@ handle_type_error({type_error, rel_error, LogicOp, P, Ty1, Ty2}) ->
               "non-compatible types:~n~s~n~s~n",
               [LogicOp, P, typelib:pp_type(Ty1), typelib:pp_type(Ty2)]);
 handle_type_error({type_error, list_op_error, ListOp, P, Ty}) ->
-    io:format("The operator ~p on line ~p is expected to have "
-              "a non-list argument of type ~s~n",
+    io:format("The operator ~p on line ~p is expected to have type "
+              "~s, which has no list subtypes~n",
               [ListOp, P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, list_op_error, ListOp, P, Ty, _}) ->
     io:format("The operator ~p on line ~p is given an argument "
