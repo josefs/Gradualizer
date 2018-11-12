@@ -489,6 +489,8 @@ expand_builtin_aliases(Type) ->
 flatten_unions(Tys, TEnv) ->
     [ FTy || Ty <- Tys, FTy <- flatten_type(normalize(Ty, TEnv), TEnv) ].
 
+flatten_type({type, _, none, []}, _) ->
+    [];
 flatten_type({type, _, union, Tys}, TEnv) ->
     flatten_unions(Tys, TEnv);
 flatten_type({ann_type, _, [_, Ty]}, TEnv) ->
