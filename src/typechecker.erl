@@ -223,33 +223,15 @@ compat_ty({type, _, record, _}, {type, _, tuple, any}, A, _TEnv) ->
     ret(A);
 
 %% Lists
-compat_ty({type, _, list, [_Ty]}, {type, _, list, []}, A, _TEnv) ->
-    ret(A);
-compat_ty({type, _, list, []}, {type, _, list, [_Ty]}, A, _TEnv) ->
-    ret(A);
-compat_ty({type, _, list, [Ty1]}, {type, _, list, [Ty2]}, A, TEnv) ->
-    compat(Ty1, Ty2, A, TEnv);
-compat_ty({type, _, nil, []}, {type, _, list, _Any}, A, _TEnv) ->
-    ret(A);
-compat_ty({type, _, nonempty_list, []}, {type, _, list, _Any}, A, _TEnv) ->
-    ret(A);
-compat_ty({type, _, nonempty_list, [_Ty]}, {type, _, nonempty_list, []}, A, _TEnv) ->
-    ret(A);
-compat_ty({type, _, nonempty_list, []}, {type, _, nonempty_list, [_Ty]}, A, _TEnv) ->
-    ret(A);
-compat_ty({type, _, nonempty_list, [Ty1]}, {type, _, nonempty_list, [Ty2]}, A, TEnv) ->
-    compat(Ty1, Ty2, A, TEnv);
-compat_ty({type, _, nonempty_list, [Ty1]}, {type, _, list, [Ty2]}, A, TEnv) ->
-    compat(Ty1, Ty2, A, TEnv);
-compat_ty({type, _, nonempty_list, [_Ty]}, {type, _, list, []}, A, _TEnv) ->
-    ret(A);
-compat_ty({type, nil, _, []}, {type, _, maybe_improper_list, [_Ty2]}, A, _TEnv) ->
-    ret(A);
-compat_ty({type, _, list, [Ty1]}, {type, _, maybe_improper_list, [Ty2]}, A, TEnv) ->
-    compat(Ty1, Ty2, A, TEnv);
-compat_ty({type, _, nonempty_list, [Ty1]}, {type, _, maybe_improper_list, [Ty2]}, A, TEnv) ->
-    compat(Ty1, Ty2, A, TEnv);
-%% TODO: improper lists
+compat_ty(Ty1, Ty2, A, TEnv) when ?is_list_type(Ty1), ?is_list_type(Ty2) ->
+    {Empty1, Elem1, Term1} = list_view(Ty1),
+    {Empty2, Elem2, Term2} = list_view(Ty2),
+    case {Empty1, Empty2} of
+        {E, E}   -> ok;
+        {_, any} -> ok;
+        _        -> throw(nomatch)
+    end,
+    compat_tys([Elem1, Term1], [Elem2, Term2], A, TEnv);
 
 %% Tuples
 compat_ty({type, _, tuple, any}, {type, _, tuple, _Args}, A, _TEnv) ->
