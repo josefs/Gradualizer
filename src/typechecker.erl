@@ -656,7 +656,14 @@ upper_bound_more_or_eq({_, A}, {_, B}) ->
         true         -> A >= B
     end.
 
+int_min(A, B) when A == neg_inf; B == neg_inf   -> neg_inf;
+int_min(pos_inf, B) -> B;
+int_min(A, pos_inf) -> A;
+int_min(A, B) when is_integer(A), is_integer(B) -> min(A, B).
+
 int_max(A, B) when A == pos_inf; B == pos_inf   -> pos_inf;
+int_max(neg_inf, B) -> B;
+int_max(A, neg_inf) -> A;
 int_max(A, B) when is_integer(A), is_integer(B) -> max(A, B).
 
 int_negate(pos_inf) ->
@@ -2105,25 +2112,124 @@ do_type_check_expr_in(Env, ResTy, {'try', _, Block, CaseCs, CatchCs, AfterBlock}
 
 
 type_check_arith_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
-    case subtype(ResTy, {type, erl_anno:new(0), 'number', []}, Env#env.tenv) of
-        {true, Cs} ->
-          {VarBinds1, Cs1} = type_check_expr_in(Env, ResTy, Arg1),
-          {VarBinds2, Cs2} = type_check_expr_in(Env, ResTy, Arg2),
-          {union_var_binds([VarBinds1, VarBinds2])
-          ,constraints:combine([Cs, Cs1, Cs2])};
-        false ->
-          throw({type_error, arith_error, Op, P, ResTy})
-    end.
+    type_check_arith_op_in(Env, number, ResTy, Op, P, Arg1, Arg2).
+
 type_check_int_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
-    case subtype(ResTy, {type, erl_anno:new(0), 'integer', []}, Env#env.tenv) of
-        {true, Cs} ->
-          {VarBinds1, Cs1} = type_check_expr_in(Env, ResTy, Arg1),
-          {VarBinds2, Cs2} = type_check_expr_in(Env, ResTy, Arg2),
-          {union_var_binds([VarBinds1, VarBinds2])
-          ,constraints:combine([Cs, Cs1, Cs2])};
+    type_check_arith_op_in(Env, integer, ResTy, Op, P, Arg1, Arg2).
+
+type_check_arith_op_in(Env, Kind, ResTy, Op, P, Arg1, Arg2) ->
+    ResTy1 = glb(type(Kind, []), ResTy, Env#env.tenv),
+    IsNone =
+        case ResTy1 of
+            %% TODO: allow none() if checking against none()? Not clear that
+            %% this is sensible, since in that case you'd like to only require
+            %% *one* of the arguments to be none(), not both.
+            {type, _, none, []} -> true;
+            _ -> false
+        end,
+    case IsNone of
         false ->
-          throw({type_error, int_error, Op, P, ResTy})
+            case arith_op_arg_types(Op, ResTy1) of
+                {ArgTy1, ArgTy2} ->
+                    {VarBinds1, Cs1} = type_check_expr_in(Env, ArgTy1, Arg1),
+                    {VarBinds2, Cs2} = type_check_expr_in(Env, ArgTy2, Arg2),
+                    {union_var_binds([VarBinds1, VarBinds2]),
+                     constraints:combine([Cs1, Cs2])};
+                false ->
+                    throw({type_error, arith_type_too_precise, Op, P, ResTy1})
+            end;
+        true ->
+            Tag = if Kind == integer -> int_error;
+                     true            -> arith_error end,
+            throw({type_error, Tag, Op, P, ResTy})
     end.
+
+%% What types should be pushed into the arguments if checking an operator
+%% application against a given type.
+
+%% any() is always fine
+arith_op_arg_types(_Op, Ty = {type, _, any, []}) ->
+    {Ty, Ty};
+
+%% '/' can't produce an integer type
+arith_op_arg_types('/', Ty) when ?is_int_type(Ty) ->
+    false;
+
+%% integer() is closed under all operators except '/'
+arith_op_arg_types(_, Ty = {type, _, integer, []}) ->
+    {Ty, Ty};
+
+%% float() is closed under non-integer-exclusive operations and accepts
+%% any number() for '/'.
+%% Some precision lost: if at least one argument is a float() the other can
+%% be integer().
+arith_op_arg_types(Op, Ty = {type, _, float, []}) ->
+    case Op of
+        _ when Op == '+'; Op == '*'; Op == '-' ->
+            {Ty, Ty};
+        '/' -> {type(number, []), type(number, [])};
+        _   -> false
+    end;
+
+%% Singleton types are not closed under any operations
+arith_op_arg_types(_, {T, _, _}) when T == integer; T == float ->
+    false;
+
+%% pos_integer() is closed under '+',  '*', and 'bor'
+arith_op_arg_types(Op, Ty = {type, _, pos_integer, []}) ->
+    case lists:member(Op, ['+', '*', 'bor']) of
+        true -> {Ty, Ty};
+        false -> false
+    end;
+
+%% non_neg_integer() are closed under everything except '-' and '/'
+arith_op_arg_types(Op, Ty = {type, _, non_neg_integer, []}) ->
+    case lists:member(Op, ['+', '*', 'div', 'rem', 'band', 'bor', 'bxor', 'bsl', 'bsr']) of
+        true -> {Ty, Ty};
+        false -> false
+    end;
+
+%% neg_integer() is only closed under '+'
+arith_op_arg_types(Op, Ty = {type, _, neg_integer, []}) ->
+    case Op of
+        '+' -> {Ty, Ty};
+        _   -> false
+    end;
+
+%% A..B: Could do more here, but better to be conservative and predictable.
+%% We check
+%%  - 0..2^N-1 is closed under bit operations (not bsl)
+%%  - non_neg_integer() rem 0..N+1 : 0..N
+%% This lets you work with types like
+%%  -type word16() :: 0..65535.
+arith_op_arg_types(Op, {type, _, range, _} = Ty) ->
+    case int_type_to_range(Ty) of
+        {0, B} when Op == 'rem' ->
+            [TyR] = int_range_to_types({0, B + 1}),
+            {type(non_neg_integer, []), TyR};
+        {0, B} ->
+            case is_power_of_two(B + 1) andalso
+                 lists:member(Op, ['band', 'bor', 'bxor', 'bsr']) of
+                true -> {Ty, Ty};
+                false -> false
+            end;
+        _ -> false
+    end;
+
+%% We get normalised types here, so number() is expanded to integer() | float().
+arith_op_arg_types(Op, {type, _, union, Tys}) ->
+    ArgTys = [ arith_op_arg_types(Op, Ty) || Ty <- Tys ],
+    case [ A || A = {_, _} <- ArgTys ] of   %% filter failures
+        []      -> false;
+        ArgTys1 ->
+            {LeftArgs, RightArgs} = lists:unzip(ArgTys1),
+            {type(union, LeftArgs), type(union, RightArgs)}
+    end;
+
+%% We shouldn't get here?
+arith_op_arg_types(_Op, _Ty) ->
+    false.
+
 type_check_logic_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
     case subtype(ResTy, {type, erl_anno:new(0), 'bool', []}, Env#env.tenv) of
         {true, Cs} ->
@@ -2969,8 +3075,17 @@ type_of_bin_element({bin_element, _P, Expr, _Size, Specifiers}) ->
 
 %%% Helper functions
 
+type(Name, Args) ->
+    {type, erl_anno:new(0), Name, Args}.
+
 return(X) ->
     { X, #{}, constraints:empty() }.
+
+is_power_of_two(0) -> true;
+is_power_of_two(1) -> true;
+is_power_of_two(N) when N rem 2 == 0 ->
+    is_power_of_two(N div 2);
+is_power_of_two(_) -> false.
 
 union_var_binds(VB1, VB2) ->
     union_var_binds([VB1, VB2]).
@@ -3239,12 +3354,15 @@ handle_type_error({type_error, relop, RelOp, P, Ty1, Ty2}) ->
               "compatible types.~nHowever, it has arguments "
               "of type ~s and ~s~n", [RelOp, P, typelib:pp_type(Ty1)
                                               , typelib:pp_type(Ty2)]);
+handle_type_error({type_error, arith_type_too_precise, IntOp, P, Ty}) ->
+    io:format("The operator ~p on line ~p is expected to have type "
+              "~s which is too precise to be statically checked~n", [IntOp, P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, arith_error, ArithOp, P, Ty}) ->
-    io:format("The operator ~p on line ~p is given a non-numeric argument "
-              "of type ~s~n", [ArithOp, P, typelib:pp_type(Ty)]);
+    io:format("The operator ~p on line ~p is expected to have type "
+              "~s which has no numeric subtypes~n", [ArithOp, P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, int_error, IntOp, P, Ty}) ->
-    io:format("The operator ~p on line ~p is given a non-integer argument "
-              "of type ~s~n", [IntOp, P, typelib:pp_type(Ty)]);
+    io:format("The operator ~p on line ~p is expected to have type "
+              "~s which has no integer subtypes~n", [IntOp, P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, non_number_exp_type_plus, P, Ty}) ->
     io:format("The plus expression on line ~p is expected to have a "
               "non-numeric type:~n~s~n", [P, typelib:pp_type(Ty)]);
