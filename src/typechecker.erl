@@ -748,6 +748,53 @@ negate_bool_type({atom, P, false}) ->
 negate_bool_type(Ty) ->
     Ty.
 
+-spec is_list_type(type()) -> boolean().
+is_list_type({type, _, Name, _}) ->
+    lists:member(Name, [nil, list, nonempty_list, maybe_improper_list, nonempty_improper_list]);
+is_list_type(_) -> false.
+
+-type list_view() :: {empty | nonempty | any | none, type(), type()}.
+
+-spec list_view(type()) -> false | list_view().
+list_view(Ty = {type, _, T, Args}) when ?is_list_type(Ty) ->
+    Empty =
+        case T of
+            nil                    -> empty;
+            list                   -> any;
+            nonempty_list          -> nonempty;
+            maybe_improper_list    -> any;
+            nonempty_improper_list -> nonempty
+        end,
+    Elem =
+        case Args of
+            []      -> type(any);
+            [A | _] -> A
+        end,
+    Term =
+        case Args of
+            _ when T == nil; T == list; T == nonempty_list ->
+                type(nil);
+            [_, B] -> B;
+            _ -> type(any)  %% Don't think we get here
+        end,
+    {Empty, Elem, Term};
+list_view(_) -> false.
+
+-spec from_list_view(list_view()) -> type().
+from_list_view({_, _, {type, _, none, []}}) -> type(none);
+from_list_view({empty, _, _}) -> type(nil);
+from_list_view({none, _, _}) -> type(none);
+from_list_view({Empty, Elem, {type, _, nil, []}}) ->
+    case Empty of
+        any      -> type(list, [Elem]);
+        nonempty -> type(nonempty_list, [Elem])
+    end;
+from_list_view({Empty, Elem, Term}) ->
+    case Empty of
+        any      -> type(maybe_improper_list, [Elem, Term]);
+        nonempty -> type(nonempty_improper_list, [Elem, Term])
+    end.
+
 %% End of subtype help functions
 
 %% Pattern matching on types
