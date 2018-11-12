@@ -2230,25 +2230,33 @@ arith_op_arg_types(Op, {type, _, union, Tys}) ->
 arith_op_arg_types(_Op, _Ty) ->
     false.
 
-type_check_logic_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
-    case subtype(ResTy, {type, erl_anno:new(0), 'bool', []}, Env#env.tenv) of
+type_check_logic_op_in(Env, ResTy, Op, P, Arg1, Arg2) when Op == 'andalso'; Op == 'orelse' ->
+    Bool = type(boolean, []),
+    case subtype(Bool, ResTy, Env#env.tenv) of
         {true, Cs} ->
-          {VarBinds1, Cs1} = type_check_expr_in(Env, ResTy, Arg1),
-          EnvArg2 =
-              if Op =:= 'andalso'; Op =:= 'orelse' ->
-                      %% variable bindings are propagated from Arg1 to Arg2
-                      Env#env{venv = union_var_binds([Env#env.venv, VarBinds1])};
-                 true ->
-                      Env
-              end,
-          {VarBinds2, Cs2} = type_check_expr_in(EnvArg2, ResTy, Arg2),
+            {VarBinds1, Cs1} = type_check_expr_in(Env, Bool, Arg1),
+            %% variable bindings are propagated from Arg1 to Arg2
+            EnvArg2 = Env#env{venv = union_var_binds([Env#env.venv, VarBinds1])},
+            {VarBinds2, Cs2} = type_check_expr_in(EnvArg2, ResTy, Arg2),
+            {union_var_binds([VarBinds1, VarBinds2]),
+             constraints:combine([Cs, Cs1, Cs2])};
+        false ->
+            throw({type_error, logic_error, Op, P, ResTy})
+    end;
+type_check_logic_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
+    Bool = type(boolean, []),
+    case subtype(Bool, ResTy, Env#env.tenv) of
+        {true, Cs} ->
+          {VarBinds1, Cs1} = type_check_expr_in(Env, Bool, Arg1),
+          {VarBinds2, Cs2} = type_check_expr_in(Env, Bool, Arg2),
           {union_var_binds([VarBinds1, VarBinds2])
           ,constraints:combine([Cs, Cs1, Cs2])};
         false ->
           throw({type_error, logic_error, Op, P, ResTy})
     end.
+
 type_check_rel_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
-    case subtype(ResTy, {type, erl_anno:new(0), 'bool', []}, Env#env.tenv) of
+    case subtype(type(boolean, []), ResTy, Env#env.tenv) of
         {true, Cs0} ->
           {ResTy1, VarBinds1, Cs1} = type_check_expr(Env, Arg1),
           {ResTy2, VarBinds2, Cs2} = type_check_expr(Env, Arg2),
@@ -2262,6 +2270,7 @@ type_check_rel_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
         false ->
           throw({type_error, rel_error, Op, P, ResTy})
     end.
+
 type_check_list_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
     case subtype(ResTy, {type, erl_anno:new(0), list, []}, Env#env.tenv) of
       {true, Cs} ->
@@ -3388,11 +3397,11 @@ handle_type_error({type_error, bnot_used_with_wrong_type, P, Ty}) ->
     io:format("The 'bnot' expression on line ~p is expected to have the "
               "following non-integer type: ~s~n", [P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, logic_error, LogicOp, P, Ty}) ->
-    io:format("The operator ~p on line ~p is given a non-boolean argument "
-              "of type ~s~n", [LogicOp, P, typelib:pp_type(Ty)]);
+    io:format("The operator ~p on line ~p is expected to have type "
+              "~s which is not a supertype of boolean()~n", [LogicOp, P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, rel_error, LogicOp, P, Ty}) ->
-    io:format("The operator ~p on line ~p is used in a context where it is "
-              "required to have type ~s~n", [LogicOp, P, typelib:pp_type(Ty)]);
+    io:format("The operator ~p on line ~p is expected to have type "
+              "~s which is not a supertype of boolean()~n", [LogicOp, P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, rel_error, LogicOp, P, Ty1, Ty2}) ->
     io:format("The operator ~p on line ~p is given two arguments with "
               "non-compatible types:~n~s~n~s~n",
