@@ -2017,38 +2017,9 @@ do_type_check_expr_in(Env, ResTy, {op, _, '!', Arg1, Arg2}) ->
     {_,  VarBinds1, Cs1} = type_check_expr(Env, Arg1),
     {VarBinds2, Cs2} = type_check_expr_in(Env, ResTy, Arg2),
     {union_var_binds([VarBinds1,VarBinds2]), constraints:combine(Cs1,Cs2)};
-do_type_check_expr_in(Env, ResTy, {op, P, 'not', Arg}) ->
-    case subtype(ResTy, {type, P, boolean, []}, Env#env.tenv) of
-        {true, Cs1} ->
-            {VB, Cs2} = type_check_expr_in(Env, ResTy, Arg),
-            {VB, constraints:combine(Cs1, Cs2)};
-        false ->
-            throw({type_error, not_used_with_wrong_type, P, ResTy})
-    end;
-do_type_check_expr_in(Env, ResTy, {op, P, 'bnot', Arg}) ->
-    case subtype(ResTy, {type, P, integer, []}, Env#env.tenv) of
-        {true, Cs1} ->
-            {VB, Cs2} = type_check_expr_in(Env, ResTy, Arg),
-            {VB, constraints:combine(Cs1, Cs2)};
-        false ->
-            throw({type_error, bnot_used_with_wrong_type, P, ResTy})
-    end;
-do_type_check_expr_in(Env, ResTy, {op, P, '+', Arg}) ->
-    case subtype(ResTy, {type, P, number, []}, Env#env.tenv) of
-        {true, Cs1} ->
-            {VB, Cs2} = type_check_expr_in(Env, ResTy, Arg),
-            {VB, constraints:combine(Cs1, Cs2)};
-        false ->
-            throw({type_error, non_number_exp_type_plus, P, ResTy})
-    end;
-do_type_check_expr_in(Env, ResTy, {op, P, '-', Arg}) ->
-    case subtype(ResTy, {type, P, number, []}, Env#env.tenv) of
-        {true, Cs1} ->
-            {VB, Cs2} = type_check_expr_in(Env, ResTy, Arg),
-            {VB, constraints:combine(Cs1, Cs2)};
-        false ->
-            throw({type_error, non_number_exp_type_minus, P, ResTy})
-    end;
+do_type_check_expr_in(Env, ResTy, {op, P, Op, Arg}) when
+      Op == 'not'; Op == 'bnot'; Op == '+'; Op == '-' ->
+    type_check_unary_op_in(Env, ResTy, Op, P, Arg);
 do_type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
       Op == '+' orelse Op == '-' orelse Op == '*' orelse Op == '/' ->
     type_check_arith_op_in(Env, ResTy, Op, P, Arg1, Arg2);
@@ -2281,6 +2252,40 @@ type_check_list_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
       false ->
           throw({type_error, list_op_error, Op, P, ResTy})
     end.
+
+type_check_unary_op_in(Env, ResTy, Op, P, Arg) ->
+    Target =
+        case Op of
+            'not'  -> type(boolean);
+            'bnot' -> type(integer);
+            '+'    -> type(number);
+            '-'    -> type(number)
+        end,
+    ResTy1 = glb(Target, ResTy, Env#env.tenv),
+    case ResTy1 of
+        %% TODO: allow if ResTy == none()?
+        {type, _, none, []} ->
+            throw({type_error, unary_error, Op, P, Target, ResTy});
+        _ ->
+            ArgTy = unary_op_arg_type(Op, ResTy1),
+            %% io:format("Pushing ~p into ~p: ~p\n", [ResTy1, Op, ArgTy]),
+            type_check_expr_in(Env, ArgTy, Arg)
+    end.
+
+%% Which type should we check the argument against if we want the given type
+%% out? We already now that Ty is a subtype of the return type of the operator.
+unary_op_arg_type('+', Ty) -> Ty;
+unary_op_arg_type(Op, {type, P, union, Tys}) ->
+    {type, P, union, [ unary_op_arg_type(Op, Ty) || Ty <- Tys ]};
+unary_op_arg_type('not', {atom, P, B}) -> {atom, P, not B};
+unary_op_arg_type('not', Ty) -> Ty;
+unary_op_arg_type(Op, Ty) when Op == '-'; Op == 'bnot' ->
+    {Lo, Hi} = int_type_to_range(Ty),
+    Neg = fun(pos_inf)             -> neg_inf;
+             (neg_inf)             -> pos_inf;
+             (N) when Op == '-'    -> -N;
+             (N) when Op == 'bnot' -> bnot N end,
+    type(union, int_range_to_types({Neg(Hi), Neg(Lo)})).
 
 type_check_lc_in(Env, ResTy, Expr, P, []) ->
     case expect_list_type(ResTy, allow_nil_type) of
@@ -3374,30 +3379,21 @@ handle_type_error({type_error, arith_error, ArithOp, P, Ty}) ->
 handle_type_error({type_error, int_error, IntOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is expected to have type "
               "~s which has no integer subtypes~n", [IntOp, P, typelib:pp_type(Ty)]);
-handle_type_error({type_error, non_number_exp_type_plus, P, Ty}) ->
-    io:format("The plus expression on line ~p is expected to have a "
-              "non-numeric type:~n~s~n", [P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, non_number_argument_to_plus, P, Ty}) ->
     io:format("The plus expression on line ~p has a non-numeric argument "
               "of type:~n~s~n", [P, typelib:pp_type(Ty)]);
-handle_type_error({type_error, non_number_exp_type_minus, P, Ty}) ->
-    io:format("The negated expression on line ~p is expected to have a "
-              "non-numeric type:~n~s~n", [P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, non_number_argument_to_minus, P, Ty}) ->
     io:format("The negated expression on line ~p has a non-numeric argument "
               "of type:~n~s~n", [P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, non_boolean_argument_to_not, P, Ty}) ->
     io:format("The 'not' expression on line ~p has a non-boolean argument "
               "of type ~s~n", [P, typelib:pp_type(Ty)]);
-handle_type_error({type_error, not_used_with_wrong_type, P, Ty}) ->
-    io:format("The 'not' expression on line ~p is expected to have the "
-              "following non-boolean type: ~s~n", [P, typelib:pp_type(Ty)]);
+handle_type_error({type_error, unary_error, Op, P, TargetTy, Ty}) ->
+    io:format("The application of unary '~s' on line ~p is expected to have type "
+              "~s, which has no shared subtype with ~s~n", [Op, P, typelib:pp_type(Ty), typelib:pp_type(TargetTy)]);
 handle_type_error({type_error, non_integer_argument_to_bnot, P, Ty}) ->
     io:format("The 'bnot' expression on line ~p has a non-integer argument "
               " of type ~s~n", [P, typelib:pp_type(Ty)]);
-handle_type_error({type_error, bnot_used_with_wrong_type, P, Ty}) ->
-    io:format("The 'bnot' expression on line ~p is expected to have the "
-              "following non-integer type: ~s~n", [P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, logic_error, LogicOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is expected to have type "
               "~s which is not a supertype of boolean()~n", [LogicOp, P, typelib:pp_type(Ty)]);
