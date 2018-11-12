@@ -387,16 +387,30 @@ glb_ty(Ty1, Ty2, _A, _TEnv) when ?is_int_type(Ty1), ?is_int_type(Ty2) ->
     {Lo2, Hi2} = int_type_to_range(Ty2),
     type(union, int_range_to_types({int_max(Lo1, Lo2), int_min(Hi1, Hi2)}));
 
-%% TODO: At the moment we only take glb with number() or integer() (when
-%% checking operator applications), so we never hit these cases. They should be
-%% implemented though.
+%% List types
+
+glb_ty(Ty1, Ty2, A, TEnv) when ?is_list_type(Ty1), ?is_list_type(Ty2) ->
+    {Empty1, Elem1, Term1} = list_view(Ty1),
+    {Empty2, Elem2, Term2} = list_view(Ty2),
+    Empty =
+        case {Empty1, Empty2} of
+            {E, E}            -> E;
+            {any, E}          -> E;
+            {E, any}          -> E;
+            {empty, nonempty} -> none;
+            {nonempty, empty} -> none
+        end,
+    Elem = glb(Elem1, Elem2, A, TEnv),
+    Term = glb(Term1, Term2, A, TEnv),
+    from_list_view({Empty, Elem, Term});
+
+%% TODO: At the moment we only take glb when checking operator applications, so
+%% we never hit these cases. They should be implemented though.
 %% Tuple types
 %% Type variables
 %% Function types
-%% Atoms
 %% Map types
 %% Record types
-%% List types
 %% Binary types
 
 %% Incompatible
