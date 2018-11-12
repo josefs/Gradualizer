@@ -355,6 +355,71 @@ get_record_fields(RecName, Anno, #tenv{records = REnv}) ->
             end
     end.
 
+%% Greatest lower bound
+%% --------------------
+%%
+%% * Computes the maximal (in the subtyping hierarchy) type that is a subtype
+%%   of two given types.
+
+-spec glb(type(), type(), TEnv :: #tenv{}) -> type().
+glb(T1, T2, TEnv) ->
+    normalize(glb(T1, T2, #{}, TEnv), TEnv).
+
+glb(T1, T2, A, TEnv) ->
+    Ty1 = typelib:remove_pos(normalize(T1, TEnv)),
+    Ty2 = typelib:remove_pos(normalize(T2, TEnv)),
+    %% TODO: memoisation
+    glb_ty(Ty1, Ty2, A, TEnv).
+
+%% If either type is any() we don't know anything
+glb_ty({type, _, any, []} = Ty1, _Ty2, _A, _TEnv) ->
+    Ty1;
+glb_ty(_Ty1, {type, _, any, []} = Ty2, _A, _TEnv) ->
+    Ty2;
+
+%% term() is the top of the hierarchy
+glb_ty({type, _, term, []}, Ty2, _A, _TEnv) ->
+    Ty2;
+glb_ty(Ty1, {type, _, term, []}, _A, _TEnv) ->
+    Ty1;
+
+%% none() is the bottom of the hierarchy
+glb_ty({type, _, none, []} = Ty1, _Ty2, _A, _TEnv) ->
+    Ty1;
+glb_ty(_Ty1, {type, _, none, []} = Ty2, _A, _TEnv) ->
+    Ty2;
+
+%% glb is idempotent
+glb_ty(Ty, Ty, _A, _TEnv) ->
+    Ty;
+
+%% Union types: glb distributes over unions
+glb_ty({type, Ann, union, Ty1s}, Ty2, A, TEnv) ->
+    {type, Ann, union, [ glb_ty(Ty1, Ty2, A, TEnv) || Ty1 <- Ty1s ]};
+glb_ty(Ty1, {type, Ann, union, Ty2s}, A, TEnv) ->
+    {type, Ann, union, [ glb_ty(Ty1, Ty2, A, TEnv) || Ty2 <- Ty2s ]};
+
+%% Number types
+glb_ty(Ty1, Ty2, _A, _TEnv) when ?is_int_type(Ty1), ?is_int_type(Ty2) ->
+    {Lo1, Hi1} = int_type_to_range(Ty1),
+    {Lo2, Hi2} = int_type_to_range(Ty2),
+    type(union, int_range_to_types({int_max(Lo1, Lo2), int_min(Hi1, Hi2)}));
+
+%% TODO: At the moment we only take glb with number() or integer() (when
+%% checking operator applications), so we never hit these cases. They should be
+%% implemented though.
+%% Tuple types
+%% Type variables
+%% Function types
+%% Atoms
+%% Map types
+%% Record types
+%% List types
+%% Binary types
+
+%% Incompatible
+glb_ty(_Ty1, _Ty2, _A, _TEnv) -> type(none, []).
+
 %% Normalize
 %% ---------
 %%
