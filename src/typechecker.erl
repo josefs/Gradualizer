@@ -2156,23 +2156,25 @@ type_check_lc_in(Env, ResTy, Expr, P, [Pred | Quals]) ->
     {VB2, constraints:combine(Cs1, Cs2)}.
 
 type_check_bc_in(Env, ResTy, Expr, P, []) ->
-    case ResTy of
-	{type, _, binary, [{integer, _, 0}, {integer, _, _N}]} ->
-	    %% The result is a multiple of N bits.
-	    %% Expr must be a multiple of N bits, i.e.
-	    %% a subtype to the same type.
-	    %% e.g. fixed size of N bits or N*2 bits
-	    {_VB, Cs} = type_check_expr_in(Env, ResTy, Expr),
-	    {#{}, Cs};
-	{type, _, binary, [{integer, _, M}, {integer, _, _N}]} when M > 0 ->
-	    %% The result is a binary with a minimum size of M. This requires
-	    %% that the generators are non-empty. We don't do that.
-	    {_Ty, _VB, Cs} = type_check_expr(Env, Expr),
-	    %% TODO: We could require that _Ty is a binary (any size) or any().
-	    {#{}, Cs};
-	_ ->
-	    throw({type_error, bc, P, ResTy})
-    end;
+    ExprTy = case ResTy of
+		 {type, _, binary, [{integer, _, 0}, {integer, _, _N}]} ->
+		     %% The result is a multiple of N bits.
+		     %% Expr must be a multiple of N bits too.
+		     ResTy;
+		 {type, _, binary, [{integer, _, M}, {integer, _, _N}]}
+		   when M > 0 ->
+		     %% The result is a binary with a minimum size of M. This
+		     %% requires that the generators are non-empty. We don't
+		     %% check that. At least, we can check that Gen is a
+		     %% bitstring.
+		     {type, erl_anno:new(0), binary,
+			    [{integer, erl_anno:new(0), 0},
+			     {integer, erl_anno:new(0), 1}]};
+		 _ ->
+		     throw({type_error, bc, P, ResTy})
+	     end,
+    {_VB, Cs} = type_check_expr_in(Env, ExprTy, Expr),
+    {#{}, Cs};
 type_check_bc_in(Env, ResTy, Expr, P, [{generate, P_Gen, Pat, Gen} | Quals]) ->
     {Ty, _VB1, Cs1} = type_check_expr(Env, Gen),
     case expect_list_type(Ty, allow_nil_type) of
@@ -2196,17 +2198,15 @@ type_check_bc_in(Env, ResTy, Expr, P, [{generate, P_Gen, Pat, Gen} | Quals]) ->
     end;
 type_check_bc_in(Env, ResTy, Expr, P, [{b_generate, P_Gen, Pat, Gen} | Quals]) ->
     %% Binary generator: Pat <= Gen
-    %% Gen should be binaries of any size.
-    {GenTy, _VarBindsGen, Cs1} = type_check_expr(Env, Gen),
-    case GenTy of
-	{type, _, any, []} -> ok;
-	{type, _, binary, _} -> ok;
-	_ -> throw({type_error, b_generate, P_Gen, GenTy})
-    end,
-    %% TODO: Check that Pat is a be binariy pattern of any size.
-    NewEnv = Env#env{venv = add_any_types_pat(Pat, Env#env.venv)},
-    {VarBinds, Cs2} = type_check_bc_in(NewEnv, ResTy, Expr, P, Quals),
-    {VarBinds, constraints:combine(Cs1, Cs2)};
+    %% Gen and Pat should be bitstrings (of any size).
+    BitTy = {type, erl_anno:new(0), binary,
+		   [{integer, erl_anno:new(0), 0},
+		    {integer, erl_anno:new(0), 1}]},
+    {_VarBindsGen, Cs1} = type_check_expr_in(Env, BitTy, Gen),
+    {NewVEnv, Cs2} = add_type_pat(Pat, BitTy, Env#env.tenv, Env#env.venv),
+    NewEnv = Env#env{venv = NewVEnv},
+    {VarBinds, Cs3} = type_check_bc_in(NewEnv, ResTy, Expr, P, Quals),
+    {VarBinds, constraints:combine([Cs1, Cs2, Cs3])};
 type_check_bc_in(Env, ResTy, Expr, P, [Pred | Quals]) ->
     %% We choose to check the type of the predicate here, as we do for lc.
     %% TODO: As a non-boolean predicates don't give runtime errors, we should
