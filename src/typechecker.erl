@@ -3448,6 +3448,14 @@ handle_type_error({type_error, relop, RelOp, P, Ty1, Ty2}) ->
 handle_type_error({type_error, op_type_too_precise, Op, P, Ty}) ->
     io:format("The operator ~p on line ~p is expected to have type "
               "~s which is too precise to be statically checked~n", [Op, P, typelib:pp_type(Ty)]);
+handle_type_error({type_error, arith_error, ArithOp, P, Ty1, Ty2}) ->
+    io:format("The operator ~p on line ~p is requires numeric arguments, but "
+              "has arguments of type ~s and ~s~n",
+              [ArithOp, P, typelib:pp_type(Ty1), typelib:pp_type(Ty2)]);
+handle_type_error({type_error, int_error, ArithOp, P, Ty1, Ty2}) ->
+    io:format("The operator ~p on line ~p is requires integer arguments, but "
+              " has arguments of type ~s and ~s~n",
+              [ArithOp, P, typelib:pp_type(Ty1), typelib:pp_type(Ty2)]);
 handle_type_error({type_error, arith_error, ArithOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is expected to have type "
               "~s which has no numeric subtypes~n", [ArithOp, P, typelib:pp_type(Ty)]);
