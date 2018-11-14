@@ -45,8 +45,8 @@ r()->
 
 s() ->
     try ok of
-	ok ->
-	    ok
+        ok ->
+            ok
     catch _:_ ->
-	    nok
+            nok
     end.

@@ -35,7 +35,7 @@ to insert type information in the right places.
 
 I should start small. The type system fragment I should start with should be
 roughly the STLC. Then I can work my way up from there. It seems to me that
-"Abstracting Gradual Types" is a good model for how to incorporate new 
+"Abstracting Gradual Types" is a good model for how to incorporate new
 type system features.
 
 Eventually I'd like to support plt files. That means that gradualizer should
@@ -94,7 +94,7 @@ file or inferred.
   * [X] If expressions
   * [X] Maps
   * [X] An initial environment for the erlang module
-  
+
 * [X] New representation of types which supports
       subtyping of recursive types. This requires that
       each subtree in a type has a unique identity so that
@@ -125,7 +125,7 @@ file or inferred.
 * The existing type system for Erlang supports equi-recursive types. The
   following blog posts have interesting things to say about subtyping
   recursive types:
-  
+
   http://whiley.org/2011/02/16/minimising-recursive-data-types/
   http://whiley.org/2011/03/07/implementing-structural-types/
   http://whiley.org/2011/08/30/simplification-vs-minimisation-of-types-in-whiley/
@@ -134,14 +134,14 @@ file or inferred.
   of intersection types, the following paper seems to provide the way to deal
   with integrating these features in a gradual type system:
   "Gradual Typing with Union and Intersection Types"
-  
+
   http://www.dptinfo.ens-cachan.fr/~vlanvin/Papers/icfp17.pdf
 
 * It'd be nice to be able to give interface types to atoms so that we can type check
-  calls to `apply`. We can reuse *behaviours* for this purpose. A behaviour 
+  calls to `apply`. We can reuse *behaviours* for this purpose. A behaviour
   essentially defines an interface. But we could also infer interfaces based on
   export lists.
-  
+
   The typing rule for `apply` will require that the `Module` argument is a subtype
   of the interface containing the `Function` with the type of its `Arguments`.
 

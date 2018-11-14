@@ -25,19 +25,19 @@ typechecking algorithm, and $T$ and $\Delta$ as outputs.
 
 \begin{math}
 \infer{\Gamma \vdash m\!:\!f(E) : T \dashv \Delta}
-	{m\!:\!f : (S) \rightarrow T \in \Gamma & \Gamma \vdash E : S \dashv \Delta}
+        {m\!:\!f : (S) \rightarrow T \in \Gamma & \Gamma \vdash E : S \dashv \Delta}
 \\
 \infer{\Gamma \vdash V : T \dashv \Delta}
-	{V : T \in \Gamma}
+        {V : T \in \Gamma}
 \\
 \infer{\Gamma \vdash \{ E_1, \dots , E_n\} : \{T_1, \dots, T_n\} \dashv \bigcup_{i = 1..n}\Delta_i}
-	{\Gamma \vdash E_1 : T_1 \dashv \Delta_1 & \dots & \Gamma \vdash E_n : T_n \dashv \Delta_n}
+        {\Gamma \vdash E_1 : T_1 \dashv \Delta_1 & \dots & \Gamma \vdash E_n : T_n \dashv \Delta_n}
 \\
 \infer{\Gamma \vdash E_1 , E_2 : T \dashv \Delta \cup \Upsilon}
-	{\Gamma \vdash E_1 : S \dashv \Upsilon & \Gamma \cup \Upsilon \vdash E_2 : T \dashv \Delta}
+        {\Gamma \vdash E_1 : S \dashv \Upsilon & \Gamma \cup \Upsilon \vdash E_2 : T \dashv \Delta}
 \\
 \infer{\Gamma \vdash V = E : T \dashv \Delta(V : T)}
-	{\Gamma \vdash E : T \dashv \Delta}
+        {\Gamma \vdash E : T \dashv \Delta}
 \end{math}
 
 ## Subtyping

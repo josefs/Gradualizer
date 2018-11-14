@@ -399,14 +399,14 @@ check_epp_errors(File, Forms) ->
                                              when Key :: K, Value :: V.
 add_entries_to_map(Entries, Map) ->
     lists:foldl(fun ({MFA, Types}, MapAcc) ->
-		    maps:update_with(MFA,
-				     fun (OldTypes) ->
-					     %% Key already present. Keep the
-					     %% old value.
-					     %% Maybe TODO: Warn if an element
-					     %% is already present
-					     OldTypes
-				     end, Types, MapAcc)
+                    maps:update_with(MFA,
+                                     fun (OldTypes) ->
+                                             %% Key already present. Keep the
+                                             %% old value.
+                                             %% Maybe TODO: Warn if an element
+                                             %% is already present
+                                             OldTypes
+                                     end, Types, MapAcc)
                 end,
                 Map,
                 Entries).

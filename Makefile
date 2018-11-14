@@ -18,7 +18,7 @@
 # > make cover
 #
 # show coverage (Linux)
-# > make showcover 
+# > make showcover
 # show coverage (OS X)
 # > make osxshowcover
 #

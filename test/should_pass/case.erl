@@ -4,8 +4,8 @@
 
 cse(X) ->
     case X of
-	true ->
-	    false;
-	false ->
-	    true
+        true ->
+            false;
+        false ->
+            true
     end.

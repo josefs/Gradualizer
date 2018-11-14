@@ -9,10 +9,10 @@ To run Gradualizer from rebar3, add it as a plugin in your `rebar.config`:
 
 # Options
 
-Gradualizer checks every source file in your app(s), unless configured not to.  
+Gradualizer checks every source file in your app(s), unless configured not to.
 Configuration is read from `gradualizer_opts` in `rebar.config` which
-should be a `proplists:proplist()`.  
-The following options are supported:  
+should be a `proplists:proplist()`.
+The following options are supported:
 
 ## include
 

@@ -2,7 +2,7 @@
 -module(typelib).
 
 -export([remove_pos/1, annotate_user_types/2, get_module_from_annotation/1,
-	 substitute_type_vars/2,
+         substitute_type_vars/2,
          pp_type/1, debug_type/3, parse_type/1]).
 
 -type type() :: erl_parse:abstract_type().
@@ -18,22 +18,22 @@ pp_type(Type) ->
     Form = {attribute, erl_anno:new(0), type, {t, Type, []}},
     TypeDef = erl_pp:form(Form),
     {match, [S]} = re:run(TypeDef, <<"::\\s*(.*)\\.\\n*">>,
-			  [{capture, all_but_first, list}, dotall]),
+                          [{capture, all_but_first, list}, dotall]),
     S.
     %case erl_anno:file(element(2, Type)) of
-    %	undefined -> S;
-    %	File      -> S ++ " in " ++ File
+    %        undefined -> S;
+    %        File      -> S ++ " in " ++ File
     %end.
 
 %% Looks up and prints the type M:N(P1, ..., Pn).
 debug_type(M, N, P) ->
     case gradualizer_db:get_type(M, N, P) of
-	{ok, T} ->
-	    Params = lists:join($,, lists:map(fun pp_type/1, P)),
-	    io:format("~w:~w(~s) :: ~s.~n",
-		      [M, N, Params, pp_type(T)]);
-	not_found ->
-	    not_found
+        {ok, T} ->
+            Params = lists:join($,, lists:map(fun pp_type/1, P)),
+            io:format("~w:~w(~s) :: ~s.~n",
+                      [M, N, Params, pp_type(T)]);
+        not_found ->
+            not_found
     end.
 
 -spec parse_type(string()) -> type().
@@ -59,7 +59,7 @@ remove_pos({type, Anno, record, Params = [_Name]}) ->
     {type, anno_keep_only_filename(Anno), record, Params};
 remove_pos({type, _, bounded_fun, [FT, Cs]}) ->
     {type, erl_anno:new(0), bounded_fun, [remove_pos(FT)
-					 ,lists:map(fun remove_pos/1, Cs)]};
+                                         ,lists:map(fun remove_pos/1, Cs)]};
 remove_pos({type, _, constraint, [{atom, _, is_subtype}, [V, T]]}) ->
     {type, erl_anno:new(0), constraint, [{atom, erl_anno:new(0), is_subtype}
                                         ,[remove_pos(V), remove_pos(T)]]};
@@ -87,8 +87,8 @@ remove_pos({op, _, Op, Type1, Type2}) ->
 anno_keep_only_filename(Anno) ->
     NewAnno = erl_anno:new(0),
     case erl_anno:file(Anno) of
-	undefined -> NewAnno;
-	Filename  -> erl_anno:set_file(Filename, NewAnno)
+        undefined -> NewAnno;
+        Filename  -> erl_anno:set_file(Filename, NewAnno)
     end.
 
 %% Annotate user-defined types and record types with a file name.
@@ -124,8 +124,8 @@ substitute_type_vars({type, L, 'fun', [Any = {type, _, any}, RetTy]}, TVars) ->
     %% the only place where `{type, _, any}` can occure
     {type, L, 'fun', [Any, substitute_type_vars(RetTy, TVars)]};
 substitute_type_vars({Tag, L, T, Params}, TVars) when Tag == type orelse
-						      Tag == user_type,
-						      is_list(Params) ->
+                                                      Tag == user_type,
+                                                      is_list(Params) ->
     {Tag, L, T, [substitute_type_vars(P, TVars) || P <- Params]};
 substitute_type_vars({remote_type, L, [M, T, Params]}, TVars) ->
     {remote_type, L, [M, T, [substitute_type_vars(P, TVars) || P <- Params]]};

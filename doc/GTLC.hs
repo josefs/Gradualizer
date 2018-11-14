@@ -74,7 +74,7 @@ typeCheck env (Assign e1 e2) = do
       guard (consistent t' t)
       return s
     _ -> fail "Type error in assign"
-      
+
 example = typeCheck ([("succ",Arrow Int Int),("hi",Bool)],[])
   (App (Const "succ") (Const "hi"))
 variation = typeCheck ([("succ",Arrow Int Int),("hi",Untyped)],[])

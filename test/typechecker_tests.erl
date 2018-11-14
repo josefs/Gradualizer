@@ -200,22 +200,22 @@ propagate_types_test_() ->
 
      %% List. The element type is the union of the element types.
      ?_assertMatch("[1..3, ...]",
-		   type_check_expr(_Env = "-spec a() -> 1.\n"
-					  "-spec b() -> 2.\n"
-					  "-spec c() -> 3.",
-				   _Expr = "[a(), b(), c()]")),
+                   type_check_expr(_Env = "-spec a() -> 1.\n"
+                                          "-spec b() -> 2.\n"
+                                          "-spec c() -> 3.",
+                                   _Expr = "[a(), b(), c()]")),
      %% Fun.
      ?_assertMatch("any()",
-		   type_check_expr(_Env = "",
-				   _Expr = "fun (_A, _B) ->\n"
-					   "    receive C -> C end\n"
-					   "end")),
+                   type_check_expr(_Env = "",
+                                   _Expr = "fun (_A, _B) ->\n"
+                                           "    receive C -> C end\n"
+                                           "end")),
      ?_assertMatch("fun((any(), any()) -> integer())",
-		   type_check_expr(_Env = "-spec i(integer()) -> integer().",
-				   _Expr = "fun (A, B) -> i(B) end")),
+                   type_check_expr(_Env = "-spec i(integer()) -> integer().",
+                                   _Expr = "fun (A, B) -> i(B) end")),
      ?_assertMatch("fun((any(), any()) -> integer())",
-		   type_check_expr(_Env = "-spec i(integer()) -> integer().",
-				   _Expr = "fun F(A, B) -> i(B) end")),
+                   type_check_expr(_Env = "-spec i(integer()) -> integer().",
+                                   _Expr = "fun F(A, B) -> i(B) end")),
 
      %% inferred type of boolean negation
      ?_assertMatch("any()",
@@ -285,9 +285,9 @@ infer_types_test_() ->
                                    [infer])),
      %% catch a type error that isn't caught without this inference.
      ?_assertNot(type_check_forms(["f() -> V = [1, 2], g(V).",
-				   "-spec g(integer()) -> any().",
-				   "g(Int) -> Int + 1."],
-				  [infer]))
+                                   "-spec g(integer()) -> any().",
+                                   "g(Int) -> Int + 1."],
+                                  [infer]))
     ].
 
 type_check_call_test_() ->
@@ -403,10 +403,10 @@ handle_type_error_test_() ->
 
 subtype(T1, T2) ->
     case typechecker:subtype(T1, T2, {tenv, #{}, #{}}) of
-	{true, _} ->
-	    true;
-	false ->
-	    false
+        {true, _} ->
+            true;
+        false ->
+            false
     end.
 
 type_check_forms(String) ->
@@ -414,7 +414,7 @@ type_check_forms(String) ->
 
 type_check_forms(String, Opts) ->
     ok =:= typechecker:type_check_forms(ensure_form_list(merl:quote(String)),
-					Opts).
+                                        Opts).
 
 ensure_form_list(List) when is_list(List) ->
     List;

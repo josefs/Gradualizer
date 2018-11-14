@@ -104,7 +104,7 @@ or **subtyping**.
 
 * Equality
 
-  `integer() = integer()`, `integer() 	≠ boolean()`
+  `integer() = integer()`, `integer()         ≠ boolean()`
 
 * Subtyping
 
@@ -216,7 +216,7 @@ Gradual typing has been a hot research topic over the last decade
 * Rationale:
 
   * Types don't fit very well with Erlang-style message passing with an
-	open-world assumption.
+        open-world assumption.
 
 # Examples
 
@@ -293,9 +293,9 @@ depth5() -> {1,{2,{3,{4,6}}}}.
 ``` {.erlang}
 -spec pattern_test(integer()) -> {}.
 pattern_test(1) ->
-	true;
+        true;
 pattern_test(X) ->
-	{}.
+        {}.
 ```
 
 * Dialyzer will not detect the error in the above program
@@ -306,9 +306,9 @@ pattern_test(X) ->
 
 ``` {.erlang}
 -spec tuple_union() -> {undefined, binary()}
-					 | {integer(), undefined}.
+                                         | {integer(), undefined}.
 tuple_union() ->
-	{undefined, undefined}.
+        {undefined, undefined}.
 ```
 
 * Dialyzer approximates a union of tuples as a tuple of unions.
@@ -326,11 +326,11 @@ A modification of the example, with pattern matching on the union.
 
 ``` {.erlang}
 -spec tuple_union({undefined, {}}
-				| {{}, undefined}) -> {}.
+                                | {{}, undefined}) -> {}.
 tuple_union({undefined, undefined}) ->
-	{};
+        {};
 tuple_union({{},{}}) ->
-	{}.
+        {}.
 ```
 
 * Both Dialyzer and Gradualizer fails to catch this problem
@@ -341,13 +341,13 @@ tuple_union({{},{}}) ->
 -export([foo/0]).
 
 foo() ->
-	bar(apa).
+        bar(apa).
 
 -spec :: (apa | bepa) -> true | false.
 bar(apa) ->
-	true;
+        true;
 bar(bepa) ->
-	false.
+        false.
 ```
 
 * Dialyzer can figure out that the clause `bar(bepa)`

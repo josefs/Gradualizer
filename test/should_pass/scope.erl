@@ -4,9 +4,9 @@
 
 f(X) ->
     case g(X) of
-	true -> A = 5,
-		B = 7;
-	false -> B = 6
+        true -> A = 5,
+                B = 7;
+        false -> B = 6
     end,
 % Fails
 %   A.
