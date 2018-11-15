@@ -350,8 +350,14 @@ glb(T1, T2, TEnv) ->
 glb(T1, T2, A, TEnv) ->
     Ty1 = typelib:remove_pos(normalize(T1, TEnv)),
     Ty2 = typelib:remove_pos(normalize(T2, TEnv)),
-    %% TODO: memoisation
-    glb_ty(Ty1, Ty2, A, TEnv).
+    case maps:is_key({T1, T2}, A) of
+        %% If we hit a recursive case we approximate with none(). Conceivably
+        %% you could do some fixed point iteration here, but let's wait for an
+        %% actual use case.
+        true -> type(none);
+        false ->
+            glb_ty(Ty1, Ty2, A#{ {Ty1, Ty2} => 0 }, TEnv)
+    end.
 
 %% If either type is any() we don't know anything
 glb_ty({type, _, any, []} = Ty1, _Ty2, _A, _TEnv) ->
