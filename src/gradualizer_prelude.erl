@@ -1,4 +1,4 @@
--module(otp_spec_fix).
+-module(gradualizer_prelude).
 
 %% This module contains specs to replace incorrect or inexact specs in OTP.
 
