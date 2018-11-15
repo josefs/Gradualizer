@@ -388,7 +388,6 @@ glb_ty(Ty1, Ty2, _A, _TEnv) when ?is_int_type(Ty1), ?is_int_type(Ty2) ->
     type(union, int_range_to_types({int_max(Lo1, Lo2), int_min(Hi1, Hi2)}));
 
 %% List types
-
 glb_ty(Ty1, Ty2, A, TEnv) when ?is_list_type(Ty1), ?is_list_type(Ty2) ->
     {Empty1, Elem1, Term1} = list_view(Ty1),
     {Empty2, Elem2, Term2} = list_view(Ty2),
@@ -404,14 +403,69 @@ glb_ty(Ty1, Ty2, A, TEnv) when ?is_list_type(Ty1), ?is_list_type(Ty2) ->
     Term = glb(Term1, Term2, A, TEnv),
     from_list_view({Empty, Elem, Term});
 
-%% TODO: At the moment we only take glb when checking operator applications, so
-%% we never hit these cases. They should be implemented though.
 %% Tuple types
-%% Type variables
-%% Function types
-%% Map types
-%% Record types
-%% Binary types
+glb_ty(Ty1 = {type, _, tuple, Tys1}, Ty2 = {type, _, tuple, Tys2}, A, TEnv) ->
+    case {Tys1, Tys2} of
+        {any, _} -> Ty2;
+        {_, any} -> Ty1;
+        _ when length(Tys1) /= length(Tys2) -> type(none);
+        _ ->
+            type(tuple, lists:zipwith(fun(T1, T2) -> glb(T1, T2, A, TEnv) end,
+                                      Tys1, Tys2))
+    end;
+
+%% Record types. Either exactly the same record (handled above) or tuple().
+glb_ty(Ty1 = {type, _, record, _}, {type, _, tuple, any}, _A, _TEnv) ->
+    Ty1;
+glb_ty({type, _, tuple, any}, Ty2 = {type, _, record, _}, _A, _TEnv) ->
+    Ty2;
+
+%% Map types. These are a bit tricky and we can't reach this case in the
+%% current code. For now going with a very crude approximation.
+glb_ty(Ty1 = {type, _, map, Assocs1}, Ty2 = {type, _, map, Assocs2}, _A, _TEnv) ->
+    case {Assocs1, Assocs2} of
+        {any, _} -> Ty2;
+        {_, any} -> Ty1;
+        _        -> type(none)
+    end;
+
+%% Binary types. For now approximate this by returning the smallest type if
+%% they are comparable, otherwise none(). See the corresponding case in
+%% compat_ty for the subtyping rule.
+glb_ty(Ty1 = {type, _, binary, _},
+       Ty2 = {type, _, binary, _}, _A, TEnv) ->
+    case subtype(Ty1, Ty2, TEnv) of
+        {true, _} -> Ty1;    %% Will never produce constraints
+        false ->
+            case subtype(Ty2, Ty1, TEnv) of
+                {true, _} -> Ty2;
+                false     -> type(none)
+            end
+    end;
+
+%% Function types. Would require lub on arguments for proper implementation.
+%% For now pick biggest arguments when comparable and none() otherwise.
+glb_ty({type, _, 'fun', [{type, _, product, Args1}, Res1]},
+       {type, _, 'fun', [{type, _, product, Args2}, Res2]}, A, TEnv) ->
+    NoConstraints = constraints:empty(),
+    Res = glb(Res1, Res2, A, TEnv),
+    case compat_tys(Args1, Args2, sets:empty(), TEnv) of
+        {true, NoConstraints} ->
+            type('fun', [type(product, Args2), Res]);
+        _ ->
+            case compat_tys(Args2, Args1, sets:empty(), TEnv) of
+                {true, NoConstraints} ->
+                    type('fun', [type(product, Args1), Res]);
+                _ ->
+                    type(none)
+            end
+    end;
+
+%% Type variables. TODO: can we get here with constrained type variables?
+glb_ty({ann_type, _, [{var, _, _}, Ty1]}, Ty2, A, TEnv) ->
+    glb(Ty1, Ty2, A, TEnv);
+glb_ty(Ty1, {ann_type, _, [{var, _, _}, Ty2]}, A, TEnv) ->
+    glb(Ty1, Ty2, A, TEnv);
 
 %% Incompatible
 glb_ty(_Ty1, _Ty2, _A, _TEnv) -> type(none).
