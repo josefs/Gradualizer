@@ -103,7 +103,8 @@ load(Filename) ->
 import_erl_files(Files) ->
     call({import_erl_files, Files}, infinity).
 
--spec import_beam_files([file:filename()]) -> ok | gradualizer_file_utils:parsed_file_error().
+-spec import_beam_files([file:filename() | binary()]) ->
+                            ok | gradualizer_file_utils:parsed_file_error().
 import_beam_files(Files) ->
     call({import_beam_files, Files}, infinity).
 
@@ -148,7 +149,7 @@ init(Opts0) ->
                  _ ->
                     State1
              end,
-    State3 = import_erl_files([?prelude_erl], State2),
+    State3 = import_prelude(State2),
     {ok, State3}.
 
 -spec handle_call(any(), {pid(), term()}, state()) -> {reply, term(), state()}.
@@ -253,6 +254,22 @@ code_change(_OldVsn, State, _Extra) ->
 
 %% Helpers
 
+-spec import_prelude(state()) -> state().
+import_prelude(State) ->
+    %% Read the beam from file system or from escript archive
+    case code:which(gradualizer_prelude) of
+        cover_compiled ->
+            %% Cover messes with the code server. Hopefully we're not
+            %% using cover when running as an escript.
+            ErlFile = filename:join(filename:dirname(?FILE),
+                                    "gradualizer_prelude.erl"),
+            import_erl_files([ErlFile], State);
+        Filename when is_list(Filename) ->
+            {ok, BeamCode, _Filename} = erl_prim_loader:get_file(Filename),
+            {ok, State1 = #state{}} = import_beam_files([BeamCode], State),
+            State1
+    end.
+
 %% @doc ensure DB server is started
 call(Request) ->
     call(Request, 5000).
@@ -338,7 +355,7 @@ import_erl_files([File | Files], State) ->
 import_erl_files([], St) ->
     St.
 
--spec import_beam_files([file:filename()], state()) -> {ok, state()} | gradualizer_file_utils:parsed_file_error().
+-spec import_beam_files([file:filename() | binary()], state()) -> {ok, state()} | gradualizer_file_utils:parsed_file_error().
 import_beam_files([File | Files], State) ->
     case gradualizer_file_utils:get_forms_from_beam(File) of
         {ok, [{attribute, _, file, _} | Forms1]} ->

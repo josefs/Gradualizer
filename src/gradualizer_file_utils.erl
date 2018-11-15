@@ -30,7 +30,8 @@ get_forms_from_erl(File) ->
             {file_open_error, {Reason, File}}
     end.
 
--spec get_forms_from_beam(file:filename()) -> parsed_file() | parsed_file_error().
+%% Accepts a filename or the beam code as a binary
+-spec get_forms_from_beam(file:filename() | binary()) -> parsed_file() | parsed_file_error().
 get_forms_from_beam(File) ->
     case beam_lib:chunks(File, [abstract_code]) of
         {ok, {_Module, [{abstract_code, {raw_abstract_v1, Forms}}]}} ->
