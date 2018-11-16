@@ -3505,6 +3505,9 @@ handle_type_error({type_error, relop, RelOp, P, Ty1, Ty2}) ->
               "compatible types.~nHowever, it has arguments "
               "of type ~s and ~s~n", [RelOp, P, typelib:pp_type(Ty1)
                                               , typelib:pp_type(Ty2)]);
+handle_type_error({type_error, op_type_too_precise, '/' = Op, P, Ty}) when ?is_int_type(Ty) ->
+    io:format("The operator ~p on line ~p is expected to have type "
+              "~s which is not a supertype of float()~n", [Op, P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, op_type_too_precise, Op, P, Ty}) ->
     io:format("The operator ~p on line ~p is expected to have type "
               "~s which is too precise to be statically checked~n", [Op, P, typelib:pp_type(Ty)]);
