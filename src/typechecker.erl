@@ -2240,8 +2240,7 @@ arith_op_arg_types(Op, Ty = {type, _, float, []}) ->
     case Op of
         _ when Op == '+'; Op == '*'; Op == '-' ->
             {Ty, Ty};
-        '/' -> {type(number), type(number)};
-        _   -> false
+        '/' -> {type(number), type(number)}
     end;
 
 %% Singleton types are not closed under any operations
