@@ -2193,16 +2193,19 @@ type_check_int_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
 
 type_check_arith_op_in(Env, Kind, ResTy, Op, P, Arg1, Arg2) ->
     ResTy1 = glb(type(Kind), ResTy, Env#env.tenv),
-    IsNone =
-        case ResTy1 of
-            %% TODO: allow none() if checking against none()? Not clear that
-            %% this is sensible, since in that case you'd like to only require
-            %% *one* of the arguments to be none(), not both.
-            {type, _, none, []} -> true;
-            _ -> false
-        end,
-    case IsNone of
-        false ->
+    case ResTy1 of
+        %% TODO: allow none() if checking against none()? Not clear that
+        %% this is sensible, since in that case you'd like to only require
+        %% *one* of the arguments to be none(), not both.
+        {type, _, none, []} ->
+            Tag = if Kind == integer -> int_error;
+                     true            -> arith_error end,
+            throw({type_error, Tag, Op, P, ResTy});
+        %% Fall back to inference mode if target is any()
+        {type, _, any, []} ->
+            {_, VB, Cs} = type_check_arith_op(Env, Op, P, Arg1, Arg2),
+            {VB, Cs};
+        _ ->
             case arith_op_arg_types(Op, ResTy1) of
                 {ArgTy1, ArgTy2} ->
                     {VarBinds1, Cs1} = type_check_expr_in(Env, ArgTy1, Arg1),
@@ -2211,11 +2214,7 @@ type_check_arith_op_in(Env, Kind, ResTy, Op, P, Arg1, Arg2) ->
                      constraints:combine([Cs1, Cs2])};
                 false ->
                     throw({type_error, op_type_too_precise, Op, P, ResTy1})
-            end;
-        true ->
-            Tag = if Kind == integer -> int_error;
-                     true            -> arith_error end,
-            throw({type_error, Tag, Op, P, ResTy})
+            end
     end.
 
 %% What types should be pushed into the arguments if checking an operator
@@ -2354,13 +2353,13 @@ type_check_list_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
             '++' -> type(maybe_improper_list, [type(term), type(term)])
         end,
     ResTy1 = glb(Target, ResTy, Env#env.tenv),
-    IsNone =
-        case ResTy1 of
-            {type, _, none, []} -> true;
-            _                   -> false
-        end,
-    case IsNone of
-        false ->
+    case ResTy1 of
+        {type, _, none, []} ->
+            throw({type_error, list_op_error, Op, P, ResTy});
+        {type, _, any, []} ->
+            {_, VB, Cs} = type_check_list_op(Env, Op, P, Arg1, Arg2),
+            {VB, Cs};
+        _ ->
             case list_op_arg_types(Op, ResTy1) of
                 {ArgTy1, ArgTy2} ->
                     {VarBinds1, Cs1} = type_check_expr_in(Env, ArgTy1, Arg1),
@@ -2369,9 +2368,7 @@ type_check_list_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
                      constraints:combine([Cs1, Cs2])};
                 false ->
                     throw({type_error, op_type_too_precise, Op, P, ResTy1})
-            end;
-        true ->
-            throw({type_error, list_op_error, Op, P, ResTy})
+            end
     end.
 
 list_op_arg_types('++', Ty) ->
