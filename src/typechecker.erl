@@ -2257,7 +2257,9 @@ arith_op_arg_types(Op, Ty = {type, _, pos_integer, []}) ->
 
 %% non_neg_integer() are closed under everything except '-' and '/'
 arith_op_arg_types(Op, Ty = {type, _, non_neg_integer, []}) ->
-    case lists:member(Op, ['+', '*', 'div', 'rem', 'band', 'bor', 'bxor', 'bsl', 'bsr']) of
+    case lists:member(Op, ['+', '*', 'div', 'rem', 'band', 'bor', 'bxor']) of
+        %% Shift amounts can be negative
+        _ when Op == 'bsl'; Op == 'bsr' -> {Ty, type(integer)};
         true -> {Ty, Ty};
         false -> false
     end;
@@ -2280,9 +2282,12 @@ arith_op_arg_types(Op, {type, _, range, _} = Ty) ->
         {0, B} when Op == 'rem' ->
             [TyR] = int_range_to_types({0, B + 1}),
             {type(non_neg_integer), TyR};
+        %% bsr and div make things smaller for any non_neg/pos second argument
+        {0, _} when Op == 'bsr' -> {Ty, type(non_neg_integer)};
+        {0, _} when Op == 'div' -> {Ty, type(pos_integer)};
         {0, B} ->
             case is_power_of_two(B + 1) andalso
-                 lists:member(Op, ['band', 'bor', 'bxor', 'bsr']) of
+                 lists:member(Op, ['band', 'bor', 'bxor']) of
                 true -> {Ty, Ty};
                 false -> false
             end;
