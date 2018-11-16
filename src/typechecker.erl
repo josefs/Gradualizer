@@ -2405,7 +2405,6 @@ type_check_unary_op_in(Env, ResTy, Op, P, Arg) ->
             throw({type_error, unary_error, Op, P, Target, ResTy});
         _ ->
             ArgTy = unary_op_arg_type(Op, ResTy1),
-            %% io:format("Pushing ~p into ~p: ~p\n", [ResTy1, Op, ArgTy]),
             type_check_expr_in(Env, ArgTy, Arg)
     end.
 
@@ -2414,15 +2413,16 @@ type_check_unary_op_in(Env, ResTy, Op, P, Arg) ->
 unary_op_arg_type('+', Ty) -> Ty;
 unary_op_arg_type(Op, {type, P, union, Tys}) ->
     {type, P, union, [ unary_op_arg_type(Op, Ty) || Ty <- Tys ]};
-unary_op_arg_type('not', {atom, P, B}) -> {atom, P, not B};
-unary_op_arg_type('not', Ty) -> Ty;
-unary_op_arg_type(Op, Ty) when Op == '-'; Op == 'bnot' ->
+unary_op_arg_type('not', {atom, P, B}) -> {atom, P, not B}; %% boolean() = false | true
+unary_op_arg_type(Op, Ty) when ?is_int_type(Ty), Op == '-' orelse Op == 'bnot' ->
     {Lo, Hi} = int_type_to_range(Ty),
     Neg = fun(pos_inf)             -> neg_inf;
              (neg_inf)             -> pos_inf;
              (N) when Op == '-'    -> -N;
              (N) when Op == 'bnot' -> bnot N end,
-    type(union, int_range_to_types({Neg(Hi), Neg(Lo)})).
+    type(union, int_range_to_types({Neg(Hi), Neg(Lo)}));
+unary_op_arg_type('-', Ty = {type, _, float, []}) ->
+    Ty.
 
 type_check_lc_in(Env, ResTy, Expr, P, []) ->
     case expect_list_type(ResTy, allow_nil_type) of
