@@ -3234,7 +3234,7 @@ type(Name) -> type(Name, []).
 return(X) ->
     { X, #{}, constraints:empty() }.
 
-is_power_of_two(0) -> true;
+is_power_of_two(0) -> false;
 is_power_of_two(1) -> true;
 is_power_of_two(N) when N rem 2 == 0 ->
     is_power_of_two(N div 2);
