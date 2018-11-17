@@ -5,7 +5,8 @@
 -include_lib("eunit/include/eunit.hrl").
 
 %% Macro to convert type to abstract form
--define(t(T), typelib:remove_pos(typelib:parse_type(??T))).
+-define(t(T), t(??T)).
+t(T) -> typelib:remove_pos(typelib:parse_type(T)).
 
 subtype_test_() ->
     [
@@ -138,6 +139,72 @@ not_subtype_test_() ->
      ?_assertNot(subtype(?t( #{a => b}      ), ?t( #{a := b}        ))),
      ?_assertNot(subtype(?t( #{a := 1..5}   ), ?t( #{a := 2}        ))),
      ?_assertNot(subtype(?t( #{1 := atom()} ), ?t( #{1 := a}        )))
+    ].
+
+-define(glb(T1, T2, R),
+    [ ?_assertEqual(deep_normalize(R), deep_normalize(glb(T1, T2))),
+      ?_assertEqual(deep_normalize(R), deep_normalize(glb(T2, T1))) ]).
+
+glb_test_() ->
+
+    Ts = [ ?t(any()), ?t(none()), ?t(term()), ?t(tuple()), ?t(atom) ],
+
+    [
+     %% any()
+     [ ?glb( ?t(any()),  T, ?t(any()) )  || T <- Ts ],
+     [ ?glb( ?t(term()), T, T)           || T <- Ts ],
+     [ ?glb( ?t(none()), T, ?t(none()) ) || T <- Ts, T /= ?t(any()) ],
+
+     %% Integer types
+     ?glb( ?t(-5..10), ?t(2..3 | 5..15), ?t(2..3 | 5..10) ),
+     ?glb( ?t(neg_integer()), ?t(non_neg_integer()), ?t(none()) ),
+
+     %% Lists
+     [ ?glb( ?t(maybe_improper_list(term(), term())), T, deep_normalize(T) ) ||
+        T <- [ ?t([]), ?t([integer()]), ?t(list()),
+               ?t([atom, ...]),
+               ?t(maybe_improper_list(tuple(), _)),
+               ?t(maybe_improper_list(a | b, tail)),
+               ?t(nonempty_improper_list(number(), [] | tail)) ] ],
+
+     ?glb( ?t(maybe_improper_list(a, b)), ?t([a]), ?t(none()) ),
+     ?glb( ?t([]), ?t([a, ...]), ?t(none()) ),
+     ?glb( ?t([]), ?t(nonempty_improper_list(a, b | [])), ?t(none()) ),
+
+     %% Tuples
+     [ ?glb( ?t(tuple()), T, T ) || T <- [?t(tuple()), ?t({}), ?t({integer()}),
+                                          ?t({a, {}})] ],
+     ?glb( ?t({a, b}), ?t({a, b, _}), ?t(none()) ),
+     ?glb( ?t({number(), a | c}), ?t({float() | x, a | b}), ?t({float(), a}) ),
+
+     %% Records
+     ?glb( ?t(#r{}), ?t(tuple()), ?t(#r{}) ),
+     ?glb( ?t(#r{}), ?t(#s{}),    ?t(none()) ),
+
+     %% Maps
+     ?glb( ?t(map()), ?t(#{a := integer()}), ?t(#{a := integer()}) ),
+     ?glb( ?t(#{ a := integer() }), ?t(#{ b := float() }), ?t(none()) ), %% Not the right answer!
+     ?glb( ?t(#{ a := b }), ?t(#{ a := b }), ?t(#{ a := b }) ),
+
+     %% Binary types
+     ?glb( ?t(binary()),       ?t(<<_:_*32>>),      ?t(<<_:_*32>>) ),
+     ?glb( ?t(<<_:4, _:_*8>>), ?t(<<_:12, _:_*8>>), ?t(<<_:12, _:_*8>>) ),
+     ?glb( ?t(<<_:4, _:_*8>>), ?t(<<_:7, _:_*8>>),  ?t(none()) ),
+     ?glb( ?t(<<_:4, _:_*8>>), ?t(<<_:_*12>>),      ?t(none()) ),   %% glb is really <<_:12, _:_*24>>
+
+     %% Functions
+     ?glb( t("fun((integer(), number()) -> a | b)"),
+           t("fun((number(),  number())  -> b | c)"),
+           t("fun((number(),  number()) -> b)")),
+
+     ?glb( t("fun((integer(), number()) -> a | b)"),
+           t("fun((number(),  float())  -> b | c)"),
+           ?t(none()) ), %% Should be same as previous
+
+     %% Annotated types
+     ?glb( ?t(X :: integer()), ?t(number()), ?t(integer()) ),
+
+     ?_assert(true)
     ].
 
 normalize_test_() ->
@@ -407,6 +474,22 @@ subtype(T1, T2) ->
             true;
         false ->
             false
+    end.
+
+glb(T1, T2) ->
+    glb(T1, T2, {tenv, #{}, #{}}).
+
+glb(T1, T2, Env) ->
+    typechecker:glb(T1, T2, Env).
+
+deep_normalize(T) ->
+    deep_normalize(T, typechecker:create_tenv([], [])).
+
+deep_normalize(T, TEnv) ->
+    case typechecker:normalize(T, TEnv) of
+        {type, P, N, Args} when is_list(Args) ->
+            {type, P, N, [ deep_normalize(A, TEnv) || A <- Args ]};
+        TN -> TN
     end.
 
 type_check_forms(String) ->
