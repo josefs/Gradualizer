@@ -744,7 +744,8 @@ int_type_to_range({type, _, range, [{integer, _, I1},
                                         when I1 =< I2  -> {I1, I2};
 int_type_to_range({integer, _, I})                     -> {I, I}.
 
-%% Converts a range back to a type. Creates two types in some cases.
+%% Converts a range back to a type. Creates two types in some cases and zero
+%% types if lower bound is greater than upper bound.
 -spec int_range_to_types(int_range()) -> [type()].
 int_range_to_types({neg_inf, pos_inf}) ->
     [type(integer)];
@@ -770,7 +771,9 @@ int_range_to_types({I, I}) ->
     [{integer, erl_anno:new(0), I}];
 int_range_to_types({I, J}) when I < J ->
     [{type, erl_anno:new(0), range, [{integer, erl_anno:new(0), I}
-                                    ,{integer, erl_anno:new(0), J}]}].
+                                    ,{integer, erl_anno:new(0), J}]}];
+int_range_to_types({I, J}) when I > J ->
+    [].
 
 %% Input arg must be already normalized
 negate_num_type({type, _, TyName, []} = Ty) when
