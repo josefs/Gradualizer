@@ -345,7 +345,7 @@ get_record_fields(RecName, Anno, #tenv{records = REnv}) ->
 
 -spec glb(type(), type(), TEnv :: #tenv{}) -> type().
 glb(T1, T2, TEnv) ->
-    normalize(glb(T1, T2, #{}, TEnv), TEnv).
+    glb(T1, T2, #{}, TEnv).
 
 glb(T1, T2, A, TEnv) ->
     Ty1 = typelib:remove_pos(normalize(T1, TEnv)),
@@ -356,7 +356,7 @@ glb(T1, T2, A, TEnv) ->
         %% actual use case.
         true -> type(none);
         false ->
-            glb_ty(Ty1, Ty2, A#{ {Ty1, Ty2} => 0 }, TEnv)
+            normalize(glb_ty(Ty1, Ty2, A#{ {Ty1, Ty2} => 0 }, TEnv), TEnv)
     end.
 
 %% If either type is any() we don't know anything
