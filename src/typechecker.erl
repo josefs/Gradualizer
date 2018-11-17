@@ -455,15 +455,19 @@ glb_ty({type, _, 'fun', [{type, _, product, Args1}, Res1]},
        {type, _, 'fun', [{type, _, product, Args2}, Res2]}, A, TEnv) ->
     NoConstraints = constraints:empty(),
     Res = glb(Res1, Res2, A, TEnv),
-    case compat_tys(Args1, Args2, sets:empty(), TEnv) of
-        {true, NoConstraints} ->
-            type('fun', [type(product, Args2), Res]);
-        _ ->
-            case compat_tys(Args2, Args1, sets:empty(), TEnv) of
-                {true, NoConstraints} ->
-                    type('fun', [type(product, Args1), Res]);
-                _ ->
-                    type(none)
+    Subtype =
+        fun(Ts1, Ts2) ->
+            try compat_tys(Ts1, Ts2, sets:new(), TEnv) of
+                {_, NoConstraints} -> true;
+                _ -> false
+            catch throw:nomatch -> false end
+        end,
+    case Subtype(Args1, Args2) of
+        true  -> type('fun', [type(product, Args2), Res]);
+        false ->
+            case Subtype(Args2, Args1) of
+                true  -> type('fun', [type(product, Args1), Res]);
+                false -> type(none)
             end
     end;
 
