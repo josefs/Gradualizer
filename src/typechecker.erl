@@ -1013,40 +1013,41 @@ expect_tuple_union([], AccTy, AccCs, _NoAny, _N) ->
                                        | {fun_ty_union, [any()], constraints:constraints()}
                                        .
 expect_fun_type(Env, Type) ->
-    case expect_fun_type(normalize(Type, Env#env.tenv)) of
+    case expect_fun_type1(Env, normalize(Type, Env#env.tenv)) of
         type_error -> {type_error, Type};
         Other -> Other
     end.
 
--spec expect_fun_type(type()) -> any
+-spec expect_fun_type1(#env{}, type()) -> any
                                | type_error
                                | {fun_ty, type(), type(), constraints:constraints()}
                                | {fun_ty_any_args, type(), constraints:constraints()}
                                | {fun_ty_intersection, [type()], constraints:constraints()}
                                | {fun_ty_union, [any()], constraints:constraints()}
                                .
-expect_fun_type({type, _, bounded_fun, [Ft, Fc]}) ->
-    case expect_fun_type(Ft) of
+expect_fun_type1(Env, {type, _, bounded_fun, [Ft, Fc]}) ->
+    Sub = solve_bounds(Env#env.tenv, Fc),
+    case expect_fun_type1(Env, Ft) of
         {fun_ty, ArgsTy, ResTy, Cs} ->
-            {fun_ty, ArgsTy, ResTy, constraints:combine(Cs, constraints:convert(Fc))};
+            {fun_ty, subst_ty(Sub, ArgsTy), subst_ty(Sub, ResTy), Cs};
         {fun_ty_any_args, ResTy, Cs} ->
-            {fun_ty_any_args, ResTy, constraints:combine(Cs, constraints:convert(Fc))};
+            {fun_ty_any_args, subst_ty(Sub, ResTy), Cs};
         {fun_ty_intersection, Tys, Cs} ->
-            {fun_ty_intersection, Tys, constraints:combine(Cs, constraints:convert(Fc))};
+            {fun_ty_intersection, subst_ty(Sub, Tys), Cs};
         {fun_ty_union, Tys, Cs} ->
-            {fun_ty_union, Tys, constraints:combine(Cs, constraints:convert(Fc))};
+            {fun_ty_union, subst_ty(Sub, Tys), Cs};
         Err ->
             Err
     end;
-expect_fun_type({type, _, 'fun', [{type, _, product, ArgsTy}, ResTy]}) ->
+expect_fun_type1(_Env, {type, _, 'fun', [{type, _, product, ArgsTy}, ResTy]}) ->
     {fun_ty, ArgsTy, ResTy, constraints:empty()};
-expect_fun_type({type, _, 'fun', []}) ->
+expect_fun_type1(_Env, {type, _, 'fun', []}) ->
     any;
-expect_fun_type({type, _, 'fun', [{type, _, any}, ResTy]}) ->
+expect_fun_type1(_Env, {type, _, 'fun', [{type, _, any}, ResTy]}) ->
     {fun_ty_any_args, ResTy, constraints:empty()};
-expect_fun_type(Tys) when is_list(Tys) ->
+expect_fun_type1(Env, Tys) when is_list(Tys) ->
     %% This is a spec, not really a type().
-    case expect_intersection_type(Tys) of
+    case expect_intersection_type(Env, Tys) of
         type_error ->
             type_error;
         [Ty] ->
@@ -1054,8 +1055,8 @@ expect_fun_type(Tys) when is_list(Tys) ->
         Tyss ->
             {fun_ty_intersection, Tyss, constraints:empty()}
     end;
-expect_fun_type({type, _, union, UnionTys}) ->
-    case expect_fun_type_union(UnionTys) of
+expect_fun_type1(Env, {type, _, union, UnionTys}) ->
+    case expect_fun_type_union(Env, UnionTys) of
         [] ->
             type_error;
         [Ty] ->
@@ -1063,29 +1064,31 @@ expect_fun_type({type, _, union, UnionTys}) ->
         Tys ->
             {fun_ty_union, Tys, constraints:empty()}
     end;
-expect_fun_type({ann_type, _, [_, Ty]}) ->
-    expect_fun_type(Ty);
-expect_fun_type({var, _, Var}) ->
+expect_fun_type1(Env, {ann_type, _, [_, Ty]}) ->
+    expect_fun_type1(Env, Ty);
+expect_fun_type1(_Env, {var, _, Var}) ->
     ResTy = new_type_var(),
     {fun_ty_any_args, {var, erl_anno:new(0), ResTy}
     ,constraints:add_var(Var,
        constraints:upper(ResTy,
          {type, erl_anno:new(0), 'fun', [{type, erl_anno:new(0), any}
                                         ,{var,  erl_anno:new(0), ResTy}]}))};
-expect_fun_type({type, _, any, []}) ->
+expect_fun_type1(_Env, {type, _, any, []}) ->
     any;
-expect_fun_type(_Ty) ->
+expect_fun_type1(_Env, {type, _, term, []}) ->
+    {fun_ty_any_args, type(term), constraints:empty()};
+expect_fun_type1(_Env, _Ty) ->
     type_error.
 
--spec expect_intersection_type([tuple()]) -> any().
-expect_intersection_type([]) ->
+-spec expect_intersection_type(#env{}, [tuple()]) -> any().
+expect_intersection_type(_Env, []) ->
     [];
-expect_intersection_type([FunTy|Tys]) ->
-    case expect_fun_type(FunTy) of
+expect_intersection_type(Env, [FunTy|Tys]) ->
+    case expect_fun_type1(Env, FunTy) of
         type_error ->
             type_error;
         Ty ->
-            case expect_intersection_type(Tys) of
+            case expect_intersection_type(Env, Tys) of
                 type_error ->
                     type_error;
                 Tyss ->
@@ -1093,14 +1096,14 @@ expect_intersection_type([FunTy|Tys]) ->
             end
     end.
 
-expect_fun_type_union([]) ->
+expect_fun_type_union(_Env, []) ->
     [];
-expect_fun_type_union([Ty|Tys]) ->
-    case expect_fun_type(Ty) of
+expect_fun_type_union(Env, [Ty|Tys]) ->
+    case expect_fun_type1(Env, Ty) of
         type_error ->
-            expect_fun_type_union(Tys);
+            expect_fun_type_union(Env, Tys);
         TyOut ->
-            [TyOut | expect_fun_type_union(Tys)]
+            [TyOut | expect_fun_type_union(Env, Tys)]
     end.
 
 expect_record_type(Record, {type, _, record, [{atom, _, Name}]}, _TEnv) ->
@@ -1135,6 +1138,44 @@ expect_record_union(_Record, [], _TEnv) ->
 new_type_var() ->
     I = erlang:unique_integer(),
     "_TyVar" ++ integer_to_list(I).
+
+-spec solve_bounds(#tenv{}, [type()]) -> #{ atom() := type() }.
+solve_bounds(TEnv, Cs) ->
+    Defs = [ {X, T} || {type, _, constraint, [{atom, _, is_subtype}, [{var, _, X}, T]]} <- Cs ],
+    Env  = lists:foldl(fun({X, T}, E) ->
+                maps:update_with(X, fun(Ts) -> [T | Ts] end, [T], E)
+            end, #{}, Defs),
+    DepG = maps:map(fun(_, T) -> maps:keys(free_vars(T)) end, Env),
+    SCCs = gradualizer_lib:top_sort(DepG),
+    solve_bounds(TEnv, Env, SCCs, #{}).
+
+solve_bounds(TEnv, Defs, [{acyclic, X} | SCCs], Acc) ->
+    #{ X := Tys } = Defs,
+    Tys1 = subst_ty(Acc, Tys),
+    %% Take intersection after substitution to get rid of type variables.
+    Ty1  = lists:foldl(fun(S, T) -> glb(S, T, TEnv) end, type(term), Tys1),
+    solve_bounds(TEnv, maps:remove(X, Defs), SCCs, Acc#{ X => Ty1 });
+solve_bounds(_, _, [{cyclic, Xs} | _], _) ->
+    throw({cyclic_dependencies, Xs});
+solve_bounds(_, _, [], Acc) -> Acc.
+
+free_vars(Ty) -> free_vars(Ty, #{}).
+
+free_vars({var, _, X}, Vars) ->
+    Vars#{ X => true };
+free_vars([H | T], Vars) ->
+    free_vars(T, free_vars(H, Vars));
+free_vars({type, _, _, Args}, Vars) ->
+    free_vars(Args, Vars);
+free_vars(_, Vars) -> Vars.
+
+subst_ty(Sub, Ty = {var, _, X}) ->
+    maps:get(X, Sub, Ty);
+subst_ty(Sub, {type, P, Name, Args}) ->
+    {type, P, Name, subst_ty(Sub, Args)};
+subst_ty(Sub, Tys) when is_list(Tys) ->
+    [ subst_ty(Sub, Ty) || Ty <- Tys ];
+subst_ty(_, Ty) -> Ty.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
