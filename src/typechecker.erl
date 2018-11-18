@@ -1220,7 +1220,7 @@ type_check_expr(Env, {cons, _, Head, Tail}) ->
                                Env#env.tenv),
             {{type, erl_anno:new(0), nonempty_list, [ElemTy]}, VB, Cs}
     end;
-type_check_expr(Env, {bin, _, BinElements}) ->
+type_check_expr(Env, {bin, _, BinElements} = BinExpr) ->
     %% <<Expr:Size/TypeSpecifierList, ...>>
     VarBindAndCsList =
         lists:map(fun ({bin_element, _P, Expr, _Size, _Specif} = BinElem) ->
@@ -1232,10 +1232,8 @@ type_check_expr(Env, {bin, _, BinElements}) ->
     {VarBinds, Css} = lists:unzip(VarBindAndCsList),
     RetTy = if
                 Env#env.infer ->
-                    %% TODO: Infer the size parameters of the bitstring
-                    {type, erl_anno:new(0), binary,
-                     [{integer, erl_anno:new(0), 0},
-                      {integer, erl_anno:new(0), 1}]};
+                    %% Infer the size parameters of the bitstring
+                    gradualizer_bin:compute_type(BinExpr);
                 not Env#env.infer ->
                     type(any)
             end,
@@ -1874,16 +1872,12 @@ do_type_check_expr_in(Env, Ty, {string, LINE, String}) ->
         throw({type_error, string, LINE, String, Ty})
     end;
 do_type_check_expr_in(Env, Ty, {bin, LINE, _BinElements} = Bin) ->
-    %% Accept any binary type regardless of bit size parameters.
-    %% TODO: If we can compute the length of the bit expression, we get the
-    %%       exact type and can require that it's a subtype of Ty.
-    Cs1 = case subtype(Ty, {type, LINE, binary, [{integer, LINE, 0},
-                                                 {integer, LINE, 1}]},
-                       Env#env.tenv) of
+    BinTy = gradualizer_bin:compute_type(Bin),
+    Cs1 = case subtype(BinTy, Ty, Env#env.tenv) of
               {true, Cs0} ->
                   Cs0;
               false ->
-                  throw({type_error, bin, LINE, Ty})
+                  throw({type_error, bin, LINE, BinTy, Ty})
           end,
     {_Ty, VarBinds, Cs2} = type_check_expr(Env, Bin),
     {VarBinds, constraints:combine(Cs1, Cs2)};
@@ -2925,16 +2919,24 @@ add_type_pat(String = {string, P, _}, Ty, _TEnv, VEnv) ->
      false ->
        throw({type_error, pattern, P, String, Ty})
    end;
-add_type_pat({bin, _, BinElements}, {type, _, binary, [_,_]}, TEnv, VEnv) ->
-    %% TODO: Consider the bit size parameters
+add_type_pat({bin, P, BinElements} = Bin, Ty, TEnv, VEnv) ->
+    %% Check the size parameters of the bit pattern
+    BinTy = gradualizer_bin:compute_type(Bin),
+    Cs1 = case subtype(BinTy, Ty, TEnv) of
+              {true, Cs0} ->
+                  Cs0;
+              false ->
+                  throw({type_error, bin, P, BinTy, Ty})
+          end,
+    %% Check the elements
     lists:foldl(fun ({bin_element, _, Pat, _Size, _Specifiers} = BinElem,
-                     {VEnv1, Cs1}) ->
+                     {VEnvAcc, CsAcc}) ->
                         %% Check Pat against the bit syntax type specifiers
                         ElemTy = type_of_bin_element(BinElem),
-                        {VEnv2, Cs2} = add_type_pat(Pat, ElemTy, TEnv, VEnv1),
-                        {VEnv2, constraints:combine(Cs1, Cs2)}
+                        {VEnv2, Cs2} = add_type_pat(Pat, ElemTy, TEnv, VEnvAcc),
+                        {VEnv2, constraints:combine(CsAcc, Cs2)}
                 end,
-                {VEnv, constraints:empty()},
+                {VEnv, Cs1},
                 BinElements);
 add_type_pat({record, P, Record, Fields}, Ty, TEnv, VEnv) ->
     case expect_record_type(Record, Ty, TEnv) of
@@ -3494,6 +3496,11 @@ handle_type_error({type_error, tuple, LINE, Ty}) ->
               [LINE, typelib:pp_type(Ty)]);
 handle_type_error({unknown_variable, P, Var}) ->
     io:format("Unknown variable ~p on line ~p.~n", [Var, P]);
+handle_type_error({type_error, bin, P, ActualTy, ExpectTy}) ->
+    io:format("The bit expression on line ~p is expected "
+              "to have type ~s but it has type ~s~n",
+              [erl_anno:line(P),
+               typelib:pp_type(ExpectTy), typelib:pp_type(ActualTy)]);
 handle_type_error({type_error, bit_type, Expr, P, Ty1, Ty2}) ->
     io:format("The expression ~s inside the bit expression on line ~p has type ~s "
               "but the type specifier indicates ~s~n",
