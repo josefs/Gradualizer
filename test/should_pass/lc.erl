@@ -7,5 +7,13 @@ bin_gen_1() ->
 bin_gen_2(Bin) ->
     [X || <<X>> <= Bin].
 
+-spec any_list() -> list().
+any_list() ->
+    [X || X <- [1, 2, 3]].
+
+-spec union_of_lists() -> [integer()] | [atom()].
+union_of_lists() ->
+    [X || X <- [apa, bepa]].
+
 -spec bin_fixed_size() -> <<_:16>>.
 bin_fixed_size() -> <<"xy">>.

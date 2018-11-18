@@ -1250,9 +1250,9 @@ type_check_expr(Env, {call, P, Name, Args}) ->
             constraints:combine(Cs1, Cs2)};
 
 type_check_expr(Env, {lc, _, Expr, Qualifiers}) ->
-    type_check_lc(Env, Expr, Qualifiers);
+    type_check_comprehension(Env, lc, Expr, Qualifiers);
 type_check_expr(Env, {bc, _, Expr, Qualifiers}) ->
-    type_check_bc(Env, Expr, Qualifiers);
+    type_check_comprehension(Env, bc, Expr, Qualifiers);
 type_check_expr(Env, {block, _, Block}) ->
     type_check_block(Env, Block);
 
@@ -1711,7 +1711,7 @@ compat_arith_type(Ty1, Ty2) ->
             end
     end.
 
-type_check_lc(Env, Expr, []) ->
+type_check_comprehension(Env, lc, Expr, []) ->
     {Ty, _VB, Cs} = type_check_expr(Env, Expr),
     RetTy = case Ty of
                 {type, _, any, []} when not Env#env.infer ->
@@ -1724,58 +1724,7 @@ type_check_lc(Env, Expr, []) ->
                     {type, erl_anno:new(0), list, [Ty]}
             end,
     {RetTy, #{}, Cs};
-type_check_lc(Env, Expr, [{generate, P, Pat, Gen} | Quals]) ->
-    {Ty,  _,  Cs1} = type_check_expr(Env, Gen),
-    case expect_list_type(Ty, allow_nil_type) of
-        {elem_ty, ElemTy, Cs} ->
-            {NewEnv, Cs2} = add_type_pat(Pat
-                                        ,ElemTy
-                                        ,Env#env.tenv
-                                        ,Env#env.venv),
-            {TyL, VB, Cs3} = type_check_lc(Env#env{
-                                             venv = NewEnv
-                                            }
-                                          ,Expr, Quals),
-            {TyL, VB, constraints:combine([Cs, Cs1, Cs2, Cs3])};
-        any ->
-            {TyL, VB, Cs2} = type_check_lc(Env#env{
-                                             venv = add_any_types_pat(
-                                                      Pat
-                                                     ,Env#env.venv)
-                                            }
-                                          ,Expr, Quals),
-            {TyL, VB, constraints:combine(Cs1,Cs2)};
-        {elem_tys, _ElemTys, Cs} ->
-            %% TODO: As a hack, we treat a union type as any, just to
-            %% allow the program to type check.
-            {TyL, VB, Cs2} = type_check_lc(Env#env{
-                                             venv = add_any_types_pat(
-                                                      Pat
-                                                     ,Env#env.venv)
-                                            }
-                                          ,Expr, Quals),
-            {TyL, VB, constraints:combine([Cs,Cs1,Cs2])};
-        {type_error, Ty} ->
-            throw({type_error, generator, P, Ty})
-    end;
-type_check_lc(Env, Expr, [{b_generate, _P, Pat, Gen} | Quals]) ->
-    BitStringTy = type(bitstring),
-    {VarBinds1, Cs1} =
-        type_check_expr_in(Env, BitStringTy, Gen),
-    {NewEnv, Cs2} = add_type_pat(Pat, BitStringTy, Env#env.tenv, Env#env.venv),
-    {TyL, VarBinds2, Cs3} = type_check_lc(Env#env{ venv = NewEnv }, Expr, Quals),
-    {TyL
-    ,union_var_binds(VarBinds1, VarBinds2, Env#env.tenv)
-    ,constraints:combine([Cs1, Cs2, Cs3])};
-type_check_lc(Env, Expr, [Guard | Quals]) ->
-    %% We don't require guards to return a boolean.
-    %% This decision is up for debate.
-    {_Ty, VarBinds1, Cs1} = type_check_expr(Env, Guard),
-    {TyL, VarBinds2, Cs2} = type_check_lc(Env#env{}, Expr, Quals),
-    {TyL, union_var_binds(VarBinds1, VarBinds2, Env#env.tenv), constraints:combine(Cs1, Cs2)}.
-
-%% Binary comprehension. This function is very similar to type_check_lc.
-type_check_bc(Env, Expr, []) ->
+type_check_comprehension(Env, bc, Expr, []) ->
     {Ty, _VB, Cs} = type_check_expr(Env, Expr),
     RetTy = case normalize(Ty, Env#env.tenv) of
                 {type, _, any, []} = Any ->
@@ -1799,52 +1748,46 @@ type_check_bc(Env, Expr, []) ->
                     throw({type_error, bc, P, Expr, NormTy})
             end,
     {RetTy, #{}, Cs};
-type_check_bc(Env, Expr, [{generate, P, Pat, Gen} | Quals]) ->
+type_check_comprehension(Env, Compr, Expr, [{generate, P, Pat, Gen} | Quals]) ->
     {Ty,  _,  Cs1} = type_check_expr(Env, Gen),
     case expect_list_type(Ty, allow_nil_type) of
         {elem_ty, ElemTy, Cs} ->
             {NewVEnv, Cs2} = add_type_pat(Pat, ElemTy, Env#env.tenv, Env#env.venv),
             NewEnv = Env#env{venv = NewVEnv},
-            {TyL, VB, Cs3} = type_check_bc(NewEnv, Expr, Quals),
+            {TyL, VB, Cs3} = type_check_comprehension(NewEnv, Compr, Expr, Quals),
             {TyL, VB, constraints:combine([Cs, Cs1, Cs2, Cs3])};
         any ->
             NewVEnv = add_any_types_pat(Pat, Env#env.venv),
             NewEnv = Env#env{venv = NewVEnv},
-            {TyL, VB, Cs2} = type_check_bc(NewEnv, Expr, Quals),
+            {TyL, VB, Cs2} = type_check_comprehension(NewEnv, Compr, Expr, Quals),
             {TyL, VB, constraints:combine(Cs1, Cs2)};
         {elem_tys, _ElemTys, Cs} ->
             %% As a hack, we treat a union type as any, just to
             %% allow the program to type check.
-            %% TODO: Rewrite the union outside the comprehention,
-            %%
+            %% TODO: Rewrite the union outside of the comprehension
             NewVEnv = add_any_types_pat(Pat, Env#env.venv),
             NewEnv = Env#env{venv = NewVEnv},
-            {TyL, VB, Cs2} = type_check_bc(NewEnv, Expr, Quals),
+            {TyL, VB, Cs2} = type_check_comprehension(NewEnv, Compr, Expr, Quals),
             {TyL, VB, constraints:combine([Cs,Cs1,Cs2])};
         {type_error, Ty} ->
             throw({type_error, generator, P, Ty})
     end;
-type_check_bc(Env, Expr, [{b_generate, P, Pat, Gen} | Quals]) ->
-    %% We want to require that Gen is a binary type of any size,
-    %% i.e. <<_:M,_:_*N>> for any M, N but it is not possible to represent
-    %% this in the type language. M and N must be interger literals. If we
-    %% extend type(), we could allow M and N to be type variables or we can
-    %% introduce {type, _, binary, any} for binaries of any size.
-    {GenTy, VarBinds1, Cs1} = type_check_expr(Env, Gen),
-    case GenTy of
-        {type, _, any, []} -> ok;
-        {type, _, binary, _} -> ok;
-        _ -> throw({type_error, b_generate, P, GenTy})
-    end,
-    NewEnv = Env#env{venv = add_any_types_pat(Pat, Env#env.venv)},
-    {TyL, VarBinds2, Cs2} = type_check_bc(NewEnv, Expr, Quals),
+type_check_comprehension(Env, Compr, Expr, [{b_generate, _P, Pat, Gen} | Quals]) ->
+    BitStringTy = type(binary, [{integer, erl_anno:new(0), 0},
+                                {integer, erl_anno:new(0), 1}]),
+    {VarBinds1, Cs1} =
+        type_check_expr_in(Env, BitStringTy, Gen),
+    {NewVEnv, Cs2} = add_type_pat(Pat, BitStringTy, Env#env.tenv, Env#env.venv),
+    {TyL, VarBinds2, Cs3} =
+        type_check_comprehension(Env#env{venv = NewVEnv}, Compr, Expr, Quals),
     {TyL
     ,union_var_binds(VarBinds1, VarBinds2, Env#env.tenv)
-    ,constraints:combine(Cs1, Cs2)};
-type_check_bc(Env, Expr, [Guard | Quals]) ->
+    ,constraints:combine([Cs1, Cs2, Cs3])};
+type_check_comprehension(Env, Compr, Expr, [Guard | Quals]) ->
     %% We don't require guards to return a boolean.
+    %% This decision is up for debate.
     {_Ty, VarBinds1, Cs1} = type_check_expr(Env, Guard),
-    {TyL, VarBinds2, Cs2} = type_check_bc(Env#env{}, Expr, Quals),
+    {TyL, VarBinds2, Cs2} = type_check_comprehension(Env, Compr, Expr, Quals),
     {TyL, union_var_binds(VarBinds1, VarBinds2, Env#env.tenv), constraints:combine(Cs1, Cs2)}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -2049,10 +1992,10 @@ do_type_check_expr_in(Env, ResTy, {call, P, Name, Args}) ->
     {VarBinds2, Cs2} = type_check_call(Env, ResTy, expect_fun_type(Env, FunTy), Args,
                                        {P, Name, FunTy}),
     {union_var_binds(VarBinds, VarBinds2, Env#env.tenv), constraints:combine(Cs, Cs2)};
-do_type_check_expr_in(Env, ResTy, {'lc', P, Expr, Qualifiers}) ->
-    type_check_lc_in(Env, ResTy, Expr, P, Qualifiers);
+do_type_check_expr_in(Env, ResTy, {lc, P, Expr, Qualifiers}) ->
+    type_check_comprehension_in(Env, ResTy, lc, Expr, P, Qualifiers);
 do_type_check_expr_in(Env, ResTy, {bc, P, Expr, Qualifiers}) ->
-    type_check_bc_in(Env, ResTy, Expr, P, Qualifiers);
+    type_check_comprehension_in(Env, ResTy, bc, Expr, P, Qualifiers);
 
 %% Functions
 do_type_check_expr_in(Env, Ty, {'fun', P, {clauses, Clauses}}) ->
@@ -2439,7 +2382,19 @@ unary_op_arg_type(Op, Ty) when ?is_int_type(Ty), Op == '-' orelse Op == 'bnot' -
 unary_op_arg_type('-', Ty = {type, _, float, []}) ->
     Ty.
 
-type_check_lc_in(Env, ResTy, Expr, P, []) ->
+%% Type check list comprehension or a binary comprehension
+-spec type_check_comprehension_in(Env        :: #env{},
+                                  ResTy      :: type(),
+                                  Compr      :: lc | bc,
+                                  Expr       :: erl_parse:expr(),
+                                  Position   :: erl_anno:anno(),
+                                  Qualifiers :: [ListGen | BinGen | Filter]) ->
+        {map(), constraints:constraints()}
+       when
+        ListGen :: {generate, erl_anno:anno(), erl_parse:expr(), erl_parse:expr()},
+        BinGen  :: {b_generate, erl_anno:anno(), erl_parse:expr(), erl_parse:expr()},
+        Filter  :: erl_parse:expr().
+type_check_comprehension_in(Env, ResTy, lc, Expr, P, []) ->
     case expect_list_type(ResTy, allow_nil_type) of
         any ->
             {_Ty, _VB, Cs} = type_check_expr(Env, Expr),
@@ -2453,48 +2408,7 @@ type_check_lc_in(Env, ResTy, Expr, P, []) ->
         {type_error, Ty} ->
             throw({type_error, lc, P, Ty})
     end;
-type_check_lc_in(Env, ResTy, Expr, P, [{generate, P_Gen, Pat, Gen} | Quals]) ->
-    {Ty, _VB1, Cs1} = type_check_expr(Env, Gen),
-    case expect_list_type(Ty, allow_nil_type) of
-        any ->
-            {_VB2, Cs2} = type_check_lc_in(Env#env{
-                                             venv =
-                                                 add_any_types_pat(Pat
-                                                                  ,Env#env.venv)
-                                            }
-                                          ,ResTy, Expr, P, Quals),
-            {#{}, constraints:combine(Cs1, Cs2)};
-        {elem_ty, ElemTy, Cs} ->
-            {NewEnv, Cs2} = add_type_pat(Pat
-                                        ,ElemTy
-                                        ,Env#env.tenv
-                                        ,Env#env.venv),
-            {_VB2, Cs3} = type_check_lc_in(Env#env{
-                                             venv = NewEnv
-                                            }
-                                          ,ResTy, Expr, P, Quals),
-            {#{}, constraints:combine([Cs, Cs1, Cs2, Cs3])};
-        {elem_tys, _ElemTys, Cs} ->
-            %% TODO: As a hack, we treat a union type as any, just to
-            %% allow the program to type check.
-            {_VB2, Cs2} = type_check_lc_in(Env#env{
-                                             venv =
-                                                 add_any_types_pat(Pat
-                                                                  ,Env#env.venv)
-                                            }
-                                          ,ResTy, Expr, P, Quals),
-            {#{}, constraints:combine([Cs, Cs1, Cs2])};
-        {type_error, Ty} ->
-            throw({type_error, generator, P_Gen, Ty})
-    end;
-type_check_lc_in(Env, ResTy, Expr, P, [Pred | Quals]) ->
-    %% We choose to check the type of the predicate here. Arguments can be
-    %% made either way on whether we should check the type here.
-    {_VB1, Cs1} = type_check_expr_in(Env, {type, erl_anno:new(0), 'boolean', []}, Pred),
-    { VB2, Cs2} = type_check_lc_in(Env, ResTy, Expr, P, Quals),
-    {VB2, constraints:combine(Cs1, Cs2)}.
-
-type_check_bc_in(Env, ResTy, Expr, P, []) ->
+type_check_comprehension_in(Env, ResTy, bc, Expr, P, []) ->
     ExprTy = case ResTy of
                  {type, _, binary, [{integer, _, 0}, {integer, _, _N}]} ->
                      %% The result is a multiple of N bits.
@@ -2514,28 +2428,30 @@ type_check_bc_in(Env, ResTy, Expr, P, []) ->
              end,
     {_VB, Cs} = type_check_expr_in(Env, ExprTy, Expr),
     {#{}, Cs};
-type_check_bc_in(Env, ResTy, Expr, P, [{generate, P_Gen, Pat, Gen} | Quals]) ->
+type_check_comprehension_in(Env, ResTy, Compr, Expr, P,
+                            [{generate, P_Gen, Pat, Gen} | Quals]) ->
     {Ty, _VB1, Cs1} = type_check_expr(Env, Gen),
     case expect_list_type(Ty, allow_nil_type) of
         any ->
             NewEnv = Env#env{venv = add_any_types_pat(Pat, Env#env.venv)},
-            {_VB2, Cs2} = type_check_bc_in(NewEnv, ResTy, Expr, P, Quals),
+            {_VB2, Cs2} = type_check_comprehension_in(NewEnv, ResTy, Compr, Expr, P, Quals),
             {#{}, constraints:combine(Cs1, Cs2)};
         {elem_ty, ElemTy, Cs} ->
             {NewVEnv, Cs2} = add_type_pat(Pat, ElemTy, Env#env.tenv, Env#env.venv),
             NewEnv = Env#env{venv = NewVEnv},
-            {_VB2, Cs3} = type_check_bc_in(NewEnv, ResTy, Expr, P, Quals),
+            {_VB2, Cs3} = type_check_comprehension_in(NewEnv, ResTy, Compr, Expr, P, Quals),
             {#{}, constraints:combine([Cs, Cs1, Cs2, Cs3])};
         {elem_tys, _ElemTys, Cs} ->
             %% TODO: As a hack, we treat a union type as any, just to
             %% allow the program to type check.
             NewEnv = Env#env{venv = add_any_types_pat(Pat, Env#env.venv)},
-            {_VB2, Cs2} = type_check_bc_in(NewEnv, ResTy, Expr, P, Quals),
+            {_VB2, Cs2} = type_check_comprehension_in(NewEnv, ResTy, Compr, Expr, P, Quals),
             {#{}, constraints:combine([Cs, Cs1, Cs2])};
         {type_error, Ty} ->
             throw({type_error, generator, P_Gen, Ty})
     end;
-type_check_bc_in(Env, ResTy, Expr, P, [{b_generate, _P_Gen, Pat, Gen} | Quals]) ->
+type_check_comprehension_in(Env, ResTy, Compr, Expr, P,
+                            [{b_generate, _P_Gen, Pat, Gen} | Quals]) ->
     %% Binary generator: Pat <= Gen
     %% Gen and Pat should be bitstrings (of any size).
     BitTy = {type, erl_anno:new(0), binary,
@@ -2544,14 +2460,15 @@ type_check_bc_in(Env, ResTy, Expr, P, [{b_generate, _P_Gen, Pat, Gen} | Quals]) 
     {_VarBindsGen, Cs1} = type_check_expr_in(Env, BitTy, Gen),
     {NewVEnv, Cs2} = add_type_pat(Pat, BitTy, Env#env.tenv, Env#env.venv),
     NewEnv = Env#env{venv = NewVEnv},
-    {VarBinds, Cs3} = type_check_bc_in(NewEnv, ResTy, Expr, P, Quals),
+    {VarBinds, Cs3} = type_check_comprehension_in(NewEnv, ResTy, Compr, Expr, P, Quals),
     {VarBinds, constraints:combine([Cs1, Cs2, Cs3])};
-type_check_bc_in(Env, ResTy, Expr, P, [Pred | Quals]) ->
-    %% We choose to check the type of the predicate here, as we do for lc.
-    %% TODO: As a non-boolean predicates don't give runtime errors, we should
-    %% probably add a configuration parameter to toggle these checks.
+type_check_comprehension_in(Env, ResTy, Compr, Expr, P, [Pred | Quals]) ->
+    %% We choose to check the type of the predicate here. Arguments can be
+    %% made either way on whether we should check the type here.
+    %% TODO: As a non-boolean predicates don't give runtime errors, we could
+    %% possibly add a configuration parameter to toggle this check.
     {VB1, Cs1} = type_check_expr_in(Env, {type, erl_anno:new(0), 'boolean', []}, Pred),
-    {VB2, Cs2} = type_check_bc_in(Env, ResTy, Expr, P, Quals),
+    {VB2, Cs2} = type_check_comprehension_in(Env, ResTy, Compr, Expr, P, Quals),
     {union_var_binds(VB1, VB2, Env#env.tenv), constraints:combine(Cs1, Cs2)}.
 
 type_check_assocs(Env, [{Assoc, _, Key, Val}| Assocs])
