@@ -524,7 +524,7 @@ normalize({user_type, P, Name, Args} = Type, TEnv) ->
                     Type1 = typelib:substitute_type_vars(Type0, VarMap),
                     normalize(Type1, TEnv);
                 _NotFound ->
-                    throw({undef, user_type, {Name, length(Args)}})
+                    throw({undef, user_type, P, {Name, length(Args)}})
             end
     end;
 normalize({remote_type, P, [{atom, _, M} = Module, {atom, _, N} = Name, Args]}, TEnv) ->
@@ -3340,7 +3340,7 @@ handle_type_error({undef, Type, {{atom, LINE, Module}, {atom, _, Name}, Arity}})
   when Type =:= user_type; Type =:= remote_type ->
     io:format("Undefined ~p ~p:~p/~p on line ~p~n",
               [Type, Module, Name, Arity, LINE]);
-handle_type_error({undef, user_type, {{atom, LINE, Name}, Arity}}) ->
+handle_type_error({undef, user_type, LINE, {Name, Arity}}) ->
     io:format("Undefined user type ~p/~p on line ~p~n",
               [Name, Arity, LINE]);
 handle_type_error({not_exported, remote_type, {{atom, LINE, _} = Module, Name, Arity}}) ->
