@@ -106,6 +106,8 @@ annotate_user_types(Filename, {type, Anno, T, Params}) when is_list(Params) ->
     {type, Anno, T, [annotate_user_types(Filename, Param) || Param <- Params]};
 annotate_user_types(Filename, {ann_type, Anno, [Var, Type]}) ->
     {ann_type, Anno, [Var, annotate_user_types(Filename, Type)]};
+annotate_user_types(Filename, Types) when is_list(Types) ->
+    [annotate_user_types(Filename, Type) || Type <- Types];
 annotate_user_types(_Filename, Type) ->
     Type.
 
