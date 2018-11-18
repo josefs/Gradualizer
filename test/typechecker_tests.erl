@@ -354,7 +354,12 @@ infer_types_test_() ->
      ?_assertNot(type_check_forms(["f() -> V = [1, 2], g(V).",
                                    "-spec g(integer()) -> any().",
                                    "g(Int) -> Int + 1."],
-                                  [infer]))
+                                  [infer])),
+     %% infer exact type of bitstrings
+     ?_assertMatch("<<_:7, _:_*16>>",
+                   type_check_expr(_Env = "f() -> receive X -> X end.",
+                                   _Expr = "<<(f())/utf16, 7:7>>",
+                                   [infer]))
     ].
 
 type_check_call_test_() ->
