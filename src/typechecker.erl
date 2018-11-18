@@ -425,6 +425,8 @@ glb_ty(Ty1 = {type, _, record, _}, {type, _, tuple, any}, _A, _TEnv) ->
     Ty1;
 glb_ty({type, _, tuple, any}, Ty2 = {type, _, record, _}, _A, _TEnv) ->
     Ty2;
+glb_ty({type, _, record, _}, {type, _, record, _}, _A, _TEnv) ->
+    type(none);
 
 %% Map types. These are a bit tricky and we can't reach this case in the
 %% current code. For now going with a very crude approximation.
@@ -476,6 +478,12 @@ glb_ty({ann_type, _, [{var, _, _}, Ty1]}, Ty2, A, TEnv) ->
     glb(Ty1, Ty2, A, TEnv);
 glb_ty(Ty1, {ann_type, _, [{var, _, _}, Ty2]}, A, TEnv) ->
     glb(Ty1, Ty2, A, TEnv);
+
+%% normalize and remove_pos only does the top layer
+glb_ty({type, _, Name, Args1}, {type, _, Name, Args2}, A, TEnv)
+        when length(Args1) == length(Args2) ->
+    Args = [ glb(Arg1, Arg2, A, TEnv) || {Arg1, Arg2} <- lists:zip(Args1, Args2) ],
+    type(Name, Args);
 
 %% Incompatible
 glb_ty(_Ty1, _Ty2, _A, _TEnv) -> type(none).
