@@ -2489,7 +2489,9 @@ type_check_fun(Env, {atom, P, Name}, Arity) ->
 type_check_fun(_Env, {remote, P, {atom,_,Module}, {atom,_,Fun}}, Arity) ->
     % Module:function call
     case gradualizer_db:get_spec(Module, Fun, Arity) of
-        {ok, Types} -> {Types, #{}, constraints:empty()};
+        {ok, Types} ->
+            Types1 = [ typelib:annotate_user_types(Module, T) || T <- Types ],
+            {Types1, #{}, constraints:empty()};
         not_found   -> throw({call_undef, P, Module, Fun, Arity})
     end;
 type_check_fun(_Env, {remote, _, _Expr, _}, Arity)->
