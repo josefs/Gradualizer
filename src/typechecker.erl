@@ -2807,7 +2807,7 @@ check_clauses_union(Env, [Ty|Tys], Clauses) ->
         check_clauses_fun(Env, Ty, Clauses)
     catch
         Error when element(1,Error) == type_error ->
-            check_clauses(env, Tys, Clauses)
+            check_clauses(Env, Tys, Clauses)
     end.
 
 
