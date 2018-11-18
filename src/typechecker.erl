@@ -2526,7 +2526,7 @@ type_check_bc_in(Env, ResTy, Expr, P, [{generate, P_Gen, Pat, Gen} | Quals]) ->
         {type_error, Ty} ->
             throw({type_error, generator, P_Gen, Ty})
     end;
-type_check_bc_in(Env, ResTy, Expr, P, [{b_generate, P_Gen, Pat, Gen} | Quals]) ->
+type_check_bc_in(Env, ResTy, Expr, P, [{b_generate, _P_Gen, Pat, Gen} | Quals]) ->
     %% Binary generator: Pat <= Gen
     %% Gen and Pat should be bitstrings (of any size).
     BitTy = {type, erl_anno:new(0), binary,
