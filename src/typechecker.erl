@@ -2945,6 +2945,11 @@ add_type_pat({record, P, Record, Fields}, Ty, TEnv, VEnv) ->
             {VEnv2, Cs2} = add_type_pat_fields(Fields, Record, TEnv, VEnv),
             {VEnv2, constraints:combine(Cs1, Cs2)}
     end;
+add_type_pat({map, _P, _Assocs} = Map, {type, _, map, _}, _TEnv, VEnv) ->
+    %% Incomplete, added just to be able to let code through.
+    %% TODO check the type of each Key := Value
+    %% TODO allow union of maps (normalized to one map?)
+    ret(add_any_types_pat(Map, VEnv));
 add_type_pat({match, _, Pat1, Pat2}, Ty, TEnv, VEnv) ->
     {VEnv1, Cs1} = add_type_pat(Pat2, Ty, TEnv, VEnv),
     {VEnv2, Cs2} = add_type_pat(Pat1, Ty, TEnv, VEnv1),
