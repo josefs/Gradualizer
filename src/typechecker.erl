@@ -779,7 +779,12 @@ expect_tuple_type({var, _, Var}, N) ->
 		)
     };
 expect_tuple_type(Ty, _N) ->
-    {type_error, Ty}.
+    case subtype({type, erl_anno:new(0), tuple, any}, Ty, #{}) of
+	{true, _Cs} ->
+	    any;
+	false ->
+	    {type_error, Ty}
+    end.
 
 
 expect_tuple_union([Ty|Tys], AccTy, AccCs, Any, N) ->
