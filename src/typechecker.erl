@@ -1575,7 +1575,13 @@ type_check_logic_op(Env, Op, P, Arg1, Arg2) ->
                 false ->
                     throw({type_error, boolop, Op, P, Ty2});
                 {true, Cs4} ->
-                    {normalize({type, erl_anno:new(0), union, [Ty1, Ty2]}, Env#env.tenv)
+                    Inferred =
+                        case Op of
+                            'andalso' -> type(union, [Ty1, {atom, erl_anno:new(0), false}]);
+                            'orelse'  -> type(union, [Ty1, {atom, erl_anno:new(0), true}]);
+                            _         -> type(boolean)
+                        end,
+                    {normalize(Inferred, Env#env.tenv)
                     ,union_var_binds(VB1, VB2, Env#env.tenv)
                     ,constraints:combine([Cs1,Cs2,Cs3,Cs4])}
             end
