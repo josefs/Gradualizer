@@ -1568,7 +1568,10 @@ type_check_logic_op(Env, Op, P, Arg1, Arg2) ->
             throw({type_error, boolop, Op, P, Ty1});
         {true, Cs2} ->
             {Ty2, VB2, Cs3} = type_check_expr(Env#env{ venv = UnionVarBindsSecondArg(Env#env.venv,VB1 )}, Arg2),
-            case subtype(Ty2, {type, P, bool, []}, Env#env.tenv) of
+            % Allow any() in second argument for shortcut operators
+            SndArgTy = if Op == 'andalso'; Op == 'orelse' -> type(any);
+                          true                            -> type(bool) end,
+            case subtype(Ty2, SndArgTy, Env#env.tenv) of
                 false ->
                     throw({type_error, boolop, Op, P, Ty2});
                 {true, Cs4} ->
@@ -2302,8 +2305,12 @@ arith_op_arg_types(_Op, _Ty) ->
     false.
 
 type_check_logic_op_in(Env, ResTy, Op, P, Arg1, Arg2) when Op == 'andalso'; Op == 'orelse' ->
-    Bool = type(boolean),
-    case subtype(Bool, ResTy, Env#env.tenv) of
+    Bool   = type(boolean),
+    Target = case Op of
+                 'andalso' -> {atom, erl_anno:new(0), false};
+                 'orelse'  -> {atom, erl_anno:new(0), true}
+             end,
+    case subtype(Target, ResTy, Env#env.tenv) of
         {true, Cs} ->
             {VarBinds1, Cs1} = type_check_expr_in(Env, Bool, Arg1),
             %% variable bindings are propagated from Arg1 to Arg2
@@ -3511,6 +3518,11 @@ handle_type_error({type_error, unary_error, Op, P, TargetTy, Ty}) ->
 handle_type_error({type_error, non_integer_argument_to_bnot, P, Ty}) ->
     io:format("The 'bnot' expression on line ~p has a non-integer argument "
               " of type ~s~n", [P, typelib:pp_type(Ty)]);
+handle_type_error({type_error, logic_error, LogicOp, P, Ty}) when LogicOp == 'andalso'; LogicOp == 'orelse' ->
+    Target = if LogicOp == 'andalso' -> false;
+                LogicOp == 'orelse'  -> true end,
+    io:format("The operator ~p on line ~p is expected to have type "
+              "~s which does not include '~p'~n", [LogicOp, P, typelib:pp_type(Ty), Target]);
 handle_type_error({type_error, logic_error, LogicOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is expected to have type "
               "~s which is not a supertype of boolean()~n", [LogicOp, P, typelib:pp_type(Ty)]);
