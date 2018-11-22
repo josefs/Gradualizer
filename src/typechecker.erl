@@ -1139,6 +1139,18 @@ new_type_var() ->
     I = erlang:unique_integer(),
     "_TyVar" ++ integer_to_list(I).
 
+bounded_type_list_to_type(TEnv, Types) ->
+    case [ unfold_bounded_type(TEnv, Ty) || Ty <- Types ] of
+        []   -> type(none);
+        [Ty] -> Ty;
+        Tys  -> type(union, Tys)
+    end.
+
+unfold_bounded_type(TEnv, {type, _, bounded_fun, [Ty, Bounds]}) ->
+    Sub = solve_bounds(TEnv, Bounds),
+    subst_ty(Sub, Ty);
+unfold_bounded_type(_Env, Ty) -> Ty.
+
 -spec solve_bounds(#tenv{}, [type()]) -> #{ atom() := type() }.
 solve_bounds(TEnv, Cs) ->
     Defs = [ {X, T} || {type, _, constraint, [{atom, _, is_subtype}, [{var, _, X}, T]]} <- Cs ],
@@ -1363,16 +1375,16 @@ type_check_expr(Env, {'fun', P, {function, Name, Arity}}) ->
         AnyType = {type, _, any, []} ->
             {AnyType, #{}, constraints:empty()};
         BoundedFunTypeList ->
-            {Ty, Cs} = absform:function_type_list_to_fun_types(BoundedFunTypeList),
-            {Ty, #{}, Cs}
+            Ty = bounded_type_list_to_type(Env#env.tenv, BoundedFunTypeList),
+            {Ty, #{}, constraints:empty()}
     end;
 type_check_expr(Env, {'fun', P, {function, M, F, A}}) ->
     case {get_atom(Env, M), get_atom(Env, F), A} of
         {{atom, _, Module}, {atom, _, Function}, {integer, _, Arity}} ->
             case gradualizer_db:get_spec(Module, Function, Arity) of
                 {ok, BoundedFunTypeList} ->
-                    {Ty, Cs} = absform:function_type_list_to_fun_types(BoundedFunTypeList),
-                    {Ty, #{}, Cs};
+                    Ty = bounded_type_list_to_type(Env#env.tenv, BoundedFunTypeList),
+                    {Ty, #{}, constraints:empty()};
                 not_found ->
                     throw({call_undef, P, M, F, A})
             end;

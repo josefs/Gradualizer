@@ -1,6 +1,6 @@
 -module(constraints).
 
--export([empty/0, upper/2, lower/2, combine/1, combine/2, convert/1, add_var/2]).
+-export([empty/0, upper/2, lower/2, combine/1, combine/2, add_var/2]).
 
 -export_type([constraints/0]).
 
@@ -52,12 +52,3 @@ combine([C1, C2 | Cs]) ->
                     },
     combine([C | Cs]).
 
-convert(Cs) when is_list(Cs) ->
-    combine(lists:map(fun convert/1, Cs));
-
-convert({type, _,constraint,[{atom, _,is_subtype},[TV = {var, _, V}
-                                                  ,TW = {var, _, W}]]}) ->
-    #constraints{ upper_bounds = #{ V => [TW] }
-                , lower_bounds = #{ W => [TV] } };
-convert({type, _,constraint,[{atom, _,is_subtype},[{var, _, V},Ty]]}) ->
-    #constraints{ upper_bounds = #{ V => [Ty] } }.

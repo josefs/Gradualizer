@@ -2,8 +2,7 @@
 -module(absform).
 
 -export([normalize_record_field/1,
-         normalize_function_type_list/1,
-         function_type_list_to_fun_types/1]).
+         normalize_function_type_list/1]).
 
 %% @doc Turns all record fields into typed record fields. Adds default
 %% 'undefined' if default value is missing.
@@ -38,18 +37,3 @@ normalize_function_type({type, _, 'bounded_fun',
                          [_FunType, _FunConst]} = BoundedFun) ->
     BoundedFun.
 
-%% @doc Convert a function type list (as retrieved from a spec) into a type and
-%% constraints. The type of a function as in a spec can be richer (with
-%% constraints and multiple clauses) than the type of a fun object in a type
-%% declaration. The returned type is a union of fun object types (one for each
-%% clause) plus the combination of the constraints separately. This assumes that
-%% each type variable is only used in one of the clauses. Useful to preserve
-%% rich type info of fun objects like `fun mod:fn/1'.
-%% TODO: Warn if same type variable is used in multiple fun spec clauses.
-function_type_list_to_fun_types(FunTypeList) ->
-    L = element(2, hd(FunTypeList)),
-    {FunTypes, Css} =
-        lists:unzip(
-          [{FunType, constraints:convert(FunConst)}
-           || {type, _, bounded_fun, [FunType, FunConst]} <- FunTypeList]),
-    {{type, L, union, FunTypes}, constraints:combine(Css)}.
