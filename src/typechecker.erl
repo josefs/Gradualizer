@@ -1020,7 +1020,7 @@ expect_fun_type(Env, Type) ->
 
 -spec expect_fun_type1(#env{}, type()) -> any
                                | type_error
-                               | {fun_ty, type(), type(), constraints:constraints()}
+                               | {fun_ty, [type()], type(), constraints:constraints()}
                                | {fun_ty_any_args, type(), constraints:constraints()}
                                | {fun_ty_intersection, [type()], constraints:constraints()}
                                | {fun_ty_union, [any()], constraints:constraints()}
@@ -2042,7 +2042,7 @@ do_type_check_expr_in(Env, ResTy, {'case', _, Expr, Clauses}) ->
     {VB, Cs2} = check_clauses(Env2, [ExprTy], ResTy, Clauses),
     {VB, constraints:combine(Cs1,Cs2)};
 do_type_check_expr_in(Env, ResTy, {'if', _, Clauses}) ->
-    check_clauses(Env, ResTy, Clauses);
+    check_clauses(Env, [], ResTy, Clauses);
 do_type_check_expr_in(Env, ResTy, {call, P, Name, Args}) ->
     {FunTy, VarBinds, Cs} = type_check_fun(Env, Name, length(Args)),
     {VarBinds2, Cs2} = type_check_call(Env, ResTy, expect_fun_type(Env, FunTy), Args,
@@ -2121,9 +2121,9 @@ do_type_check_expr_in(Env, Ty, {named_fun, P, FunName, Clauses}) ->
     end;
 
 do_type_check_expr_in(Env, ResTy, {'receive', _, Clauses}) ->
-    check_clauses(Env, any, ResTy, Clauses);
+    check_clauses(Env, [type(any)], ResTy, Clauses);
 do_type_check_expr_in(Env, ResTy, {'receive', _, Clauses, After, Block}) ->
-    {VarBinds1, Cs1} = check_clauses(Env, any, ResTy, Clauses),
+    {VarBinds1, Cs1} = check_clauses(Env, [type(any)], ResTy, Clauses),
     {VarBinds2, Cs2} = type_check_expr_in(Env
                                          ,type(integer)
                                          ,After),
@@ -2184,7 +2184,7 @@ do_type_check_expr_in(Env, ResTy, {'try', _, Block, CaseCs, CatchCs, AfterBlock}
                 {_VB2, Cs2} = check_clauses(Env, [BlockTy], ResTy, CaseCs),
                 constraints:combine(Cs1, Cs2)
         end,
-    {_VB3, Cs3} = check_clauses(Env, any, ResTy, CatchCs),
+    {_VB3, Cs3} = check_clauses(Env, [type(any)], ResTy, CatchCs),
     Cs5 =
         case AfterBlock of
             [] ->
@@ -2746,7 +2746,9 @@ split_tuple_union(N, [{type, _, union, Tys1} | Tys2]) ->
     split_tuple_union(N, Tys1 ++ Tys2).
 
 
-%% Infers (or at least propagates types from) fun, receive and try clauses.
+%% Infers (or at least propagates types from) fun/receive/try/case/if clauses.
+-spec infer_clauses(#env{}, [erl_parse:abstract_clause()]) ->
+        {type(), VarBinds :: map(), constraints:constraints()}.
 infer_clauses(Env, Clauses) ->
     {Tys, VarBindsList, Css} =
         lists:unzip3(lists:map(fun (Clause) ->
@@ -2756,6 +2758,8 @@ infer_clauses(Env, Clauses) ->
     ,union_var_binds(VarBindsList, Env#env.tenv)
     ,constraints:combine(Css)}.
 
+-spec infer_clause(#env{}, erl_parse:abstract_clause()) ->
+        {type(), VarBinds :: map(), constraints:constraints()}.
 infer_clause(Env, {clause, _, Args, Guards, Block}) ->
     EnvNew = Env#env{ venv = add_any_types_pats(Args, Env#env.venv) },
     % TODO: Can there be variable bindings in a guard? Right now we just
@@ -2786,7 +2790,7 @@ check_clauses_union(Env, [Ty|Tys], Clauses) ->
         check_clauses_fun(Env, Ty, Clauses)
     catch
         Error when element(1,Error) == type_error ->
-            check_clauses(Env, Tys, Clauses)
+            check_clauses_union(Env, Tys, Clauses)
     end.
 
 
@@ -2805,20 +2809,18 @@ check_clauses_fun(Env, {fun_ty_union, Tys, Cs1}, Clauses) ->
     {VarBinds, Cs2} = check_clauses_union(Env, Tys, Clauses),
     {VarBinds, constraints:combine(Cs1, Cs2)}.
 
-
-check_clauses(Env, {var, _, TyVar}, Clauses) ->
+%% Checks a list of clauses (if/case/fun/try/catch/receive).
+-spec check_clauses(Env :: #env{}, ArgsTy :: [type()] | any, ResTy :: type(),
+                    Clauses :: [erl_parse:abstract_clause()]) ->
+                        {VarBinds :: map(), constraints:constraints()}.
+check_clauses(Env, any, ResTy, [{clause, _, Args, _, _} | _] = Clauses) ->
+    %% 'any' is the ... in the type fun((...) -> ResTy)
+    ArgsTy = lists:duplicate(length(Args), type(any)),
+    check_clauses(Env, ArgsTy, ResTy, Clauses);
+check_clauses(Env, [], {var, _, TyVar}, Clauses) ->
+    %% This case was added for 'if' clauses.
     {Ty, VarBinds, Cs} = infer_clauses(Env, Clauses),
     {VarBinds, constraints:combine(constraints:upper(TyVar, Ty), Cs)};
-check_clauses(Env, Ty, Clauses) ->
-    {VarBindsList, Css} =
-        lists:unzip(lists:map(fun (Clause) ->
-                                      check_clause(Env, Ty, Clause)
-                              end, Clauses)),
-    {union_var_binds(VarBindsList, Env#env.tenv), constraints:combine(Css)}.
-
-check_clauses(Env, ArgsTy, ResTy, Clauses) when
-      not is_list(ArgsTy) andalso ArgsTy /= any ->
-    check_clauses(Env, [ArgsTy], ResTy, Clauses);
 check_clauses(Env, ArgsTy, ResTy, Clauses) ->
     {VarBindsList, Css} =
         lists:unzip(lists:map(fun (Clause) ->
@@ -2826,12 +2828,13 @@ check_clauses(Env, ArgsTy, ResTy, Clauses) ->
                           end, Clauses)),
     {union_var_binds(VarBindsList, Env#env.tenv), constraints:combine(Css)}.
 
-%% This version of check_clause is for "function-like" clauses, which
-%% takes arguments. That includes case clauses and function clauses
-%% but not if clauses.
-check_clause(Env, any,    ResTy, {clause, _, Args,      _,     _} = Clause) ->
-    ArgsTy = lists:duplicate(length(Args), type(any)),
-    check_clause(Env, ArgsTy, ResTy, Clause);
+%% This function checks clauses.
+%% * If clauses have 0 arguments;
+%% * case/try/catch/receive clauses have 1 argument;
+%% * function clauses have any number of arguments;
+%% * the patterns for catch C:E:T is represented as {C,E,T}
+-spec check_clause(#env{}, [type()], type(), erl_parse:abstract_clause()) ->
+        {VarBinds :: map(), constraints:constraints()}.
 check_clause(Env, ArgsTy, ResTy, {clause, P, Args, Guards, Block}) ->
     case {length(ArgsTy), length(Args)} of
         {L, L} ->
@@ -2850,15 +2853,6 @@ check_clause(Env, ArgsTy, ResTy, {clause, P, Args, Guards, Block}) ->
 check_clause(_Env, _ArgsTy, _ResTy, Term) ->
     io:format("DEBUG: check_clause term: ~p~n", [Term]),
     throw(check_clause).
-
-%% This version, with only three arguments, is for if clauses. Those
-%% clauses don't take any arguments.
-check_clause(Env, ResTy, {clause, _, [], Guards, Block}) ->
-    VarBinds1 = check_guards(Env, Guards),
-    NewEnv    = Env#env{ venv = add_var_binds(Env#env.venv, VarBinds1, Env#env.tenv) },
-    {VarBinds2, Cs2} = type_check_block_in(NewEnv, ResTy, Block),
-    {union_var_binds(VarBinds1, VarBinds2, Env#env.tenv), Cs2}.
-
 
 %% TODO: implement proper checking of guards.
 check_guards(Env, Guards) ->
@@ -2879,18 +2873,20 @@ type_check_function(Env, {function,_, Name, NArgs, Clauses}) ->
             throw({internal_error, missing_type_spec, Name, NArgs})
     end.
 
+%% Type check patterns against types (P1 :: T1, P2 :: T2, ...)
+%% and add variable bindings for the patterns.
 add_types_pats([], [], _TEnv, VEnv) ->
     ret(VEnv);
 add_types_pats([Pat | Pats], [Ty | Tys], TEnv, VEnv) ->
     NormTy = normalize(Ty, TEnv),
-    {VEnv2, Cs1} = add_type_pat(Pat, NormTy, TEnv, VEnv),
-    {VEnv3, Cs2} = ?throw_orig_type(add_types_pats(Pats, Tys, TEnv, VEnv2),
+    {VEnv2, Cs1} = ?throw_orig_type(add_type_pat(Pat, NormTy, TEnv, VEnv),
                                     Ty, NormTy),
+    {VEnv3, Cs2} = add_types_pats(Pats, Tys, TEnv, VEnv2),
     {VEnv3, constraints:combine(Cs1, Cs2)}.
 
-%% Add variable bindings from the pattern
--spec add_type_pat(erl_type:abstract_expr(),
-                   type(),
+%% Type check a pattern against a type and add variable bindings
+-spec add_type_pat(Pat  :: any(), %% should be erl_parse:abstract_expr()
+                   Type :: type(),
                    TEnv :: #tenv{},
                    VEnv :: #{}) ->
           {NewVEnv :: #{}, constraints:constraints()}.
@@ -3080,6 +3076,7 @@ add_type_pat_list([Pat|Pats], [Ty|Tys], TEnv, VEnv) ->
 add_type_pat_list([], [], _TEnv, VEnv) ->
     ret(VEnv).
 
+%% TODO: This function is unused.
 add_type_pat_tuple(Pats, {type, _, any, []}, _TEnv, VEnv) ->
     ret(add_any_types_pats(Pats, VEnv));
 add_type_pat_tuple(Pats, {type, _, tuple, any}, _TEnv, VEnv) ->
