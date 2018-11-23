@@ -64,6 +64,8 @@ parse_opts([A | Args], Opts) ->
         "--no-print-file"          -> parse_opts(Args, [{print_file, false} | Opts]);
         "--stop-on-first-error"    -> parse_opts(Args, [stop_on_first_error | Opts]);
         "--no-stop-on-first-error" -> parse_opts(Args, [{stop_on_first_error, false} | Opts]);
+        "--crash-on-error"         -> parse_opts(Args, [crash_on_error | Opts]);
+        "--no-crash-on-error"      -> parse_opts(Args, [{no_crash_on_error, false} | Opts]);
         "--version"                -> {[], [version]};
         "--"                       -> {Args, Opts};
         "-" ++ _                   -> erlang:error(string:join(["Unknown parameter:", A], " "));

@@ -3289,7 +3289,7 @@ type_check_forms(Forms, Opts) ->
                             {_VarBinds, _Cs} ->
                                 Res
                         catch
-                            Throw when not CrashOnError ->
+                            Throw ->
                                 % Useful for debugging
                                 % io:format("~p~n", [erlang:get_stacktrace()]),
                                 case File of
@@ -3297,7 +3297,13 @@ type_check_forms(Forms, Opts) ->
                                     _ -> io:format("~s: ", [File])
                                 end,
                                 handle_type_error(Throw),
-                                nok;
+                                if
+                                    CrashOnError ->
+                                        io:format("Crashing...~n"),
+                                        erlang:raise(throw, Throw, erlang:get_stacktrace());
+                                    not CrashOnError ->
+                                        nok
+                                end;
                             error:Error ->
                                 %% A hack to hide the (very large) #env{} in
                                 %% error stacktraces. TODO: Add an opt for this.
