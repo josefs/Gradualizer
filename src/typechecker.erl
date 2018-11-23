@@ -1025,8 +1025,8 @@ expect_fun_type(Env, Type) ->
                                | {fun_ty_intersection, [type()], constraints:constraints()}
                                | {fun_ty_union, [any()], constraints:constraints()}
                                .
-expect_fun_type1(Env, {type, _, bounded_fun, [Ft, Fc]}) ->
-    Sub = solve_bounds(Env#env.tenv, Fc),
+expect_fun_type1(Env, BTy = {type, _, bounded_fun, [Ft, _Fc]}) ->
+    Sub = bounded_type_subst(Env#env.tenv, BTy),
     case expect_fun_type1(Env, Ft) of
         {fun_ty, ArgsTy, ResTy, Cs} ->
             {fun_ty, subst_ty(Sub, ArgsTy), subst_ty(Sub, ResTy), Cs};
@@ -1146,10 +1146,19 @@ bounded_type_list_to_type(TEnv, Types) ->
         Tys  -> type(union, Tys)
     end.
 
-unfold_bounded_type(TEnv, {type, _, bounded_fun, [Ty, Bounds]}) ->
-    Sub = solve_bounds(TEnv, Bounds),
+unfold_bounded_type(TEnv, BTy = {type, _, bounded_fun, [Ty, _]}) ->
+    Sub = bounded_type_subst(TEnv, BTy),
     subst_ty(Sub, Ty);
 unfold_bounded_type(_Env, Ty) -> Ty.
+
+-spec bounded_type_subst(#tenv{}, {type, erl_anno:anno(), bounded_fun, [_]}) ->
+        #{ atom() => type() }.
+bounded_type_subst(TEnv, BTy = {type, P, bounded_fun, [_, Bounds]}) ->
+    try
+        solve_bounds(TEnv, Bounds)
+    catch throw:{cyclic_dependencies, Xs} ->
+        throw({type_error, cyclic_type_vars, P, BTy, Xs})
+    end.
 
 -spec solve_bounds(#tenv{}, [type()]) -> #{ atom() := type() }.
 solve_bounds(TEnv, Cs) ->
@@ -3621,6 +3630,11 @@ handle_type_error({type_error, receive_after, P, TyClauses, TyBlock}) ->
              "The type of the after block is : ~s~n"
             ,[erl_anno:line(P), typelib:pp_type(TyClauses)
                                , typelib:pp_type(TyBlock)]);
+handle_type_error({type_error, cyclic_type_vars, _P, Ty, Xs}) ->
+    io:format("The type spec ~s has a cyclic dependency in variable~s ~s~n",
+              [typelib:pp_type(Ty),
+               [ "s" || length(Xs) > 1 ],
+               string:join(lists:map(fun atom_to_list/1, lists:sort(Xs)), ", ")]);
 handle_type_error(type_error) ->
     io:format("TYPE ERROR~n").
 
