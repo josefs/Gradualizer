@@ -3273,6 +3273,7 @@ get_rec_field_type(FieldName, []) ->
 
 type_check_forms(Forms, Opts) ->
     StopOnFirstError = proplists:get_bool(stop_on_first_error, Opts),
+    CrashOnError = proplists:get_bool(crash_on_error, Opts),
     File = proplists:get_value(print_file, Opts),
 
     case gradualizer_db:start_link() of
@@ -3288,7 +3289,7 @@ type_check_forms(Forms, Opts) ->
                             {_VarBinds, _Cs} ->
                                 Res
                         catch
-                            Throw ->
+                            Throw when not CrashOnError ->
                                 % Useful for debugging
                                 % io:format("~p~n", [erlang:get_stacktrace()]),
                                 case File of
