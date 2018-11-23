@@ -12,6 +12,13 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 -spec pp_type(type()) -> string().
+pp_type(Type = {type, _, bounded_fun, _}) ->
+    %% erl_pp can't handle bounded_fun in type definitions
+    Form = {attribute, erl_anno:new(0), spec, {{foo, 0}, [Type]}},
+    TypeDef = erl_pp:form(Form),
+    {match, [S]} = re:run(TypeDef, <<"-spec foo\\s*(.*)\\.\\n*">>,
+                          [{capture, all_but_first, list}, dotall]),
+    "fun(" ++ S ++ ")";
 pp_type(Type) ->
     %% erl_pp can handle type definitions, so wrap Type in a type definition
     %% and then take the type from that.
