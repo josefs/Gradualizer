@@ -2591,6 +2591,9 @@ type_check_call_intersection_(Env, ResTy, [Ty | Tys], Args, E) ->
             type_check_call_intersection_(Env, ResTy, Tys, Args, E)
     end.
 
+type_check_call(_Env, _ResTy, {fun_ty, ArgsTy, _FunResTy, _Cs}, Args, {P, Name, _})
+        when length(ArgsTy) /= length(Args) ->
+    throw({type_error, call_arity, P, Name, length(ArgsTy), length(Args)});
 type_check_call(Env, ResTy, {fun_ty, ArgsTy, FunResTy, Cs}, Args, {P, Name, _}) ->
     {VarBindsList, Css} =
         lists:unzip(
@@ -3476,6 +3479,9 @@ handle_type_error({argument_length_mismatch, P, LenTy, LenArgs}) ->
     io:format("The clause on line ~p is expected to have ~p argument(s) "
               "but it has ~p~n ",
               [P, LenTy, LenArgs]);
+handle_type_error({type_error, call_arity, P, Fun, TyArity, CallArity}) ->
+    io:format("The function ~s at line ~p expects ~p argument~s, but is given ~p~n",
+              [erl_pp:expr(Fun), P, TyArity, ["s" || TyArity /= 1], CallArity]);
 handle_type_error({type_error, call, _P, Name, TyArgs, ArgTys}) ->
     io:format("The function ~p expects arguments of type~n~p~n but is given "
               "arguments of type~n~p~n",
