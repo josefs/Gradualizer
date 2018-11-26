@@ -798,6 +798,8 @@ negate_num_type({type, P, union, Tys}) ->
     %% contain any unresolved types. So it is ok to normalize the result with an
     %% empty TEnv.
     normalize({type, P, union, [negate_num_type(Ty)||Ty <- Tys]}, #tenv{});
+negate_num_type(None = {type, _, none, []}) ->
+    None;
 negate_num_type(RangeTy) ->
     %% some kind of range type like `1..3' or `neg_integer()'
     {L, U} = int_type_to_range(RangeTy),
