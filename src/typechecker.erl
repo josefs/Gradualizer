@@ -1856,7 +1856,8 @@ type_check_comprehension(Env, Compr, Expr, [Guard | Quals]) ->
     %% We don't require guards to return a boolean.
     %% This decision is up for debate.
     {_Ty, VarBinds1, Cs1} = type_check_expr(Env, Guard),
-    {TyL, VarBinds2, Cs2} = type_check_comprehension(Env, Compr, Expr, Quals),
+    NewEnv = Env#env{ venv = add_var_binds(Env#env.venv, VarBinds1, Env#env.tenv) },
+    {TyL, VarBinds2, Cs2} = type_check_comprehension(NewEnv, Compr, Expr, Quals),
     {TyL, union_var_binds(VarBinds1, VarBinds2, Env#env.tenv), constraints:combine(Cs1, Cs2)}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
