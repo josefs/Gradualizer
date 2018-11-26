@@ -3477,10 +3477,10 @@ handle_type_error({type_error, call, _P, Name, TyArgs, ArgTys}) ->
     io:format("The function ~p expects arguments of type~n~p~n but is given "
               "arguments of type~n~p~n",
               [Name, TyArgs, ArgTys]);
-handle_type_error({type_error, call, P, FunTy, Name}) ->
+handle_type_error({type_error, call, P, Ty, Name}) ->
     io:format("The function ~s, called on line ~p doesn't have a function type~n"
              "Rather, it has the following type~n~s~n"
-            ,[erl_pp:expr(Name), P, pp_intersection_type(FunTy)]);
+            ,[erl_pp:expr(Name), P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, call_intersect, P, FunTy, Name}) ->
     io:format("The type of the function ~s, called on line ~p doesn't match "
               "the surrounding calling context.~n"
@@ -3630,6 +3630,15 @@ handle_type_error({type_error, receive_after, P, TyClauses, TyBlock}) ->
              "The type of the after block is : ~s~n"
             ,[erl_anno:line(P), typelib:pp_type(TyClauses)
                                , typelib:pp_type(TyBlock)]);
+handle_type_error({type_error, lc, P, Ty}) ->
+    io:format("The list comprehension at line ~p is expected to have type "
+              "~s which has no list subtypes~n", [P, typelib:pp_type(Ty)]);
+handle_type_error({type_error, bc, P, Ty}) ->
+    io:format("The binary comprehension at line ~p is expected to have type "
+              "~s which has no binary subtypes~n", [P, typelib:pp_type(Ty)]);
+handle_type_error({type_error, lambda, P, Ty}) ->
+    io:format("The function expression at line ~p is expected to have type "
+              "~s which is not a function type~n", [P, typelib:pp_type(Ty)]);
 handle_type_error({type_error, cyclic_type_vars, _P, Ty, Xs}) ->
     io:format("The type spec ~s has a cyclic dependency in variable~s ~s~n",
               [typelib:pp_type(Ty),
@@ -3642,9 +3651,9 @@ pp_intersection_type([]) ->
     "";
 %% TODO: pp_type seems to have problems printing bounded types.
 pp_intersection_type([{type, _, bounded_fun, [Ty, []]} | Tys]) ->
-    typelib:pp_type(Ty) ++ pp_intersection_type(Tys);
+    typelib:pp_type(Ty) ++ ["\n" || Tys /= []] ++ pp_intersection_type(Tys);
 pp_intersection_type([Ty|Tys]) ->
-    typelib:pp_type(Ty) ++ pp_intersection_type(Tys).
+    typelib:pp_type(Ty) ++ ["\n" || Tys /= []] ++ pp_intersection_type(Tys).
 
 
 
