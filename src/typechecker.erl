@@ -258,7 +258,7 @@ compat_ty({type, _, AssocTag2, [Key2, Val2]},
              AssocTag2 == map_field_exact, AssocTag1 == map_field_exact;
              AssocTag2 == map_field_assoc, AssocTag1 == map_field_exact ->
     %% For M1 <: M2, mandatory fields in M2 must be mandatory fields in M1
-    {A1, Cs1} = compat_ty(Key2, Key1, A, TEnv),
+    {A1, Cs1} = compat_ty(Key1, Key2, A, TEnv),
     {A2, Cs2} = compat_ty(Val1, Val2, A1, TEnv),
     {A2, constraints:combine(Cs1, Cs2)};
 
