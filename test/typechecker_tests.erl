@@ -159,6 +159,11 @@ glb_test_() ->
      ?glb( ?t(-5..10), ?t(2..3 | 5..15), ?t(2..3 | 5..10) ),
      ?glb( ?t(neg_integer()), ?t(non_neg_integer()), ?t(none()) ),
 
+     %% Atoms
+     ?glb( ?t(a | b), ?t(atom()), ?t(a | b) ),
+     ?glb( ?t(a),     ?t(atom()), ?t(a) ),
+     ?glb( ?t(b),     ?t(a | b),  ?t(b) ),
+
      %% Lists
      [ ?glb( ?t(maybe_improper_list(term(), term())), T, deep_normalize(T) ) ||
         T <- [ ?t([]), ?t([integer()]), ?t(list()),
