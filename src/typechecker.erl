@@ -387,6 +387,12 @@ glb_ty({type, Ann, union, Ty1s}, Ty2, A, TEnv) ->
 glb_ty(Ty1, {type, Ann, union, Ty2s}, A, TEnv) ->
     {type, Ann, union, [ glb_ty(Ty1, Ty2, A, TEnv) || Ty2 <- Ty2s ]};
 
+%% Atom types
+glb_ty(Ty1 = {atom, _, _}, {type, _, atom, []}, _A, _TEnv) ->
+    Ty1;
+glb_ty({type, _, atom, []}, Ty2 = {atom, _, _}, _A, _TEnv) ->
+    Ty2;
+
 %% Number types
 glb_ty(Ty1, Ty2, _A, _TEnv) when ?is_int_type(Ty1), ?is_int_type(Ty2) ->
     {Lo1, Hi1} = int_type_to_range(Ty1),
