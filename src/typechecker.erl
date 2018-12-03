@@ -2674,14 +2674,20 @@ type_check_block_in(Env, ResTy, [Expr | Exprs]) ->
     {VB, Cs2} = type_check_block_in(Env#env{ venv = add_var_binds(Env#env.venv, VarBinds, Env#env.tenv) }, ResTy, Exprs),
     {add_var_binds(VB, VarBinds, Env#env.tenv), constraints:combine(Cs1, Cs2)}.
 
-type_check_union_in(Env, [Ty|Tys], Expr) ->
+type_check_union_in(Env, Tys, Expr) ->
+    case type_check_union_in1(Env, Tys, Expr) of
+        none        -> throw({type_error, mismatch, type(union, Tys), Expr});
+        Ok = {_, _} -> Ok
+    end.
+
+type_check_union_in1(Env, [Ty|Tys], Expr) ->
     try
         type_check_expr_in(Env, Ty, Expr)
     catch
         E when element(1,E) == type_error ->
-            type_check_union_in(Env, Tys, Expr)
+            type_check_union_in1(Env, Tys, Expr)
     end;
-type_check_union_in(_Env, [], _Expr) ->
+type_check_union_in1(_Env, [], _Expr) ->
     none.
 
 type_check_tuple_union_in(Env, [Tys|Tyss], Elems) ->
@@ -3659,6 +3665,9 @@ handle_type_error({type_error, cyclic_type_vars, _P, Ty, Xs}) ->
               [typelib:pp_type(Ty),
                [ "s" || length(Xs) > 1 ],
                string:join(lists:map(fun atom_to_list/1, lists:sort(Xs)), ", ")]);
+handle_type_error({type_error, mismatch, Ty, Expr}) ->
+    io:format("The expression ~s at line ~p does not have type ~s~n",
+              [erl_pp:expr(Expr), erl_anno:line(element(2, Expr)), typelib:pp_type(Ty)]);
 handle_type_error(type_error) ->
     io:format("TYPE ERROR~n").
 
