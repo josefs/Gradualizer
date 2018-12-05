@@ -1010,6 +1010,15 @@ expect_tuple_union([], AccTy, AccCs, any, N) ->
 expect_tuple_union([], AccTy, AccCs, _NoAny, _N) ->
     {AccTy, AccCs}.
 
+
+-spec allow_empty_list(type()) -> type().
+allow_empty_list({type, P, nonempty_list, []}) ->
+    {type, P, list, []};
+allow_empty_list({type, P, nonempty_list, [T]}) ->
+    {type, P, list, [T]};
+allow_empty_list(Ty) ->
+    Ty.
+
 %% Categorizes a function type.
 %% Normalizes the type (expand user-def and remote types). Errors for non-fun
 %% types are returned with the original non-normalized type.
@@ -1924,15 +1933,15 @@ do_type_check_expr_in(Env, Ty, Cons = {cons, LINE, H, T}) ->
     case expect_list_type(Ty, dont_allow_nil_type) of
         {elem_ty, ETy, Cs} ->
             {VB1, Cs1} = type_check_expr_in(Env, ETy, H),
-            {VB2, Cs2} = type_check_expr_in(Env, Ty,  T),
+            {VB2, Cs2} = type_check_expr_in(Env, allow_empty_list(Ty),  T),
             {union_var_binds(VB1, VB2, Env#env.tenv), constraints:combine([Cs, Cs1, Cs2])};
         {elem_tys, ETys, Cs} ->
             {VB1, Cs1} = type_check_union_in(Env, ETys, H),
-            {VB2, Cs2} = type_check_expr_in(Env, Ty,  T),
+            {VB2, Cs2} = type_check_expr_in (Env, allow_empty_list(Ty), T),
             {union_var_binds(VB1, VB2, Env#env.tenv), constraints:combine([Cs, Cs1, Cs2])};
         any ->
             {_Ty, VB1, Cs1} = type_check_expr   (Env, H),
-            {     VB2, Cs2} = type_check_expr_in(Env, Ty, T),
+            {     VB2, Cs2} = type_check_expr_in(Env, allow_empty_list(Ty), T),
             {union_var_binds(VB1, VB2, Env#env.tenv), constraints:combine(Cs1, Cs2)};
         {type_error, _} ->
             throw({type_error, cons, LINE, Cons, Ty})
