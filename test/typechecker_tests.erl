@@ -81,6 +81,7 @@ subtype_test_() ->
      ?_assert(subtype(?t( #{a := b}         ), ?t( map()            ))),
      ?_assert(subtype(?t( #{a => b}         ), ?t( #{}              ))),
      ?_assert(subtype(?t( #{a := b}         ), ?t( #{a => b}        ))),
+     ?_assert(subtype(?t( #{a => b, c => d} ), ?t( #{a => b}        ))),
      ?_assert(subtype(?t( #{5 := a }        ), ?t( #{1..5 := atom()}))),
 
      %% Type variables
