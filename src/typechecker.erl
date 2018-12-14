@@ -2951,25 +2951,20 @@ refine(OrigTy, Ty, TEnv) ->
     end.
 
 %% May throw no_refinement.
+refine_ty(_Ty, ?type(none), _TEnv) ->
+    %% PatTy none() means the pattern can't be used for refinement,
+    %% because there is imprecision.
+    throw(no_refinement);
 refine_ty(?type(union, Tys), Ty, TEnv) ->
     normalize(type(union, [refine(U, Ty, TEnv) || U <- Tys]), TEnv);
 refine_ty(?type(tuple, Tys1), ?type(tuple, Tys2), TEnv)
-  when length(Tys1) > 0 ->
+  when length(Tys1) > 0, length(Tys1) == length(Tys2) ->
     %% Non-empty tuple
     RefTys = [refine(Ty1, Ty2, TEnv) || {Ty1, Ty2} <- lists:zip(Tys1, Tys2)],
-    %% {a|b, a|b} \ {a,a} => {a|b, b} | {b, a|b}
-    PossibleTyss = [case RefTy of
-                        Ty          -> [Ty];
-                        ?type(none) -> [Ty];
-                        _           -> [Ty, RefTy]
-                    end || {Ty, RefTy} <- lists:zip(Tys1, RefTys)],
-    [_|TuplesElems] = pick_from_each(PossibleTyss),
+    %% {a|b, a|b} \ {a,a} => {b, a|b}, {a|b, b}
+    TuplesElems = pick_one_refinement_each(Tys1, RefTys),
     Tuples = [type(tuple, TupleElems) || TupleElems <- TuplesElems],
     normalize(type(union, Tuples), TEnv);
-refine_ty(?type(any), _Ty, _) ->
-    throw(no_refinement);
-refine_ty(Ty, ?type(none), _) ->
-    Ty;
 refine_ty({ann_type, _, [_, Ty1]}, Ty2, TEnv) ->
     refine_ty(Ty1, Ty2, TEnv);
 refine_ty(Ty1, {ann_type, _, [_, Ty2]}, TEnv) ->
@@ -2990,9 +2985,9 @@ refine_ty(Ty, {Tag, _, V}, TEnv) when ?is_int_type(Ty),
                                       Tag == integer orelse Tag == char ->
     case Ty of
         ?type(non_neg_integer) when V == 0 -> type(pos_integer);
-        ?type(non_neg_integer) when V < 0  -> Ty;
-        ?type(pos_integer)     when V =< 0 -> Ty;
-        ?type(neg_integer)     when V < 0  -> Ty;
+        ?type(non_neg_integer) when V < 0  -> Ty; %% disjoint
+        ?type(pos_integer)     when V =< 0 -> Ty; %% disjoint
+        ?type(neg_integer)     when V >= 0 -> Ty; %% disjoint
         ?type(integer)         when V == 0 ->
             type(union, [type(neg_integer), type(pos_integer)]);
         ?type(range, [{_TagLo, _, Lo}, {_TagHi, _, Hi}]) ->
@@ -3003,24 +2998,42 @@ refine_ty(Ty, {Tag, _, V}, TEnv) when ?is_int_type(Ty),
                           int_range_to_types({V + 1, Hi}),
                     normalize(type(union, Tys), TEnv);
                 true ->
-                    Ty
+                    Ty %% disjoint (V is not in the range)
             end;
-        _ ->
+        _OtherIntType ->
             %% Not possible to subtract from other integer types
             throw(no_refinement)
     end;
 refine_ty(Ty1, Ty2, TEnv) ->
-    case subtype(Ty2, Ty1, TEnv) of
-        false     -> Ty1;                 %% disjoint
-        {true, _} -> throw(no_refinement) %% inexact
+    case glb(Ty1, Ty2, TEnv) of
+        ?type(none)  -> Ty1;                 %% disjoint
+        _NotDisjoint -> throw(no_refinement) %% imprecision
     end.
 
-%% [Xs, Ys, ...] -> [[X, Y, ...] || X <- Xs, Y <- Ys, ...]
-pick_from_each([]) -> [];
-pick_from_each([Xs]) ->
-    [[X] || X <- Xs];
-pick_from_each([Xs|Xss]) ->
-    [[X | Ys] || X <- Xs, Ys <- pick_from_each(Xss)].
+%% Returns a nested list on the form
+%%
+%%     [[RefTy1, Ty2, Ty3, ..., TyN],
+%%      [Ty1, RefTy2, Ty3, ..., TyN],
+%%      [Ty1, Ty2, RefTy3, ..., TyN],
+%%      ...
+%%      [Ty1, Ty2, Ty3, ..., RefTyN]].
+%%
+%% If RefTyI==TyI or RefTyI==none() for any I, that list I is excluded.
+pick_one_refinement_each([], []) -> [];
+pick_one_refinement_each([Ty|Tys], [RefTy|RefTys]) ->
+    %% The lists (zero or one list) where we refine head and keep tail
+    %% unrefined, if head is possible to refine.
+    RefHeadCombinations =
+        case RefTy of
+            Ty          -> [];           %% pattern mismatches; no refinement
+            ?type(none) -> [];           %% pattern matches all; no refinement
+            _           -> [[RefTy|Tys]] %% refinement possible
+        end,
+    %% All lists where we keep head and refine one of the rest types
+    RefTailCombinations =
+        [[Ty|Tail] || Tail <- pick_one_refinement_each(Tys, RefTys)],
+    %% The last list is the list where to type is refined.
+    RefHeadCombinations ++ RefTailCombinations.
 
 %% TODO: implement proper checking of guards.
 check_guards(Env, Guards) ->
