@@ -1,6 +1,6 @@
--module(tuple_union2).
+-module(tuple_union_pattern).
 
--compile(export_all).
+-export([tuple_union/1]).
 
 -spec tuple_union({undefined, {}}
                 | {{}, undefined}) -> {}.
