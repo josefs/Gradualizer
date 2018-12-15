@@ -351,6 +351,12 @@ get_record_fields(RecName, Anno, #tenv{records = REnv}) ->
 glb(T1, T2, TEnv) ->
     glb(T1, T2, #{}, TEnv).
 
+-spec glb([type()], TEnv :: #tenv{}) -> type().
+glb(Ts, TEnv) ->
+    lists:foldl(fun (T, Acc) -> glb(T, Acc, TEnv) end,
+                type(term),
+                Ts).
+
 glb(T1, T2, A, TEnv) ->
     Ty1 = typelib:remove_pos(normalize(T1, TEnv)),
     Ty2 = typelib:remove_pos(normalize(T2, TEnv)),
@@ -3025,7 +3031,7 @@ pick_one_refinement_each([Ty|Tys], [RefTy|RefTys]) ->
     %% unrefined, if head is possible to refine.
     RefHeadCombinations =
         case RefTy of
-            Ty          -> [];           %% pattern mismatches; no refinement
+            %Ty          -> [];           %% pattern mismatches; no refinement
             ?type(none) -> [];           %% pattern matches all; no refinement
             _           -> [[RefTy|Tys]] %% refinement possible
         end,
@@ -3113,6 +3119,34 @@ add_type_pat({var, P, A}=Var, Ty, TEnv, VEnv) ->
     end;
 add_type_pat(Expr, {type, _, any, []} = Ty, _TEnv, VEnv) ->
     {type(none), Ty, add_any_types_pat(Expr, VEnv), constraints:empty()};
+add_type_pat(Pat, ?type(union, UnionTys)=UnionTy, TEnv, VEnv) ->
+    {PatTys, UBounds, VEnvs, Css} =
+        lists:foldr(fun (Ty, {PatTysAcc, UBoundsAcc, VEnvAcc, CsAcc}=Acc) ->
+                        try add_type_pat(Pat, Ty, TEnv, VEnv) of
+                            {PatTy, UBound, NewVEnv, Cs} ->
+                                {[PatTy|PatTysAcc],
+                                 [UBound|UBoundsAcc],
+                                 [NewVEnv|VEnvAcc],
+                                 [Cs|CsAcc]}
+                        catch _TypeError ->
+                            Acc
+                        end
+                    end,
+                    {[], [], [], []},
+                    UnionTys),
+    case PatTys of
+        [] ->
+            %% Pattern doesn't match any type in the union
+            Anno = element(2, Pat),
+            throw({type_error, pattern, Anno, Pat, UnionTy});
+        _SomeTysMatched ->
+            %% TODO: The constraints should be merged with *or* semantics
+            %%       and var binds with intersection
+            {glb(PatTys, TEnv),
+             normalize(type(union, UBounds), TEnv),
+             union_var_binds(VEnvs, TEnv),
+             constraints:combine(Css)}
+    end;
 add_type_pat(Lit = {integer, P, _}, Ty, TEnv, VEnv) ->
     case subtype(Lit, Ty, TEnv) of
         {true, Cs} ->
@@ -3147,14 +3181,6 @@ add_type_pat(Tuple = {tuple, P, Pats}, Ty, TEnv, VEnv) ->
             ,type(tuple, UBounds)
             ,VEnv1
             ,constraints:combine(Cs, Cs1)};
-        {elem_tys, Tyss, Cs} ->
-            %% TODO: This code approximates unions of tuples with tuples of unions
-            Unions = lists:map(fun (UnionTys) ->
-                                       type(union, UnionTys)
-                               end
-                              ,transpose(Tyss)),
-            {_PatTys, _UBounds, VEnv1, Cs1} = add_types_pats(Pats, Unions, TEnv, VEnv),
-            {type(none), Ty, VEnv1, constraints:combine(Cs, Cs1)};
         {type_error, _Type} ->
             throw({type_error, pattern, P, Tuple, Ty})
     end;
@@ -3185,13 +3211,6 @@ add_type_pat(CONS = {cons, P, PH, PT}, ListTy, TEnv, VEnv) ->
             TailTy = normalize(type(union, [ListTy, type(nil)]), TEnv),
             {_PatTy2, _Ubound2, VEnv3, Cs3} = add_type_pat(PT, TailTy, TEnv, VEnv2),
             {type(none), ListTy, VEnv3, constraints:combine([Cs1, Cs2, Cs3])};
-        {elem_tys, _ElemTys, Cs1} ->
-            %% TODO: As a hack, we treat a union type as any, just to
-            %% allow the program to type check.
-            VEnv2 = add_any_types_pat(PH, VEnv),
-            TailTy = normalize(type(union, [ListTy, type(nil)]), TEnv),
-            {_TailPatTy, _TailUBound, VEnv3, Cs2} = add_type_pat(PT, TailTy, TEnv, VEnv2),
-            {type(none), ListTy, VEnv3, constraints:combine(Cs1, Cs2)};
         {type_error, _Ty} ->
             throw({type_error, cons_pat, P, CONS, ListTy})
     end;
