@@ -7,6 +7,6 @@ crash() -> error(crash).
 
 foo() -> -crash().
 
--spec bar(none()) -> _.
-bar(X) -> -X.
+%-spec bar(none()) -> _.
+%bar(X) -> -X.  %% <--- error "clause cannot be reached"
 

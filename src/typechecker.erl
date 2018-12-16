@@ -2890,6 +2890,8 @@ check_clauses(Env, ArgsTy, ResTy, Clauses) ->
 %% * the patterns for catch C:E:T is represented as {C,E,T}
 -spec check_clause(#env{}, [type()], type(), erl_parse:abstract_clause()) ->
         {RefinedTys :: [type()] , VarBinds :: map(), constraints:constraints()}.
+check_clause(_Env, [?type(none)|_], _ResTy, {clause, P, _Args, _Guards, _Block}) ->
+    throw({type_error, unreachable_clause, P});
 check_clause(Env, ArgsTy, ResTy, {clause, P, Args, Guards, Block}) ->
     case {length(ArgsTy), length(Args)} of
         {L, L} ->
@@ -2921,8 +2923,7 @@ refine_clause_arg_tys(Tys, MatchedTys, [], TEnv) ->
         ?type(tuple, RefTys) ->
             RefTys;
         ?type(none) ->
-            Tys; %% We could return [none(), ...] here if we'd want to do
-                 %% exhaustiveness checking
+            lists:duplicate(length(Tys), type(none));
         ?type(union, _) ->
             Tys %% Multiple possibilities => don't refine
     catch
@@ -2945,8 +2946,16 @@ refine_ty(_Ty, ?type(none), _TEnv) ->
     %% PatTy none() means the pattern can't be used for refinement,
     %% because there is imprecision.
     throw(no_refinement);
-refine_ty(?type(union, Tys), Ty, TEnv) ->
-    normalize(type(union, [refine(U, Ty, TEnv) || U <- Tys]), TEnv);
+refine_ty(?type(union, UnionTys), Ty, TEnv) ->
+    RefTys = lists:foldr(fun (UnionTy, Acc) ->
+                             try refine(UnionTy, Ty, TEnv) of
+                                 RefTy -> [RefTy|Acc]
+                             catch
+                                 disjoint -> [UnionTy|Acc]
+                             end
+                          end,
+                          [], UnionTys),
+    normalize(type(union, RefTys), TEnv);
 refine_ty(?type(tuple, Tys1), ?type(tuple, Tys2), TEnv)
   when length(Tys1) > 0, length(Tys1) == length(Tys2) ->
     %% Non-empty tuple
@@ -2965,19 +2974,19 @@ refine_ty({atom, _, A}, {atom, _, A}, _) ->
     type(none);
 refine_ty(?type(list, A), ?type(nil), _TEnv) ->
     type(nonempty_list, A);
-refine_ty({Tag1, _, M} = Ty, {Tag2, _, N}, _TEnv)
+refine_ty({Tag1, _, M}, {Tag2, _, N}, _TEnv)
     when Tag1 == integer orelse Tag1 == char,
          Tag2 == integer orelse Tag2 == char ->
     if M == N -> type(none);
-       M /= N -> Ty
+       M /= N -> throw(disjoint)
     end;
 refine_ty(Ty, {Tag, _, V}, TEnv) when ?is_int_type(Ty),
                                       Tag == integer orelse Tag == char ->
     case Ty of
         ?type(non_neg_integer) when V == 0 -> type(pos_integer);
-        ?type(non_neg_integer) when V < 0  -> Ty; %% disjoint
-        ?type(pos_integer)     when V =< 0 -> Ty; %% disjoint
-        ?type(neg_integer)     when V >= 0 -> Ty; %% disjoint
+        ?type(non_neg_integer) when V < 0  -> throw(disjoint);
+        ?type(pos_integer)     when V =< 0 -> throw(disjoint);
+        ?type(neg_integer)     when V >= 0 -> throw(disjoint);
         ?type(integer)         when V == 0 ->
             type(union, [type(neg_integer), type(pos_integer)]);
         ?type(range, [{_TagLo, _, Lo}, {_TagHi, _, Hi}]) ->
@@ -2988,7 +2997,7 @@ refine_ty(Ty, {Tag, _, V}, TEnv) when ?is_int_type(Ty),
                           int_range_to_types({V + 1, Hi}),
                     normalize(type(union, Tys), TEnv);
                 true ->
-                    Ty %% disjoint (V is not in the range)
+                    throw(disjoint)
             end;
         _OtherIntType ->
             %% Not possible to subtract from other integer types
@@ -2996,7 +3005,7 @@ refine_ty(Ty, {Tag, _, V}, TEnv) when ?is_int_type(Ty),
     end;
 refine_ty(Ty1, Ty2, TEnv) ->
     case glb(Ty1, Ty2, TEnv) of
-        ?type(none)  -> Ty1;                 %% disjoint
+        ?type(none)  -> throw(disjoint);     %% disjoint
         _NotDisjoint -> throw(no_refinement) %% imprecision
     end.
 
@@ -3015,7 +3024,6 @@ pick_one_refinement_each([Ty|Tys], [RefTy|RefTys]) ->
     %% unrefined, if head is possible to refine.
     RefHeadCombinations =
         case RefTy of
-            %Ty          -> [];           %% pattern mismatches; no refinement
             ?type(none) -> [];           %% pattern matches all; no refinement
             _           -> [[RefTy|Tys]] %% refinement possible
         end,
@@ -3670,6 +3678,8 @@ handle_type_error({argument_length_mismatch, P, LenTy, LenArgs}) ->
     io:format("The clause on line ~p is expected to have ~p argument(s) "
               "but it has ~p~n ",
               [P, LenTy, LenArgs]);
+handle_type_error({type_error, unreachable_clause, P}) ->
+    io:format("The clause on line ~p cannot be reached~n", [P]);
 handle_type_error({type_error, call_arity, P, Fun, TyArity, CallArity}) ->
     io:format("The function ~s at line ~p expects ~p argument~s, but is given ~p~n",
               [erl_pp:expr(Fun), P, TyArity, ["s" || TyArity /= 1], CallArity]);

@@ -63,6 +63,11 @@ nil_elimination(Xs) -> Xs.
 tuple_union({a, b, c}) -> ok;
 tuple_union({a, b}) -> ok.
 
+-spec tuple_union_2({a, b | c} | {b, c}) -> {a, b}.
+tuple_union_2({b, c}) -> {a, b}; %% refine to {a, b | c}
+tuple_union_2({a, c}) -> {a, b}; %% refine to {a, b}
+tuple_union_2(AB)     -> AB.
+
 -spec beside_match_all(any(), a | b) -> b.
 beside_match_all(_, a) -> b;
 beside_match_all(_, X) -> X.
