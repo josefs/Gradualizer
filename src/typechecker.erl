@@ -2426,6 +2426,17 @@ type_check_list_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
             end
     end.
 
+list_op_arg_types(ListOp, {type, _, union, Tys}) ->
+    %% This approximates union of lists with list of unions
+    Pairs = [list_op_arg_types(ListOp, Ty) || Ty <- Tys],
+    case lists:member(false, Pairs) of
+        true ->
+            %% Some type in the union is not a list type
+            false;
+        false ->
+            {Arg1Tys, Arg2Tys} = lists:unzip(Pairs),
+            {type(union, Arg1Tys), type(union, Arg2Tys)}
+    end;
 list_op_arg_types('++', Ty) ->
     case list_view(Ty) of
         {empty, _, _}       -> {type(nil), type(nil)};
