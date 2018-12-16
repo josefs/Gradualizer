@@ -1188,10 +1188,14 @@ solve_bounds(TEnv, Cs) ->
     solve_bounds(TEnv, Env, SCCs, #{}).
 
 solve_bounds(TEnv, Defs, [{acyclic, X} | SCCs], Acc) ->
-    #{ X := Tys } = Defs,
-    Tys1 = subst_ty(Acc, Tys),
-    %% Take intersection after substitution to get rid of type variables.
-    Ty1  = lists:foldl(fun(S, T) -> glb(S, T, TEnv) end, type(term), Tys1),
+    Ty1 = case Defs of
+              #{X := Tys} ->
+                  Tys1 = subst_ty(Acc, Tys),
+                  %% Take intersection after substitution to get rid of type variables.
+                  lists:foldl(fun(S, T) -> glb(S, T, TEnv) end, type(term), Tys1);
+              _NoBoundsForX ->
+                  type(any) %% or should we return term()?
+          end,
     solve_bounds(TEnv, maps:remove(X, Defs), SCCs, Acc#{ X => Ty1 });
 solve_bounds(_, _, [{cyclic, Xs} | _], _) ->
     throw({cyclic_dependencies, Xs});
@@ -1199,6 +1203,8 @@ solve_bounds(_, _, [], Acc) -> Acc.
 
 free_vars(Ty) -> free_vars(Ty, #{}).
 
+free_vars({var, _, '_'}, Vars) ->
+    Vars;
 free_vars({var, _, X}, Vars) ->
     Vars#{ X => true };
 free_vars([H | T], Vars) ->
