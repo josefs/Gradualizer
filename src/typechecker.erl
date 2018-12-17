@@ -966,6 +966,8 @@ expect_tuple_type({type, _, tuple, any}, _N) ->
     any;
 expect_tuple_type({type, _, tuple, Tys}, N) when length(Tys) == N ->
     {elem_ty, Tys, constraints:empty()};
+expect_tuple_type(?type(term) = TermTy, N) ->
+    {elem_ty, lists:duplicate(N, TermTy), constraints:empty()};
 expect_tuple_type({ann_type, _, [_, Ty]}, N) ->
     expect_tuple_type(Ty, N);
 expect_tuple_type(Union = {type, _, union, UnionTys}, N) ->
