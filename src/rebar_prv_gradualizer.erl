@@ -23,17 +23,22 @@ init(State) ->
 do(State) ->
     code:add_pathsa(rebar_state:code_paths(State, all_deps)),
     CheckedApps = lists:map(fun gradualizer_check_app/1, rebar_state:project_apps(State)),
-    HasNok = lists:member(nok, CheckedApps),
-    if
-        HasNok -> {error, {?MODULE, undefined}};
-        true -> {ok, State}
+    WithError = lists:filter(
+        fun
+            ([]) -> false;
+            ([_|_]) -> true
+        end, CheckedApps),
+    case WithError of
+        [] -> {ok, State};
+        _ -> {error, "Gradualizer found errors."}
     end.
 
--spec gradualizer_check_app(rebar_app_info:t()) -> ok | nok.
+-spec gradualizer_check_app(rebar_app_info:t()) ->
+        [{file:filename(), [typechecker:type_error()]}].
 gradualizer_check_app(App) ->
     GOpts = rebar_app_info:get(App, gradualizer_opts, []),
     Files = files_to_check(App),
-    gradualizer:type_check_files(Files, GOpts).
+    gradualizer:type_check_files(Files, GOpts ++ [print_file]).
 
 -spec files_to_check(rebar_app_info:t()) -> [file:name()].
 files_to_check(App) ->
@@ -63,8 +68,8 @@ files_to_check(App) ->
         end, Files).
 
 -spec format_error(any()) -> string().
-format_error(_) ->
-    "Gradualizer found errors.".
+format_error(Reason) ->
+    io_lib:format("~p", [Reason]).
 
 -spec resolve_src_dirs(dict:dict()) -> {[file:name()], [file:name()]}.
 resolve_src_dirs(Opts) ->

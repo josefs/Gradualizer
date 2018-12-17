@@ -507,7 +507,7 @@ type_check_forms(String) ->
     type_check_forms(String, []).
 
 type_check_forms(String, Opts) ->
-    ok =:= typechecker:type_check_forms(ensure_form_list(merl:quote(String)),
+    [] =:= typechecker:type_check_forms(ensure_form_list(merl:quote(String)),
                                         Opts).
 
 ensure_form_list(List) when is_list(List) ->

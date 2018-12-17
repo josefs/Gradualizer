@@ -14,10 +14,14 @@ handle_args(Args) ->
     Status = if
         HasHelp -> print_usage(), ok;
         HasVersion -> print_version(), ok;
-        true -> gradualizer:type_check_files(Rest, Opts)
+        true -> case gradualizer:type_check_files(Rest, Opts) of
+                    [] -> ok;
+                    _  -> nok
+                end
     end,
+    io:format("~p~n", [Status]),
     case Status of
-        ok -> halt(0);
+        ok  -> halt(0);
         nok -> halt(1)
     end.
 
@@ -49,7 +53,7 @@ print_usage() ->
     io:format("       --no-stop-on-first-error  inverse of --stop-on-first-error~n"),
     io:format("                                  - the default behaviour~n").
 
--spec parse_opts([string()], gradualizer:options()) -> {[string()], gradualizer:options()}.
+-spec parse_opts([string()], typechecker:options()) -> {[string()], typechecker:options()}.
 parse_opts([], Opts) ->
     {[], Opts};
 parse_opts([A | Args], Opts) ->
@@ -72,7 +76,7 @@ parse_opts([A | Args], Opts) ->
         _                          -> {[A | Args], Opts}
     end.
 
--spec handle_path_add(string(), [string()], gradualizer:options()) -> {[string()], gradualizer:options()}.
+-spec handle_path_add(string(), [string()], typechecker:options()) -> {[string()], typechecker:options()}.
 handle_path_add(A, [], _) ->
     erlang:error(string:join(["Missing argument for", A], " "));
 handle_path_add(A, [Path | Args], Opts) ->

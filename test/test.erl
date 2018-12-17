@@ -7,12 +7,12 @@ should_pass_test_() ->
     %% it is not in the sourcemap of the DB so let's import it manually
     gradualizer_db:import_erl_files(["test/should_pass/user_types.erl"]),
     map_erl_files(fun(File) ->
-            {filename:basename(File), [?_assertMatch({ok, _}, {gradualizer:type_check_file(File), File})]}
+            {filename:basename(File), [?_assertMatch({[], _}, {gradualizer:type_check_file(File), File})]}
         end, "test/should_pass").
 
 should_fail_test_() ->
     map_erl_files(fun(File) ->
-            {filename:basename(File), [?_assertMatch({nok, _}, {gradualizer:type_check_file(File), File})]}
+            {filename:basename(File), [?_assertMatch({[_ | _], _}, {gradualizer:type_check_file(File), File})]}
         end, "test/should_fail").
 
 % Test succeeds if Gradualizer crashes or if it doesn't type check.
@@ -22,9 +22,9 @@ known_problem_should_pass_test_() ->
         Result =
             try gradualizer:type_check_file(File) of
                 V -> V
-            catch _:_ -> nok
+            catch _:_ -> [nok]
             end,
-        {filename:basename(File), [?_assertMatch({nok, _}, {Result, File})]}
+        {filename:basename(File), [?_assertMatch({[_ | _], _}, {Result, File})]}
         end, "test/known_problems/should_pass").
 
 % Test succeeds if Gradualizer crashes or if it does type check.
@@ -34,9 +34,9 @@ known_problem_should_fail_test_() ->
         Result =
             try gradualizer:type_check_file(File) of
                 V -> V
-            catch _:_ -> ok
+            catch _:_ -> []
             end,
-        ?_assertMatch({ok, _}, {Result, File})
+        ?_assertMatch({[], _}, {Result, File})
         end, "test/known_problems/should_fail").
 
 map_erl_files(Fun, Dir) ->

@@ -20,6 +20,34 @@
 
 -type type() :: erl_parse:abstract_type().
 
+-type type_error() ::
+    #{error_type := type_error
+                    | {undef, call | record | user_type | remote_type | variable}
+                    | unexported_remote_type | var | char | atom
+                    | string | int | float | cons_pat
+                    | cons | nil | argument_length_mismatch | call_args
+                    | {call, args | arity | context} | mfa
+                    | return | expected_fun_type | op_type_too_precise
+                    | {arith_op, arguments | expression}
+                    | {int_op, arguments | expression}
+                    | unary_op | logic_op | {rel_op, arguments | expression}
+                    | {list_op, arguments | expression}
+                    | operator_pattern | pattern | tuple
+                    | {bit, arguments | expression} | generator | bin_generator
+                    | check_clauses | record_pattern | record_update
+                    | {comprehension, bit_string | list | binary}
+                    | lambda | cyclic_type_vars | mismatch,
+      line           => erl_anno:anno(),
+      module         => atom(),
+      name           => atom(),
+      arity          => non_neg_integer(),
+      actual_type    => type() | {type(), type()},
+      expected_type  => type(),
+      expression     => any(),
+      expected_arity => non_neg_integer()
+    }.
+-type options() :: proplists:proplist().
+
 -compile([export_all]).
 
 %% Data collected from epp parse tree
@@ -1271,7 +1299,7 @@ type_check_expr(Env, {tuple, P, TS}) ->
                 {type, P, tuple, Tys}
         end,
     { InferredTy, union_var_binds(VarBindsList, Env#env.tenv), constraints:combine(Css) };
-type_check_expr(Env, {cons, _, Head, Tail}) ->
+type_check_expr(Env, {cons, _, Head, Tail} = E) ->
     {Ty1, VB1, Cs1} = type_check_expr(Env, Head),
     {Ty2, VB2, Cs2} = type_check_expr(Env, Tail),
     VB = union_var_binds(VB1, VB2, Env#env.tenv),
@@ -1296,7 +1324,10 @@ type_check_expr(Env, {cons, _, Head, Tail}) ->
                                                      L == nonempty_list ->
                         TailElemTy0;
                     _ ->
-                        throw({type_error, list, 0, Ty2})
+                        throw({type_error,
+                               #{error_type  => type_error,
+                                 expression  => E,
+                                 actual_type => Ty2}})
                         %% We throw a type error here because Tail is not of type list
                         %% (nor is it of type any()).
                         %% TODO: Improper list?
@@ -1457,39 +1488,47 @@ type_check_expr(Env, {op, _, '!', Proc, Val}) ->
     {type(any)
     ,union_var_binds(VB1, VB2, Env#env.tenv)
     ,constraints:combine(Cs1, Cs2)};
-type_check_expr(Env, {op, P, 'not', Arg}) ->
+type_check_expr(Env, {op, P, 'not', Arg} = E) ->
     {Ty, VB, Cs1} = type_check_expr(Env, Arg),
     case subtype(Ty, {type, P, boolean, []}, Env#env.tenv) of
         {true, Cs2} ->
             NormTy = normalize(Ty, Env#env.tenv),
             {negate_bool_type(NormTy), VB, constraints:combine(Cs1, Cs2)};
         false ->
-            throw({type_error, non_boolean_argument_to_not, P, Ty})
+            throw({type_error, #{error_type  => type_error,
+                                 expression  => E,
+                                 actual_type => Ty}})
     end;
-type_check_expr(Env, {op, P, 'bnot', Arg}) ->
+type_check_expr(Env, {op, P, 'bnot', Arg} = E) ->
     {Ty, VB, Cs1} = type_check_expr(Env, Arg),
     case subtype(Ty, {type, P, integer, []}, Env#env.tenv) of
         {true, Cs2} ->
             {type(integer), VB, constraints:combine(Cs1, Cs2)};
         false ->
-            throw({type_error, non_integer_argument_to_bnot, P, Ty})
+            throw({type_error, #{error_type  => type_error,
+                                 expression  => E,
+                                 actual_type => Ty}})
     end;
-type_check_expr(Env, {op, P, '+', Arg}) ->
+type_check_expr(Env, {op, P, '+', Arg} = E) ->
     {Ty, VB, Cs1} = type_check_expr(Env, Arg),
     case subtype(Ty, {type, P, number ,[]}, Env#env.tenv) of
         {true, Cs2} ->
             {Ty, VB, constraints:combine(Cs1, Cs2)};
         false ->
-            throw({type_error, non_number_argument_to_plus, P, Ty})
+            throw({type_error, #{error_type  => type_error,
+                                 expression  => E,
+                                 actual_type => Ty}})
     end;
-type_check_expr(Env, {op, P, '-', Arg}) ->
+type_check_expr(Env, {op, P, '-', Arg} = E) ->
     {Ty, VB, Cs1} = type_check_expr(Env, Arg),
     case subtype(Ty, {type, P, number ,[]}, Env#env.tenv) of
         {true, Cs2} ->
             NormTy = normalize(Ty, Env#env.tenv),
             {negate_num_type(NormTy), VB, constraints:combine(Cs1, Cs2)};
         false ->
-            throw({type_error, non_number_argument_to_minus, P, Ty})
+            throw({type_error, #{error_type  => type_error,
+                                 expression  => E,
+                                 actual_type => Ty}})
     end;
 type_check_expr(Env, {op, P, BoolOp, Arg1, Arg2}) when
       (BoolOp == 'andalso') or (BoolOp == 'and') or
@@ -2007,7 +2046,7 @@ do_type_check_expr_in(Env, ResTy, {map, LINE, Assocs}) ->
         false ->
             throw({type_error, map, LINE, ResTy})
     end;
-do_type_check_expr_in(Env, ResTy, {map, LINE, Expr, Assocs}) ->
+do_type_check_expr_in(Env, ResTy, {map, LINE, Expr, Assocs} = E) ->
     {Ty, VBExpr,   Cs1} = type_check_expr(Env, Expr),
     {_AssocTy, VBAssocs, Cs2} = type_check_assocs(Env, Assocs),
     % TODO: Update the type of the map.
@@ -2021,11 +2060,13 @@ do_type_check_expr_in(Env, ResTy, {map, LINE, Expr, Assocs}) ->
     end;
 
 %% Records
-do_type_check_expr_in(Env, ResTy, {record, P, Record, Fields}) ->
+do_type_check_expr_in(Env, ResTy, {record, _, Record, Fields} = E) ->
     Rec = maps:get(Record, Env#env.tenv#tenv.records),
     case expect_record_type(Record, ResTy, Env#env.tenv) of
       type_error ->
-            throw({type_error, record, P, Record, ResTy});
+            throw({type_error, #{error_type    => type_error,
+                                 expression    => E,
+                                 expected_type => ResTy}});
       {ok, Cs1} ->
             {VarBinds, Cs2} = type_check_fields(Env, Rec, Fields),
             {VarBinds, constraints:combine(Cs1, Cs2)}
@@ -2049,7 +2090,7 @@ do_type_check_expr_in(Env, ResTy, {record, P, Exp, Record, Fields}) ->
             {union_var_binds([VarBinds|VarBindsList], Env#env.tenv)
             ,constraints:combine([Cs1, Cs2|Css])}
     end;
-do_type_check_expr_in(Env, ResTy, {record_field, P, Expr, Record, {atom, _, Field}}) ->
+do_type_check_expr_in(Env, ResTy, {record_field, _, Expr, Record, {atom, _, Field}} = E) ->
     Rec = maps:get(Record, Env#env.tenv#tenv.records),
     FieldTy = get_rec_field_type(Field, Rec),
     case subtype(ResTy, FieldTy, Env#env.tenv) of
@@ -2058,14 +2099,18 @@ do_type_check_expr_in(Env, ResTy, {record_field, P, Expr, Record, {atom, _, Fiel
             {VarBinds, Cs2} = type_check_expr_in(Env, RecTy, Expr),
             {VarBinds, constraints:combine([Cs1,Cs2])};
         false ->
-            throw({type_error, record_field, P, Record, Field, FieldTy, ResTy})
+            throw({type_error, #{error_type    => type_error,
+                                 expression    => E,
+                                 actual_type   => FieldTy,
+                                 expected_type => ResTy}})
     end;
-do_type_check_expr_in(Env, ResTy, {record_index, LINE, Record, Field}) ->
+do_type_check_expr_in(Env, ResTy, {record_index, _, _, _} = E) ->
     case subtype(ResTy, type(integer), Env#env.tenv) of
         {true, Cs} ->
             {#{}, Cs};
         false ->
-            throw({type_error, record_index, LINE, Record, Field})
+            throw({type_error, #{error_type    => type_error,
+                                 expression    => E}})
     end;
 
 do_type_check_expr_in(Env, ResTy, {'case', _, Expr, Clauses}) ->
@@ -2110,6 +2155,9 @@ do_type_check_expr_in(Env, ResTy, {'fun', P, {function, Name, Arity}}) ->
     BoundedFunTypeList = get_type_from_name_arity(Name, Arity, Env#env.fenv, P),
     case any_subtype(ResTy, BoundedFunTypeList, Env#env.tenv) of
         {true, Cs} -> {#{}, Cs};
+        % I believe that throwing fun_res_type here will result in a confusing type error
+        % TODO: throw a unique error so error printer can distinguish from
+        % a bad call and a bad function body.
         false -> throw({type_error, fun_res_type, P, {atom, P, Name},
                         ResTy, BoundedFunTypeList})
     end;
@@ -2637,6 +2685,7 @@ type_check_call(Env, ResTy, {fun_ty, ArgsTy, FunResTy, Cs}, Args, {P, Name, _}) 
             { union_var_binds(VarBindsList, Env#env.tenv)
             , constraints:combine([Cs, Cs1 | Css]) };
         false ->
+            % TODO: replace this with unique error (see above)
             throw({type_error, fun_res_type, P, Name, FunResTy, ResTy})
     end;
 type_check_call(Env, ResTy, {fun_ty_any_args, FunResTy, Cs}, Args, {P, Name, _})  ->
@@ -3323,10 +3372,11 @@ get_rec_field_type(FieldName, []) ->
 %%% Main entry point
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+-spec type_check_forms(gradualizer_file_utils:abstract_forms(),
+                       options()) -> [type_error()].
 type_check_forms(Forms, Opts) ->
     StopOnFirstError = proplists:get_bool(stop_on_first_error, Opts),
     CrashOnError = proplists:get_bool(crash_on_error, Opts),
-    File = proplists:get_value(print_file, Opts),
 
     case gradualizer_db:start_link() of
         {ok, _Pid}                    -> ok;
@@ -3335,26 +3385,19 @@ type_check_forms(Forms, Opts) ->
     ParseData =
         collect_specs_types_opaques_and_functions(Forms),
     Env = create_env(ParseData, Opts),
-    lists:foldr(fun (Function, Res) when Res =:= ok;
+    lists:foldr(fun (Function, Errors) when Errors =:= [];
                                          not StopOnFirstError ->
                         try type_check_function(Env, Function) of
                             {_VarBinds, _Cs} ->
-                                Res
+                                Errors
                         catch
                             Throw ->
-                                % Useful for debugging
-                                % io:format("~p~n", [erlang:get_stacktrace()]),
-                                case File of
-                                    undefined -> ok;
-                                    _ -> io:format("~s: ", [File])
-                                end,
-                                handle_type_error(Throw),
                                 if
                                     CrashOnError ->
                                         io:format("Crashing...~n"),
                                         erlang:raise(throw, Throw, erlang:get_stacktrace());
                                     not CrashOnError ->
-                                        nok
+                                        [handle_type_error(Throw) | Errors]
                                 end;
                             error:Error ->
                                 %% A hack to hide the (very large) #env{} in
@@ -3367,9 +3410,9 @@ type_check_forms(Forms, Opts) ->
                                 end,
                                 erlang:raise(error, Error, Trace)
                         end;
-                    (_Function, Err) ->
-                        Err
-                end, ok, ParseData#parsedata.functions).
+                    (_Function, Errors) ->
+                        Errors
+                end, [], ParseData#parsedata.functions).
 
 create_env(#parsedata{specs     = Specs
                      ,functions = Funs
@@ -3453,262 +3496,342 @@ aux([{attribute, _, compile, export_all} | Forms], Acc) ->
 aux([_|Forms], Acc) ->
     aux(Forms, Acc).
 
+-spec handle_type_error(any()) -> type_error().
 handle_type_error({call_undef, LINE, Func, Arity}) ->
-    io:format("Call to undefined function ~p/~p on line ~p~n",
-              [Func, Arity, LINE]);
+    #{error_type => {undef, call},
+      line       => LINE,
+      name       => Func,
+      arity      => Arity
+    };
 handle_type_error({call_undef, LINE, Module, Func, Arity}) ->
-    io:format("Call to undefined function ~p:~p/~p on line ~p~n",
-              [Module, Func, Arity, LINE]);
+    #{error_type => {undef, call},
+      line       => LINE,
+      module     => Module,
+      name       => Func,
+      arity      => Arity
+    };
 handle_type_error({undef, record, {{atom, LINE, Module}, {atom, _, RecName}}}) ->
-    io:format("Undefined record ~p:~p on line ~p~n",
-              [Module, RecName, LINE]);
+    #{error_type => {undef, record},
+      line     => LINE,
+      module   => Module,
+      name     => RecName
+    };
 handle_type_error({undef, record, {atom, LINE, RecName}}) ->
-    io:format("Undefined record ~p on line ~p~n",
-              [RecName, LINE]);
+    #{error_type => {undef, record},
+      line     => LINE,
+      name     => RecName
+    };
 handle_type_error({undef, Type, {{atom, LINE, Module}, {atom, _, Name}, Arity}})
   when Type =:= user_type; Type =:= remote_type ->
-    io:format("Undefined ~p ~p:~p/~p on line ~p~n",
-              [Type, Module, Name, Arity, LINE]);
+    #{error_type => {undef, Type},
+      line       => LINE,
+      module     => Module,
+      name       => Name,
+      arity      => Arity
+    };
 handle_type_error({undef, user_type, LINE, {Name, Arity}}) ->
-    io:format("Undefined user type ~p/~p on line ~p~n",
-              [Name, Arity, LINE]);
+    #{error_type => {undef, user_type},
+      line       => LINE,
+      name       => Name,
+      arity      => Arity
+    };
 handle_type_error({not_exported, remote_type, {{atom, LINE, _} = Module, Name, Arity}}) ->
-    io:format("The type ~s:~s/~p on line ~p is not exported~n",
-              [erl_pp:expr(Module), erl_pp:expr(Name), Arity, LINE]);
+    #{error_type => unexported_remote_type,
+      line       => LINE,
+      module     => Module,
+      name       => Name,
+      arity      => Arity
+      };
 handle_type_error({type_error, tyVar, LINE, Var, VarTy, Ty}) ->
-    io:format("The variable ~p on line ~p has type ~s "
-              "but is expected to have type ~s~n",
-              [Var, LINE, typelib:pp_type(VarTy), typelib:pp_type(Ty)]);
+    #{error_type    => var,
+      line          => LINE,
+      name          => Var,
+      actual_type   => VarTy,
+      expected_type => Ty
+      };
 handle_type_error({type_error, char_expr, LINE, Char, Ty}) ->
-    io:format("The character ~p on line ~p does not have type ~s~n"
-             ,[erl_pp:expr(Char), LINE, typelib:pp_type(Ty)]);
+    #{error_type    => char,
+      line          => LINE,
+      expression    => Char,
+      expected_type => Ty
+      };
 handle_type_error({type_error, {atom, _, A}, LINE, Ty}) ->
-    io:format("The atom ~p on line ~p does not have type ~s~n",
-              [A, LINE, typelib:pp_type(Ty)]);
+    #{error_type    => atom,
+      line          => LINE,
+      expression    => A,
+      expected_type => Ty
+      };
 handle_type_error({type_error, string, LINE, String, Ty}) ->
-    io:format("The string ~p on line ~p does not have type ~s~n",
-              [String, LINE, typelib:pp_type(Ty)]);
+    #{error_type    => string,
+      line          => LINE,
+      expression    => String,
+      expected_type => Ty
+      };
 handle_type_error({type_error, int, I, LINE, Ty}) ->
-    io:format("The integer ~p on line ~p does not have type ~s~n",
-              [I, LINE, typelib:pp_type(Ty)]);
+    #{error_type    => int,
+      line          => LINE,
+      expression    => I,
+      expected_type => Ty
+      };
 handle_type_error({type_error, float, F, LINE, Ty}) ->
-    io:format("The float ~p on line ~p does not have type ~s~n",
-              [F, LINE, typelib:pp_type(Ty)]);
-handle_type_error({type_error, compat, _LINE, Ty1, Ty2}) ->
-    io:format("The type ~s is not compatible with type ~s~n"
-             ,[typelib:pp_type(Ty1), typelib:pp_type(Ty2)]);
-handle_type_error({type_error, list, _, Ty1, Ty}) ->
-    io:format("The type ~s cannot be an element of a list of type ~s~n",
-              [typelib:pp_type(Ty1), typelib:pp_type(Ty)]);
-handle_type_error({type_error, list, _, Ty}) ->
-    io:format("The type ~s on line ~p is not a list type~n",
-              [typelib:pp_type(Ty), line_no(Ty)]);
+    #{error_type    => float,
+      line          => LINE,
+      expression    => F,
+      expected_type => Ty
+      };
 handle_type_error({type_error, cons_pat, P, Cons, Ty}) ->
-    io:format("The pattern ~s on line ~p does not have type:~n~s~n"
-             ,[erl_pp:expr(Cons),P, typelib:pp_type(Ty)]);
+    #{error_type    => cons_pat,
+      line          => P,
+      expression    => Cons,
+      expected_type => Ty
+      };
 handle_type_error({type_error, cons, P, Cons, Ty}) ->
-    io:format("The expression ~s on line ~p does not have type ~s~n"
-             ,[erl_pp:expr(Cons), P, typelib:pp_type(Ty)]);
+    #{error_type    => cons,
+      line          => P,
+      expression    => Cons,
+      expected_type => Ty
+      };
 handle_type_error({type_error, nil, LINE, Ty}) ->
-    io:format("The empty list on line ~p does not have type ~s~n",
-              [LINE, typelib:pp_type(Ty)]);
+    #{error_type    => nil,
+      line          => LINE,
+      expected_type => Ty
+      };
 handle_type_error({argument_length_mismatch, P, LenTy, LenArgs}) ->
-    io:format("The clause on line ~p is expected to have ~p argument(s) "
-              "but it has ~p~n ",
-              [P, LenTy, LenArgs]);
+    #{error_type   => argument_length_mismatch,
+      line           => P,
+      arity          => LenArgs,
+      expected_arity => LenTy
+      };
 handle_type_error({type_error, call_arity, P, Fun, TyArity, CallArity}) ->
-    io:format("The function ~s at line ~p expects ~p argument~s, but is given ~p~n",
-              [erl_pp:expr(Fun), P, TyArity, ["s" || TyArity /= 1], CallArity]);
-handle_type_error({type_error, call, _P, Name, TyArgs, ArgTys}) ->
-    io:format("The function ~p expects arguments of type~n~p~n but is given "
-              "arguments of type~n~p~n",
-              [Name, TyArgs, ArgTys]);
-handle_type_error({type_error, call, P, Ty, Name}) ->
-    io:format("The function ~s, called on line ~p doesn't have a function type~n"
-             "Rather, it has the following type~n~s~n"
-            ,[erl_pp:expr(Name), P, typelib:pp_type(Ty)]);
+    #{error_type     => {call, arity},
+      line           => P,
+      expression     => Fun,
+      expected_arity => TyArity,
+      arity          => CallArity
+      };
+handle_type_error({type_error, call, P, Name, TyArgs, ArgTys}) ->
+    #{error_type    => {call, args},
+      line          => P,
+      name          => Name,
+      expected_type => TyArgs,
+      actual_type   => ArgTys
+      };
 handle_type_error({type_error, call_intersect, P, FunTy, Name}) ->
-    io:format("The type of the function ~s, called on line ~p doesn't match "
-              "the surrounding calling context.~n"
-              "It has the following type~n~s~n"
-             ,[erl_pp:expr(Name), P, pp_intersection_type(FunTy)]);
+    #{error_type  => {call, context},
+      line        => P,
+      name        => Name,
+      actual_type => FunTy
+      };
 handle_type_error({type_error, mfa, P, M, F, A, ResTy, FunTy}) ->
-    io:format("The mfa ~p:~p/~p on line ~p is expected to have type : ~n~s~n"
-              "but has type : ~n"
-              "~s~n"
-             ,[M, F, A, P,typelib:pp_type(ResTy)
-              ,pp_intersection_type(FunTy)]);
+    #{error_type    => mfa,
+      line          => P,
+      module        => M,
+      name          => F,
+      arity         => A,
+      actual_type   => FunTy,
+      expected_type => ResTy
+      };
 handle_type_error({type_error, fun_res_type, P, Func, FunResTy, ResTy}) ->
-    Name = erl_pp:expr(Func), %% {atom, _, Name} or {remote, Mod, Name}
-    io:format("The function ~s on line ~p is expected to return ~s but it returns ~s~n",
-              [Name, P, typelib:pp_type(ResTy), typelib:pp_type(FunResTy)]);
+    Name = erl_pp:expr(Func),
+    #{error_type    => return,
+      line          => P,
+      name          => Name,
+      actual_type   => FunResTy,
+      expected_type => ResTy
+      };
 handle_type_error({type_error, expected_fun_type, P, Func, FunTy}) ->
     Name = erl_pp:expr(Func),
-    io:format("Expected function ~s on line ~p to have a function type,~n"
-              "but it has the following type:~n~s~n",
-              [Name, P, typelib:pp_type(FunTy)]);
+    #{error_type    => expected_fun_type,
+      line          => P,
+      name          => Name,
+      actual_type   => FunTy
+      };
 handle_type_error({type_error, no_type_match_intersection, P, Func, FunTy}) ->
     Name = erl_pp:expr(Func),
-    io:format("None of the types of the function ~s at line ~p matches the "
-              "call site. Here's the types of the function:~n~s~n",
-              [Name, P, pp_intersection_type(FunTy)]);
+     #{error_type   => intersection_mismatch,
+      line          => P,
+      name          => Name,
+      actual_type   => FunTy
+      };
 handle_type_error({type_error, boolop, BoolOp, P, Ty}) ->
-    io:format("The operator ~p on line ~p is given a non-boolean argument "
-              "of type ~s~n", [BoolOp, P, typelib:pp_type(Ty)]);
+    #{error_type    => boolop,
+      line          => P,
+      expression    => BoolOp,
+      actual_type   => Ty
+      };
 handle_type_error({type_error, relop, RelOp, P, Ty1, Ty2}) ->
-    io:format("The operator ~p on line ~p requires arguments of "
-              "compatible types.~nHowever, it has arguments "
-              "of type ~s and ~s~n", [RelOp, P, typelib:pp_type(Ty1)
-                                              , typelib:pp_type(Ty2)]);
-handle_type_error({type_error, op_type_too_precise, '/' = Op, P, Ty}) when ?is_int_type(Ty) ->
-    io:format("The operator ~p on line ~p is expected to have type "
-              "~s which is not a supertype of float()~n", [Op, P, typelib:pp_type(Ty)]);
+    #{error_type   => relop,
+      line         => P,
+      expression  => RelOp,
+      actual_type  => {Ty1, Ty2}
+      };
 handle_type_error({type_error, op_type_too_precise, Op, P, Ty}) ->
-    io:format("The operator ~p on line ~p is expected to have type "
-              "~s which is too precise to be statically checked~n", [Op, P, typelib:pp_type(Ty)]);
+    #{error_type   => op_type_too_precise,
+      line         => P,
+      expression  => Op,
+      expected_type  => Ty
+      };
 handle_type_error({type_error, arith_error, ArithOp, P, Ty1, Ty2}) ->
-    io:format("The operator ~p on line ~p is requires numeric arguments, but "
-              "has arguments of type ~s and ~s~n",
-              [ArithOp, P, typelib:pp_type(Ty1), typelib:pp_type(Ty2)]);
+    #{error_type   => {arith_op, arguments},
+      line         => P,
+      expression   => ArithOp,
+      actual_type  => {Ty1, Ty2}
+      };
 handle_type_error({type_error, int_error, ArithOp, P, Ty1, Ty2}) ->
-    io:format("The operator ~p on line ~p is requires integer arguments, but "
-              " has arguments of type ~s and ~s~n",
-              [ArithOp, P, typelib:pp_type(Ty1), typelib:pp_type(Ty2)]);
+    #{error_type   => {int_op, arguments},
+      line         => P,
+      expression   => ArithOp,
+      actual_type  => {Ty1, Ty2}
+      };
 handle_type_error({type_error, arith_error, ArithOp, P, Ty}) ->
-    io:format("The operator ~p on line ~p is expected to have type "
-              "~s which has no numeric subtypes~n", [ArithOp, P, typelib:pp_type(Ty)]);
+    #{error_type    => {arith_op, expression},
+      line          => P,
+      expression    => ArithOp,
+      expected_type => Ty
+      };
 handle_type_error({type_error, int_error, IntOp, P, Ty}) ->
-    io:format("The operator ~p on line ~p is expected to have type "
-              "~s which has no integer subtypes~n", [IntOp, P, typelib:pp_type(Ty)]);
-handle_type_error({type_error, non_number_argument_to_plus, P, Ty}) ->
-    io:format("The plus expression on line ~p has a non-numeric argument "
-              "of type:~n~s~n", [P, typelib:pp_type(Ty)]);
-handle_type_error({type_error, non_number_argument_to_minus, P, Ty}) ->
-    io:format("The negated expression on line ~p has a non-numeric argument "
-              "of type:~n~s~n", [P, typelib:pp_type(Ty)]);
-handle_type_error({type_error, non_boolean_argument_to_not, P, Ty}) ->
-    io:format("The 'not' expression on line ~p has a non-boolean argument "
-              "of type ~s~n", [P, typelib:pp_type(Ty)]);
+    #{error_type     => {int_op, expression},
+      line           => P,
+      expression     => IntOp,
+      expected_type  => Ty
+      };
 handle_type_error({type_error, unary_error, Op, P, TargetTy, Ty}) ->
-    io:format("The application of unary '~s' on line ~p is expected to have type "
-              "~s, which has no shared subtype with ~s~n", [Op, P, typelib:pp_type(Ty), typelib:pp_type(TargetTy)]);
-handle_type_error({type_error, non_integer_argument_to_bnot, P, Ty}) ->
-    io:format("The 'bnot' expression on line ~p has a non-integer argument "
-              " of type ~s~n", [P, typelib:pp_type(Ty)]);
-handle_type_error({type_error, logic_error, LogicOp, P, Ty}) when LogicOp == 'andalso'; LogicOp == 'orelse' ->
-    Target = if LogicOp == 'andalso' -> false;
-                LogicOp == 'orelse'  -> true end,
-    io:format("The operator ~p on line ~p is expected to have type "
-              "~s which does not include '~p'~n", [LogicOp, P, typelib:pp_type(Ty), Target]);
+    #{error_type    => unary_op,
+      line          => P,
+      expression    => Op,
+      actual_type   => TargetTy,
+      expected_type => Ty
+      };
 handle_type_error({type_error, logic_error, LogicOp, P, Ty}) ->
-    io:format("The operator ~p on line ~p is expected to have type "
-              "~s which is not a supertype of boolean()~n", [LogicOp, P, typelib:pp_type(Ty)]);
+    #{error_type    => logic_op,
+      line          => P,
+      expression    => LogicOp,
+      expected_type => Ty
+      };
 handle_type_error({type_error, rel_error, LogicOp, P, Ty}) ->
-    io:format("The operator ~p on line ~p is expected to have type "
-              "~s which is not a supertype of boolean()~n", [LogicOp, P, typelib:pp_type(Ty)]);
+    #{error_type    => {rel_op, expression},
+      line          => P,
+      expression    => LogicOp,
+      expected_type => Ty
+      };
 handle_type_error({type_error, rel_error, LogicOp, P, Ty1, Ty2}) ->
-    io:format("The operator ~p on line ~p is given two arguments with "
-              "non-compatible types:~n~s~n~s~n",
-              [LogicOp, P, typelib:pp_type(Ty1), typelib:pp_type(Ty2)]);
+     #{error_type   => {rel_op, arguments},
+      line         => P,
+      expression   => LogicOp,
+      actual_type  => {Ty1, Ty2}
+      };
 handle_type_error({type_error, list_op_error, ListOp, P, Ty}) ->
-    io:format("The operator ~p on line ~p is expected to have type "
-              "~s, which has no list subtypes~n",
-              [ListOp, P, typelib:pp_type(Ty)]);
+    #{error_type    => {list_op, expression},
+      line          => P,
+      expression    => ListOp,
+      expected_type => Ty
+      };
 handle_type_error({type_error, list_op_error, ListOp, P, Ty, _}) ->
-    io:format("The operator ~p on line ~p is given an argument "
-              "with a non-list type ~s~n",
-              [ListOp, P, typelib:pp_type(Ty)]);
+    #{error_type   => {list_op, arguments},
+      line         => P,
+      expression   => ListOp,
+      actual_type  => Ty
+      };
 handle_type_error({type_error, operator_pattern, P, Expr, Ty}) ->
-    io:format("The operator pattern ~s on line ~p is expected to have type "
-              "~s~n"
-             ,[erl_pp:expr(Expr), P, typelib:pp_type(Ty)]);
-handle_type_error({type_error, tuple_error, P, Expr, Ty}) ->
-    io:format("A tuple {~s} at line ~p didn't match any of the types in the union ~s~n",
-              [erl_pp:exprs(Expr), P, typelib:pp_type(Ty)]);
+    #{error_type   => operator_pattern,
+      line         => P,
+      expression   => Expr,
+      expected_type  => Ty
+      };
 handle_type_error({type_error, pattern, P, Pat, Ty}) ->
-    io:format("The pattern ~s on line ~p doesn't have the type ~s~n",
-              [erl_pp:expr(Pat), P, typelib:pp_type(Ty)]);
-handle_type_error({type_error, tuple, LINE, Ty}) ->
-    io:format("The tuple on line ~p does not have type ~s~n",
-              [LINE, typelib:pp_type(Ty)]);
+    #{error_type   => pattern,
+      line         => P,
+      expression   => Pat,
+      expected_type  => Ty
+      };
+handle_type_error({type_error, tuple, P, Ty}) ->
+    #{error_type     => tuple,
+      line           => P,
+      expected_type  => Ty
+      };
 handle_type_error({unknown_variable, P, Var}) ->
-    io:format("Unknown variable ~p on line ~p.~n", [Var, P]);
+    #{error_type => {undef, variable},
+      line       => P,
+      expression => Var
+      };
 handle_type_error({type_error, bin, P, ActualTy, ExpectTy}) ->
-    io:format("The bit expression on line ~p is expected "
-              "to have type ~s but it has type ~s~n",
-              [erl_anno:line(P),
-               typelib:pp_type(ExpectTy), typelib:pp_type(ActualTy)]);
+    #{error_type    => {bit, expression},
+      line          => P,
+      actual_type   => ActualTy,
+      expected_type => ExpectTy
+      };
 handle_type_error({type_error, bit_type, Expr, P, Ty1, Ty2}) ->
-    io:format("The expression ~s inside the bit expression on line ~p has type ~s "
-              "but the type specifier indicates ~s~n",
-              [erl_pp:expr(Expr), erl_anno:line(P), typelib:pp_type(Ty1),
-               typelib:pp_type(Ty2)]);
+    #{error_type    => {bit, arguments},
+      line          => P,
+      expression    => Expr,
+      actual_type   => Ty1,
+      expected_type => Ty2
+      };
 handle_type_error({type_error, generator, P, Ty}) ->
-    io:format("The generator in a list comprehension on line ~p is expected "
-              "to return a list type, but returns ~s~n",
-              [erl_anno:line(P), typelib:pp_type(Ty)]);
+    #{error_type    => generator,
+      line          => P,
+      expected_type => Ty
+      };
 handle_type_error({type_error, b_generate, P, Ty}) ->
-    io:format("The binary generator on line ~p is expected "
-              "to return a bitstring type, but returns ~s~n",
-              [erl_anno:line(P), typelib:pp_type(Ty)]);
+    #{error_type    => bin_generator,
+      line          => P,
+      expected_type => Ty
+      };
 handle_type_error({type_error, bc, P, Expr, Ty}) ->
-    io:format("The expression ~s in the bit string comprehension on line ~p "
-              "has type ~s but a bit type is expected.~n",
-              [erl_pp:expr(Expr), erl_anno:line(P), typelib:pp_type(Ty)]);
+    #{error_type    => {comprehension, bit_string},
+      line          => P,
+      expression    => Expr,
+      expected_type => Ty
+      };
 handle_type_error({type_error, check_clauses}) ->
     %%% TODO: Improve quality of type error
-    io:format("Type error in clauses");
-handle_type_error({type_error, record, P, Record, ResTy}) ->
-    io:format("The record #~p on line ~p is expected to have type ~s.~n"
-             ,[Record, P, typelib:pp_type(ResTy)]);
-handle_type_error({type_error, record_field, P, Record, Field, Ty, ExpectTy}) ->
-    io:format("The record field #~p.~p on line ~p has type ~s but is expected to have type ~s.~n"
-             ,[Record, Field, P, typelib:pp_type(Ty), typelib:pp_type(ExpectTy)]);
+    #{error_type    => check_clauses};
 handle_type_error({type_error, record_pattern, P, Record, Ty}) ->
-    io:format("The record patterns for record #~p on line ~p is expected to have"
-              " type ~s.~n"
-             ,[Record, P, typelib:pp_type(Ty)]);
+    #{error_type    => record_pattern,
+      line          => P,
+      expression    => Record,
+      expected_type => Ty
+      };
 handle_type_error({type_error, record_update, P, Record, ResTy}) ->
-    io:format("The record update of the record #~p on line ~p is expected to have type:"
-              "~n~s~n"
-             ,[Record, P, typelib:pp_type(ResTy)]);
+    #{error_type    => record_update,
+      line          => P,
+      expression    => Record,
+      expected_type => ResTy
+      };
 handle_type_error({type_error, receive_after, P, TyClauses, TyBlock}) ->
-    io:format("The types in the clauses and the after block are incompatible~n"
-              "in the receive statement on line ~p.~n"
-             "The type of the clauses is : ~s~n"
-             "The type of the after block is : ~s~n"
-            ,[erl_anno:line(P), typelib:pp_type(TyClauses)
-                               , typelib:pp_type(TyBlock)]);
+    #{error_type    => receive_after,
+      line          => P,
+      actual_type   => {TyClauses, TyBlock}
+      };
 handle_type_error({type_error, lc, P, Ty}) ->
-    io:format("The list comprehension at line ~p is expected to have type "
-              "~s which has no list subtypes~n", [P, typelib:pp_type(Ty)]);
+    #{error_type    => {comprehension, list},
+      line          => P,
+      expected_type => Ty
+      };
 handle_type_error({type_error, bc, P, Ty}) ->
-    io:format("The binary comprehension at line ~p is expected to have type "
-              "~s which has no binary subtypes~n", [P, typelib:pp_type(Ty)]);
+    #{error_type    => {comprehension, binary},
+      line          => P,
+      expected_type => Ty
+      };
 handle_type_error({type_error, lambda, P, Ty}) ->
-    io:format("The function expression at line ~p is expected to have type "
-              "~s which is not a function type~n", [P, typelib:pp_type(Ty)]);
-handle_type_error({type_error, cyclic_type_vars, _P, Ty, Xs}) ->
-    io:format("The type spec ~s has a cyclic dependency in variable~s ~s~n",
-              [typelib:pp_type(Ty),
-               [ "s" || length(Xs) > 1 ],
-               string:join(lists:map(fun atom_to_list/1, lists:sort(Xs)), ", ")]);
+    #{error_type    => lambda,
+      line          => P,
+      expected_type => Ty
+      };
+handle_type_error({type_error, cyclic_type_vars, P, Ty, Xs}) ->
+    #{error_type  => cyclic_type_vars,
+      line        => P,
+      actual_type => Ty,
+      expression  => Xs
+      };
 handle_type_error({type_error, mismatch, Ty, Expr}) ->
-    io:format("The expression ~s at line ~p does not have type ~s~n",
-              [erl_pp:expr(Expr), erl_anno:line(element(2, Expr)), typelib:pp_type(Ty)]);
-handle_type_error(type_error) ->
-    io:format("TYPE ERROR~n").
-
-pp_intersection_type([]) ->
-    "";
-%% TODO: pp_type seems to have problems printing bounded types.
-pp_intersection_type([{type, _, bounded_fun, [Ty, []]} | Tys]) ->
-    typelib:pp_type(Ty) ++ ["\n" || Tys /= []] ++ pp_intersection_type(Tys);
-pp_intersection_type([Ty|Tys]) ->
-    typelib:pp_type(Ty) ++ ["\n" || Tys /= []] ++ pp_intersection_type(Tys).
-
-
-
+    #{error_type    => mismatch,
+      line          => erl_anno:line(element(2, Expr)),
+      expression    => Expr,
+      expected_type => Ty
+      };
+handle_type_error({type_error, #{error_type := _} = V}) ->
+    V.
 
 line_no(Ty) ->
     element(2,Ty).

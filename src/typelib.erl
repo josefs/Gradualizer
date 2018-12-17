@@ -3,7 +3,7 @@
 
 -export([remove_pos/1, annotate_user_types/2, get_module_from_annotation/1,
          substitute_type_vars/2,
-         pp_type/1, debug_type/3, parse_type/1]).
+         pp_type/1, debug_type/3, parse_type/1, pp_intersection_type/1]).
 
 -type type() :: erl_parse:abstract_type().
 
@@ -31,6 +31,14 @@ pp_type(Type) ->
     %        undefined -> S;
     %        File      -> S ++ " in " ++ File
     %end.
+
+pp_intersection_type([]) ->
+    "";
+%% TODO: pp_type seems to have problems printing bounded types.
+pp_intersection_type([{type, _, bounded_fun, [Ty, []]} | Tys]) ->
+    typelib:pp_type(Ty) ++ pp_intersection_type(Tys);
+pp_intersection_type([Ty|Tys]) ->
+    typelib:pp_type(Ty) ++ pp_intersection_type(Tys).
 
 %% Looks up and prints the type M:N(P1, ..., Pn).
 debug_type(M, N, P) ->

@@ -3,18 +3,18 @@
 -include_lib("eunit/include/eunit.hrl").
 
 api_test_() ->
-    [?_assertEqual(ok, gradualizer:type_check_file("test/should_pass/any.erl")),
+    [?_assertEqual([], gradualizer:type_check_file("test/should_pass/any.erl")),
      % TODO: Test fixture is not meant to depend on the build results
-     ?_assertEqual(ok, gradualizer:type_check_file("_build/test/lib/gradualizer/test/any.beam")),
+     ?_assertEqual([], gradualizer:type_check_file("_build/test/lib/gradualizer/test/any.beam")),
      fun() ->
              {module, Mod} = code:load_abs("_build/test/lib/gradualizer/test/any"),
-             ?assertEqual(ok, gradualizer:type_check_module(Mod))
+             ?assertEqual([], gradualizer:type_check_module(Mod))
      end,
      fun() ->
              %% user_types.erl references remote_types.erl
              %% it is not in the sourcemap of the DB so let's import it manually
              gradualizer_db:import_erl_files(["test/should_pass/user_types.erl"]),
-             ?assertEqual(ok, gradualizer:type_check_dir("test/should_pass/"))
+             ?_assertEqual([], gradualizer:type_check_dir("test/should_pass/"))
      end,
 
      %% Failure cases
