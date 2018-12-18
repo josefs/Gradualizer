@@ -2440,7 +2440,7 @@ type_check_list_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
     end.
 
 list_op_arg_types(ListOp, {type, _, union, Tys}) ->
-    %% This approximates union of lists with list of unions
+    %% TODO: This approximates union of lists with list of unions
     Pairs = [list_op_arg_types(ListOp, Ty) || Ty <- Tys],
     case lists:member(false, Pairs) of
         true ->
@@ -3033,7 +3033,7 @@ refine_ty(Ty1, Ty2, TEnv) ->
 %%      ...
 %%      [Ty1, Ty2, Ty3, ..., RefTyN]].
 %%
-%% If RefTyI==TyI or RefTyI==none() for any I, that list I is excluded.
+%% If RefTyI == none() for any I, that list I is excluded.
 pick_one_refinement_each([], []) -> [];
 pick_one_refinement_each([Ty|Tys], [RefTy|RefTys]) ->
     %% The lists (zero or one list) where we refine head and keep tail

@@ -36,11 +36,11 @@ int_literals_3(0) -> 42;
 int_literals_3(N) -> N.
 
 -spec disjoint_stuff_1(non_neg_integer() | -3) -> non_neg_integer().
-disjoint_stuff_1(-3) -> 42; %% this eliminates -3 but doesn't affect neg_integer()
+disjoint_stuff_1(-3) -> 42; %% this eliminates -3 but doesn't affect non_neg_integer()
 disjoint_stuff_1(X) -> X.
 
 -spec disjoint_stuff_2(pos_integer() | -3) -> pos_integer().
-disjoint_stuff_2(-3) -> 42; %% this eliminates 42 but doesn't affect neg_integer()
+disjoint_stuff_2(-3) -> 42; %% this eliminates 42 but doesn't affect pos_integer()
 disjoint_stuff_2(X) -> X.
 
 -spec disjoint_stuff_3(neg_integer() | 42) -> neg_integer().
