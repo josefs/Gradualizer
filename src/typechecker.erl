@@ -50,10 +50,11 @@
               }).
 
 %%% The environment passed around during typechecking.
--record(env, {fenv  = #{}
-             ,venv  = #{}
-             ,tenv          :: #tenv{}
-             ,infer = false :: boolean()
+-record(env, {fenv    = #{}
+             ,venv    = #{}
+             ,tenv            :: #tenv{}
+             ,infer   = false :: boolean()
+             ,verbose = false :: boolean()
              %,tyvenv = #{}
              }).
 
@@ -1905,6 +1906,8 @@ type_check_comprehension(Env, Compr, Expr, [Guard | Quals]) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 type_check_expr_in(Env, ResTy, Expr) ->
+    verbose(Env, "~p: Checking that ~s :: ~s~n",
+            [element(2, Expr), erl_pp:expr(Expr), typelib:pp_type(ResTy)]),
     NormResTy = normalize(ResTy, Env#env.tenv),
     ?throw_orig_type(do_type_check_expr_in(Env, NormResTy, Expr),
                      ResTy, NormResTy).
@@ -2914,6 +2917,7 @@ check_clauses(Env, ArgsTy, ResTy, Clauses) ->
 check_clause(_Env, [?type(none)|_], _ResTy, {clause, P, _Args, _Guards, _Block}) ->
     throw({type_error, unreachable_clause, P});
 check_clause(Env, ArgsTy, ResTy, {clause, P, Args, Guards, Block}) ->
+    verbose(Env, "~p: Checking clause :: ~s~n", [P, typelib:pp_type(ResTy)]),
     case {length(ArgsTy), length(Args)} of
         {L, L} ->
             {PatTys, _UBounds, VEnv2, Cs1} =
@@ -3066,6 +3070,7 @@ check_guards(Env, Guards) ->
                 end, Guards), Env#env.tenv).
 
 type_check_function(Env, {function,_, Name, NArgs, Clauses}) ->
+    verbose(Env, "Checking function ~p/~p~n", [Name, NArgs]),
     case maps:find({Name, NArgs}, Env#env.fenv) of
         {ok, FunTy} ->
             check_clauses_fun(Env, expect_fun_type(Env, FunTy), Clauses);
@@ -3473,6 +3478,9 @@ type(Name) -> type(Name, []).
 return(X) ->
     { X, #{}, constraints:empty() }.
 
+verbose(Env, Fmt, Args) ->
+    Env#env.verbose andalso io:format(Fmt, Args).
+
 is_power_of_two(0) -> false;
 is_power_of_two(1) -> true;
 is_power_of_two(N) when N rem 2 == 0 ->
@@ -3518,6 +3526,7 @@ type_check_forms(Forms, Opts) ->
     ParseData =
         collect_specs_types_opaques_and_functions(Forms),
     Env = create_env(ParseData, Opts),
+    verbose(Env, "Checking module ~p~n", [ParseData#parsedata.module]),
     lists:foldr(fun (Function, Res) when Res =:= ok;
                                          not StopOnFirstError ->
                         try type_check_function(Env, Function) of
@@ -3565,7 +3574,8 @@ create_env(#parsedata{specs     = Specs
     #env{fenv = FEnv,
          tenv = TEnv,
          %% Store some type checking options in the environment
-         infer = proplists:get_bool(infer, Opts)}.
+         infer = proplists:get_bool(infer, Opts),
+         verbose = proplists:get_bool(verbose, Opts)}.
 
 create_tenv(TypeDefs, RecordDefs) ->
     TypeMap =
