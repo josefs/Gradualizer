@@ -905,6 +905,8 @@ expect_list_type({type, _, T, []}, _)
 expect_list_type({type, _, T, [ElemTy]}, _)
   when T == 'list' orelse T == 'nonempty_list' ->
     {elem_ty, ElemTy, constraints:empty()};
+expect_list_type(?type(term) = TermTy, _EmptyOrNot) ->
+    {elem_ty, TermTy, constraints:empty()};
 expect_list_type({type, _, maybe_improper_list, [ElemTy, _]}, _) ->
     {elem_ty, ElemTy, constraints:empty()};
 expect_list_type({type, _, nil, []}, allow_nil_type) ->
@@ -1143,10 +1145,11 @@ expect_record_type(Record, {type, _, record, [{atom, _, Name}]}, _TEnv) ->
     end;
 expect_record_type(_Record, {type, _, tuple, any}, _TEnv) ->
     {ok, constraints:empty()};
+expect_record_type(_Record, ?type(term), _TEnv) ->
+    {ok, constraints:empty()};
 expect_record_type(Record, {type, _, union, Tys}, TEnv) ->
     expect_record_union(Record, Tys, TEnv);
 expect_record_type(Record, {var, _, Var}, _TEnv) ->
-
     {ok, constraints:add_var(Var,
            constraints:upper(Var, {record, erl_anno:new(0), Record}))};
 expect_record_type(Record, {ann_type, _, [_, Ty]}, TEnv) ->
@@ -1874,8 +1877,8 @@ type_check_comprehension(Env, Compr, Expr, [{generate, P, Pat, Gen} | Quals]) ->
             NewEnv = Env#env{venv = NewVEnv},
             {TyL, VB, Cs2} = type_check_comprehension(NewEnv, Compr, Expr, Quals),
             {TyL, VB, constraints:combine([Cs,Cs1,Cs2])};
-        {type_error, Ty} ->
-            throw({type_error, generator, P, Ty})
+        {type_error, BadTy} ->
+            throw({type_error, generator, P, BadTy})
     end;
 type_check_comprehension(Env, Compr, Expr, [{b_generate, _P, Pat, Gen} | Quals]) ->
     BitStringTy = type(binary, [{integer, erl_anno:new(0), 0},
@@ -2566,8 +2569,8 @@ type_check_comprehension_in(Env, ResTy, Compr, Expr, P,
             NewEnv = Env#env{venv = add_any_types_pat(Pat, Env#env.venv)},
             {_VB2, Cs2} = type_check_comprehension_in(NewEnv, ResTy, Compr, Expr, P, Quals),
             {#{}, constraints:combine([Cs, Cs1, Cs2])};
-        {type_error, Ty} ->
-            throw({type_error, generator, P_Gen, Ty})
+        {type_error, BadTy} ->
+            throw({type_error, generator, P_Gen, BadTy})
     end;
 type_check_comprehension_in(Env, ResTy, Compr, Expr, P,
                             [{b_generate, _P_Gen, Pat, Gen} | Quals]) ->
