@@ -2957,7 +2957,14 @@ refine_clause_arg_tys(Tys, MatchedTys, [], TEnv) ->
         ?type(union, _) ->
             Tys %% Multiple possibilities => don't refine
     catch
-        no_refinement -> Tys
+        no_refinement ->
+            %% Imprecision prohibits refinement
+            Tys;
+        disjoint ->
+            %% This can currently happen due to unhandled type variables, e.g.
+            %% Elem :: T \ {attribute, _TyVar-54982374928, compile, export_all}
+            %% No refinement.
+            Tys
     end;
 refine_clause_arg_tys(Tys, _TysBounds, _Guards, _TEnv) ->
     Tys.
