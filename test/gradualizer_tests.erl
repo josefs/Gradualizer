@@ -3,7 +3,16 @@
 -include_lib("eunit/include/eunit.hrl").
 
 api_test_() ->
-    [?_assertEqual(ok, gradualizer:type_check_file("test/should_pass/any.erl")),
+    Passing = "test/should_pass/any.erl",
+    Failing = "test/should_fail/arg.erl",
+    [?_assertEqual(ok, gradualizer:type_check_file(Passing)),
+     ?_assertEqual([], gradualizer:type_check_file(Passing, [return_errors])),
+     ?_assertEqual(nok, gradualizer:type_check_file(Failing)),
+     ?_assertMatch([_|_], gradualizer:type_check_file(Failing, [return_errors])),
+     ?_assertEqual(ok, gradualizer:type_check_files([Passing, Passing])),
+     ?_assertEqual(nok, gradualizer:type_check_files([Failing, Failing])),
+     ?_assertMatch([_|_], gradualizer:type_check_files([Failing, Failing], [return_errors])),
+     ?_assertEqual([], gradualizer:type_check_files([Passing, Passing], [return_errors])),
      % TODO: Test fixture is not meant to depend on the build results
      ?_assertEqual(ok, gradualizer:type_check_file("_build/test/lib/gradualizer/test/any.beam")),
      fun() ->

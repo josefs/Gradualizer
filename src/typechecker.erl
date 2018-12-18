@@ -3563,6 +3563,7 @@ type_check_forms(Forms, Opts) ->
     StopOnFirstError = proplists:get_bool(stop_on_first_error, Opts),
     CrashOnError = proplists:get_bool(crash_on_error, Opts),
     File = proplists:get_value(print_file, Opts),
+    NoReportErrors = proplists:get_bool(return_errors, Opts),
 
     case gradualizer_db:start_link() of
         {ok, _Pid}                    -> ok;
@@ -3572,26 +3573,30 @@ type_check_forms(Forms, Opts) ->
         collect_specs_types_opaques_and_functions(Forms),
     Env = create_env(ParseData, Opts),
     verbose(Env, "Checking module ~p~n", [ParseData#parsedata.module]),
-    lists:foldr(fun (Function, Res) when Res =:= ok;
+    lists:foldr(fun (Function, Errors) when Errors =:= [];
                                          not StopOnFirstError ->
                         try type_check_function(Env, Function) of
                             {_VarBinds, _Cs} ->
-                                Res
+                                Errors
                         catch
                             Throw ->
                                 % Useful for debugging
                                 % io:format("~p~n", [erlang:get_stacktrace()]),
-                                case File of
-                                    undefined -> ok;
-                                    _ -> io:format("~s: ", [File])
+                                if
+                                    NoReportErrors -> ok;
+                                    true ->
+                                        case File of
+                                            undefined -> ok;
+                                            _ -> io:format("~s: ", [File])
+                                        end,
+                                        handle_type_error(Throw)
                                 end,
-                                handle_type_error(Throw),
                                 if
                                     CrashOnError ->
                                         io:format("Crashing...~n"),
                                         erlang:raise(throw, Throw, erlang:get_stacktrace());
                                     not CrashOnError ->
-                                        nok
+                                        [Throw | Errors]
                                 end;
                             error:Error ->
                                 %% A hack to hide the (very large) #env{} in
@@ -3604,9 +3609,9 @@ type_check_forms(Forms, Opts) ->
                                 end,
                                 erlang:raise(error, Error, Trace)
                         end;
-                    (_Function, Err) ->
-                        Err
-                end, ok, ParseData#parsedata.functions).
+                    (_Function, Errors) ->
+                        Errors
+                end, [], ParseData#parsedata.functions).
 
 create_env(#parsedata{specs     = Specs
                      ,functions = Funs
