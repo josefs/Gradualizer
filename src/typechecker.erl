@@ -1946,12 +1946,12 @@ do_type_check_expr_in(Env, Ty, Atom = {atom, LINE, _}) ->
         false ->
             throw({type_error, Atom, LINE, Ty})
     end;
-do_type_check_expr_in(Env, Ty, Char = {char, LINE, _}) ->
+do_type_check_expr_in(Env, Ty, Char = {char, _, _}) ->
     case subtype(type(char), Ty, Env#env.tenv) of
         {true, Cs} ->
            {#{}, Cs};
        false ->
-           throw({type_error, char_expr, LINE, Char, Ty})
+           throw({type_error, Char, type(char), Ty})
     end;
 do_type_check_expr_in(Env, Ty, Cons = {cons, LINE, H, T}) ->
     case expect_list_type(Ty, dont_allow_nil_type) of
@@ -3662,9 +3662,13 @@ handle_type_error({type_error, tyVar, LINE, Var, VarTy, Ty}) ->
     io:format("The variable ~p on line ~p has type ~s "
               "but is expected to have type ~s~n",
               [Var, LINE, typelib:pp_type(VarTy), typelib:pp_type(Ty)]);
-handle_type_error({type_error, char_expr, LINE, Char, Ty}) ->
-    io:format("The character ~p on line ~p does not have type ~s~n"
-             ,[erl_pp:expr(Char), LINE, typelib:pp_type(Ty)]);
+handle_type_error({type_error, {char, Anno, _} = Char, ActualTy, ExpectedTy}) ->
+    io:format("The character ~s on line ~p is expected "
+              "to have type ~s but it has type ~s~n",
+              [erl_pp:expr(Char),
+               erl_anno:line(Anno),
+               typelib:pp_type(ExpectedTy),
+               typelib:pp_type(ActualTy)]);
 handle_type_error({type_error, {atom, _, A}, LINE, Ty}) ->
     io:format("The atom ~p on line ~p does not have type ~s~n",
               [A, LINE, typelib:pp_type(Ty)]);
