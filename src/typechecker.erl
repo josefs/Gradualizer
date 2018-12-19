@@ -1953,7 +1953,7 @@ do_type_check_expr_in(Env, Ty, Char = {char, _, _}) ->
        false ->
            throw({type_error, Char, type(char), Ty})
     end;
-do_type_check_expr_in(Env, Ty, Cons = {cons, LINE, H, T}) ->
+do_type_check_expr_in(Env, Ty, Cons = {cons, _, H, T}) ->
     case expect_list_type(Ty, dont_allow_nil_type) of
         {elem_ty, ETy, Cs} ->
             {VB1, Cs1} = type_check_expr_in(Env, ETy, H),
@@ -1968,7 +1968,7 @@ do_type_check_expr_in(Env, Ty, Cons = {cons, LINE, H, T}) ->
             {     VB2, Cs2} = type_check_expr_in(Env, allow_empty_list(Ty), T),
             {union_var_binds(VB1, VB2, Env#env.tenv), constraints:combine(Cs1, Cs2)};
         {type_error, _} ->
-            throw({type_error, cons, LINE, Cons, Ty})
+            throw({type_error, Cons, type(list), Ty})
     end;
 do_type_check_expr_in(Env, Ty, {nil, LINE}) ->
     case subtype({type, LINE, nil, []}, Ty, Env#env.tenv) of
@@ -3693,9 +3693,13 @@ handle_type_error({type_error, list, _, Ty}) ->
 handle_type_error({type_error, cons_pat, P, Cons, Ty}) ->
     io:format("The pattern ~s on line ~p does not have type:~n~s~n"
              ,[erl_pp:expr(Cons),P, typelib:pp_type(Ty)]);
-handle_type_error({type_error, cons, P, Cons, Ty}) ->
-    io:format("The expression ~s on line ~p does not have type ~s~n"
-             ,[erl_pp:expr(Cons), P, typelib:pp_type(Ty)]);
+handle_type_error({type_error, {cons, Anno, _, _} = Cons, ActualTy, ExpectedTy}) ->
+    io:format("The list ~s on line ~p is expected "
+              "to have type ~s but it has type ~s~n",
+              [erl_pp:expr(Cons),
+               erl_anno:line(Anno),
+               typelib:pp_type(ExpectedTy),
+               typelib:pp_type(ActualTy)]);
 handle_type_error({type_error, nil, LINE, Ty}) ->
     io:format("The empty list on line ~p does not have type ~s~n",
               [LINE, typelib:pp_type(Ty)]);
