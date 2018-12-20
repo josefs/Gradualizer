@@ -2010,16 +2010,16 @@ do_type_check_expr_in(Env, ResTy, {tuple, LINE, TS}) ->
     end;
 
 %% Maps
-do_type_check_expr_in(Env, ResTy, {map, LINE, Assocs}) ->
-    case subtype(ResTy, {type, LINE, map, any}, Env#env.tenv) of
+do_type_check_expr_in(Env, ResTy, {map, _, Assocs} = Map) ->
+    case subtype(ResTy, type(map, any), Env#env.tenv) of
         {true, Cs1} ->
             %% TODO: check the type of the map fields
             {_AssocTy, VBs, Cs2} = type_check_assocs(Env, Assocs),
             {VBs, constraints:combine(Cs1, Cs2)};
         false ->
-            throw({type_error, map, LINE, ResTy})
+            throw({type_error, Map, type(map, any), ResTy})
     end;
-do_type_check_expr_in(Env, ResTy, {map, LINE, Expr, Assocs}) ->
+do_type_check_expr_in(Env, ResTy, {map, _, Expr, Assocs} = Map) ->
     {Ty, VBExpr,   Cs1} = type_check_expr(Env, Expr),
     {_AssocTy, VBAssocs, Cs2} = type_check_assocs(Env, Assocs),
     % TODO: Update the type of the map.
@@ -2029,7 +2029,7 @@ do_type_check_expr_in(Env, ResTy, {map, LINE, Expr, Assocs}) ->
             {union_var_binds(VBExpr, VBAssocs, Env#env.tenv),
              constraints:combine([Cs1, Cs2, Cs3])};
         false ->
-            throw({type_error, map, LINE, ResTy})
+            throw({type_error, Map, Ty, ResTy})
     end;
 
 %% Records
@@ -3880,6 +3880,13 @@ handle_type_error({type_error, list_op_error, ListOp, P, Ty, _}) ->
     io:format("The operator ~p on line ~p is given an argument "
               "with a non-list type ~s~n",
               [ListOp, P, typelib:pp_type(Ty)]);
+handle_type_error({type_error, {map, Anno, _} = Map, ActualTy, ExpectTy}) ->
+    io:format("The map ~s on line ~p is expected "
+              "to have type ~s but it has type ~s~n",
+              [erl_pp:expr(Map),
+               erl_anno:line(Anno),
+               typelib:pp_type(ExpectTy),
+               typelib:pp_type(ActualTy)]);
 handle_type_error({type_error, operator_pattern, P, Expr, Ty}) ->
     io:format("The operator pattern ~s on line ~p is expected to have type "
               "~s~n"
