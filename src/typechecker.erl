@@ -3502,11 +3502,20 @@ is_power_of_two(_) -> false.
 union_var_binds(VB1, VB2, TEnv) ->
     union_var_binds([VB1, VB2], TEnv).
 
+%% This function has been identified as a bottleneck.
+%% Without tail recursion, the gradualizer would hang when self-gradualizing
+%% when called from add_type_pat/4, the clause where the type is a union type.
 union_var_binds([], _) ->
     #{};
-union_var_binds([ VarBinds | VarBindsList ], TEnv) ->
+union_var_binds(VarBindsList, TEnv) ->
     Glb = fun(_K, S, T) -> glb(S, T, TEnv) end,
-    gradualizer_lib:merge_with(Glb, VarBinds, union_var_binds(VarBindsList, TEnv)).
+    union_var_binds_help(VarBindsList, Glb).
+
+%% Tail recursive helper.
+union_var_binds_help([VB1, VB2 | Rest], Glb) ->
+    VB = gradualizer_lib:merge_with(Glb, VB1, VB2),
+    union_var_binds_help([VB | Rest], Glb);
+union_var_binds_help([VB], _) -> VB.
 
 add_var_binds(VEnv, VarBinds, TEnv) ->
     Glb = fun(_K, S, T) -> glb(S, T, TEnv) end,
