@@ -481,13 +481,6 @@ add_type_pat_test_() ->
                                  "f(#r{f = F}) -> F."]))}
     ].
 
-handle_type_error_test_() ->
-    [
-     %% {type_error, nil, Line, Ty}
-     ?_assertNot(type_check_forms(["-spec f() -> atom().",
-                                   "f() -> []."]))
-    ].
-
 subtype(T1, T2) ->
     case typechecker:subtype(T1, T2, {tenv, #{}, #{}}) of
         {true, _} ->
