@@ -1984,7 +1984,7 @@ do_type_check_expr_in(Env, Ty, {bin, LINE, _BinElements} = Bin) ->
               {true, Cs0} ->
                   Cs0;
               false ->
-                  throw({type_error, bin, LINE, BinTy, Ty})
+                  throw({type_error, Bin, BinTy, Ty})
           end,
     {_Ty, VarBinds, Cs2} = type_check_expr(Env, Bin),
     {VarBinds, constraints:combine(Cs1, Cs2)};
@@ -3895,11 +3895,13 @@ handle_type_error({type_error, tuple, LINE, Ty}) ->
               [LINE, typelib:pp_type(Ty)]);
 handle_type_error({unknown_variable, P, Var}) ->
     io:format("Unknown variable ~p on line ~p.~n", [Var, P]);
-handle_type_error({type_error, bin, P, ActualTy, ExpectTy}) ->
-    io:format("The bit expression on line ~p is expected "
+handle_type_error({type_error, {bin, Anno, _} = Bin, ActualTy, ExpectTy}) ->
+    io:format("The bit expression ~s on line ~p is expected "
               "to have type ~s but it has type ~s~n",
-              [erl_anno:line(P),
-               typelib:pp_type(ExpectTy), typelib:pp_type(ActualTy)]);
+              [erl_pp:expr(Bin),
+               erl_anno:line(Anno),
+               typelib:pp_type(ExpectTy),
+               typelib:pp_type(ActualTy)]);
 handle_type_error({type_error, bit_type, Expr, P, Ty1, Ty2}) ->
     io:format("The expression ~s inside the bit expression on line ~p has type ~s "
               "but the type specifier indicates ~s~n",
