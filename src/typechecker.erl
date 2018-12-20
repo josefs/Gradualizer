@@ -1964,12 +1964,12 @@ do_type_check_expr_in(Env, Ty, Cons = {cons, _, H, T}) ->
         {type_error, _} ->
             throw({type_error, Cons, type(nonempty_list), Ty})
     end;
-do_type_check_expr_in(Env, Ty, {nil, LINE}) ->
-    case subtype({type, LINE, nil, []}, Ty, Env#env.tenv) of
+do_type_check_expr_in(Env, Ty, {nil, _} = Nil) ->
+    case subtype(type(nil), Ty, Env#env.tenv) of
         {true, Cs} ->
             {#{}, Cs};
         false ->
-            throw({type_error, nil, LINE, Ty})
+            throw({type_error, Nil, type(nil), Ty})
     end;
 do_type_check_expr_in(Env, Ty, {string, LINE, String}) ->
     case subtype({type, LINE, string, []}, Ty, Env#env.tenv) of
@@ -3761,9 +3761,13 @@ handle_type_error({type_error, {cons, Anno, _, _} = Cons, ActualTy, ExpectedTy})
                erl_anno:line(Anno),
                typelib:pp_type(ExpectedTy),
                typelib:pp_type(ActualTy)]);
-handle_type_error({type_error, nil, LINE, Ty}) ->
-    io:format("The empty list on line ~p does not have type ~s~n",
-              [LINE, typelib:pp_type(Ty)]);
+handle_type_error({type_error, {nil, Anno} = Nil, ActualTy, ExpectedTy}) ->
+    io:format("The empty list ~s on line ~p is expected "
+              "to have type ~s but it has type ~s~n",
+              [erl_pp:expr(Nil),
+               erl_anno:line(Anno),
+               typelib:pp_type(ExpectedTy),
+               typelib:pp_type(ActualTy)]);
 handle_type_error({argument_length_mismatch, P, LenTy, LenArgs}) ->
     io:format("The clause on line ~p is expected to have ~p argument(s) "
               "but it has ~p~n ",
