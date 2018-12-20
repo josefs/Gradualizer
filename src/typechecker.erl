@@ -1971,12 +1971,12 @@ do_type_check_expr_in(Env, Ty, {nil, _} = Nil) ->
         false ->
             throw({type_error, Nil, type(nil), Ty})
     end;
-do_type_check_expr_in(Env, Ty, {string, LINE, String}) ->
-    case subtype({type, LINE, string, []}, Ty, Env#env.tenv) of
+do_type_check_expr_in(Env, Ty, {string, _, _} = String) ->
+    case subtype(type(string), Ty, Env#env.tenv) of
       {true, Cs} ->
         {#{}, Cs};
       false ->
-        throw({type_error, string, LINE, String, Ty})
+        throw({type_error, String, type(string), Ty})
     end;
 do_type_check_expr_in(Env, Ty, {bin, LINE, _BinElements} = Bin) ->
     BinTy = gradualizer_bin:compute_type(Bin),
@@ -3738,9 +3738,13 @@ handle_type_error({type_error, {char, Anno, _} = Char, ActualTy, ExpectedTy}) ->
 handle_type_error({type_error, {atom, _, A}, LINE, Ty}) ->
     io:format("The atom ~p on line ~p does not have type ~s~n",
               [A, LINE, typelib:pp_type(Ty)]);
-handle_type_error({type_error, string, LINE, String, Ty}) ->
-    io:format("The string ~p on line ~p does not have type ~s~n",
-              [String, LINE, typelib:pp_type(Ty)]);
+handle_type_error({type_error, {string, Anno, _} = String, ActualTy, ExpectedTy}) ->
+    io:format("The string ~s on line ~p is expected "
+              "to have type ~s but it has type ~s~n",
+              [erl_pp:expr(String),
+               erl_anno:line(Anno),
+               typelib:pp_type(ExpectedTy),
+               typelib:pp_type(ActualTy)]);
 handle_type_error({type_error, int, I, LINE, Ty}) ->
     io:format("The integer ~p on line ~p does not have type ~s~n",
               [I, LINE, typelib:pp_type(Ty)]);
