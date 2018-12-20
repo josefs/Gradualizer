@@ -2,5 +2,5 @@
 
 -export([f/0]).
 
--spec f() -> ok.
+-spec f() -> [].
 f() -> [x, y].

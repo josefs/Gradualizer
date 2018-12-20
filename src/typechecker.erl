@@ -1968,7 +1968,7 @@ do_type_check_expr_in(Env, Ty, Cons = {cons, _, H, T}) ->
             {     VB2, Cs2} = type_check_expr_in(Env, allow_empty_list(Ty), T),
             {union_var_binds(VB1, VB2, Env#env.tenv), constraints:combine(Cs1, Cs2)};
         {type_error, _} ->
-            throw({type_error, Cons, type(list), Ty})
+            throw({type_error, Cons, type(nonempty_list), Ty})
     end;
 do_type_check_expr_in(Env, Ty, {nil, LINE}) ->
     case subtype({type, LINE, nil, []}, Ty, Env#env.tenv) of
