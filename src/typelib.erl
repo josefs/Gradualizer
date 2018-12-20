@@ -11,7 +11,25 @@
 %%% Parsing and pretty printing types
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
--spec pp_type(type()) -> string().
+-type constraint() :: {type, erl_anno:anno(),
+                             constraint,
+                             {atom, erl_anno:anno(), is_subtype},
+                             [{var, erl_anno:anno(), atom()} | type()]}.
+-type function_type() :: {type, erl_anno:anno(),
+                                'fun',
+                                [{type, erl_anno:anno(), product, [type()]} |
+                                 type()]}.
+-type type_et_cetera() :: type() |
+                          {type, erl_anno:anno(), bounded_fun,
+                                 [function_type() | constraint()]} |
+                          [type_et_cetera()].
+-spec pp_type(type_et_cetera()) -> string().
+pp_type(Types = [_|_]) ->
+    %% TODO: This is a workaround for the fact that a list is sometimes used in
+    %% place of a type. It typically represents a function type with multiple
+    %% clauses. We should perhaps represented them as a tuples on the form
+    %% {type, Anno, intersection, Types} instead.
+    lists:join("; ", lists:map(fun pp_type/1, Types));
 pp_type(Type = {type, _, bounded_fun, _}) ->
     %% erl_pp can't handle bounded_fun in type definitions
     Form = {attribute, erl_anno:new(0), spec, {{foo, 0}, [Type]}},
@@ -26,6 +44,8 @@ pp_type(Type) ->
     TypeDef = erl_pp:form(Form),
     {match, [S]} = re:run(TypeDef, <<"::\\s*(.*)\\.\\n*">>,
                           [{capture, all_but_first, list}, dotall]),
+    case S of "INVALID" ++ _ -> error({badarg, Type});
+              _ -> ok end,
     S.
     %case erl_anno:file(element(2, Type)) of
     %        undefined -> S;
