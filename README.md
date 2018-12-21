@@ -14,10 +14,10 @@
 Gradualizer aims to integrate well into existing Erlang code bases in a non intrusive way. It does so by
 
 * having a type system that is based on the principles of Gradual Typing
-* using the existsing type specs syntax in Erlang.
+* using the existing type specs syntax in Erlang.
 * allowing for granular opt-in of type checking. Without any type specs, no static typing happens.
 
-  When type specs are added the program the program is checked against
+  When type specs are added the program is checked against
   these specs statically. The more type specs, the more static typing.
 
 # Usage
