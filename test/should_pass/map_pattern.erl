@@ -13,3 +13,6 @@ key_subtype(#{banana := N}) ->
 -spec map_union(#{a => atom()} | #{b := boolean()}) -> atom().
 map_union(#{a := A}) -> A;
 map_union(#{b := B}) -> B.
+
+-spec any_map(map()) -> ok.
+any_map(#{apa := _}) -> ok.

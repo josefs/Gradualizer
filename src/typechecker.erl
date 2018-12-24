@@ -3372,7 +3372,7 @@ add_type_pat_fields([{record_field, _, {atom, _, Field}, Pat}|Fields], Record, T
                           ) -> {ok, ValueTy :: type(), constraints:constraints()} |
                                error.
 add_type_pat_map_key(_Key, any, _TEnv, _VEnv) ->
-    type(any);
+    {ok, type(any), constraints:empty()};
 add_type_pat_map_key(Key, [{type, _, AssocTag, [KeyTy, ValueTy]} | MapAssocs], TEnv, VEnv)
   when AssocTag == map_field_exact; AssocTag == map_field_assoc ->
     try add_type_pat(Key, KeyTy, TEnv, VEnv) of
