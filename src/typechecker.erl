@@ -3280,11 +3280,22 @@ add_type_pat({record, P, Record, Fields}, Ty, TEnv, VEnv) ->
             {VEnv2, Cs2} = add_type_pat_fields(Fields, Record, TEnv, VEnv),
             {type(none), Ty, VEnv2, constraints:combine(Cs1, Cs2)}
     end;
-add_type_pat({map, _P, _Assocs} = Map, {type, _, map, _}=Ty, _TEnv, VEnv) ->
-    %% Incomplete, added just to be able to let code through.
-    %% TODO check the type of each Key := Value
-    %% TODO allow union of maps (normalized to one map?)
-    {type(none), Ty, add_any_types_pat(Map, VEnv), constraints:empty()};
+add_type_pat({map, _P, PatAssocs}, {type, _, map, MapTyAssocs} = MapTy, TEnv, VEnv) ->
+    %% Check each Key := Value and binds vars in Value.
+    {NewVEnv, Css} =
+        lists:foldl(fun ({map_field_exact, _, Key, ValuePat}, {VEnvIn, CsAcc}) ->
+                            case add_type_pat_map_key(Key, MapTyAssocs, TEnv, VEnvIn) of
+                                {ok, ValueTy, Cs1} ->
+                                    {_ValPatTy, _ValUBound, VEnvOut, Cs2} =
+                                        add_type_pat(ValuePat, ValueTy, TEnv, VEnvIn),
+                                    {VEnvOut, [Cs1, Cs2 | CsAcc]};
+                                error ->
+                                    throw({type_error, badkey, Key, MapTy})
+                            end
+                    end,
+                    {VEnv, []},
+                    PatAssocs),
+    {type(none), MapTy, NewVEnv, constraints:combine(Css)};
 add_type_pat({match, _, Pat1, {var, _, _Var}=Pat2}, Ty, TEnv, VEnv) ->
     %% Refine using Pat1 first to be able to bind Pat2 to a refined type.
     {PatTy1, Ty1, VEnv1, Cs2} = add_type_pat(Pat1, Ty, TEnv, VEnv),
@@ -3350,6 +3361,30 @@ add_type_pat_fields([{record_field, _, {atom, _, Field}, Pat}|Fields], Record, T
     {VEnv3, Cs2} = add_type_pat_fields(Fields, Record, TEnv, VEnv2),
     {VEnv3, constraints:combine(Cs1, Cs2)}.
 
+%% Given a pattern for a key, finds the matching association in the map type and
+%% returns the value type. Returns 'error' if the key is not valid in the map.
+-spec add_type_pat_map_key(Key         :: erl_parse:abstract_expr(),
+                           MapTyAssocs :: [{type, erl_anno:anno(),
+                                            map_field_exact | map_field_assoc,
+                                            [type()]}] | any,
+                           TEnv        :: #tenv{},
+                           VEnv        :: #{atom() => type()}
+                          ) -> {ok, ValueTy :: type(), constraints:constraints()} |
+                               error.
+add_type_pat_map_key(_Key, any, _TEnv, _VEnv) ->
+    type(any);
+add_type_pat_map_key(Key, [{type, _, AssocTag, [KeyTy, ValueTy]} | MapAssocs], TEnv, VEnv)
+  when AssocTag == map_field_exact; AssocTag == map_field_assoc ->
+    try add_type_pat(Key, KeyTy, TEnv, VEnv) of
+        {_, _, VEnv, Cs} ->
+            %% No free vars in Key, so no new variable binds
+            {ok, ValueTy, Cs}
+    catch _TypeError ->
+        add_type_pat_map_key(Key, MapAssocs, TEnv, VEnv)
+    end;
+add_type_pat_map_key(_Key, [], _TEnv, _VEnv) ->
+    %% Key is not defined in this map type.
+    error.
 
 transpose([[]|_]) -> [];
 transpose(M) ->
@@ -3896,6 +3931,10 @@ handle_type_error({type_error, record_update, P, Record, ResTy}) ->
     io:format("The record update of the record #~p on line ~p is expected to have type:"
               "~n~s~n"
              ,[Record, P, typelib:pp_type(ResTy)]);
+handle_type_error({type_error, badkey, KeyExpr, MapType}) ->
+    %% Compare to the runtime error raised by maps:get(Key, Map) error:{badkey, Key}.
+    io:format("The expression ~s on line ~p is not a valid key in the map type ~s~n",
+              [erl_pp:expr(KeyExpr), line_no(KeyExpr), typelib:pp_type(MapType)]);
 handle_type_error({type_error, receive_after, P, TyClauses, TyBlock}) ->
     io:format("The types in the clauses and the after block are incompatible~n"
               "in the receive statement on line ~p.~n"
