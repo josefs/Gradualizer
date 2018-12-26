@@ -87,19 +87,6 @@ subtype(Ty1, Ty2, TEnv) ->
             false
     end.
 
-subtypes([], [], _TEnv) ->
-    {true, constraints:empty()};
-subtypes([Ty1|Tys1], [Ty2|Tys2], TEnv) ->
-    case subtype(Ty1, Ty2, TEnv) of
-        false -> false;
-        {true, C1} ->
-            case subtypes(Tys1, Tys2, TEnv) of
-                false -> false;
-                {true, C2} ->
-                    {true, constraints:combine(C1,C2)}
-            end
-    end.
-
 %% Checks is a type is a subtype of at least one of the types in a list.
 %% Used when checking intersection types.
 any_subtype(Ty, Tys, TEnv) when not is_list(Tys) ->
@@ -833,11 +820,6 @@ negate_bool_type({atom, P, false}) ->
     {atom, P, true};
 negate_bool_type(Ty) ->
     Ty.
-
--spec is_list_type(type()) -> boolean().
-is_list_type({type, _, Name, _}) ->
-    lists:member(Name, [nil, list, nonempty_list, maybe_improper_list, nonempty_improper_list]);
-is_list_type(_) -> false.
 
 -type list_view() :: {empty | nonempty | any | none, type(), type()}.
 
@@ -2803,23 +2785,6 @@ get_atom(Env, {var, _, Var}) ->
     end;
 get_atom(_Env, _) ->
     false.
-
-
-%% We don't use these function right now but they can be useful for
-%% implementing an approximation when typechecking unions of tuples.
-split_tuple_type(N, {type, P, tuple, any}) ->
-    [lists:duplicate(N, {type, P, any, []})];
-split_tuple_type(_N, {type, _, tuple, Tys}) ->
-    [Tys];
-split_tuple_type(N, {type, _, union, Tys}) ->
-    split_tuple_union(N, Tys).
-
-split_tuple_union(N, [Tuple = {type, _, tuple, _}|Tys]) ->
-    split_tuple_type(N, Tuple) ++ split_tuple_union(N, Tys);
-split_tuple_union(_, []) ->
-    [];
-split_tuple_union(N, [{type, _, union, Tys1} | Tys2]) ->
-    split_tuple_union(N, Tys1 ++ Tys2).
 
 
 %% Infers (or at least propagates types from) fun/receive/try/case/if clauses.
