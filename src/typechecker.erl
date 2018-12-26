@@ -658,31 +658,27 @@ merge_union_types(Types, _TEnv) ->
             %% term() is among the types.
             [type(term)];
         false ->
-            {IntegerTypes, NonIntegerTypes} =
+            {IntegerTypes1, OtherTypes1} =
                 lists:partition(fun is_int_type/1, Types),
-            {Anys, OtherTypes} =
-                lists:partition(fun ({type, _, any, []}) -> true;
-                                    (_)                  -> false
-                                end, NonIntegerTypes),
-            merge_int_types(IntegerTypes) ++
-                OtherTypes ++ %remove_subtypes(OtherTypes, TEnv) ++
-                case Anys of
-                    []      -> [];
-                    [Any|_] -> [Any]
-                end
+            IntegerTypes2 = merge_int_types(IntegerTypes1),
+            OtherTypes2 = merge_atom_types(OtherTypes1),
+            OtherTypes3 = lists:usort(OtherTypes2),
+            IntegerTypes2 ++ OtherTypes3
     end.
 
-%% Keep only types that are not subtypes of any other types in the list.
-%remove_subtypes(Types, TEnv) ->
-%    remove_subtypes_help(Types, Types, TEnv).
-%
-%remove_subtypes_help([T|Ts], Types, TEnv) ->
-%    case any_type(T, Types -- [T], sets:new(), TEnv) of
-%        true -> remove_subtypes_help(Ts, Types, TEnv);
-%        false -> [T | remove_subtypes_help(Ts, Types, TEnv)]
-%    end;
-%remove_subtypes_help([], _Types, _TEnv) ->
-%    [].
+%% Remove all atom listerals if atom() is among the types.
+merge_atom_types(Types) ->
+    IsAnyAtom = lists:any(fun ({type, _, atom, []}) -> true;
+                              (_)                   -> false
+                          end,
+                          Types),
+    if
+        IsAnyAtom -> lists:filter(fun ({atom, _, _}) -> false;
+                                      (_)            -> true
+                                  end,
+                                  Types);
+        true      -> Types
+    end.
 
 -spec is_int_type(type()) -> boolean().
 is_int_type({type, _, T, _})
