@@ -1174,9 +1174,15 @@ bounded_type_subst(TEnv, BTy = {type, P, bounded_fun, [_, Bounds]}) ->
 -spec solve_bounds(#tenv{}, [type()]) -> #{ atom() := type() }.
 solve_bounds(TEnv, Cs) ->
     Defs = [ {X, T} || {type, _, constraint, [{atom, _, is_subtype}, [{var, _, X}, T]]} <- Cs ],
-    Env  = lists:foldl(fun({X, T}, E) ->
-                maps:update_with(X, fun(Ts) -> [T | Ts] end, [T], E)
-            end, #{}, Defs),
+    Env  = lists:foldl(fun
+                           ({_, ?type(term)}, E) ->
+                               E; %% Don't unfold X :: term()
+                           ({X, T}, E) ->
+                               maps:update_with(X,
+                                                fun(Ts) -> [T | Ts] end,
+                                                [T],
+                                                E)
+                       end, #{}, Defs),
     DepG = maps:map(fun(_, T) -> maps:keys(free_vars(T)) end, Env),
     SCCs = gradualizer_lib:top_sort(DepG),
     solve_bounds(TEnv, Env, SCCs, #{}).
