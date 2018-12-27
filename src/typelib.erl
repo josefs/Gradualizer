@@ -21,7 +21,7 @@
                                  type()]}.
 -type type_et_cetera() :: type() |
                           {type, erl_anno:anno(), bounded_fun,
-                                 [function_type() | constraint()]} |
+                                 [function_type() | [constraint()]]} |
                           [type_et_cetera()].
 -spec pp_type(type_et_cetera()) -> string().
 pp_type(Types = [_|_]) ->
@@ -30,11 +30,16 @@ pp_type(Types = [_|_]) ->
     %% clauses. We should perhaps represented them as a tuples on the form
     %% {type, Anno, intersection, Types} instead.
     lists:join("; ", lists:map(fun pp_type/1, Types));
+pp_type({type, _, bounded_fun, [FunType, []]}) ->
+    %% Bounded fun with empty constraints gets printed with a trailing "when"
+    %% when pretty-printed as a spec (next clause)
+    pp_type(FunType);
 pp_type(Type = {type, _, bounded_fun, _}) ->
     %% erl_pp can't handle bounded_fun in type definitions
+    %% We invent our own syntax here, e.g. "fun((A) -> ok when A :: atom())"
     Form = {attribute, erl_anno:new(0), spec, {{foo, 0}, [Type]}},
     TypeDef = erl_pp:form(Form),
-    {match, [S]} = re:run(TypeDef, <<"-spec foo\\s*(.*)\\.\\n*">>,
+    {match, [S]} = re:run(TypeDef, <<"-spec foo\\s*(.*)\\.\\n*$">>,
                           [{capture, all_but_first, list}, dotall]),
     "fun(" ++ S ++ ")";
 pp_type(Type) ->
