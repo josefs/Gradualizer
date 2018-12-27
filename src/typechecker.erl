@@ -2831,7 +2831,7 @@ check_clauses_intersect(Env, [Ty|Tys], Clauses) ->
 
 check_clauses_union(_Env, [], _Clauses) ->
     %% TODO: Improve quality of type error
-    throw({typer_error, check_clauses});
+    throw({type_error, check_clauses});
 check_clauses_union(Env, [Ty|Tys], Clauses) ->
     try
         check_clauses_fun(Env, Ty, Clauses)
