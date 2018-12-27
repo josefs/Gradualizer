@@ -11,7 +11,8 @@
           element(3, T) =:= range))
         orelse
           (tuple_size(T) =:= 3 andalso
-           element(1, T) =:= integer)).
+           (element(1, T) =:= integer orelse
+            element(1, T) =:= char))).
 
 %% same as typechecker:is_list_type/1 but can be used as a guard
 -define(is_list_type(T),
