@@ -82,8 +82,6 @@ parse_type(Src) ->
 remove_pos({Type, _, Value})
   when Type == atom; Type == integer; Type == char; Type == var ->
     {Type, erl_anno:new(0), Value};
-remove_pos({nil, _}) ->
-    {nil, erl_anno:new(0)};
 remove_pos({user_type, Anno, Name, Params}) when is_list(Params) ->
     {user_type, anno_keep_only_filename(Anno), Name,
      lists:map(fun remove_pos/1, Params)};

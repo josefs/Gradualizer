@@ -36,7 +36,7 @@ bin_view({bin, _, BinElements}) ->
 bin_element_view({bin_element, Anno, {Lit, _, _}, default, _Spec} = BinElem)
   when Lit == integer; Lit == char; Lit == string ->
     %% Literal with default size, i.e. no variables to consider.
-    %% Size it not allowed for utf8/utf16/utf32.
+    %% Size is not allowed for utf8/utf16/utf32.
     Bin = {bin, Anno, [BinElem]},
     {value, Value, []} = erl_eval:expr(Bin, []),
     {bit_size(Value), 0};
