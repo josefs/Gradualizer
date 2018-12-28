@@ -3109,7 +3109,7 @@ add_type_pat({var, P, A}=Var, Ty, TEnv, VEnv) ->
                 {true, Cs} ->
                     {type(none), VarTy, VEnv, Cs};
                 false ->
-                    throw({type_error, tyVar, P, Var, VarTy, Ty})
+                    throw({type_error, tyVar, P, A, VarTy, Ty})
             end;
         _FreeVar ->
             {Ty, Ty, VEnv#{A => Ty}, constraints:empty()}
