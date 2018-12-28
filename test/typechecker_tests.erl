@@ -95,6 +95,11 @@ subtype_test_() ->
      ?_assert(subtype(?t( #{a => b, c => d} ), ?t( #{a => b}        ))),
      ?_assert(subtype(?t( #{5 := a }        ), ?t( #{1..5 := atom()}))),
 
+     %% Fun objects
+     ?_assert(subtype(t("fun((...) -> integer())"), t("fun()"))),
+     ?_assert(subtype(t("fun((...) -> integer())"), t("fun((...) -> number())"))),
+     ?_assert(subtype(t("fun((atom()) -> integer())"), t("fun((...) -> number())"))),
+
      %% Type variables
      ?_assert(subtype(?t( A                 ), ?t( integer()        ))),
      ?_assert(subtype(?t( integer()         ), ?t( A                ))),
