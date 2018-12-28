@@ -96,18 +96,18 @@ subtype(Ty1, Ty2, TEnv) ->
             false
     end.
 
-%% Checks is a type is a subtype of at least one of the types in a list.
+%% Check if at least on of the types in a list is a subtype of a type.
 %% Used when checking intersection types.
-any_subtype(Ty, Tys, TEnv) when not is_list(Tys) ->
-    any_subtype(Ty, [Tys], TEnv);
-any_subtype(_Ty, [], _TEnv) ->
+any_subtype(Tys, Ty, TEnv) when not is_list(Tys) ->
+    any_subtype([Ty], Ty, TEnv);
+any_subtype([], _Ty, _TEnv) ->
     false;
-any_subtype(Ty, [Ty1|Tys], TEnv) ->
-    case subtype(Ty, Ty1, TEnv) of
+any_subtype([Ty1|Tys], Ty, TEnv) ->
+    case subtype(Ty1, Ty, TEnv) of
         R={true, _} ->
             R;
         false ->
-            any_subtype(Ty, Tys, TEnv)
+            any_subtype(Tys, Ty, TEnv)
     end.
 
 
@@ -158,6 +158,10 @@ compat_ty(Ty1, {ann_type, _, [{var, _, Var}, Ty2]}, A, TEnv) ->
 
 % TODO: There are several kinds of fun types.
 % Add support for them all eventually
+compat_ty({type, _, 'fun', [_, Res1]},
+          {type, _, 'fun', [{type, _, any}, Res2]},
+          A, TEnv) ->
+    compat(Res1, Res2, A, TEnv);
 compat_ty({type, _, 'fun', [{type, _, product, Args1}, Res1]},
           {type, _, 'fun', [{type, _, product, Args2}, Res2]},
           A, TEnv) ->
@@ -660,7 +664,11 @@ expand_builtin_aliases({type, Ann, iolist, []}) ->
     {type, Ann, maybe_improper_list, [{type, Ann, union, Union},
                                       {type, Ann, union, Tail}]};
 expand_builtin_aliases({type, Ann, function, []}) ->
-    {type, Ann, 'fun', []};
+    {type, Ann, 'fun', [{type, Ann, any}, {type, Ann , any,[]}]};
+expand_builtin_aliases({type, Ann, 'fun', []}) ->
+    %% `fun()' is not a built-in alias per the erlang docs
+    %% but it is equivalent with `fun((...) -> any())'
+    {type, Ann, 'fun', [{type, Ann, any}, {type, Ann, any, []}]};
 expand_builtin_aliases({type, Ann, module, []}) ->
     {type, Ann, atom, []};
 expand_builtin_aliases({type, Ann, mfa, []}) ->
@@ -2294,23 +2302,24 @@ do_type_check_expr_in(Env, Ty, {'fun', _, {clauses, Clauses}} = Fun) ->
         {type_error, _} ->
             throw({type_error, Fun, type('fun'), Ty})
     end;
-do_type_check_expr_in(Env, ResTy, {'fun', P, {function, Name, Arity}}) ->
+do_type_check_expr_in(Env, ResTy, Expr = {'fun', P, {function, Name, Arity}}) ->
     BoundedFunTypeList = get_bounded_fun_type_list(Name, Arity, Env, P),
-    case any_subtype(ResTy, BoundedFunTypeList, Env#env.tenv) of
+    FunTypeList = [unfold_bounded_type(Env#env.tenv, Ty)
+                   || Ty <- BoundedFunTypeList],
+    case any_subtype(FunTypeList, ResTy, Env#env.tenv) of
         {true, Cs} -> {#{}, Cs};
-        false -> throw({type_error, fun_res_type, P, {atom, P, Name},
-                        ResTy, BoundedFunTypeList})
+        false -> throw({type_error, Expr, FunTypeList, ResTy})
     end;
-do_type_check_expr_in(Env, ResTy, {'fun', P, {function, M, F, A}}) ->
+do_type_check_expr_in(Env, ResTy, Expr = {'fun', P, {function, M, F, A}}) ->
     case {get_atom(Env, M), get_atom(Env, F), A} of
         {{atom, _, Module}, {atom, _, Function}, {integer, _,Arity}} ->
             case gradualizer_db:get_spec(Module, Function, Arity) of
                 {ok, BoundedFunTypeList} ->
-                    case any_subtype(ResTy, BoundedFunTypeList, Env#env.tenv) of
+                    FunTypeList = [unfold_bounded_type(Env#env.tenv, Ty)
+                                   || Ty <- BoundedFunTypeList],
+                    case any_subtype(FunTypeList, ResTy, Env#env.tenv) of
                         {true, Cs} -> {#{}, Cs};
-                        false -> throw({type_error, mfa, P
-                                       ,Module, Function, Arity, ResTy
-                                       ,BoundedFunTypeList})
+                        false -> throw({type_error, Expr, FunTypeList, ResTy})
                     end;
                 not_found ->
                     throw({call_undef, P, Module, Function, Arity})
@@ -4046,6 +4055,13 @@ handle_type_error({type_error, fun_res_type, P, Func, FunResTy, ResTy}) ->
     Name = erl_pp:expr(Func), %% {atom, _, Name} or {remote, Mod, Name}
     io:format("The function ~s on line ~p is expected to return ~s but it returns ~s~n",
               [Name, P, typelib:pp_type(ResTy), typelib:pp_type(FunResTy)]);
+handle_type_error({type_error, {'fun', _, _} = Fun, ActualTy, ExpectedTy}) ->
+    io:format("The fun object ~s on line ~p is expected "
+              "to have type ~s but it has type ~s~n",
+              [erl_pp:expr(Fun),
+               line_no(Fun),
+               typelib:pp_type(ExpectedTy),
+               typelib:pp_type(ActualTy)]);
 handle_type_error({type_error, expected_fun_type, P, Func, FunTy}) ->
     Name = erl_pp:expr(Func),
     io:format("Expected function ~s on line ~p to have a function type,~n"
