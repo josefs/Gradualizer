@@ -3941,7 +3941,7 @@ pp_intersection_type([Ty|Tys]) ->
 
 
 line_no(Ty) ->
-    element(2,Ty).
+    erl_anno:line(element(2,Ty)).
 
 -spec gen_partition(integer(), list(tuple()), fun((tuple()) -> {integer(), term()} | false)) ->
                            tuple().
