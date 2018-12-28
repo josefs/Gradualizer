@@ -1282,33 +1282,33 @@ type_check_expr(Env, {cons, _, Head, Tail}) ->
     VB = union_var_binds(VB1, VB2, Env#env.tenv),
     Cs = constraints:combine([Cs1, Cs2]),
     case {Ty1, Ty2} of
-        {{type, _, any, []}, {type, _, any, []}} when not Env#env.infer ->
+        {?type(any), ?type(any)} when not Env#env.infer ->
             %% No type information to propagate
             {type(any), VB, Cs};
-        {_, {type, _, any, []}} ->
+        {_, ?type(any)} ->
             %% Propagate type information from head
-            {{type, erl_anno:new(0), nonempty_list, [Ty1]}, VB, Cs};
+            {type(nonempty_list, [Ty1]), VB, Cs};
         {_, _} ->
             %% Propagate type information from tail, which must be a list type
-            TailElemTy =
-                case Ty2 of
-                    {type, _, nil, []} ->
-                        type(none);
-                    {type, _, L, []} when L == list;
-                                          L == nonempty_list ->
-                        type(any);
-                    {type, _, L, [TailElemTy0]} when L == list;
-                                                     L == nonempty_list ->
-                        TailElemTy0;
-                    _ ->
-                        throw({type_error, list, 0, Ty2})
+            {TailElemTys, Cs4} =
+                case expect_list_type(Ty2, dont_allow_nil_type) of
+                    any ->
+                        {[type(any)], Cs};
+                    {elem_ty, ElemTy, Cs3} ->
+                        {[ElemTy], constraints:combine([Cs, Cs3])};
+                    {elem_tys, ElemTys, Cs3} ->
+                        {ElemTys, constraints:combine([Cs, Cs3])};
+                    {type_error, ?type(nil)} ->
+                        {[], Cs};
+                    {type_error, BadTy} ->
+                        throw({type_error, list, line_no(Tail), BadTy})
                         %% We throw a type error here because Tail is not of type list
                         %% (nor is it of type any()).
                         %% TODO: Improper list?
                 end,
-            ElemTy = normalize({type, erl_anno:new(0), union, [Ty1, TailElemTy]},
-                               Env#env.tenv),
-            {{type, erl_anno:new(0), nonempty_list, [ElemTy]}, VB, Cs}
+            FinalElemTy = normalize(type(union, [Ty1|TailElemTys]),
+                                    Env#env.tenv),
+            {type(nonempty_list, [FinalElemTy]), VB, Cs4}
     end;
 type_check_expr(Env, {bin, _, BinElements} = BinExpr) ->
     %% <<Expr:Size/TypeSpecifierList, ...>>
@@ -3720,9 +3720,9 @@ handle_type_error({type_error, compat, _LINE, Ty1, Ty2}) ->
 handle_type_error({type_error, list, _, Ty1, Ty}) ->
     io:format("The type ~s cannot be an element of a list of type ~s~n",
               [typelib:pp_type(Ty1), typelib:pp_type(Ty)]);
-handle_type_error({type_error, list, _, Ty}) ->
-    io:format("The type ~s on line ~p is not a list type~n",
-              [typelib:pp_type(Ty), line_no(Ty)]);
+handle_type_error({type_error, list, LINE, Ty}) ->
+    io:format("The expression of type ~s on line ~p is not a list type~n",
+              [typelib:pp_type(Ty), LINE]);
 handle_type_error({type_error, cons_pat, P, Cons, Ty}) ->
     io:format("The pattern ~s on line ~p does not have type:~n~s~n"
              ,[erl_pp:expr(Cons),P, typelib:pp_type(Ty)]);
