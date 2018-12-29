@@ -36,7 +36,7 @@ known_problem_should_fail_test_() ->
                 V -> V
             catch _:_ -> ok
             end,
-        ?_assertMatch({ok, _}, {Result, File})
+        {filename:basename(File), ?_assertMatch({ok, _}, {Result, File})}
         end, "test/known_problems/should_fail").
 
 map_erl_files(Fun, Dir) ->
