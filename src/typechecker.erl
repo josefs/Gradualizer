@@ -2499,14 +2499,14 @@ unary_op_arg_type('-', Ty = {type, _, float, []}) ->
 -spec type_check_comprehension_in(Env        :: #env{},
                                   ResTy      :: type(),
                                   Compr      :: lc | bc,
-                                  Expr       :: erl_parse:expr(),
+                                  Expr       :: erl_parse:abstract_expr(),
                                   Position   :: erl_anno:anno(),
                                   Qualifiers :: [ListGen | BinGen | Filter]) ->
         {map(), constraints:constraints()}
        when
-        ListGen :: {generate, erl_anno:anno(), erl_parse:expr(), erl_parse:expr()},
-        BinGen  :: {b_generate, erl_anno:anno(), erl_parse:expr(), erl_parse:expr()},
-        Filter  :: erl_parse:expr().
+        ListGen :: {generate, erl_anno:anno(), erl_parse:abstract_expr(), erl_parse:abstract_expr()},
+        BinGen  :: {b_generate, erl_anno:anno(), erl_parse:abstract_expr(), erl_parse:abstract_expr()},
+        Filter  :: erl_parse:abstract_expr().
 type_check_comprehension_in(Env, ResTy, lc, Expr, P, []) ->
     case expect_list_type(ResTy, allow_nil_type) of
         any ->
