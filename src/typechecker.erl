@@ -3101,7 +3101,7 @@ add_types_pats([Pat | Pats], [Ty | Tys], TEnv, VEnv, PatTysAcc, UBoundsAcc, CsAc
            constraints:constraints()}.
 add_type_pat({var, _, '_'}, Ty, _TEnv, VEnv) ->
     {Ty, Ty, VEnv, constraints:empty()};
-add_type_pat({var, P, A}=Var, Ty, TEnv, VEnv) ->
+add_type_pat({var, P, A}, Ty, TEnv, VEnv) ->
     %% TODO: In a fun clause, A is always free, but not in e.g. case clauses
     case VEnv of
         #{A := VarTy} ->
@@ -3898,6 +3898,9 @@ handle_type_error({type_error, record_update, P, Record, ResTy}) ->
     io:format("The record update of the record #~p on line ~p is expected to have type:"
               "~n~s~n"
              ,[Record, P, typelib:pp_type(ResTy)]);
+handle_type_error({type_error, map, Anno, ExpectedTy}) ->
+    io:format("The map on line ~p does not have type ~s~n",
+              [erl_anno:line(Anno), typelib:pp_type(ExpectedTy)]);
 handle_type_error({type_error, badkey, KeyExpr, MapType}) ->
     %% Compare to the runtime error raised by maps:get(Key, Map) error:{badkey, Key}.
     io:format("The expression ~s on line ~p is not a valid key in the map type ~s~n",
