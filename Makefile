@@ -47,7 +47,7 @@ escript:
 
 .PHONY: gradualize
 gradualize: escript
-	./gradualizer -pa $(CURDIR)/src/ $(CURDIR)/src/*.erl
+	./gradualizer -pa src/ src/*.erl
 
 .PHONY: clean
 clean:
