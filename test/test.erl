@@ -6,6 +6,8 @@ should_pass_test_() ->
     %% user_types.erl references remote_types.erl
     %% it is not in the sourcemap of the DB so let's import it manually
     gradualizer_db:import_erl_files(["test/should_pass/user_types.erl"]),
+    %% imported.erl references any.erl
+    gradualizer_db:import_erl_files(["test/should_pass/any.erl"]),
     map_erl_files(fun(File) ->
             {filename:basename(File), [?_assertMatch({ok, _}, {gradualizer:type_check_file(File), File})]}
         end, "test/should_pass").

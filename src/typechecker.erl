@@ -31,6 +31,7 @@
           module             :: atom(),
           export_all = false :: boolean(),
           exports    = []    :: [{atom(), integer()}],
+          imports    = []    :: [{module(), atom(), integer()}],
           specs      = []    :: list(),
           types      = []    :: list(),
           opaques    = []    :: list(),
@@ -50,12 +51,13 @@
               }).
 
 %%% The environment passed around during typechecking.
--record(env, {fenv    = #{}
-             ,venv    = #{}
-             ,tenv            :: #tenv{}
-             ,infer   = false :: boolean()
-             ,verbose = false :: boolean()
-             %,tyvenv = #{}
+-record(env, {fenv     = #{}
+             ,imported = #{}   :: #{{atom(), arity()} => module()}
+             ,venv     = #{}
+             ,tenv             :: #tenv{}
+             ,infer    = false :: boolean()
+             ,verbose  = false :: boolean()
+             %,tyvenv  = #{}
              }).
 
 %% Two types are compatible if one is a subtype of the other, or both.
@@ -1408,7 +1410,7 @@ type_check_expr(_Env, {record_index, _, _Record, _Field}) ->
 type_check_expr(Env, {'fun', _, {clauses, Clauses}}) ->
     type_check_fun(Env, Clauses);
 type_check_expr(Env, {'fun', P, {function, Name, Arity}}) ->
-    case get_type_from_name_arity(Name, Arity, Env#env.fenv, P) of
+    case get_bounded_fun_type_list(Name, Arity, Env, P) of
         AnyType = {type, _, any, []} ->
             {AnyType, #{}, constraints:empty()};
         BoundedFunTypeList ->
@@ -2117,7 +2119,7 @@ do_type_check_expr_in(Env, Ty, {'fun', P, {clauses, Clauses}}) ->
             throw({type_error, lambda, P, Ty})
     end;
 do_type_check_expr_in(Env, ResTy, {'fun', P, {function, Name, Arity}}) ->
-    BoundedFunTypeList = get_type_from_name_arity(Name, Arity, Env#env.fenv, P),
+    BoundedFunTypeList = get_bounded_fun_type_list(Name, Arity, Env, P),
     case any_subtype(ResTy, BoundedFunTypeList, Env#env.tenv) of
         {true, Cs} -> {#{}, Cs};
         false -> throw({type_error, fun_res_type, P, {atom, P, Name},
@@ -2599,7 +2601,7 @@ type_check_assocs(_Env, []) ->
 
 type_check_fun(Env, {atom, P, Name}, Arity) ->
     % Local function call
-    Types = get_type_from_name_arity(Name, Arity, Env#env.fenv, P),
+    Types = get_bounded_fun_type_list(Name, Arity, Env, P),
     {Types, #{}, constraints:empty()};
 type_check_fun(_Env, {remote, P, {atom,_,Module}, {atom,_,Fun}}, Arity) ->
     % Module:function call
@@ -2766,8 +2768,8 @@ type_check_cons_union(Env, [_ | Tys], H, T) ->
     type_check_cons_union(Env, Tys, H, T).
 
 
-get_type_from_name_arity(Name, Arity, FEnv, P) ->
-    case maps:find({Name, Arity}, FEnv) of
+get_bounded_fun_type_list(Name, Arity, Env, P) ->
+    case maps:find({Name, Arity}, Env#env.fenv) of
         {ok, Types} ->
             Types;
         error ->
@@ -2776,8 +2778,25 @@ get_type_from_name_arity(Name, Arity, FEnv, P) ->
                     {ok, Types} = gradualizer_db:get_spec(erlang, Name, Arity),
                     Types;
                 false ->
-                    throw({call_undef, P, Name, Arity})
+                    case get_imported_bounded_fun_type_list(Name, Arity, Env, P) of
+                        {ok, Types} ->
+                            Types;
+                        error ->
+                            throw({call_undef, P, Name, Arity})
+                    end
             end
+    end.
+
+get_imported_bounded_fun_type_list(Name, Arity, Env, P) ->
+    case maps:find({Name, Arity}, Env#env.imported) of
+        {ok, Module} ->
+            case gradualizer_db:get_spec(Module, Name, Arity) of
+                {ok, BoundedFunTypeList} ->
+                    {ok, BoundedFunTypeList};
+                not_found ->
+                    throw({call_undef, P, Module, Name, Arity})
+            end;
+        error -> error
     end.
 
 get_atom(_Env, Atom = {atom, _, _}) ->
@@ -3591,11 +3610,14 @@ create_env(#parsedata{specs     = Specs
                      ,types     = Types
                      ,opaques   = Opaques
                      ,records   = Records
+                     ,imports   = Imports
                      }, Opts) ->
     FEnv = create_fenv(Specs, Funs),
     TEnv = create_tenv(Types ++ Opaques, Records),
+    Imported = maps:from_list([{{F, A}, M} || {M, F, A} <- Imports]),
     #env{fenv = FEnv,
          tenv = TEnv,
+         imported = Imported,
          %% Store some type checking options in the environment
          infer = proplists:get_bool(infer, Opts),
          verbose = proplists:get_bool(verbose, Opts)}.
@@ -3654,6 +3676,9 @@ aux([{attribute, _, record, Record} | Forms], Acc) ->
     aux(Forms, Acc#parsedata{records = [Record | Acc#parsedata.records]});
 aux([{attribute, _, export, Exports} | Forms], Acc) ->
     aux(Forms, Acc#parsedata{exports = Exports ++ Acc#parsedata.exports});
+aux([{attribute, _, import, {Module, Functions}} | Forms], Acc) ->
+    MFAs = [{Module, Name, Arity} || {Name, Arity} <- Functions],
+    aux(Forms, Acc#parsedata{imports = MFAs ++ Acc#parsedata.imports});
 aux([{attribute, _, compile, CompileOpts} | Forms], Acc)
   when is_list(CompileOpts) ->
     Acc1 = lists:foldl(fun (export_all, AccAcc) ->
