@@ -1793,13 +1793,13 @@ compat_arith_type(Ty1, Ty2) ->
         {{true,_},{true,_}} ->
             TInteger;
         _ ->
-        TFloat = type(float),
+            TFloat = type(float),
             case {subtype(Ty1, TFloat, #tenv{})
                  ,subtype(Ty2, TFloat, #tenv{})} of
                 {{true,_},{true,_}} ->
                     TFloat;
                 _ ->
-            TNumber = type(number),
+                    TNumber = type(number),
                     case {subtype(Ty1, TNumber, #tenv{})
                          ,subtype(Ty2, TNumber, #tenv{})} of
                         {{true,_},{true,_}} ->
@@ -2243,7 +2243,6 @@ do_type_check_expr_in(Env, ResTy, {'try', _, Block, CaseCs, CatchCs, AfterBlock}
     {#{}
     ,constraints:combine([Cs,Cs3,Cs5])}.
 
-
 type_check_arith_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
     type_check_arith_op_in(Env, number, ResTy, Op, P, Arg1, Arg2).
 
@@ -2313,6 +2312,10 @@ arith_op_arg_types(Op, Ty = {type, _, pos_integer, []}) ->
         false -> false
     end;
 
+%% Special case for integer recursion: pos_integer() - 1 :: non_neg_integer()
+arith_op_arg_types('-', ?type(non_neg_integer)) ->
+    {type(pos_integer), {integer, erl_anno:new(0), 1}};
+
 %% non_neg_integer() are closed under everything except '-' and '/'
 arith_op_arg_types(Op, Ty = {type, _, non_neg_integer, []}) ->
     case lists:member(Op, ['+', '*', 'div', 'rem', 'band', 'bor', 'bxor']) of
@@ -2362,7 +2365,7 @@ arith_op_arg_types(Op, {type, _, union, Tys}) ->
             {type(union, LeftArgs), type(union, RightArgs)}
     end;
 
-%% We shouldn't get here?
+%% Cases like Op = '-', Ty = neg_integer()
 arith_op_arg_types(_Op, _Ty) ->
     false.
 
