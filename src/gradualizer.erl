@@ -19,7 +19,8 @@
          type_check_dir/1,
          type_check_dir/2,
          type_check_files/1,
-         type_check_files/2
+         type_check_files/2,
+         type_check_forms/2
         ]).
 
 -export_type([options/0]).
@@ -48,16 +49,7 @@ type_check_file(File, Opts) ->
     case ParsedFile of
         {ok, Forms} ->
             Opts2 = proplists:expand([{print_file, [{print_file, File}]}], Opts),
-            ReturnErrors = proplists:get_bool(return_errors, Opts),
-            Errors = typechecker:type_check_forms(Forms, Opts2),
-            case {ReturnErrors, Errors} of
-                {true, _ } ->
-                    lists:map(fun(Error) -> {File, Error} end, Errors);
-                {false, []} ->
-                    ok;
-                {false, [_|_]} ->
-                    nok
-            end;
+            type_check_forms(File, Forms, Opts2);
         Error ->
             throw(Error)
     end.
@@ -130,4 +122,34 @@ type_check_files(Files, Opts) ->
                  (_, nok) ->
                       nok
               end, ok, Files)
+    end.
+
+%% @doc Type check an abstract syntax tree of a module. This can be useful
+%% for tools where the abstract forms are generated in memory.
+%%
+%% If the first form is a file attribute (as in forms retuned by e.g.
+%% epp:parse_file/1,2), that filename will be used in error messages.
+%% The second form is typically the module attribute.
+-spec type_check_forms([erl_parse:abstract_form()], options()) ->
+                            ok | nok | [{file:filename(), any()}].
+type_check_forms(Forms, Opts) ->
+    File = case Forms of
+               [{attribute, _, file, {F,  _}} |  _] -> F;
+               _ -> "no filename"
+           end,
+    type_check_forms(File, Forms, Opts).
+
+%% Helper
+-spec type_check_forms(file:filename(), [erl_parse:abstract_form()], options()) ->
+                            ok | nok | [{file:filename(), any()}].
+type_check_forms(File, Forms, Opts) ->
+    ReturnErrors = proplists:get_bool(return_errors, Opts),
+    Errors = typechecker:type_check_forms(Forms, Opts),
+    case {ReturnErrors, Errors} of
+        {true, _ } ->
+            lists:map(fun(Error) -> {File, Error} end, Errors);
+        {false, []} ->
+            ok;
+        {false, [_|_]} ->
+            nok
     end.

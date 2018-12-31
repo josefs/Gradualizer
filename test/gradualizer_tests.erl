@@ -5,6 +5,7 @@
 api_test_() ->
     Passing = "test/should_pass/any.erl",
     Failing = "test/should_fail/arg.erl",
+    {ok, PassingForms} = epp:parse_file(Passing, []),
     [?_assertEqual(ok, gradualizer:type_check_file(Passing)),
      ?_assertEqual([], gradualizer:type_check_file(Passing, [return_errors])),
      ?_assertEqual(nok, gradualizer:type_check_file(Failing)),
@@ -13,6 +14,7 @@ api_test_() ->
      ?_assertEqual(nok, gradualizer:type_check_files([Failing, Failing])),
      ?_assertMatch([_|_], gradualizer:type_check_files([Failing, Failing], [return_errors])),
      ?_assertEqual([], gradualizer:type_check_files([Passing, Passing], [return_errors])),
+     ?_assertEqual(ok, gradualizer:type_check_forms(PassingForms, [])),
      % TODO: Test fixture is not meant to depend on the build results
      ?_assertEqual(ok, gradualizer:type_check_file("_build/test/lib/gradualizer/test/any.beam")),
      fun() ->
