@@ -1256,11 +1256,14 @@ new_type_var() ->
     "_TyVar" ++ integer_to_list(I).
 
 bounded_type_list_to_type(TEnv, Types) ->
-    case [ unfold_bounded_type(TEnv, Ty) || Ty <- Types ] of
+    case unfold_bounded_type_list(TEnv, Types) of
         []   -> type(none);
         [Ty] -> Ty;
         Tys  -> type(union, Tys)
     end.
+
+unfold_bounded_type_list(TEnv, Types) when is_list(Types) ->
+    [ unfold_bounded_type(TEnv, Ty) || Ty <- Types ].
 
 unfold_bounded_type(TEnv, BTy = {type, _, bounded_fun, [Ty, _]}) ->
     Sub = bounded_type_subst(TEnv, BTy),
@@ -1719,8 +1722,7 @@ type_check_fun(Env, Clauses) ->
 %% Creates a type on the form fun((_,_,_) -> RetTy) with the given arity.
 create_fun_type(Arity, RetTy) when is_integer(Arity) ->
     ParTys = lists:duplicate(Arity, type(any)),
-    {type, erl_anno:new(0), 'fun',
-     [type(product, ParTys), RetTy]}.
+    type('fun', [type(product, ParTys), RetTy]).
 
 type_check_fields(Env, Rec, Fields) ->
     UnAssignedFields = get_unassigned_fields(Fields, Rec),
@@ -2303,20 +2305,30 @@ do_type_check_expr_in(Env, Ty, {'fun', _, {clauses, Clauses}} = Fun) ->
             throw({type_error, Fun, type('fun'), Ty})
     end;
 do_type_check_expr_in(Env, ResTy, Expr = {'fun', P, {function, Name, Arity}}) ->
-    BoundedFunTypeList = get_bounded_fun_type_list(Name, Arity, Env, P),
-    FunTypeList = [unfold_bounded_type(Env#env.tenv, Ty)
-                   || Ty <- BoundedFunTypeList],
-    case any_subtype(FunTypeList, ResTy, Env#env.tenv) of
-        {true, Cs} -> {#{}, Cs};
-        false -> throw({type_error, Expr, FunTypeList, ResTy})
+    case get_bounded_fun_type_list(Name, Arity, Env, P) of
+        ?type(any) when not Env#env.infer ->
+            {#{}, constraints:empty()};
+        ?type(any) ->
+            FunType = create_fun_type(Arity, type(any)),
+            case subtype(FunType, ResTy, Env#env.tenv) of
+                {true, Cs} -> {#{}, Cs};
+                false -> throw({type_error, Expr, FunType, ResTy})
+            end;
+        BoundedFunTypeList ->
+            FunTypeList =
+                unfold_bounded_type_list(Env#env.tenv, BoundedFunTypeList),
+            case any_subtype(FunTypeList, ResTy, Env#env.tenv) of
+                {true, Cs} -> {#{}, Cs};
+                false -> throw({type_error, Expr, FunTypeList, ResTy})
+            end
     end;
 do_type_check_expr_in(Env, ResTy, Expr = {'fun', P, {function, M, F, A}}) ->
     case {get_atom(Env, M), get_atom(Env, F), A} of
         {{atom, _, Module}, {atom, _, Function}, {integer, _,Arity}} ->
             case gradualizer_db:get_spec(Module, Function, Arity) of
                 {ok, BoundedFunTypeList} ->
-                    FunTypeList = [unfold_bounded_type(Env#env.tenv, Ty)
-                                   || Ty <- BoundedFunTypeList],
+                    FunTypeList =
+                        unfold_bounded_type_list(Env#env.tenv, BoundedFunTypeList),
                     case any_subtype(FunTypeList, ResTy, Env#env.tenv) of
                         {true, Cs} -> {#{}, Cs};
                         false -> throw({type_error, Expr, FunTypeList, ResTy})
