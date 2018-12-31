@@ -1363,8 +1363,10 @@ type_check_expr(#env{infer = false}, {char, _, _C}) ->
 
 %% When infer = true, we do propagate the types of literals,
 %% list cons, tuples, etc.
-type_check_expr(#env{infer = true}, {string, _, _}) ->
-    return(type(string));
+type_check_expr(#env{infer = true}, {string, _, ""}) ->
+    return(type(nil));
+type_check_expr(#env{infer = true}, {string, _, [_|_]}) ->
+    return(type(nonempty_string));
 type_check_expr(#env{infer = true}, {nil, _}) ->
     return(type(nil));
 type_check_expr(#env{infer = true}, {atom, _, _} = Atom) ->
@@ -1971,14 +1973,18 @@ do_type_check_expr_in(Env, Ty, {nil, _} = Nil) ->
         false ->
             throw({type_error, Nil, type(nil), Ty})
     end;
-do_type_check_expr_in(Env, Ty, {string, _, _} = String) ->
-    case subtype(type(string), Ty, Env#env.tenv) of
+do_type_check_expr_in(Env, Ty, {string, _, Chars} = String) ->
+    ActualTy = case Chars of
+                   []    -> type(nil);
+                   [_|_] -> type(nonempty_string)
+               end,
+    case subtype(ActualTy, Ty, Env#env.tenv) of
       {true, Cs} ->
         {#{}, Cs};
       false ->
-        throw({type_error, String, type(string), Ty})
+        throw({type_error, String, ActualTy, Ty})
     end;
-do_type_check_expr_in(Env, Ty, {bin, LINE, _BinElements} = Bin) ->
+do_type_check_expr_in(Env, Ty, {bin, _Anno, _BinElements} = Bin) ->
     BinTy = gradualizer_bin:compute_type(Bin),
     Cs1 = case subtype(BinTy, Ty, Env#env.tenv) of
               {true, Cs0} ->

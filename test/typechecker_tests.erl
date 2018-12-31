@@ -350,9 +350,9 @@ type_check_in_test_() ->
 
 infer_types_test_() ->
     %% Checking type_check_expr with inference enabled
-    [?_assertEqual("{1, 2}",
+    [?_assertEqual("{1, nonempty_string(), [], banana, float(), $c}",
                    type_check_expr(_Env = "",
-                                   _Expr = "{1, 2}",
+                                   _Expr = "{1, \"hello\", \"\", banana, 3.14, $c}",
                                    [infer])),
      %% the inferred type of a tuple with a untyped function call
      %% should be any()
