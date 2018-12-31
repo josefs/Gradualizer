@@ -387,7 +387,16 @@ type_check_in_test_() ->
      ?_assert(type_check_forms(["-spec f(float() | foo) -> ok.",
                                 "g() -> f(3.14)."])),
      ?_assertNot(type_check_forms(["-spec f(foo) -> ok.",
-                                   "g() -> f(3.14)."]))
+                                   "g() -> f(3.14)."])),
+     %% Although there is no spec for f/1 - inferred type is `fun((any()) -> any())'
+     ?_assert(type_check_forms(["f(_) -> ok.",
+                                "-spec g() -> fun((integer()) -> integer()).",
+                                "g() -> fun f/1."],
+                               [infer])),
+     %% Although there is not spec for f/1 - inferred arity does not match
+     ?_assertNot(type_check_forms(["-spec g() -> fun(() -> integer()).",
+                                   "g() -> fun f/1."],
+                                  [infer]))
     ].
 
 infer_types_test_() ->
