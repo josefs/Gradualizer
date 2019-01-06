@@ -2051,13 +2051,16 @@ do_type_check_expr_in(Env, ResTy, {record, _, Name, Fields} = Record) ->
             {VarBinds, Cs2} = type_check_fields(Env, Rec, Fields),
             {VarBinds, constraints:combine(Cs1, Cs2)}
     end;
-do_type_check_expr_in(Env, ResTy, {record, P, Exp, Record, Fields}) ->
-    RecordTy = {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Record}]},
-    case expect_record_type(Record, ResTy, Env#env.tenv) of
+do_type_check_expr_in(Env, ResTy, {record, _, Exp, Name, Fields} = Record) ->
+    RecordTy = {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Name}]},
+    case expect_record_type(Name, ResTy, Env#env.tenv) of
       type_error ->
-        throw({type_error, record_update, P, Record, ResTy});
+        throw({type_error,
+               Record,
+               type(record, [{atom, erl_anno:new(0), Name}]),
+               ResTy});
       {ok, Cs1} ->
-            Rec = maps:get(Record, Env#env.tenv#tenv.records),
+            Rec = maps:get(Name, Env#env.tenv#tenv.records),
             {VarBindsList, Css}
                 = lists:unzip(
                     lists:map(fun ({record_field, _, {atom, _, Field}, Expr}) ->
@@ -3950,6 +3953,13 @@ handle_type_error({type_error, {record, Anno, _, _} = Rec, ActualTy, ExpectTy}) 
                erl_anno:line(Anno),
                typelib:pp_type(ExpectTy),
                typelib:pp_type(ActualTy)]);
+handle_type_error({type_error, {record, Anno, _, _, _} = Rec, ActualTy, ExpectTy}) ->
+    io:format("The record update ~s on line ~p is expected "
+              "to have type ~s but it has type ~s~n",
+              [erl_pp:expr(Rec),
+               erl_anno:line(Anno),
+               typelib:pp_type(ExpectTy),
+               typelib:pp_type(ActualTy)]);
 handle_type_error({type_error, record_field, P, Record, Field, Ty, ExpectTy}) ->
     io:format("The record field #~p.~p on line ~p has type ~s but is expected to have type ~s.~n"
              ,[Record, Field, P, typelib:pp_type(Ty), typelib:pp_type(ExpectTy)]);
@@ -3957,10 +3967,6 @@ handle_type_error({type_error, record_pattern, P, Record, Ty}) ->
     io:format("The record patterns for record #~p on line ~p is expected to have"
               " type ~s.~n"
              ,[Record, P, typelib:pp_type(Ty)]);
-handle_type_error({type_error, record_update, P, Record, ResTy}) ->
-    io:format("The record update of the record #~p on line ~p is expected to have type:"
-              "~n~s~n"
-             ,[Record, P, typelib:pp_type(ResTy)]);
 handle_type_error({type_error, map, Anno, ExpectedTy}) ->
     io:format("The map on line ~p does not have type ~s~n",
               [erl_anno:line(Anno), typelib:pp_type(ExpectedTy)]);
