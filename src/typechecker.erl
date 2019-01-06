@@ -2039,11 +2039,14 @@ do_type_check_expr_in(Env, ResTy, {map, _, Expr, Assocs} = Map) ->
     end;
 
 %% Records
-do_type_check_expr_in(Env, ResTy, {record, P, Record, Fields}) ->
-    Rec = maps:get(Record, Env#env.tenv#tenv.records),
-    case expect_record_type(Record, ResTy, Env#env.tenv) of
+do_type_check_expr_in(Env, ResTy, {record, _, Name, Fields} = Record) ->
+    Rec = maps:get(Name, Env#env.tenv#tenv.records),
+    case expect_record_type(Name, ResTy, Env#env.tenv) of
       type_error ->
-            throw({type_error, record, P, Record, ResTy});
+            throw({type_error,
+                   Record,
+                   type(record, [{atom, erl_anno:new(0), Name}]),
+                   ResTy});
       {ok, Cs1} ->
             {VarBinds, Cs2} = type_check_fields(Env, Rec, Fields),
             {VarBinds, constraints:combine(Cs1, Cs2)}
@@ -3940,9 +3943,13 @@ handle_type_error({type_error, bc, P, Expr, Ty}) ->
 handle_type_error({type_error, check_clauses}) ->
     %%% TODO: Improve quality of type error
     io:format("Type error in clauses");
-handle_type_error({type_error, record, P, Record, ResTy}) ->
-    io:format("The record #~p on line ~p is expected to have type ~s.~n"
-             ,[Record, P, typelib:pp_type(ResTy)]);
+handle_type_error({type_error, {record, Anno, _, _} = Rec, ActualTy, ExpectTy}) ->
+    io:format("The record ~s on line ~p is expected "
+              "to have type ~s but it has type ~s~n",
+              [erl_pp:expr(Rec),
+               erl_anno:line(Anno),
+               typelib:pp_type(ExpectTy),
+               typelib:pp_type(ActualTy)]);
 handle_type_error({type_error, record_field, P, Record, Field, Ty, ExpectTy}) ->
     io:format("The record field #~p.~p on line ~p has type ~s but is expected to have type ~s.~n"
              ,[Record, Field, P, typelib:pp_type(Ty), typelib:pp_type(ExpectTy)]);
