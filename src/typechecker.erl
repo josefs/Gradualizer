@@ -2084,12 +2084,12 @@ do_type_check_expr_in(Env, ResTy, {record_field, _, Expr, Name, {atom, _, Field}
         false ->
             throw({type_error, RecordField, FieldTy, ResTy})
     end;
-do_type_check_expr_in(Env, ResTy, {record_index, LINE, Record, Field}) ->
+do_type_check_expr_in(Env, ResTy, {record_index, _, _, _} = Index) ->
     case subtype(ResTy, type(integer), Env#env.tenv) of
         {true, Cs} ->
             {#{}, Cs};
         false ->
-            throw({type_error, record_index, LINE, Record, Field})
+            throw({type_error, Index, type(integer), ResTy})
     end;
 
 do_type_check_expr_in(Env, ResTy, {'case', _, Expr, Clauses}) ->
@@ -3964,6 +3964,13 @@ handle_type_error({type_error, {record_field, Anno, _, _, _} = Field, ActualTy, 
     io:format("The record field ~s on line ~p is expected "
               "to have type ~s but it has type ~s~n",
               [erl_pp:expr(Field),
+               erl_anno:line(Anno),
+               typelib:pp_type(ExpectTy),
+               typelib:pp_type(ActualTy)]);
+handle_type_error({type_error, {record_index, Anno, _, _} = Index, ActualTy, ExpectTy}) ->
+    io:format("The record index ~s on line ~p is expected "
+              "to have type ~s but it has type ~s~n",
+              [erl_pp:expr(Index),
                erl_anno:line(Anno),
                typelib:pp_type(ExpectTy),
                typelib:pp_type(ActualTy)]);
