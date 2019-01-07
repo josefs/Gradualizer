@@ -226,6 +226,13 @@ glb_test_() ->
      ?_assert(true)
     ].
 
+%% Call to glb never returns
+glb_issue_test_() ->
+    ?glb( ?t([erl_parse:abstract_type()]),
+          ?t(list(tuple())),
+          ?t(none())
+        ).
+
 normalize_test_() ->
     [
      {"Merge intervals",
