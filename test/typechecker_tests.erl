@@ -228,10 +228,12 @@ glb_test_() ->
 
 %% Call to glb never returns
 glb_issue_test_() ->
-    ?glb( ?t([erl_parse:abstract_type()]),
-          ?t(list(tuple())),
-          ?t(none())
-        ).
+    [?_assertMatch(Result when is_tuple(Result),
+                   glb( ?t([erl_parse:abstract_type()]),
+                        {type,0,list,[{type,0,union,[{ann_type,0,[{var,891,'Name'},{user_type,[{file,"erl_parse.erl"},{location,0}],af_atom,[]}]},
+                                                     {user_type,[{file,"erl_parse.erl"},{location,0}],af_record_field_type,[]}]}]}
+                      )
+                  )].
 
 normalize_test_() ->
     [
