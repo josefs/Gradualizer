@@ -18,10 +18,7 @@
 
 -export_type([typed_record_field/0]).
 
--type type() :: erl_parse:abstract_type()
-              | af_character(). %% Workaround: char was not part of type() until after OTP 21.2.1
-                                %% (although it is supported since OTP 19.3)
--type af_character() :: {'char', erl_anno:anno(), char()}.
+-type type() :: erl_parse:abstract_type().
 
 %% Pattern macros
 -define(type(T), {type, _, T, []}).
@@ -78,9 +75,15 @@ compatible(Ty1, Ty2, TEnv) ->
 % Subtyping compatibility
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-% The first argument is a "compatible subtype" of the second.
+%% The first argument is a "compatible subtype" of the second.
 
--spec subtype(type(), type(), #tenv{}) -> {true, any()} | false.
+%% Workaround to silence the dialyzer warning:
+%% "The call subtype(Char::{'char',_,_},...) breaks the contract (type(),...)"
+%% char was not part of erl_parse:abstract_type() until after OTP 21.2
+%% (although it is supported since OTP 19.3)
+-type af_character() :: {'char', erl_anno:anno(), char()}.
+
+-spec subtype(type() | af_character(), type(), #tenv{}) -> {true, any()} | false.
 subtype(Ty1, Ty2, TEnv) ->
     try compat(Ty1, Ty2, sets:new(), TEnv) of
         {_Memoization, Constraints} ->
