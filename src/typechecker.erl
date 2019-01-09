@@ -3246,14 +3246,14 @@ add_type_pat(String = {string, P, _}, Ty, _TEnv, VEnv) ->
         false ->
             throw({type_error, pattern, P, String, Ty})
     end;
-add_type_pat({bin, P, BinElements} = Bin, Ty, TEnv, VEnv) ->
+add_type_pat({bin, _P, BinElements} = Bin, Ty, TEnv, VEnv) ->
     %% Check the size parameters of the bit pattern
     BinTy = gradualizer_bin:compute_type(Bin),
     Cs1 = case subtype(BinTy, Ty, TEnv) of
               {true, Cs0} ->
                   Cs0;
               false ->
-                  throw({type_error, bin, P, BinTy, Ty})
+                  throw({type_error, Bin, BinTy, Ty})
           end,
     %% Check the elements
     {NewVEnv, Cs} =
