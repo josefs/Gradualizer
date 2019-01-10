@@ -4,6 +4,7 @@
 -export([remove_pos/1, annotate_user_types/2, get_module_from_annotation/1,
          substitute_type_vars/2,
          pp_type/1, debug_type/3, parse_type/1]).
+-export_type([constraint/0, function_type/0, type_et_cetera/0]).
 
 -type type() :: erl_parse:abstract_type().
 

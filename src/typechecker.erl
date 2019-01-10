@@ -3740,23 +3740,13 @@ handle_type_error({type_error, tyVar, LINE, Var, VarTy, Ty}) ->
     io:format("The variable ~p on line ~p has type ~s "
               "but is expected to have type ~s~n",
               [Var, LINE, typelib:pp_type(VarTy), typelib:pp_type(Ty)]);
-handle_type_error({type_error, {char, Anno, _} = Char, ActualTy, ExpectedTy}) ->
-    io:format("The character ~s on line ~p is expected "
-              "to have type ~s but it has type ~s~n",
-              [erl_pp:expr(Char),
-               erl_anno:line(Anno),
-               typelib:pp_type(ExpectedTy),
-               typelib:pp_type(ActualTy)]);
+handle_type_error({type_error, {char, _, _} = Char, ActualType, ExpectedType}) ->
+    print_type_error("character", Char, ActualType, ExpectedType);
 handle_type_error({type_error, {atom, _, A}, LINE, Ty}) ->
     io:format("The atom ~p on line ~p does not have type ~s~n",
               [A, LINE, typelib:pp_type(Ty)]);
-handle_type_error({type_error, {string, Anno, _} = String, ActualTy, ExpectedTy}) ->
-    io:format("The string ~s on line ~p is expected "
-              "to have type ~s but it has type ~s~n",
-              [erl_pp:expr(String),
-               erl_anno:line(Anno),
-               typelib:pp_type(ExpectedTy),
-               typelib:pp_type(ActualTy)]);
+handle_type_error({type_error, {string, _, _} = String, ActualType, ExpectedType}) ->
+    print_type_error("string", String, ActualType, ExpectedType);
 handle_type_error({type_error, int, I, LINE, Ty}) ->
     io:format("The integer ~p on line ~p does not have type ~s~n",
               [I, LINE, typelib:pp_type(Ty)]);
@@ -3775,20 +3765,10 @@ handle_type_error({type_error, list, LINE, Ty}) ->
 handle_type_error({type_error, cons_pat, P, Cons, Ty}) ->
     io:format("The pattern ~s on line ~p does not have type:~n~s~n"
              ,[erl_pp:expr(Cons),P, typelib:pp_type(Ty)]);
-handle_type_error({type_error, {cons, Anno, _, _} = Cons, ActualTy, ExpectedTy}) ->
-    io:format("The list ~s on line ~p is expected "
-              "to have type ~s but it has type ~s~n",
-              [erl_pp:expr(Cons),
-               erl_anno:line(Anno),
-               typelib:pp_type(ExpectedTy),
-               typelib:pp_type(ActualTy)]);
-handle_type_error({type_error, {nil, Anno} = Nil, ActualTy, ExpectedTy}) ->
-    io:format("The empty list ~s on line ~p is expected "
-              "to have type ~s but it has type ~s~n",
-              [erl_pp:expr(Nil),
-               erl_anno:line(Anno),
-               typelib:pp_type(ExpectedTy),
-               typelib:pp_type(ActualTy)]);
+handle_type_error({type_error, {cons, _, _, _} = Cons, ActualType, ExpectedType}) ->
+    print_type_error("list", Cons, ActualType, ExpectedType);
+handle_type_error({type_error, {nil, _} = Nil, ActualType, ExpectedType}) ->
+    print_type_error("empty list", Nil, ActualType, ExpectedType);
 handle_type_error({argument_length_mismatch, P, LenTy, LenArgs}) ->
     io:format("The clause on line ~p is expected to have ~p argument(s) "
               "but it has ~p~n ",
@@ -3897,13 +3877,8 @@ handle_type_error({type_error, list_op_error, ListOp, P, Ty, _}) ->
     io:format("The operator ~p on line ~p is given an argument "
               "with a non-list type ~s~n",
               [ListOp, P, typelib:pp_type(Ty)]);
-handle_type_error({type_error, {map, Anno, _} = Map, ActualTy, ExpectTy}) ->
-    io:format("The map ~s on line ~p is expected "
-              "to have type ~s but it has type ~s~n",
-              [erl_pp:expr(Map),
-               erl_anno:line(Anno),
-               typelib:pp_type(ExpectTy),
-               typelib:pp_type(ActualTy)]);
+handle_type_error({type_error, {map, _, _} = Map, ActualType, ExpectedType}) ->
+    print_type_error("map", Map, ActualType, ExpectedType);
 handle_type_error({type_error, operator_pattern, P, Expr, Ty}) ->
     io:format("The operator pattern ~s on line ~p is expected to have type "
               "~s~n"
@@ -3919,13 +3894,8 @@ handle_type_error({type_error, tuple, LINE, Ty}) ->
               [LINE, typelib:pp_type(Ty)]);
 handle_type_error({unknown_variable, P, Var}) ->
     io:format("Unknown variable ~p on line ~p.~n", [Var, P]);
-handle_type_error({type_error, {bin, Anno, _} = Bin, ActualTy, ExpectTy}) ->
-    io:format("The bit expression ~s on line ~p is expected "
-              "to have type ~s but it has type ~s~n",
-              [erl_pp:expr(Bin),
-               erl_anno:line(Anno),
-               typelib:pp_type(ExpectTy),
-               typelib:pp_type(ActualTy)]);
+handle_type_error({type_error, {bin, _, _} = Bin, ActualType, ExpectedType}) ->
+    print_type_error("bit expression", Bin, ActualType, ExpectedType);
 handle_type_error({type_error, bit_type, Expr, P, Ty1, Ty2}) ->
     io:format("The expression ~s inside the bit expression on line ~p has type ~s "
               "but the type specifier indicates ~s~n",
@@ -3946,34 +3916,14 @@ handle_type_error({type_error, bc, P, Expr, Ty}) ->
 handle_type_error({type_error, check_clauses}) ->
     %%% TODO: Improve quality of type error
     io:format("Type error in clauses");
-handle_type_error({type_error, {record, Anno, _, _} = Rec, ActualTy, ExpectTy}) ->
-    io:format("The record ~s on line ~p is expected "
-              "to have type ~s but it has type ~s~n",
-              [erl_pp:expr(Rec),
-               erl_anno:line(Anno),
-               typelib:pp_type(ExpectTy),
-               typelib:pp_type(ActualTy)]);
-handle_type_error({type_error, {record, Anno, _, _, _} = Rec, ActualTy, ExpectTy}) ->
-    io:format("The record update ~s on line ~p is expected "
-              "to have type ~s but it has type ~s~n",
-              [erl_pp:expr(Rec),
-               erl_anno:line(Anno),
-               typelib:pp_type(ExpectTy),
-               typelib:pp_type(ActualTy)]);
-handle_type_error({type_error, {record_field, Anno, _, _, _} = Field, ActualTy, ExpectTy}) ->
-    io:format("The record field ~s on line ~p is expected "
-              "to have type ~s but it has type ~s~n",
-              [erl_pp:expr(Field),
-               erl_anno:line(Anno),
-               typelib:pp_type(ExpectTy),
-               typelib:pp_type(ActualTy)]);
-handle_type_error({type_error, {record_index, Anno, _, _} = Index, ActualTy, ExpectTy}) ->
-    io:format("The record index ~s on line ~p is expected "
-              "to have type ~s but it has type ~s~n",
-              [erl_pp:expr(Index),
-               erl_anno:line(Anno),
-               typelib:pp_type(ExpectTy),
-               typelib:pp_type(ActualTy)]);
+handle_type_error({type_error, {record, _, _, _} = Rec, ActualType, ExpectedType}) ->
+    print_type_error("record", Rec, ActualType, ExpectedType);
+handle_type_error({type_error, {record, _, _, _, _} = Rec, ActualType, ExpectedType}) ->
+    print_type_error("record update", Rec, ActualType, ExpectedType);
+handle_type_error({type_error, {record_field, _, _, _, _} = Field, ActualType, ExpectedType}) ->
+    print_type_error("record field", Field, ActualType, ExpectedType);
+handle_type_error({type_error, {record_index, _, _, _} = Index, ActualType, ExpectedType}) ->
+    print_type_error("record index", Index, ActualType, ExpectedType);
 handle_type_error({type_error, record_pattern, P, Record, Ty}) ->
     io:format("The record patterns for record #~p on line ~p is expected to have"
               " type ~s.~n"
@@ -4011,6 +3961,19 @@ handle_type_error({type_error, mismatch, Ty, Expr}) ->
               [erl_pp:expr(Expr), erl_anno:line(element(2, Expr)), typelib:pp_type(Ty)]);
 handle_type_error(type_error) ->
     io:format("TYPE ERROR~n").
+
+-spec print_type_error(string(),
+                       erl_parse:abstract_expr(),
+                       typelib:type_et_cetera(),
+                       typelib:type_et_cetera()) -> ok.
+print_type_error(Explanation, Expression, ActualType, ExpectedType) ->
+    io:format("The ~s ~s on line ~p is expected "
+              "to have type ~s but it has type ~s~n",
+              [Explanation,
+               erl_pp:expr(Expression),
+               line_no(Expression),
+               typelib:pp_type(ExpectedType),
+               typelib:pp_type(ActualType)]).
 
 pp_intersection_type([]) ->
     "";
