@@ -2110,7 +2110,7 @@ do_type_check_expr_in(Env, ResTy, {bc, P, Expr, Qualifiers}) ->
     type_check_comprehension_in(Env, ResTy, bc, Expr, P, Qualifiers);
 
 %% Functions
-do_type_check_expr_in(Env, Ty, {'fun', P, {clauses, Clauses}}) ->
+do_type_check_expr_in(Env, Ty, {'fun', _, {clauses, Clauses}} = Fun) ->
     case expect_fun_type(Env, Ty) of
         any ->
             {#{}, constraints:empty()};
@@ -2128,7 +2128,7 @@ do_type_check_expr_in(Env, Ty, {'fun', P, {clauses, Clauses}}) ->
             {VB, Cs2} = check_clauses_union(Env, Tyss, Clauses),
             {VB, constraints:combine(Cs1, Cs2)};
         {type_error, _} ->
-            throw({type_error, lambda, P, Ty})
+            throw({type_error, Fun, type('fun'), Ty})
     end;
 do_type_check_expr_in(Env, ResTy, {'fun', P, {function, Name, Arity}}) ->
     BoundedFunTypeList = get_bounded_fun_type_list(Name, Arity, Env, P),
@@ -2154,7 +2154,7 @@ do_type_check_expr_in(Env, ResTy, {'fun', P, {function, M, F, A}}) ->
         _ -> % We don't have enough information to check the type.
             {#{}, constraints:empty()}
     end;
-do_type_check_expr_in(Env, Ty, {named_fun, P, FunName, Clauses}) ->
+do_type_check_expr_in(Env, Ty, {named_fun, _, FunName, Clauses} = Fun) ->
     NewEnv = Env#env{ venv = add_var_binds(#{ FunName => Ty }, Env#env.venv, Env#env.tenv) },
     case expect_fun_type(Env, Ty) of
         any ->
@@ -2173,7 +2173,7 @@ do_type_check_expr_in(Env, Ty, {named_fun, P, FunName, Clauses}) ->
             {VB, Cs2} = check_clauses_union(Env, Tyss, Clauses),
             {VB, constraints:combine(Cs1, Cs2)};
         {type_error, _} ->
-            throw({type_error, lambda, P, Ty})
+            throw({type_error, Fun, type('fun'), Ty})
     end;
 
 do_type_check_expr_in(Env, ResTy, {'receive', _, Clauses}) ->
@@ -3948,9 +3948,10 @@ handle_type_error({type_error, lc, P, Ty}) ->
 handle_type_error({type_error, bc, P, Ty}) ->
     io:format("The binary comprehension at line ~p is expected to have type "
               "~s which has no binary subtypes~n", [P, typelib:pp_type(Ty)]);
-handle_type_error({type_error, lambda, P, Ty}) ->
-    io:format("The function expression at line ~p is expected to have type "
-              "~s which is not a function type~n", [P, typelib:pp_type(Ty)]);
+handle_type_error({type_error, {named_fun, _, _, _} = Fun, ActualType, ExpectedType}) ->
+    print_type_error("function expression", Fun, ActualType, ExpectedType);
+handle_type_error({type_error, {'fun', _, _} = Fun, ActualType, ExpectedType}) ->
+    print_type_error("function expression", Fun, ActualType, ExpectedType);
 handle_type_error({type_error, cyclic_type_vars, _P, Ty, Xs}) ->
     io:format("The type spec ~s has a cyclic dependency in variable~s ~s~n",
               [typelib:pp_type(Ty),
