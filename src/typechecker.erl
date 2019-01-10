@@ -1917,13 +1917,13 @@ type_check_expr_in(Env, ResTy, Expr) ->
 do_type_check_expr_in(Env, {type, _, any, []}, Expr) ->
     {_Ty, VB, Cs} = type_check_expr(Env, Expr),
     {VB, Cs};
-do_type_check_expr_in(Env, Ty, {var, LINE, Var}) ->
-    VarTy = maps:get(Var, Env#env.venv),
+do_type_check_expr_in(Env, Ty, {var, _, Name} = Var) ->
+    VarTy = maps:get(Name, Env#env.venv),
     case subtype(VarTy, Ty, Env#env.tenv) of
         {true, Cs} ->
             {#{}, Cs};
         false ->
-            throw({type_error, tyVar, LINE, Var, VarTy, Ty})
+            throw({type_error, Var, VarTy, Ty})
     end;
 do_type_check_expr_in(Env, Ty, {match, _, Pat, Expr}) ->
     {VarBinds, Cs} = type_check_expr_in(Env, Ty, Expr),
@@ -3144,7 +3144,7 @@ add_types_pats([Pat | Pats], [Ty | Tys], TEnv, VEnv, PatTysAcc, UBoundsAcc, CsAc
            constraints:constraints()}.
 add_type_pat({var, _, '_'}, Ty, _TEnv, VEnv) ->
     {Ty, Ty, VEnv, constraints:empty()};
-add_type_pat({var, P, A}, Ty, TEnv, VEnv) ->
+add_type_pat({var, _, A} = Var, Ty, TEnv, VEnv) ->
     %% TODO: In a fun clause, A is always free, but not in e.g. case clauses
     case VEnv of
         #{A := VarTy} ->
@@ -3152,7 +3152,7 @@ add_type_pat({var, P, A}, Ty, TEnv, VEnv) ->
                 {true, Cs} ->
                     {type(none), VarTy, VEnv, Cs};
                 false ->
-                    throw({type_error, tyVar, P, A, VarTy, Ty})
+                    throw({type_error, Var, VarTy, Ty})
             end;
         _FreeVar ->
             {Ty, Ty, VEnv#{A => Ty}, constraints:empty()}
@@ -3753,10 +3753,8 @@ handle_type_error({undef, user_type, LINE, {Name, Arity}}) ->
 handle_type_error({not_exported, remote_type, {{atom, LINE, _} = Module, Name, Arity}}) ->
     io:format("The type ~s:~s/~p on line ~p is not exported~n",
               [erl_pp:expr(Module), erl_pp:expr(Name), Arity, LINE]);
-handle_type_error({type_error, tyVar, LINE, Var, VarTy, Ty}) ->
-    io:format("The variable ~p on line ~p has type ~s "
-              "but is expected to have type ~s~n",
-              [Var, LINE, typelib:pp_type(VarTy), typelib:pp_type(Ty)]);
+handle_type_error({type_error, {var, _, _} = Var, ActualType, ExpectedType}) ->
+    print_type_error("variable", Var, ActualType, ExpectedType);
 handle_type_error({type_error, {char, _, _} = Char, ActualType, ExpectedType}) ->
     print_type_error("character", Char, ActualType, ExpectedType);
 handle_type_error({type_error, {atom, _, A}, LINE, Ty}) ->
