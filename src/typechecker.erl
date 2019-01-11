@@ -77,9 +77,15 @@ compatible(Ty1, Ty2, TEnv) ->
 % Subtyping compatibility
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-% The first argument is a "compatible subtype" of the second.
+%% The first argument is a "compatible subtype" of the second.
 
--spec subtype(type(), type(), #tenv{}) -> {true, any()} | false.
+%% Workaround to silence the dialyzer warning:
+%% "The call subtype(Char::{'char',_,_},...) breaks the contract (type(),...)"
+%% char was not part of erl_parse:abstract_type() until after OTP 21.2
+%% (although it is supported since OTP 19.3)
+-type af_character() :: {'char', erl_anno:anno(), char()}.
+
+-spec subtype(type() | af_character(), type(), #tenv{}) -> {true, any()} | false.
 subtype(Ty1, Ty2, TEnv) ->
     try compat(Ty1, Ty2, sets:new(), TEnv) of
         {_Memoization, Constraints} ->
@@ -674,6 +680,7 @@ is_int_type({type, _, T, _})
   when T == pos_integer; T == non_neg_integer; T == neg_integer;
        T == integer; T == range -> true;
 is_int_type({integer, _, _}) -> true;
+is_int_type({char, _, _}) -> true;
 is_int_type(_) -> false.
 
 %% A type used while normalizing integer types. The ranges that are possible to
@@ -749,9 +756,11 @@ int_type_to_range({type, _, integer, []})              -> {neg_inf, pos_inf};
 int_type_to_range({type, _, neg_integer, []})          -> {neg_inf, -1};
 int_type_to_range({type, _, non_neg_integer, []})      -> {0, pos_inf};
 int_type_to_range({type, _, pos_integer, []})          -> {1, pos_inf};
-int_type_to_range({type, _, range, [{integer, _, I1},
-                                    {integer, _, I2}]})
-                                        when I1 =< I2  -> {I1, I2};
+int_type_to_range({type, _, range, [{Tag1, _, I1}, {Tag2, _, I2}]})
+  when Tag1 =:= integer orelse Tag1 =:= char,
+       Tag2 =:= integer orelse Tag2 =:= char,
+       I1 =< I2                                        -> {I1, I2};
+int_type_to_range({char, _, I})                        -> {I, I};
 int_type_to_range({integer, _, I})                     -> {I, I}.
 
 %% Converts a range back to a type. Creates two types in some cases and zero
@@ -1943,11 +1952,11 @@ do_type_check_expr_in(Env, Ty, Atom = {atom, LINE, _}) ->
             throw({type_error, Atom, LINE, Ty})
     end;
 do_type_check_expr_in(Env, Ty, Char = {char, _, _}) ->
-    case subtype(type(char), Ty, Env#env.tenv) of
+    case subtype(Char, Ty, Env#env.tenv) of
         {true, Cs} ->
            {#{}, Cs};
        false ->
-           throw({type_error, Char, type(char), Ty})
+           throw({type_error, Char, Char, Ty})
     end;
 do_type_check_expr_in(Env, Ty, Cons = {cons, _, H, T}) ->
     case expect_list_type(Ty, dont_allow_nil_type) of
@@ -2314,7 +2323,7 @@ arith_op_arg_types(Op, Ty = {type, _, float, []}) ->
     end;
 
 %% Singleton types are not closed under any operations
-arith_op_arg_types(_, {T, _, _}) when T == integer; T == float ->
+arith_op_arg_types(_, {T, _, _}) when T == integer; T == char ->
     false;
 
 %% pos_integer() is closed under '+',  '*', and 'bor'
@@ -2497,7 +2506,7 @@ type_check_unary_op_in(Env, ResTy, Op, P, Arg) ->
     end.
 
 %% Which type should we check the argument against if we want the given type
-%% out? We already now that Ty is a subtype of the return type of the operator.
+%% out? We already know that Ty is a subtype of the return type of the operator.
 unary_op_arg_type('+', Ty) -> Ty;
 unary_op_arg_type(Op, {type, P, union, Tys}) ->
     {type, P, union, [ unary_op_arg_type(Op, Ty) || Ty <- Tys ]};
