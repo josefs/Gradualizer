@@ -2086,7 +2086,7 @@ do_type_check_expr_in(Env, ResTy, {record, _, Exp, Name, Fields} = Record) ->
 do_type_check_expr_in(Env, ResTy, {record_field, _, Expr, Name, {atom, _, Field}} = RecordField) ->
     Rec = maps:get(Name, Env#env.tenv#tenv.records),
     FieldTy = get_rec_field_type(Field, Rec),
-    case subtype(ResTy, FieldTy, Env#env.tenv) of
+    case subtype(FieldTy, ResTy, Env#env.tenv) of
         {true, Cs1} ->
             RecTy = {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Name}]},
             {VarBinds, Cs2} = type_check_expr_in(Env, RecTy, Expr),
@@ -2095,7 +2095,7 @@ do_type_check_expr_in(Env, ResTy, {record_field, _, Expr, Name, {atom, _, Field}
             throw({type_error, RecordField, FieldTy, ResTy})
     end;
 do_type_check_expr_in(Env, ResTy, {record_index, _, _, _} = Index) ->
-    case subtype(ResTy, type(integer), Env#env.tenv) of
+    case subtype(type(integer), ResTy, Env#env.tenv) of
         {true, Cs} ->
             {#{}, Cs};
         false ->
