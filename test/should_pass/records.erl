@@ -26,3 +26,11 @@ i() ->
 -spec j() -> integer().
 j() ->
     #r.f2.
+
+-spec rec_field_subtype(#r{}) -> number().
+rec_field_subtype(R) ->
+    R#r.f2.
+
+-spec rec_index_subtype() -> number().
+rec_index_subtype() ->
+    #r.f2.
