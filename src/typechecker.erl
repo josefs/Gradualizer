@@ -1127,7 +1127,7 @@ expect_fun_type_union(Env, [Ty|Tys]) ->
             [TyOut | expect_fun_type_union(Env, Tys)]
     end.
 
-expect_record_type(Record, {type, _, record, [{atom, _, Name}]}, _TEnv) ->
+expect_record_type(Record, {type, _, record, [{atom, _, Name}|_]}, _TEnv) ->
     if Record == Name ->
          {ok, constraints:empty()};
        true ->

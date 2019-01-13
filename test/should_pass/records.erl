@@ -34,3 +34,11 @@ rec_field_subtype(R) ->
 -spec rec_index_subtype() -> number().
 rec_index_subtype() ->
     #r.f2.
+
+-spec rec_refinement() -> #r{f1 :: boolean()}.
+rec_refinement() ->
+    #r{f1 = get_bool()}.
+
+-spec get_bool() -> boolean().
+get_bool() ->
+    true.
