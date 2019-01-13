@@ -1412,8 +1412,19 @@ type_check_expr(Env, {record, Anno, Record, Fields}) ->
     RecTy    = type(record, [{atom, erl_anno:new(0), Record}]),
     {VB, Cs} = type_check_fields(Env, Record, Anno, Fields),
     {RecTy, VB, Cs};
-type_check_expr(_Env, {record_index, _, _Record, _Field}) ->
-    {type(integer), #{}, constraints:empty()};
+type_check_expr(Env, {record_index, Anno, Name, FieldNameAtom}) ->
+    %% we still fetch record field index even if infer=false
+    %% to be able to report undefined record or record field.
+    %% ("we do our best for the customer")
+    RecFields = get_record_fields(Name, Anno, Env#env.tenv),
+    Index = get_rec_field_index(FieldNameAtom, RecFields),
+    IndexTy = case Env#env.infer of
+                  true ->
+                      {integer, erl_anno:new(0), Index};
+                  false ->
+                      type(any)
+              end,
+    return(IndexTy);
 
 %% Functions
 type_check_expr(Env, {'fun', _, {clauses, Clauses}}) ->
@@ -2091,12 +2102,15 @@ do_type_check_expr_in(Env, ResTy, {record_field, Anno, Expr, Name, FieldNameAtom
         false ->
             throw({type_error, RecordField, FieldTy, ResTy})
     end;
-do_type_check_expr_in(Env, ResTy, {record_index, _, _, _} = Index) ->
-    case subtype(type(integer), ResTy, Env#env.tenv) of
+do_type_check_expr_in(Env, ResTy, {record_index, Anno, Name, FieldNameAtom} = RecIndex) ->
+    RecFields = get_record_fields(Name, Anno, Env#env.tenv),
+    Index = get_rec_field_index(FieldNameAtom, RecFields),
+    IndexTy = {integer, erl_anno:new(0), Index},
+    case subtype(IndexTy, ResTy, Env#env.tenv) of
         {true, Cs} ->
             {#{}, Cs};
         false ->
-            throw({type_error, Index, type(integer), ResTy})
+            throw({type_error, RecIndex, IndexTy, ResTy})
     end;
 
 do_type_check_expr_in(Env, ResTy, {'case', _, Expr, Clauses}) ->
@@ -3564,15 +3578,28 @@ add_var_binds(VEnv, VarBinds, TEnv) ->
     Glb = fun(_K, S, T) -> glb(S, T, TEnv) end,
     gradualizer_lib:merge_with(Glb, VEnv, VarBinds).
 
-get_rec_field_type({atom, _, FieldName},
-                   [{typed_record_field,
-                     {record_field, _,
-                      {atom, _, FieldName}, _}, Ty}|_]) ->
-    Ty;
-get_rec_field_type(FieldNameAtom, [_|RecFieldTypes]) ->
-    get_rec_field_type(FieldNameAtom, RecFieldTypes);
-get_rec_field_type(FieldNameAtom, []) ->
-    throw({undef, record_field, FieldNameAtom}).
+get_rec_field_type(FieldNameAtom, RecFields) ->
+    case get_rec_field_index_and_type(FieldNameAtom, RecFields, 1) of
+        {_Index, Ty} -> Ty;
+        undefined -> throw({undef, record_field, FieldNameAtom})
+    end.
+
+get_rec_field_index(FieldNameAtom, RecFields) ->
+    case get_rec_field_index_and_type(FieldNameAtom, RecFields, 1) of
+        {Index, _} -> Index;
+        undefined -> throw({undef, record_field, FieldNameAtom})
+    end.
+
+get_rec_field_index_and_type({atom, _, FieldName},
+                             [{typed_record_field,
+                               {record_field, _,
+                                {atom, _, FieldName}, _}, Ty}|_],
+                             Index) ->
+    {Index, Ty};
+get_rec_field_index_and_type(FieldNameAtom, [_|RecFieldTypes], I) ->
+    get_rec_field_index_and_type(FieldNameAtom, RecFieldTypes, I + 1);
+get_rec_field_index_and_type(_FieldNameAtom, [], _) ->
+    undefined.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% Main entry point
