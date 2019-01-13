@@ -1414,8 +1414,15 @@ type_check_expr(Env, {record, _, Record, Fields}) ->
     Rec      = maps:get(Record, Env#env.tenv#tenv.records),
     {VB, Cs} = type_check_fields(Env, Rec, Fields),
     {RecTy, VB, Cs};
-type_check_expr(_Env, {record_index, _, _Record, _Field}) ->
-    {type(integer), #{}, constraints:empty()};
+type_check_expr(Env, {record_index, Anno, Name, {atom, _, Field}}) ->
+    case Env#env.infer of
+        true ->
+            RecFields = get_record_fields(Name, Anno, Env#env.tenv),
+            Index = get_rec_field_index(Field, RecFields),
+            return({integer, erl_anno:new(0), Index});
+        false ->
+            return(type(any))
+    end;
 
 %% Functions
 type_check_expr(Env, {'fun', _, {clauses, Clauses}}) ->
@@ -2094,12 +2101,15 @@ do_type_check_expr_in(Env, ResTy, {record_field, _, Expr, Name, {atom, _, Field}
         false ->
             throw({type_error, RecordField, FieldTy, ResTy})
     end;
-do_type_check_expr_in(Env, ResTy, {record_index, _, _, _} = Index) ->
-    case subtype(type(integer), ResTy, Env#env.tenv) of
+do_type_check_expr_in(Env, ResTy, {record_index, Anno, Name, {atom, _, Field}} = RecIndex) ->
+    RecFields = get_record_fields(Name, Anno, Env#env.tenv),
+    Index = get_rec_field_index(Field, RecFields),
+    IndexTy = {integer, erl_anno:new(0), Index},
+    case subtype(IndexTy, ResTy, Env#env.tenv) of
         {true, Cs} ->
             {#{}, Cs};
         false ->
-            throw({type_error, Index, type(integer), ResTy})
+            throw({type_error, RecIndex, IndexTy, ResTy})
     end;
 
 do_type_check_expr_in(Env, ResTy, {'case', _, Expr, Clauses}) ->
@@ -3567,14 +3577,24 @@ add_var_binds(VEnv, VarBinds, TEnv) ->
     Glb = fun(_K, S, T) -> glb(S, T, TEnv) end,
     gradualizer_lib:merge_with(Glb, VEnv, VarBinds).
 
-get_rec_field_type(FieldName,
+get_rec_field_type(FieldName, RecFields) ->
+    %% The first field is the second element of the tuple - so start from 2
+    {_Index, Ty} = get_rec_field_index_and_type(FieldName, RecFields, 2),
+    Ty.
+
+get_rec_field_index(FieldName, RecFields) ->
+    %% The first field is the second element of the tuple - so start from 2
+    {Index, _Ty} = get_rec_field_index_and_type(FieldName, RecFields, 2),
+    Index.
+
+get_rec_field_index_and_type(FieldName,
                    [{typed_record_field,
                      {record_field, _,
-                      {atom, _, FieldName}, _}, Ty}|_]) ->
-    Ty;
-get_rec_field_type(FieldName, [_|RecFieldTypes]) ->
-    get_rec_field_type(FieldName, RecFieldTypes);
-get_rec_field_type(FieldName, []) ->
+                      {atom, _, FieldName}, _}, Ty}|_], I) ->
+    {I, Ty};
+get_rec_field_index_and_type(FieldName, [_|RecFieldTypes], I) ->
+    get_rec_field_index_and_type(FieldName, RecFieldTypes, I + 1);
+get_rec_field_index_and_type(FieldName, [], _) ->
     throw({error, {record_field_not_found, FieldName}}).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

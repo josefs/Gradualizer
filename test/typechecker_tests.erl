@@ -335,7 +335,12 @@ propagate_types_test_() ->
                                    _Expr = "- f()")),
      ?_assertMatch("-2..-1 | non_neg_integer()",
                    type_check_expr(_Env = "-spec f() -> neg_integer() | 0..2.",
-                                   _Expr = "- f()"))
+                                   _Expr = "- f()")),
+
+     %% inferred type of record index
+     ?_assertMatch("any()",
+                   type_check_expr(_Env = "",
+                                   _Expr = "#r.f"))
     ].
 
 type_check_in_test_() ->
@@ -374,6 +379,11 @@ infer_types_test_() ->
      ?_assertMatch("<<_:7, _:_*16>>",
                    type_check_expr(_Env = "f() -> receive X -> X end.",
                                    _Expr = "<<(f())/utf16, 7:7>>",
+                                   [infer])),
+     %% infer exact type of record index
+     ?_assertMatch("2",
+                   type_check_expr(_Env = "-record(r, {f}).",
+                                   _Expr = "#r.f",
                                    [infer]))
     ].
 

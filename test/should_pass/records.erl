@@ -23,7 +23,7 @@ h() ->
 i() ->
     #r.f1.
 
--spec j() -> integer().
+-spec j() -> 3.
 j() ->
     #r.f2.
 
@@ -34,3 +34,4 @@ rec_field_subtype(R) ->
 -spec rec_index_subtype() -> number().
 rec_index_subtype() ->
     #r.f2.
+
