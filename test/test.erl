@@ -14,7 +14,14 @@ should_pass_test_() ->
 
 should_fail_test_() ->
     map_erl_files(fun(File) ->
-            {filename:basename(File), [?_assertMatch({nok, _}, {gradualizer:type_check_file(File), File})]}
+            Errors = gradualizer:type_check_file(File, [return_errors]),
+            %% Test that error formatting doesn't crash
+            lists:foreach(fun({_, Error}) -> typechecker:handle_type_error(Error) end, Errors),
+            {ok, Forms} = gradualizer_file_utils:get_forms_from_erl(File),
+            NumberOfExportedFunctions = typechecker:number_of_exported_functions(Forms),
+            {filename:basename(File),
+             [?_assertMatch({NumberOfExportedFunctions, _, _},
+                            {length(Errors), filename:basename(File), NumberOfExportedFunctions})]}
         end, "test/should_fail").
 
 % Test succeeds if Gradualizer crashes or if it doesn't type check.

@@ -3723,6 +3723,14 @@ aux([{attribute, _, compile, export_all} | Forms], Acc) ->
 aux([_|Forms], Acc) ->
     aux(Forms, Acc).
 
+%% Used by test module to cross-check number of reported errors
+number_of_exported_functions(Forms) ->
+    ParseData = typechecker:collect_specs_types_opaques_and_functions(Forms),
+    case ParseData#parsedata.export_all of
+        true -> length(ParseData#parsedata.functions);
+        false -> length(ParseData#parsedata.exports)
+    end.
+
 handle_type_error({call_undef, LINE, Func, Arity}) ->
     io:format("Call to undefined function ~p/~p on line ~p~n",
               [Func, Arity, LINE]);
