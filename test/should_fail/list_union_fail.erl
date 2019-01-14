@@ -1,6 +1,5 @@
 -module(list_union_fail).
-
--compile(export_all).
+-export([bar/0, baz/0]).
 
 -spec foo([a] | [b]) -> ok.
 foo(_) -> ok.

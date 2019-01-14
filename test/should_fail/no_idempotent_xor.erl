@@ -1,6 +1,5 @@
 -module(no_idempotent_xor).
-
--compile(export_all).
+-export([bla/2]).
 
 -spec bla(true, true) -> _.
 bla(X, Y) ->

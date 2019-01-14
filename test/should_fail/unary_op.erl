@@ -1,5 +1,5 @@
--module(unary_op_1).
+-module(unary_op).
+-export([fail/1]).
 
 -spec fail(number()) -> boolean().
 fail(X) -> -X.
-
