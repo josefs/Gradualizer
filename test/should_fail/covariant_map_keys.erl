@@ -1,6 +1,6 @@
 -module(covariant_map_keys).
 
--compile([export_all, nowarn_export_all]).
+-export([not_good/1]).
 
 -spec good(#{ good := A }) -> A.
 good(#{ good := X }) -> X.
@@ -10,4 +10,3 @@ not_good(M) -> good(M). %% This call should fail
 
 -spec kaboom() -> integer().
 kaboom() -> not_good(#{ bad => 0 }).
-

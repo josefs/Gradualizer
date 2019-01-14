@@ -1,6 +1,6 @@
 -module(arg).
 
--compile([export_all]).
+-export([g/1]).
 
 -spec f(integer()) -> integer().
 f(N) ->

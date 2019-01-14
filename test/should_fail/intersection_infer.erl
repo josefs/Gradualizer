@@ -1,6 +1,6 @@
 -module(intersection_infer).
 
--compile([export_all]).
+-export([g/0]).
 
 -spec f(integer()) -> integer();
        (boolean()) -> boolean().

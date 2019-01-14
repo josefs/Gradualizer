@@ -1,6 +1,6 @@
 -module(arity_mismatch).
 
--compile([export_all, nowarn_export_all]).
+-export([bar/0, bar/1]).
 
 -spec foo(alice) -> bob.
 foo(alice) -> bob.

@@ -1,6 +1,6 @@
 -module(intersection_check).
 
--compile([export_all]).
+-export([h/0]).
 
 -spec f(integer()) -> integer();
        (boolean()) -> boolean().

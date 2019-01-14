@@ -1,6 +1,5 @@
 -module(pp_intersection).
-
--compile([export_all, nowarn_export_all]).
+-export([foo/1]).
 
 %% Mostly to make sure pretty printing intersection types doesn't crash.
 
