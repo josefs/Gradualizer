@@ -1409,9 +1409,19 @@ type_check_expr(Env, {record, Anno, Expr, Record, Fields}) ->
     {VB2, Cs2} = type_check_fields(Env, Record, Anno, Fields),
     {RecTy, union_var_binds(VB1, VB2, Env#env.tenv), constraints:combine(Cs1, Cs2)};
 type_check_expr(Env, {record, Anno, Record, Fields}) ->
-    RecTy    = type(record, [{atom, erl_anno:new(0), Record}]),
     {VB, Cs} = type_check_fields(Env, Record, Anno, Fields),
-    {RecTy, VB, Cs};
+    {FieldTypes, VarBindsList, Css}
+                = lists:unzip3(
+                    lists:map(
+                      fun({record_field, _, FieldNameAtom, Expr}) ->
+                              {FTy, FVB, FCs} = type_check_expr(Env, Expr),
+                              {type(field_type, [FieldNameAtom, FTy]), FVB, FCs}
+                      end
+                     ,Fields)),
+    RecTy = type(record, [{atom, erl_anno:new(0), Record} | FieldTypes]),
+    {RecTy
+    ,union_var_binds([VB|VarBindsList], Env#env.tenv)
+    ,constraints:combine([Cs|Css])};
 type_check_expr(Env, {record_index, Anno, Name, FieldNameAtom}) ->
     %% we still fetch record field index even if infer=false
     %% to be able to report undefined record or record field.
