@@ -4,7 +4,7 @@
 -export([remove_pos/1, annotate_user_types/2, get_module_from_annotation/1,
          substitute_type_vars/2,
          pp_type/1, debug_type/3, parse_type/1]).
--export_type([constraint/0, function_type/0, type_et_cetera/0]).
+-export_type([constraint/0, function_type/0, extended_type/0]).
 
 -type type() :: erl_parse:abstract_type().
 
@@ -20,11 +20,11 @@
                                 'fun',
                                 [{type, erl_anno:anno(), product, [type()]} |
                                  type()]}.
--type type_et_cetera() :: type() |
+-type extended_type() :: type() |
                           {type, erl_anno:anno(), bounded_fun,
                                  [function_type() | [constraint()]]} |
-                          [type_et_cetera()].
--spec pp_type(type_et_cetera()) -> string().
+                          [extended_type()].
+-spec pp_type(extended_type()) -> string().
 pp_type(Types = [_|_]) ->
     %% TODO: This is a workaround for the fact that a list is sometimes used in
     %% place of a type. It typically represents a function type with multiple

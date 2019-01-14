@@ -3963,8 +3963,8 @@ handle_type_error(type_error) ->
 
 -spec print_type_error(string(),
                        erl_parse:abstract_expr(),
-                       typelib:type_et_cetera(),
-                       typelib:type_et_cetera()) -> ok.
+                       typelib:extended_type(),
+                       typelib:extended_type()) -> ok.
 print_type_error(Explanation, Expression, ActualType, ExpectedType) ->
     io:format("The ~s ~s on line ~p is expected "
               "to have type ~s but it has type ~s~n",
