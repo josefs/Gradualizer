@@ -215,8 +215,8 @@ compat_ty({type, _, binary, [{integer, _, M1}, {integer, _, N1}]},
 %% TODO: Record equivallend on tuple form
 compat_ty({type, P1, record, [{atom, _, Name}]},
           {type, P2, record, [{atom, _, Name}]}, A, TEnv) ->
-    Fields1 = get_record_fields(Name, P1, TEnv),
-    Fields2 = get_record_fields(Name, P2, TEnv),
+    Fields1 = get_maybe_remote_record_fields(Name, P1, TEnv),
+    Fields2 = get_maybe_remote_record_fields(Name, P2, TEnv),
     compat_record_fields(Fields1, Fields2, A, TEnv);
 
 compat_ty({type, _, record, _}, {type, _, tuple, any}, A, _TEnv) ->
@@ -320,7 +320,7 @@ all_type([Ty1|Tys], Ty, AIn, Css, TEnv) ->
     {AOut, Cs} = compat_ty(Ty1, Ty, AIn, TEnv),
     all_type(Tys, Ty, AOut, [Cs|Css], TEnv).
 
-get_record_fields(RecName, Anno, #tenv{records = REnv}) ->
+get_maybe_remote_record_fields(RecName, Anno, TEnv) ->
     case typelib:get_module_from_annotation(Anno) of
         {ok, Module} ->
             %% A record type in another module, from an expanded remote type
@@ -328,16 +328,19 @@ get_record_fields(RecName, Anno, #tenv{records = REnv}) ->
                 {ok, TypedRecordFields} ->
                     TypedRecordFields;
                 not_found ->
-                    throw({undef, record, {Module, RecName}})
+                    throw({undef, record, Anno, {Module, RecName}})
             end;
         none ->
             %% Local record type
-            case REnv of
-                #{RecName := Fields} ->
-                    Fields;
-                _NotFound ->
-                    throw({undef, record, RecName})
-            end
+            get_record_fields(RecName, Anno, TEnv)
+    end.
+
+get_record_fields(RecName, Anno, #tenv{records = REnv}) ->
+    case REnv of
+        #{RecName := Fields} ->
+            Fields;
+        _NotFound ->
+            throw({undef, record, Anno, RecName})
     end.
 
 %% Greatest lower bound
@@ -1403,27 +1406,27 @@ type_check_expr(Env, {map, _, Expr, Assocs}) ->
     {MapTy, union_var_binds(VBExpr, VBAssocs, Env#env.tenv), constraints:combine(Cs1, Cs2)};
 
 %% Records
-type_check_expr(Env, {record_field, _P, Expr, Record, {atom, _, Field}}) ->
+type_check_expr(Env, {record_field, Anno, Expr, Record, FieldWithAnno}) ->
     {VB, Cs} = type_check_expr_in(Env, {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Record}]}, Expr),
-    Rec = maps:get(Record, Env#env.tenv#tenv.records),
-    Ty = get_rec_field_type(Field, Rec),
+    Rec = get_record_fields(Record, Anno, Env#env.tenv),
+    Ty = get_rec_field_type(FieldWithAnno, Rec),
     {Ty, VB, Cs};
-type_check_expr(Env, {record, _, Expr, Record, Fields}) ->
+type_check_expr(Env, {record, Anno, Expr, Record, Fields}) ->
     RecTy = {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Record}]},
     {VB1, Cs1} = type_check_expr_in(Env, RecTy, Expr),
-    Rec = maps:get(Record, Env#env.tenv#tenv.records),
+    Rec = get_record_fields(Record, Anno, Env#env.tenv),
     {VB2, Cs2} = type_check_fields(Env, Rec, Fields),
     {RecTy, union_var_binds(VB1, VB2, Env#env.tenv), constraints:combine(Cs1, Cs2)};
-type_check_expr(Env, {record, _, Record, Fields}) ->
+type_check_expr(Env, {record, Anno, Record, Fields}) ->
     RecTy    = {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Record}]},
-    Rec      = maps:get(Record, Env#env.tenv#tenv.records),
+    Rec      = get_record_fields(Record, Anno, Env#env.tenv),
     {VB, Cs} = type_check_fields(Env, Rec, Fields),
     {RecTy, VB, Cs};
-type_check_expr(Env, {record_index, Anno, Name, {atom, _, Field}}) ->
+type_check_expr(Env, {record_index, Anno, Name, FieldWithAnno}) ->
     case Env#env.infer of
         true ->
             RecFields = get_record_fields(Name, Anno, Env#env.tenv),
-            Index = get_rec_field_index(Field, RecFields),
+            Index = get_rec_field_index(FieldWithAnno, RecFields),
             return({integer, erl_anno:new(0), Index});
         false ->
             return(type(any))
@@ -1602,9 +1605,9 @@ type_check_fields(Env, Rec, Fields) ->
     UnAssignedFields = get_unassigned_fields(Fields, Rec),
     type_check_fields(Env, Rec, Fields, UnAssignedFields).
 
-type_check_fields(Env, Rec, [{record_field, _, {atom, _, Field}, Expr} | Fields]
+type_check_fields(Env, Rec, [{record_field, _, {atom, _, _} = FieldWithAnno, Expr} | Fields]
                  ,UnAssignedFields) ->
-    FieldTy = get_rec_field_type(Field, Rec),
+    FieldTy = get_rec_field_type(FieldWithAnno, Rec),
     {VB1, Cs1} = type_check_expr_in(Env, FieldTy, Expr),
     {VB2, Cs2} = type_check_fields(Env, Rec, Fields, UnAssignedFields),
     {union_var_binds(VB1, VB2, Env#env.tenv), constraints:combine(Cs1,Cs2)};
@@ -2061,8 +2064,8 @@ do_type_check_expr_in(Env, ResTy, {map, _, Expr, Assocs} = Map) ->
     end;
 
 %% Records
-do_type_check_expr_in(Env, ResTy, {record, _, Name, Fields} = Record) ->
-    Rec = maps:get(Name, Env#env.tenv#tenv.records),
+do_type_check_expr_in(Env, ResTy, {record, Anno, Name, Fields} = Record) ->
+    Rec = get_record_fields(Name, Anno, Env#env.tenv),
     case expect_record_type(Name, ResTy, Env#env.tenv) of
       type_error ->
             throw({type_error,
@@ -2073,7 +2076,7 @@ do_type_check_expr_in(Env, ResTy, {record, _, Name, Fields} = Record) ->
             {VarBinds, Cs2} = type_check_fields(Env, Rec, Fields),
             {VarBinds, constraints:combine(Cs1, Cs2)}
     end;
-do_type_check_expr_in(Env, ResTy, {record, _, Exp, Name, Fields} = Record) ->
+do_type_check_expr_in(Env, ResTy, {record, Anno, Exp, Name, Fields} = Record) ->
     RecordTy = {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Name}]},
     case expect_record_type(Name, ResTy, Env#env.tenv) of
       type_error ->
@@ -2082,11 +2085,11 @@ do_type_check_expr_in(Env, ResTy, {record, _, Exp, Name, Fields} = Record) ->
                type(record, [{atom, erl_anno:new(0), Name}]),
                ResTy});
       {ok, Cs1} ->
-            Rec = maps:get(Name, Env#env.tenv#tenv.records),
+            Rec = get_record_fields(Name, Anno, Env#env.tenv),
             {VarBindsList, Css}
                 = lists:unzip(
-                    lists:map(fun ({record_field, _, {atom, _, Field}, Expr}) ->
-                                      FieldTy = get_rec_field_type(Field, Rec),
+                    lists:map(fun ({record_field, _, FieldWithAnno, Expr}) ->
+                                      FieldTy = get_rec_field_type(FieldWithAnno, Rec),
                                       type_check_expr_in(Env, FieldTy, Expr)
                               end
                              ,Fields)
@@ -2095,9 +2098,9 @@ do_type_check_expr_in(Env, ResTy, {record, _, Exp, Name, Fields} = Record) ->
             {union_var_binds([VarBinds|VarBindsList], Env#env.tenv)
             ,constraints:combine([Cs1, Cs2|Css])}
     end;
-do_type_check_expr_in(Env, ResTy, {record_field, _, Expr, Name, {atom, _, Field}} = RecordField) ->
-    Rec = maps:get(Name, Env#env.tenv#tenv.records),
-    FieldTy = get_rec_field_type(Field, Rec),
+do_type_check_expr_in(Env, ResTy, {record_field, Anno, Expr, Name, FieldWithAnno} = RecordField) ->
+    Rec = get_record_fields(Name, Anno, Env#env.tenv),
+    FieldTy = get_rec_field_type(FieldWithAnno, Rec),
     case subtype(FieldTy, ResTy, Env#env.tenv) of
         {true, Cs1} ->
             RecTy = {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Name}]},
@@ -2106,9 +2109,9 @@ do_type_check_expr_in(Env, ResTy, {record_field, _, Expr, Name, {atom, _, Field}
         false ->
             throw({type_error, RecordField, FieldTy, ResTy})
     end;
-do_type_check_expr_in(Env, ResTy, {record_index, Anno, Name, {atom, _, Field}} = RecIndex) ->
+do_type_check_expr_in(Env, ResTy, {record_index, Anno, Name, FieldWithAnno} = RecIndex) ->
     RecFields = get_record_fields(Name, Anno, Env#env.tenv),
-    Index = get_rec_field_index(Field, RecFields),
+    Index = get_rec_field_index(FieldWithAnno, RecFields),
     IndexTy = {integer, erl_anno:new(0), Index},
     case subtype(IndexTy, ResTy, Env#env.tenv) of
         {true, Cs} ->
@@ -3408,9 +3411,10 @@ add_type_pat(Pat, Ty, _TEnv, _VEnv) ->
 
 add_type_pat_fields([], _, _TEnv, VEnv) ->
     ret(VEnv);
-add_type_pat_fields([{record_field, _, {atom, _, Field}, Pat}|Fields], Record, TEnv, VEnv) ->
-    Rec = maps:get(Record, TEnv#tenv.records),
-    FieldTy = get_rec_field_type(Field, Rec),
+add_type_pat_fields([{record_field, Anno, {atom, _, _} = FieldWithAnno, Pat}|Fields],
+                    Record, TEnv, VEnv) ->
+    Rec = get_record_fields(Record, Anno, TEnv),
+    FieldTy = get_rec_field_type(FieldWithAnno, Rec),
     {_TyPat, _UBound, VEnv2, Cs1} = add_type_pat(Pat, FieldTy, TEnv, VEnv),
     {VEnv3, Cs2} = add_type_pat_fields(Fields, Record, TEnv, VEnv2),
     {VEnv3, constraints:combine(Cs1, Cs2)}.
@@ -3610,25 +3614,24 @@ add_var_binds(VEnv, VarBinds, TEnv) ->
     Glb = fun(_K, S, T) -> glb(S, T, TEnv) end,
     gradualizer_lib:merge_with(Glb, VEnv, VarBinds).
 
-get_rec_field_type(FieldName, RecFields) ->
+get_rec_field_type(FieldWithAnno, RecFields) ->
     %% The first field is the second element of the tuple - so start from 2
-    {_Index, Ty} = get_rec_field_index_and_type(FieldName, RecFields, 2),
+    {_Index, Ty} = get_rec_field_index_and_type(FieldWithAnno, RecFields, 2),
     Ty.
 
-get_rec_field_index(FieldName, RecFields) ->
+get_rec_field_index(FieldWithAnno, RecFields) ->
     %% The first field is the second element of the tuple - so start from 2
-    {Index, _Ty} = get_rec_field_index_and_type(FieldName, RecFields, 2),
+    {Index, _Ty} = get_rec_field_index_and_type(FieldWithAnno, RecFields, 2),
     Index.
 
-get_rec_field_index_and_type(FieldName,
+get_rec_field_index_and_type({atom, _, FieldName},
                    [{typed_record_field,
-                     {record_field, _,
-                      {atom, _, FieldName}, _}, Ty}|_], I) ->
+                     {record_field, _, {atom, _, FieldName}, _}, Ty}|_], I) ->
     {I, Ty};
-get_rec_field_index_and_type(FieldName, [_|RecFieldTypes], I) ->
-    get_rec_field_index_and_type(FieldName, RecFieldTypes, I + 1);
-get_rec_field_index_and_type(FieldName, [], _) ->
-    throw({error, {record_field_not_found, FieldName}}).
+get_rec_field_index_and_type(FieldWithAnno, [_|RecFieldTypes], I) ->
+    get_rec_field_index_and_type(FieldWithAnno, RecFieldTypes, I + 1);
+get_rec_field_index_and_type(FieldWithAnno, [], _) ->
+    throw({undef, record_field, FieldWithAnno}).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% Main entry point
@@ -3794,12 +3797,15 @@ handle_type_error({call_undef, LINE, Func, Arity}) ->
 handle_type_error({call_undef, LINE, Module, Func, Arity}) ->
     io:format("Call to undefined function ~p:~p/~p on line ~p~n",
               [Module, Func, Arity, LINE]);
-handle_type_error({undef, record, {{atom, LINE, Module}, {atom, _, RecName}}}) ->
+handle_type_error({undef, record, Anno, {Module, RecName}}) ->
     io:format("Undefined record ~p:~p on line ~p~n",
-              [Module, RecName, LINE]);
-handle_type_error({undef, record, {atom, LINE, RecName}}) ->
+              [Module, RecName, erl_anno:line(Anno)]);
+handle_type_error({undef, record, Anno, RecName}) ->
     io:format("Undefined record ~p on line ~p~n",
-              [RecName, LINE]);
+              [RecName, erl_anno:line(Anno)]);
+handle_type_error({undef, record_field, FieldName}) ->
+    io:format("Undefined record field ~s on line ~p~n",
+              [erl_pp:expr(FieldName), line_no(FieldName)]);
 handle_type_error({undef, Type, {{atom, LINE, Module}, {atom, _, Name}, Arity}})
   when Type =:= user_type; Type =:= remote_type ->
     io:format("Undefined ~p ~p:~p/~p on line ~p~n",
