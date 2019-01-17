@@ -1,6 +1,6 @@
 -module(named_fun).
 
--compile([export_all, nowarn_export_all]).
+-export([bar/0]).
 
 -spec foo(integer()) -> integer().
 foo(N) -> N.
