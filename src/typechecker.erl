@@ -3895,7 +3895,7 @@ handle_type_error({type_error, list_op_error, ListOp, P, Ty, _}) ->
 handle_type_error({type_error, {map, _, _} = Map, ActualType, ExpectedType}) ->
     print_type_error("map", Map, ActualType, ExpectedType);
 handle_type_error({type_error, {map, _, _, _} = Map, ActualType, ExpectedType}) ->
-    print_type_error("map", Map, ActualType, ExpectedType);
+    print_type_error("map update", Map, ActualType, ExpectedType);
 handle_type_error({type_error, operator_pattern, P, Expr, Ty}) ->
     io:format("The operator pattern ~s on line ~p is expected to have type "
               "~s~n"
