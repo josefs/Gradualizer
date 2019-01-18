@@ -1930,12 +1930,12 @@ do_type_check_expr_in(Env, Ty, {match, _, Pat, Expr}) ->
     {_PatTy, _UBound, NewVEnv, Cs2} =
         add_type_pat(Pat, Ty, Env#env.tenv, Env#env.venv),
     {union_var_binds(VarBinds, NewVEnv, Env#env.tenv), constraints:combine(Cs, Cs2)};
-do_type_check_expr_in(Env, Ty, I = {integer, LINE, Int}) ->
+do_type_check_expr_in(Env, Ty, I = {integer, _, _}) ->
     case subtype(I, Ty, Env#env.tenv) of
         {true, Cs} ->
             {#{}, Cs};
         false ->
-            throw({type_error, int, Int, LINE, Ty})
+            throw({type_error, I, I, Ty})
     end;
 do_type_check_expr_in(Env, Ty, {float, _, _} = Float) ->
     ExpectedType = type(float),
@@ -3757,9 +3757,6 @@ handle_type_error({undef, user_type, LINE, {Name, Arity}}) ->
 handle_type_error({not_exported, remote_type, {{atom, LINE, _} = Module, Name, Arity}}) ->
     io:format("The type ~s:~s/~p on line ~p is not exported~n",
               [erl_pp:expr(Module), erl_pp:expr(Name), Arity, LINE]);
-handle_type_error({type_error, int, I, LINE, Ty}) ->
-    io:format("The integer ~p on line ~p does not have type ~s~n",
-              [I, LINE, typelib:pp_type(Ty)]);
 handle_type_error({type_error, compat, _LINE, Ty1, Ty2}) ->
     io:format("The type ~s is not compatible with type ~s~n"
              ,[typelib:pp_type(Ty1), typelib:pp_type(Ty2)]);
@@ -3957,6 +3954,7 @@ describe_expr({char, _, _})               -> "character";
 describe_expr({cons, _, _, _})            -> "list";
 describe_expr({float, _, _})              -> "float";
 describe_expr({'fun', _, _})              -> "function expression";
+describe_expr({integer, _, _})       -> "integer";
 describe_expr({map, _, _})                -> "map";
 describe_expr({map, _, _, _} )            -> "map update";
 describe_expr({named_fun, _, _, _})       -> "function expression";
