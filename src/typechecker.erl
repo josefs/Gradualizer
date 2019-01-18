@@ -1944,12 +1944,12 @@ do_type_check_expr_in(Env, Ty, {float, LINE, F}) ->
         false ->
             throw({type_error, float, F, LINE, Ty})
     end;
-do_type_check_expr_in(Env, Ty, Atom = {atom, LINE, _}) ->
+do_type_check_expr_in(Env, Ty, Atom = {atom, _, _}) ->
     case subtype(Atom, Ty, Env#env.tenv) of
         {true, Cs} ->
             {#{}, Cs};
         false ->
-            throw({type_error, Atom, LINE, Ty})
+            throw({type_error, Atom, Atom, Ty})
     end;
 do_type_check_expr_in(Env, Ty, Char = {char, _, _}) ->
     case subtype(Char, Ty, Env#env.tenv) of
@@ -3731,6 +3731,9 @@ number_of_exported_functions(Forms) ->
         false -> length(ParseData#parsedata.exports)
     end.
 
+handle_type_error({type_error, Expression, ActualType, ExpectedType})
+  when is_tuple(Expression) ->
+    print_type_error(Expression, ActualType, ExpectedType);
 handle_type_error({call_undef, LINE, Func, Arity}) ->
     io:format("Call to undefined function ~p/~p on line ~p~n",
               [Func, Arity, LINE]);
@@ -3753,15 +3756,6 @@ handle_type_error({undef, user_type, LINE, {Name, Arity}}) ->
 handle_type_error({not_exported, remote_type, {{atom, LINE, _} = Module, Name, Arity}}) ->
     io:format("The type ~s:~s/~p on line ~p is not exported~n",
               [erl_pp:expr(Module), erl_pp:expr(Name), Arity, LINE]);
-handle_type_error({type_error, {var, _, _} = Var, ActualType, ExpectedType}) ->
-    print_type_error("variable", Var, ActualType, ExpectedType);
-handle_type_error({type_error, {char, _, _} = Char, ActualType, ExpectedType}) ->
-    print_type_error("character", Char, ActualType, ExpectedType);
-handle_type_error({type_error, {atom, _, A}, LINE, Ty}) ->
-    io:format("The atom ~p on line ~p does not have type ~s~n",
-              [A, LINE, typelib:pp_type(Ty)]);
-handle_type_error({type_error, {string, _, _} = String, ActualType, ExpectedType}) ->
-    print_type_error("string", String, ActualType, ExpectedType);
 handle_type_error({type_error, int, I, LINE, Ty}) ->
     io:format("The integer ~p on line ~p does not have type ~s~n",
               [I, LINE, typelib:pp_type(Ty)]);
@@ -3780,10 +3774,6 @@ handle_type_error({type_error, list, LINE, Ty}) ->
 handle_type_error({type_error, cons_pat, P, Cons, Ty}) ->
     io:format("The pattern ~s on line ~p does not have type:~n~s~n"
              ,[erl_pp:expr(Cons),P, typelib:pp_type(Ty)]);
-handle_type_error({type_error, {cons, _, _, _} = Cons, ActualType, ExpectedType}) ->
-    print_type_error("list", Cons, ActualType, ExpectedType);
-handle_type_error({type_error, {nil, _} = Nil, ActualType, ExpectedType}) ->
-    print_type_error("empty list", Nil, ActualType, ExpectedType);
 handle_type_error({argument_length_mismatch, P, LenTy, LenArgs}) ->
     io:format("The clause on line ~p is expected to have ~p argument(s) "
               "but it has ~p~n ",
@@ -3892,10 +3882,6 @@ handle_type_error({type_error, list_op_error, ListOp, P, Ty, _}) ->
     io:format("The operator ~p on line ~p is given an argument "
               "with a non-list type ~s~n",
               [ListOp, P, typelib:pp_type(Ty)]);
-handle_type_error({type_error, {map, _, _} = Map, ActualType, ExpectedType}) ->
-    print_type_error("map", Map, ActualType, ExpectedType);
-handle_type_error({type_error, {map, _, _, _} = Map, ActualType, ExpectedType}) ->
-    print_type_error("map update", Map, ActualType, ExpectedType);
 handle_type_error({type_error, operator_pattern, P, Expr, Ty}) ->
     io:format("The operator pattern ~s on line ~p is expected to have type "
               "~s~n"
@@ -3911,8 +3897,6 @@ handle_type_error({type_error, tuple, LINE, Ty}) ->
               [LINE, typelib:pp_type(Ty)]);
 handle_type_error({unknown_variable, P, Var}) ->
     io:format("Unknown variable ~p on line ~p.~n", [Var, P]);
-handle_type_error({type_error, {bin, _, _} = Bin, ActualType, ExpectedType}) ->
-    print_type_error("bit expression", Bin, ActualType, ExpectedType);
 handle_type_error({type_error, bit_type, Expr, P, Ty1, Ty2}) ->
     io:format("The expression ~s inside the bit expression on line ~p has type ~s "
               "but the type specifier indicates ~s~n",
@@ -3933,14 +3917,6 @@ handle_type_error({type_error, bc, P, Expr, Ty}) ->
 handle_type_error({type_error, check_clauses}) ->
     %%% TODO: Improve quality of type error
     io:format("Type error in clauses");
-handle_type_error({type_error, {record, _, _, _} = Rec, ActualType, ExpectedType}) ->
-    print_type_error("record", Rec, ActualType, ExpectedType);
-handle_type_error({type_error, {record, _, _, _, _} = Rec, ActualType, ExpectedType}) ->
-    print_type_error("record update", Rec, ActualType, ExpectedType);
-handle_type_error({type_error, {record_field, _, _, _, _} = Field, ActualType, ExpectedType}) ->
-    print_type_error("record field", Field, ActualType, ExpectedType);
-handle_type_error({type_error, {record_index, _, _, _} = Index, ActualType, ExpectedType}) ->
-    print_type_error("record index", Index, ActualType, ExpectedType);
 handle_type_error({type_error, record_pattern, P, Record, Ty}) ->
     io:format("The record patterns for record #~p on line ~p is expected to have"
               " type ~s.~n"
@@ -3965,10 +3941,6 @@ handle_type_error({type_error, lc, P, Ty}) ->
 handle_type_error({type_error, bc, P, Ty}) ->
     io:format("The binary comprehension at line ~p is expected to have type "
               "~s which has no binary subtypes~n", [P, typelib:pp_type(Ty)]);
-handle_type_error({type_error, {named_fun, _, _, _} = Fun, ActualType, ExpectedType}) ->
-    print_type_error("function expression", Fun, ActualType, ExpectedType);
-handle_type_error({type_error, {'fun', _, _} = Fun, ActualType, ExpectedType}) ->
-    print_type_error("function expression", Fun, ActualType, ExpectedType);
 handle_type_error({type_error, cyclic_type_vars, _P, Ty, Xs}) ->
     io:format("The type spec ~s has a cyclic dependency in variable~s ~s~n",
               [typelib:pp_type(Ty),
@@ -3980,14 +3952,31 @@ handle_type_error({type_error, mismatch, Ty, Expr}) ->
 handle_type_error(type_error) ->
     io:format("TYPE ERROR~n").
 
--spec print_type_error(string(),
-                       erl_parse:abstract_expr(),
+-spec describe_expr(erl_parse:abstract_expr()) -> string().
+describe_expr({atom, _, _})               -> "atom";
+describe_expr({bin, _, _})                -> "bit expression";
+describe_expr({char, _, _})               -> "character";
+describe_expr({cons, _, _, _})            -> "list";
+describe_expr({'fun', _, _})              -> "function expression";
+describe_expr({map, _, _})                -> "map";
+describe_expr({map, _, _, _} )            -> "map update";
+describe_expr({named_fun, _, _, _})       -> "function expression";
+describe_expr({nil, _})                   -> "empty list";
+describe_expr({record, _, _, _})          -> "record";
+describe_expr({record, _, _, _, _})       -> "record update";
+describe_expr({record_field, _, _, _, _}) -> "record field";
+describe_expr({record_index, _, _, _})    -> "record index";
+describe_expr({string, _, _})             -> "string";
+describe_expr({var, _, _})                -> "variable";
+describe_expr(_) -> "expression".
+
+-spec print_type_error(erl_parse:abstract_expr(),
                        typelib:extended_type(),
                        typelib:extended_type()) -> ok.
-print_type_error(Explanation, Expression, ActualType, ExpectedType) ->
+print_type_error(Expression, ActualType, ExpectedType) ->
     io:format("The ~s ~s on line ~p is expected "
               "to have type ~s but it has type ~s~n",
-              [Explanation,
+              [describe_expr(Expression),
                erl_pp:expr(Expression),
                line_no(Expression),
                typelib:pp_type(ExpectedType),
