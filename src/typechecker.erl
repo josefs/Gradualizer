@@ -1937,12 +1937,13 @@ do_type_check_expr_in(Env, Ty, I = {integer, LINE, Int}) ->
         false ->
             throw({type_error, int, Int, LINE, Ty})
     end;
-do_type_check_expr_in(Env, Ty, {float, LINE, F}) ->
-    case subtype({type, LINE, float, []}, Ty, Env#env.tenv) of
+do_type_check_expr_in(Env, Ty, {float, _, _} = Float) ->
+    ExpectedType = type(float),
+    case subtype(ExpectedType, Ty, Env#env.tenv) of
         {true, Cs} ->
             {#{}, Cs};
         false ->
-            throw({type_error, float, F, LINE, Ty})
+            throw({type_error, Float, ExpectedType, Ty})
     end;
 do_type_check_expr_in(Env, Ty, Atom = {atom, _, _}) ->
     case subtype(Atom, Ty, Env#env.tenv) of
@@ -3759,9 +3760,6 @@ handle_type_error({not_exported, remote_type, {{atom, LINE, _} = Module, Name, A
 handle_type_error({type_error, int, I, LINE, Ty}) ->
     io:format("The integer ~p on line ~p does not have type ~s~n",
               [I, LINE, typelib:pp_type(Ty)]);
-handle_type_error({type_error, float, F, LINE, Ty}) ->
-    io:format("The float ~p on line ~p does not have type ~s~n",
-              [F, LINE, typelib:pp_type(Ty)]);
 handle_type_error({type_error, compat, _LINE, Ty1, Ty2}) ->
     io:format("The type ~s is not compatible with type ~s~n"
              ,[typelib:pp_type(Ty1), typelib:pp_type(Ty2)]);
@@ -3957,6 +3955,7 @@ describe_expr({atom, _, _})               -> "atom";
 describe_expr({bin, _, _})                -> "bit expression";
 describe_expr({char, _, _})               -> "character";
 describe_expr({cons, _, _, _})            -> "list";
+describe_expr({float, _, _})              -> "float";
 describe_expr({'fun', _, _})              -> "function expression";
 describe_expr({map, _, _})                -> "map";
 describe_expr({map, _, _, _} )            -> "map update";
