@@ -484,12 +484,24 @@ type_check_clause_test_() ->
                                    "h() ->",
                                    "    fun() -> ok end."]))
     ].
+
 add_type_pat_test_() ->
     [{"Pattern matching list against any()",
       ?_assert(type_check_forms(["f([E|_]) -> E."]))},
      {"Pattern matching record against any()",
       ?_assert(type_check_forms(["-record(f, {r}).",
                                  "f(#r{f = F}) -> F."]))}
+    ].
+
+%% it is the responsibility of the compiler to catch undefined records
+%% but to improve code coverage we test them quickly.
+%% Gradualizer should not crash but return error nicely
+undefined_records_test_() ->
+    [?_assertNot(type_check_forms(["-spec f() -> term().",
+                                   "f() -> #r{f = 1}."])),
+     ?_assertNot(type_check_forms(["-record(r, {f1}).",
+                                   "-spec f() -> term().",
+                                   "f() -> #r{f2 = 1}."]))
     ].
 
 subtype(T1, T2) ->
