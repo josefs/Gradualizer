@@ -8,6 +8,6 @@
 f() ->
     #rec.apa.
 
--spec g() -> 2.
+-spec g() -> 3.
 g() ->
     #rec.apa.
