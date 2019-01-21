@@ -21,13 +21,38 @@
 
 -spec get_forms_from_erl(file:filename()) -> parsed_file() | parsed_file_error().
 get_forms_from_erl(File) ->
-    case epp:parse_file(File, []) of
+    case epp_parse_file(File) of
         {ok, Forms} ->
             {ok, Forms};
         {error, enoent} ->
             {file_not_found, File};
         {error, Reason} ->
             {file_open_error, {Reason, File}}
+    end.
+
+%% @doc Preprocess and parse a file including column numbers in the result
+epp_parse_file(File) ->
+    case file:open(File, [read]) of
+        {ok, Fd} ->
+            try
+                StartLocation = {1, 1},
+                case epp:open(File, Fd, StartLocation, [], []) of
+                    {ok, Epp} ->
+                        %% The undocumented `epp:parse_file/1' just
+                        %% takes an internal state, and calls the
+                        %% documented `epp:parse_erl_forms/1' in a
+                        %% loop.
+                        Forms = epp:parse_file(Epp),
+                        epp:close(Epp),
+                        {ok, Forms};
+                    Error2 ->
+                        Error2
+                end
+            after
+                file:close(Fd)
+            end;
+        Error1 ->
+            Error1
     end.
 
 %% Accepts a filename or the beam code as a binary
