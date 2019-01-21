@@ -3953,11 +3953,11 @@ describe_expr({bin, _, _})                -> "bit expression";
 describe_expr({char, _, _})               -> "character";
 describe_expr({cons, _, _, _})            -> "list";
 describe_expr({float, _, _})              -> "float";
-describe_expr({'fun', _, _})              -> "function expression";
-describe_expr({integer, _, _})       -> "integer";
+describe_expr({'fun', _, _})              -> "fun";
+describe_expr({integer, _, _})            -> "integer";
 describe_expr({map, _, _})                -> "map";
 describe_expr({map, _, _, _} )            -> "map update";
-describe_expr({named_fun, _, _, _})       -> "function expression";
+describe_expr({named_fun, _, _, _})       -> "named fun";
 describe_expr({nil, _})                   -> "empty list";
 describe_expr({record, _, _, _})          -> "record";
 describe_expr({record, _, _, _, _})       -> "record update";
@@ -3965,7 +3965,7 @@ describe_expr({record_field, _, _, _, _}) -> "record field";
 describe_expr({record_index, _, _, _})    -> "record index";
 describe_expr({string, _, _})             -> "string";
 describe_expr({var, _, _})                -> "variable";
-describe_expr(_) -> "expression".
+describe_expr(_)                          -> "expression".
 
 -spec print_type_error(erl_parse:abstract_expr(),
                        typelib:extended_type(),
