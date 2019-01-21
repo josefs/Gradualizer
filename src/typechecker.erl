@@ -3991,11 +3991,12 @@ describe_expr(_)                          -> "expression".
                        typelib:extended_type(),
                        typelib:extended_type()) -> ok.
 print_type_error(Expression, ActualType, ExpectedType) ->
-    io:format("The ~s ~s on line ~p is expected "
+    io:format("The ~s ~s on line ~p~s is expected "
               "to have type ~s but it has type ~s~n",
               [describe_expr(Expression),
                erl_pp:expr(Expression),
                line_no(Expression),
+               maybe_format_column(Expression),
                typelib:pp_type(ExpectedType),
                typelib:pp_type(ActualType)]).
 
@@ -4010,8 +4011,16 @@ pp_intersection_type([Ty|Tys]) ->
 
 
 
-line_no(Ty) ->
-    erl_anno:line(element(2,Ty)).
+line_no(Expr) ->
+    erl_anno:line(element(2, Expr)).
+
+maybe_format_column(Expr) ->
+    case erl_anno:column(element(2, Expr)) of
+        undefined ->
+            "";
+        Column ->
+            " at column " ++ integer_to_list(Column)
+    end.
 
 -spec gen_partition(integer(), list(tuple()), fun((tuple()) -> {integer(), term()} | false)) ->
                            tuple().
