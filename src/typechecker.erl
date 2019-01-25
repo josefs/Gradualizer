@@ -249,9 +249,12 @@ compat_ty({type, _, map, any}, {type, _, map, _Assocs}, A, _TEnv) ->
 compat_ty({type, _, map, _Assocs}, {type, _, map, any}, A, _TEnv) ->
     ret(A);
 compat_ty({type, _, map, Assocs1}, {type, _, map, Assocs2}, A, TEnv) ->
-    ret(lists:foldl(fun (Assoc2, As) ->
-                            any_type(Assoc2, Assocs1, As, TEnv)
-                    end, A, Assocs2));
+    lists:foldl(fun (Assoc2, {As, Cs1}) ->
+			begin
+			    {Ax, Cs2} = any_type(Assoc2, Assocs1, As, TEnv),
+			    {Ax, constraints:combine(Cs1, Cs2)}
+			end
+		end, ret(A), Assocs2);
 compat_ty({type, _, AssocTag2, [Key2, Val2]},
           {type, _, AssocTag1, [Key1, Val1]}, A, TEnv)
         when AssocTag2 == map_field_assoc, AssocTag1 == map_field_assoc;
@@ -299,7 +302,7 @@ any_type(_Ty, [], _A, _TEnv) ->
     throw(nomatch);
 any_type(Ty, [Ty1|Tys], A, TEnv) ->
     try
-        compat_ty(Ty, Ty1, A, TEnv)
+        compat(Ty, Ty1, A, TEnv)
     catch
         nomatch ->
             any_type(Ty, Tys, A, TEnv)
@@ -1389,13 +1392,15 @@ type_check_expr(#env{infer = true}, {char, _, _C} = Char) ->
 
 %% Maps
 type_check_expr(Env, {map, _, Assocs}) ->
-    type_check_assocs(Env, Assocs);
+    {_AssocTys, VB, Cs} = type_check_assocs(Env, Assocs),
+    % TODO: When the --infer flag is set we should return the type of the map
+    {type(any), VB, Cs};
 type_check_expr(Env, {map, _, Expr, Assocs}) ->
-    {Ty, VBExpr,   Cs1} = type_check_expr(Env, Expr),
-    {_AssocTy, VBAssocs, Cs2} = type_check_assocs(Env, Assocs),
-    % TODO: Update the type of the map.
+    {Ty, VBExpr, Cs1} = type_check_expr(Env, Expr),
+    {AssocTys, VBAssocs, Cs2} = type_check_assocs(Env, Assocs),
+    MapTy = update_map_type(Ty, AssocTys),
     % TODO: Check the type of the map.
-    {Ty, union_var_binds(VBExpr, VBAssocs, Env#env.tenv), constraints:combine(Cs1, Cs2)};
+    {MapTy, union_var_binds(VBExpr, VBAssocs, Env#env.tenv), constraints:combine(Cs1, Cs2)};
 
 %% Records
 type_check_expr(Env, {record_field, _P, Expr, Record, {atom, _, Field}}) ->
@@ -2034,25 +2039,25 @@ do_type_check_expr_in(Env, ResTy, {tuple, LINE, TS}) ->
 
 %% Maps
 do_type_check_expr_in(Env, ResTy, {map, _, Assocs} = Map) ->
-    case subtype(ResTy, type(map, any), Env#env.tenv) of
+    {AssocTys, VBs, Cs2} = type_check_assocs(Env, Assocs),
+    _MapTy = update_map_type(type(map, any), AssocTys),
+    case subtype(type(map, any), ResTy, Env#env.tenv) of
         {true, Cs1} ->
-            %% TODO: check the type of the map fields
-            {_AssocTy, VBs, Cs2} = type_check_assocs(Env, Assocs),
             {VBs, constraints:combine(Cs1, Cs2)};
         false ->
-            throw({type_error, Map, type(map, any), ResTy})
+            throw({type_error, Map, type(map,any), ResTy})
     end;
 do_type_check_expr_in(Env, ResTy, {map, _, Expr, Assocs} = Map) ->
-    {Ty, VBExpr,   Cs1} = type_check_expr(Env, Expr),
-    {_AssocTy, VBAssocs, Cs2} = type_check_assocs(Env, Assocs),
-    % TODO: Update the type of the map.
-    % TODO: Check the type of the map.
-    case subtype(Ty, ResTy, Env#env.tenv) of
+    {Ty, VBExpr, Cs1} = type_check_expr(Env, Expr),
+    {AssocTys, VBAssocs, Cs2} = type_check_assocs(Env, Assocs),
+    UpdatedTy = update_map_type(Ty, AssocTys),
+    io:format("update-map: ~p~n~p~n~p~n", [AssocTys, UpdatedTy, ResTy]),
+    case subtype(UpdatedTy, ResTy, Env#env.tenv) of
         {true, Cs3} ->
             {union_var_binds(VBExpr, VBAssocs, Env#env.tenv),
              constraints:combine([Cs1, Cs2, Cs3])};
         false ->
-            throw({type_error, Map, Ty, ResTy})
+            throw({type_error, Map, UpdatedTy, ResTy})
     end;
 
 %% Records
@@ -2623,15 +2628,43 @@ type_check_comprehension_in(Env, ResTy, Compr, Expr, P, [Pred | Quals]) ->
     {VB2, Cs2} = type_check_comprehension_in(Env, ResTy, Compr, Expr, P, Quals),
     {union_var_binds(VB1, VB2, Env#env.tenv), constraints:combine(Cs1, Cs2)}.
 
-type_check_assocs(Env, [{Assoc, _, Key, Val}| Assocs])
+% We use a special format for map associations here. We don't
+% put the Key and Value in a list because we want to be able to
+% search for the Key using listskeyfind/3 in update_assocs/2 below.
+type_check_assocs(Env, [{Assoc, P, Key, Val}| Assocs])
   when Assoc == map_field_assoc orelse Assoc == map_field_exact ->
-    {_KeyTy, _KeyVB, Cs1} = type_check_expr(Env, Key),
-    {_ValTy, _ValVB, Cs2} = type_check_expr(Env, Val),
-    % TODO
-    {Ty, VB, Cs} = type_check_assocs(Env, Assocs),
-    {Ty, VB, constraints:combine([Cs, Cs1, Cs2])};
+    {KeyTy, _KeyVB, Cs1} = type_check_expr(Env#env{infer = true}, Key),
+    {ValTy, _ValVB, Cs2} = type_check_expr(Env#env{infer = true}, Val),
+    {AssocTys, VB, Cs}   = type_check_assocs(Env, Assocs),
+    {[{type, P, Assoc, KeyTy, ValTy} | AssocTys], VB
+    ,constraints:combine([Cs, Cs1, Cs2])};
 type_check_assocs(_Env, []) ->
-    {type(any), #{}, constraints:empty()}.
+    {[], #{}, constraints:empty()}.
+
+update_map_type({type, _, Ty, Arg}, AssocTys)
+    when Ty == map, Arg == any;
+	 Ty == any, Arg == []
+	 ->
+    type(map, [{type, P, Assoc, [Key, ValueType]}
+	       || {type, P, Assoc, Key, ValueType} <- AssocTys ]);
+update_map_type({type, P, map, Assocs}, AssocTys) ->
+    UpdatedAssocs =
+	update_assocs(Assocs,
+		      lists:map(fun typelib:remove_pos/1, AssocTys)),
+    {type, P, map, UpdatedAssocs}.
+
+update_assocs([{type, P, Assoc, [Key, ValueType]} | Assocs],
+	      AssocTys) ->
+    NewType = case lists:keyfind(typelib:remove_pos(Key), 4, AssocTys) of
+		  false ->
+		      ValueType;
+		  {type, _P, _Assoc, _Key, New} ->
+		      New
+	      end,
+    NewTys = update_assocs(Assocs, AssocTys),
+    [{type, P, Assoc, [Key, NewType]} | NewTys];
+update_assocs([], _) ->
+    [].
 
 
 type_check_fun(Env, {atom, P, Name}, Arity) ->
@@ -3961,6 +3994,10 @@ handle_type_error({type_error, cyclic_type_vars, _P, Ty, Xs}) ->
               [typelib:pp_type(Ty),
                [ "s" || length(Xs) > 1 ],
                string:join(lists:map(fun atom_to_list/1, lists:sort(Xs)), ", ")]);
+handle_type_error({type_error, map, P, ResTy, MapTy}) ->
+    io:format("The map at line ~p is expected to have type:~n~s~n"
+	      "but has the type:~n~s~n",
+	      [P, typelib:pp_type(ResTy), typelib:pp_type(MapTy)]);
 handle_type_error({type_error, mismatch, Ty, Expr}) ->
     io:format("The expression ~s at line ~p does not have type ~s~n",
               [erl_pp:expr(Expr), erl_anno:line(element(2, Expr)), typelib:pp_type(Ty)]);

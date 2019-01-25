@@ -51,6 +51,7 @@ subtype_test_() ->
      ?_assert(subtype(?t( <<>>              ), ?t( bitstring()      ))),
      ?_assert(subtype(?t( <<_:4>>           ), ?t( <<_:_*2>>        ))),
      ?_assert(subtype(?t( <<_:6,_:_*4>>     ), ?t( <<_:4,_:_*2>>    ))),
+     ?_assert(subtype(?t( <<_:48>>          ), ?t( binary()         ))),
 
      %% Union
      ?_assert(subtype(?t( b                 ), ?t( a|b              ))),
