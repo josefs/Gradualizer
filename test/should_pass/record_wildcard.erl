@@ -1,6 +1,6 @@
 -module(record_wildcard).
 
--export([f/0, g/0]).
+-export([f/0, g/0, h/1]).
 
 -record(rec, {apa  = 1         :: integer()
              ,bepa = false     :: boolean()
@@ -15,3 +15,10 @@ f() ->
 g() ->
     #rec{ apa = 1
         , _   = true }.
+
+%% wildcard in pattern matching
+-spec h(#rec{}) -> boolean().
+h(#rec{apa = 1, _ = true}) ->
+    true;
+h(_) ->
+    false.

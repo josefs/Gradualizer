@@ -3417,6 +3417,13 @@ add_type_pat_fields([{record_field, Anno, {atom, _, _} = FieldWithAnno, Pat}|Fie
     FieldTy = get_rec_field_type(FieldWithAnno, Rec),
     {_TyPat, _UBound, VEnv2, Cs1} = add_type_pat(Pat, FieldTy, TEnv, VEnv),
     {VEnv3, Cs2} = add_type_pat_fields(Fields, Record, TEnv, VEnv2),
+    {VEnv3, constraints:combine(Cs1, Cs2)};
+add_type_pat_fields([{record_field, _, {var, _, '_'}, _Pat}|Fields],
+                    Record, TEnv, VEnv) ->
+    %% TODO check Pat against type of unassigned fields
+    {VEnv2, Cs1} = {VEnv, constraints:empty()},
+
+    {VEnv3, Cs2} = add_type_pat_fields(Fields, Record, TEnv, VEnv2),
     {VEnv3, constraints:combine(Cs1, Cs2)}.
 
 %% Given a pattern for a key, finds the matching association in the map type and
