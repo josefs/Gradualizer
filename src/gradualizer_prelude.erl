@@ -27,7 +27,7 @@
 
 -spec lists:dropwhile(fun((T) -> boolean()), [T]) -> [T].
 
--spec lists:duplicate(T, non_neg_integer()) -> [T].
+-spec lists:duplicate(non_neg_integer(), T) -> [T].
 
 -spec lists:filter(fun((T) -> boolean()), [T]) -> [T].
 -spec lists:filtermap(fun((Elem) -> boolean() | {'true', Value}), [Elem])

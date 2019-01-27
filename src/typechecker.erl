@@ -4072,7 +4072,8 @@ maybe_format_column(Expr) ->
             " at column " ++ integer_to_list(Column)
     end.
 
--spec gen_partition(integer(), list(tuple()), fun((tuple()) -> {integer(), term()} | false)) ->
+-spec gen_partition(pos_integer(), list(tuple()),
+                    fun((tuple()) -> {pos_integer(), term()} | false)) ->
                            tuple().
 
 gen_partition(N,List, Fun) ->
