@@ -30,6 +30,8 @@
 -spec lists:duplicate(T, non_neg_integer()) -> [T].
 
 -spec lists:filter(fun((T) -> boolean()), [T]) -> [T].
+-spec lists:filtermap(fun((Elem) -> boolean() | {'true', Value}), [Elem])
+		     -> [Elem | Value].
 
 -spec lists:flatmap(fun((A) -> [B]), [A]) -> [B].
 
