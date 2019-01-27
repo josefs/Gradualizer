@@ -31,7 +31,7 @@
 
 -spec lists:filter(fun((T) -> boolean() | {true, Value}), [T]) -> [T | Value].
 
--spec lists:flatmap(fun((A) -> B), [A]) -> [B].
+-spec lists:flatmap(fun((A) -> [B]), [A]) -> [B].
 
 -type deep_list(A) :: [A | deep_list(A)].
 
