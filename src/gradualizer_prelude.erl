@@ -39,7 +39,7 @@
 -spec lists:flatten(deep_list(A), [A]) -> [A].
 
 -spec lists:foldl(fun((T, Acc) -> Acc), Acc, [T]) -> Acc.
--spec lists:foldr(fun((T, Acc) -> Acc), [T], Acc) -> Acc.
+-spec lists:foldr(fun((T, Acc) -> Acc), Acc, [T]) -> Acc.
 -spec lists:join(T, [T]) -> [T].
 
 -spec lists:foreach(fun((T) -> term()), [T]) -> ok.
