@@ -29,7 +29,7 @@
 
 -spec lists:duplicate(T, non_neg_integer()) -> [T].
 
--spec lists:filter(fun((T) -> boolean() | {true, Value}), [T]) -> [T | Value].
+-spec lists:filter(fun((T) -> boolean()), [T]) -> [T].
 
 -spec lists:flatmap(fun((A) -> [B]), [A]) -> [B].
 
@@ -70,7 +70,7 @@
 -spec lists:sort([T]) -> [T].
 -spec lists:sort(fun((T, T) -> boolean()), [T]) -> [T].
 
--spec lists:split(integer(), [T]) -> {[T], [T]}.
+-spec lists:split(non_neg_integer(), [T]) -> {[T], [T]}.
 
 -spec lists:splitwith(fun((T) -> boolean()), [T]) -> {[T], [T]}.
 
