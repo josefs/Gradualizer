@@ -1689,33 +1689,48 @@ type_check_rel_op(Env, Op, P, Arg1, Arg2) ->
             end
     end.
 
-type_check_arith_op(Env, Op, P, Arg1, Arg2) ->
+type_check_arith_op(Env, _, _, Arg1, Arg2) ->
     {Ty1, VB1, Cs1} = type_check_expr(Env, Arg1),
     {Ty2, VB2, Cs2} = type_check_expr(Env, Arg2),
 
-    case compat_arith_type(Ty1,Ty2) of
-        false ->
-          throw({type_error, arith_error, Op, P, Ty1, Ty2});
-        Ty ->
-            {Ty
-            ,union_var_binds(VB1, VB2, Env#env.tenv)
-            ,constraints:combine(Cs1, Cs2)}
-    end.
+    TNumber = type(number),
+    TFloat = type(float),
+    expect_expr_subtype(Arg1, Ty1, TNumber, #tenv{}),
+    expect_expr_subtype(Arg2, Ty2, TNumber, #tenv{}),
 
-type_check_int_op(Env, Op, P, Arg1, Arg2) ->
+    Ty = case {Ty1, Ty2, Env#env.infer} of
+             {{type, _, any, _}, _, false} -> type(any);
+             {_, {type, _, any, _}, false} -> type(any);
+             {_, {type, _, any, _}, true} -> TFloat;
+             {{type, _, any, _}, _, true} -> TFloat;
+             _ ->
+                 case {subtype(Ty1, TFloat, #tenv{}),
+                       subtype(Ty2, TFloat, #tenv{})} of
+                     {{true, _}, _} -> TFloat;
+                     {_, {true, _}} -> TFloat;
+                     _              -> type(integer)
+                 end
+         end,
+    {Ty,
+     union_var_binds(VB1, VB2, Env#env.tenv),
+     constraints:combine(Cs1, Cs2)}.
+
+type_check_int_op(Env, _, _, Arg1, Arg2) ->
     {Ty1, VB1, Cs1} = type_check_expr(Env, Arg1),
     {Ty2, VB2, Cs2} = type_check_expr(Env, Arg2),
 
-    case compat_arith_type(Ty1,Ty2) of
-        false ->
-            throw({type_error, int_error, Op, P, Ty1, Ty2});
-        {type, _, Ty, []} when Ty == float orelse Ty == number ->
-            throw({type_error, int_error, Op, P, Ty1, Ty2});
-        Ty ->
-            {Ty
-            ,union_var_binds(VB1, VB2, Env#env.tenv)
-            ,constraints:combine(Cs1, Cs2)}
-    end.
+    TInteger = type(integer),
+    expect_expr_subtype(Arg1, Ty1, TInteger, #tenv{}),
+    expect_expr_subtype(Arg2, Ty2, TInteger, #tenv{}),
+
+    Ty = case {Ty1, Ty2, Env#env.infer} of
+        {{type, _, any, []}, _, false} -> type(any);
+        {_, {type, _, any, []}, false} -> type(any);
+        _                              -> TInteger
+    end,
+    {Ty,
+     union_var_binds(VB1, VB2, Env#env.tenv),
+     constraints:combine(Cs1, Cs2)}.
 
 type_check_list_op(Env, Op, P, Arg1, Arg2) ->
   {Ty1, VB1, Cs1} = type_check_expr(Env, Arg1),
@@ -1788,6 +1803,14 @@ type_check_call_ty_intersect(Env, [Ty | Tys], Args, E) ->
             type_check_call_ty_intersect(Env, Tys, Args, E)
     end.
 
+expect_expr_subtype(Expr, ExprTy, ExpectedTy, TEnv) ->
+    case subtype(ExprTy, ExpectedTy, TEnv) of
+        {true, Constraints} ->
+           Constraints;
+       false ->
+           throw({type_error, Expr, ExprTy, ExpectedTy})
+    end.
+
 type_check_call_ty_union(Env, Tys, Args, E) ->
     {ResTys, VBs, Css} =
         lists:unzip3([type_check_call_ty(Env, Ty, Args, E)
@@ -1795,46 +1818,6 @@ type_check_call_ty_union(Env, Tys, Args, E) ->
     {normalize(type(union, ResTys), Env#env.tenv),
      union_var_binds(VBs, Env#env.tenv),
      constraints:combine(Css)}.
-
-compat_arith_type(Any = {type, _, any, []}, {type, _, any, []}) ->
-    Any;
-compat_arith_type(Any = {type, _, any, []}, Ty) ->
-    case subtype(Ty, type(number), #tenv{}) of
-        false ->
-            false;
-        _ ->
-            Any
-    end;
-compat_arith_type(Ty, Any = {type, _, any, []}) ->
-    case subtype(Ty, type(number), #tenv{}) of
-        false ->
-            false;
-        _ ->
-            Any
-    end;
-compat_arith_type(Ty1, Ty2) ->
-    TInteger = type(integer),
-    case {subtype(Ty1, TInteger, #tenv{})
-         ,subtype(Ty2, TInteger, #tenv{})} of
-        {{true,_},{true,_}} ->
-            TInteger;
-        _ ->
-            TFloat = type(float),
-            case {subtype(Ty1, TFloat, #tenv{})
-                 ,subtype(Ty2, TFloat, #tenv{})} of
-                {{true,_},{true,_}} ->
-                    TFloat;
-                _ ->
-                    TNumber = type(number),
-                    case {subtype(Ty1, TNumber, #tenv{})
-                         ,subtype(Ty2, TNumber, #tenv{})} of
-                        {{true,_},{true,_}} ->
-                            TNumber;
-                        _ ->
-                            false
-                    end
-            end
-    end.
 
 type_check_comprehension(Env, lc, Expr, []) ->
     {Ty, _VB, Cs} = type_check_expr(Env, Expr),
@@ -2295,6 +2278,7 @@ type_check_arith_op_in(Env, Kind, ResTy, Op, P, Arg1, Arg2) ->
         %% TODO: allow none() if checking against none()? Not clear that
         %% this is sensible, since in that case you'd like to only require
         %% *one* of the arguments to be none(), not both.
+        %% TODO: unify by passing in the original expression
         {type, _, none, []} ->
             Tag = if Kind == integer -> int_error;
                      true            -> arith_error end,
@@ -3891,14 +3875,6 @@ handle_type_error({type_error, op_type_too_precise, '/' = Op, P, Ty}) when ?is_i
 handle_type_error({type_error, op_type_too_precise, Op, P, Ty}) ->
     io:format("The operator ~p on line ~p is expected to have type "
               "~s which is too precise to be statically checked~n", [Op, P, typelib:pp_type(Ty)]);
-handle_type_error({type_error, arith_error, ArithOp, P, Ty1, Ty2}) ->
-    io:format("The operator ~p on line ~p is requires numeric arguments, but "
-              "has arguments of type ~s and ~s~n",
-              [ArithOp, P, typelib:pp_type(Ty1), typelib:pp_type(Ty2)]);
-handle_type_error({type_error, int_error, ArithOp, P, Ty1, Ty2}) ->
-    io:format("The operator ~p on line ~p is requires integer arguments, but "
-              " has arguments of type ~s and ~s~n",
-              [ArithOp, P, typelib:pp_type(Ty1), typelib:pp_type(Ty2)]);
 handle_type_error({type_error, arith_error, ArithOp, P, Ty}) ->
     io:format("The operator ~p on line ~p is expected to have type "
               "~s which has no numeric subtypes~n", [ArithOp, P, typelib:pp_type(Ty)]);

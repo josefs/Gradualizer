@@ -1,7 +1,8 @@
 -module(arith_op).
 -export([failplus/1, faildivvar/1, faildivlit/1, failpositivedivision/1,
          faildivprecise/1, failplusprecise/2, failminusprecisepos/2,
-         failminusnonneg/2, failminuspreciseneg/2]).
+         failminusnonneg/2, failminuspreciseneg/2, failplusarg/2,
+         faildivarg/2, failplusarg2/2, faildivarg2/2]).
 
 -spec failplus(_) -> tuple().
 failplus(X) -> X + X.
@@ -29,3 +30,19 @@ failminusnonneg(X, Y) -> X - Y.
 
 -spec failminuspreciseneg(neg_integer(), non_neg_integer()) -> neg_integer().
 failminuspreciseneg(X, Y) -> X - Y.
+
+-spec failplusarg(one, integer()) -> integer().
+failplusarg(X, Y) -> X + Y.
+
+-spec faildivarg(integer(), zero) -> integer().
+faildivarg(X, Y) -> X div Y.
+
+-spec failplusarg2(one, integer()) -> integer().
+failplusarg2(X, Y) ->
+    A = X + Y,
+    A.
+
+-spec faildivarg2(integer(), zero) -> integer().
+faildivarg2(X, Y) ->
+    A = X div Y,
+    A.
