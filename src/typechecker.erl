@@ -2715,27 +2715,41 @@ update_map_type({type, _, Ty, Arg}, AssocTys)
     when Ty == map, Arg == any;
 	 Ty == any, Arg == []
 	 ->
-    type(map, [{type, P, Assoc, [Key, ValueType]}
-	       || {type, P, Assoc, Key, ValueType} <- AssocTys ]);
+    type(map, [{type, P, map_field_exact, [Key, ValueType]}
+	       || {type, P, _Assoc, Key, ValueType} <- AssocTys ]
+         %% the original type could have any keys
+         %% so we also need to include and optional any() => any()
+         %% in the updated map type
+         %% (map key types can be overlapping, precedence is left to right,
+         %%  so let's append it as the last entry)
+         ++ [type(map_field_assoc, [type(any), type(any)])]
+        );
 update_map_type({type, P, map, Assocs}, AssocTys) ->
-    UpdatedAssocs =
-	update_assocs(Assocs,
-		      lists:map(fun typelib:remove_pos/1, AssocTys)),
+    UpdatedAssocs = update_assocs(AssocTys,
+                                  lists:map(fun typelib:remove_pos/1, Assocs)),
     {type, P, map, UpdatedAssocs}.
 
-update_assocs([{type, P, Assoc, [Key, ValueType]} | Assocs],
-	      AssocTys) ->
-    NewType = case lists:keyfind(typelib:remove_pos(Key), 4, AssocTys) of
-		  false ->
-		      ValueType;
-		  {type, _P, _Assoc, _Key, New} ->
-		      New
-	      end,
-    NewTys = update_assocs(Assocs, AssocTys),
-    [{type, P, Assoc, [Key, NewType]} | NewTys];
-update_assocs([], _) ->
-    [].
+%% Override existing key's value types and append those key types
+%% which are not updated
+update_assocs([{type, P, _Assoc, Key, ValueType} | AssocTys],
+	      Assocs) ->
+    [{type, P, map_field_exact, [Key, ValueType]}|
+     case take_assoc(typelib:remove_pos(Key), Assocs, []) of
+         {value, _, RestAssocs} ->
+             update_assocs(AssocTys, RestAssocs);
+         false ->
+             %% TODO check if we are updating an existing Key (:=)
+             update_assocs(AssocTys, Assocs)
+     end];
+update_assocs([], Assocs) ->
+    Assocs.
 
+take_assoc(Key, [Assoc = ?type(_, [Key, _VTy])|T], L) ->
+    {value, Assoc, lists:reverse(L, T)};
+take_assoc(Key, [H|Assocs], L) ->
+    take_assoc(Key, Assocs, [H|L]);
+take_assoc(_, [], _) ->
+    false.
 
 type_check_fun(Env, {atom, P, Name}, Arity) ->
     % Local function call
