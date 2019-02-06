@@ -20,3 +20,11 @@ ok(ok) -> ok.
 bar() ->
     ok(case Ok = ok of ok -> ok end),
     Ok.
+
+-spec merge_vars(boolean(), 1..2, 2..3) -> 1..3.
+merge_vars(A, B, C) ->
+    case A of
+        true ->  V = B;
+        false -> V = C
+    end,
+    V.

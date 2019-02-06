@@ -3646,7 +3646,7 @@ union_var_binds([], _) ->
     #{};
 union_var_binds(VarBindsList, TEnv) ->
     % TODO: Don't drop the constraints
-    Glb = fun(_K, S, T) -> {T, _Cs} = glb(S, T, TEnv), T end,
+    Glb = fun(_K, Ty1, Ty2) -> {Ty, _Cs} = glb(Ty1, Ty2, TEnv), Ty end,
     union_var_binds_help(VarBindsList, Glb).
 
 %% Tail recursive helper.
