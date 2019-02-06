@@ -349,14 +349,17 @@ get_record_fields(RecName, Anno, #tenv{records = REnv}) ->
 %% * Computes the maximal (in the subtyping hierarchy) type that is a subtype
 %%   of two given types.
 
--spec glb(type(), type(), TEnv :: #tenv{}) -> type().
+-spec glb(type(), type(), TEnv :: #tenv{}) -> {type(), constraints:constraints()}.
 glb(T1, T2, TEnv) ->
     glb(T1, T2, #{}, TEnv).
 
--spec glb([type()], TEnv :: #tenv{}) -> type().
+-spec glb([type()], TEnv :: #tenv{}) -> {type(), constraints:constraints()}.
 glb(Ts, TEnv) ->
-    lists:foldl(fun (T, Acc) -> glb(T, Acc, TEnv) end,
-                type(term),
+    lists:foldl(fun (T, {TyAcc, Cs1}) ->
+			{Ty, Cs2} = glb(T, TyAcc, TEnv),
+			{Ty, constraints:combine(Cs1, Cs2)}
+		end,
+                {type(term), constraints:empty()},
                 Ts).
 
 glb(T1, T2, A, TEnv) ->
@@ -366,50 +369,53 @@ glb(T1, T2, A, TEnv) ->
         %% If we hit a recursive case we approximate with none(). Conceivably
         %% you could do some fixed point iteration here, but let's wait for an
         %% actual use case.
-        true -> type(none);
+        true -> {type(none), constraints:empty()};
         false ->
-            normalize(glb_ty(Ty1, Ty2, A#{ {Ty1, Ty2} => 0 }, TEnv), TEnv)
+	    {Ty, Cs} = glb_ty(Ty1, Ty2, A#{ {Ty1, Ty2} => 0 }, TEnv),
+            {normalize(Ty, TEnv), Cs}
     end.
 
 %% If either type is any() we don't know anything
 glb_ty({type, _, any, []} = Ty1, _Ty2, _A, _TEnv) ->
-    Ty1;
+    ret(Ty1);
 glb_ty(_Ty1, {type, _, any, []} = Ty2, _A, _TEnv) ->
-    Ty2;
+    ret(Ty2);
 
 %% term() is the top of the hierarchy
 glb_ty({type, _, term, []}, Ty2, _A, _TEnv) ->
-    Ty2;
+    ret(Ty2);
 glb_ty(Ty1, {type, _, term, []}, _A, _TEnv) ->
-    Ty1;
+    ret(Ty1);
 
 %% none() is the bottom of the hierarchy
 glb_ty({type, _, none, []} = Ty1, _Ty2, _A, _TEnv) ->
-    Ty1;
+    ret(Ty1);
 glb_ty(_Ty1, {type, _, none, []} = Ty2, _A, _TEnv) ->
-    Ty2;
+    ret(Ty2);
 
 %% glb is idempotent
 glb_ty(Ty, Ty, _A, _TEnv) ->
-    Ty;
+    ret(Ty);
 
 %% Union types: glb distributes over unions
 glb_ty({type, Ann, union, Ty1s}, Ty2, A, TEnv) ->
-    {type, Ann, union, [ glb_ty(Ty1, Ty2, A, TEnv) || Ty1 <- Ty1s ]};
+    {Tys, Css} = lists:unzip([ glb_ty(Ty1, Ty2, A, TEnv) || Ty1 <- Ty1s ]),
+    {{type, Ann, union, Tys}, constraints:combine(Css)};
 glb_ty(Ty1, {type, Ann, union, Ty2s}, A, TEnv) ->
-    {type, Ann, union, [ glb_ty(Ty1, Ty2, A, TEnv) || Ty2 <- Ty2s ]};
+    {Tys, Css} = lists:unzip([glb_ty(Ty1, Ty2, A, TEnv) || Ty2 <- Ty2s ]),
+    {{type, Ann, union, Tys}, constraints:combine(Css)};
 
 %% Atom types
 glb_ty(Ty1 = {atom, _, _}, {type, _, atom, []}, _A, _TEnv) ->
-    Ty1;
+    ret(Ty1);
 glb_ty({type, _, atom, []}, Ty2 = {atom, _, _}, _A, _TEnv) ->
-    Ty2;
+    ret(Ty2);
 
 %% Number types
 glb_ty(Ty1, Ty2, _A, _TEnv) when ?is_int_type(Ty1), ?is_int_type(Ty2) ->
     {Lo1, Hi1} = int_type_to_range(Ty1),
     {Lo2, Hi2} = int_type_to_range(Ty2),
-    type(union, int_range_to_types({int_max(Lo1, Lo2), int_min(Hi1, Hi2)}));
+    ret(type(union, int_range_to_types({int_max(Lo1, Lo2), int_min(Hi1, Hi2)})));
 
 %% List types
 glb_ty(Ty1, Ty2, A, TEnv) when ?is_list_type(Ty1), ?is_list_type(Ty2) ->
@@ -423,36 +429,40 @@ glb_ty(Ty1, Ty2, A, TEnv) when ?is_list_type(Ty1), ?is_list_type(Ty2) ->
             {empty, nonempty} -> none;
             {nonempty, empty} -> none
         end,
-    Elem = glb(Elem1, Elem2, A, TEnv),
-    Term = glb(Term1, Term2, A, TEnv),
-    from_list_view({Empty, Elem, Term});
+    {Elem, Cs1} = glb(Elem1, Elem2, A, TEnv),
+    {Term, Cs2} = glb(Term1, Term2, A, TEnv),
+    {from_list_view({Empty, Elem, Term}), constraints:combine(Cs1, Cs2)};
 
 %% Tuple types
 glb_ty(Ty1 = {type, _, tuple, Tys1}, Ty2 = {type, _, tuple, Tys2}, A, TEnv) ->
     case {Tys1, Tys2} of
-        {any, _} -> Ty2;
-        {_, any} -> Ty1;
-        _ when length(Tys1) /= length(Tys2) -> type(none);
+        {any, _} -> ret(Ty2);
+        {_, any} -> ret(Ty1);
+        _ when length(Tys1) /= length(Tys2) -> ret(type(none));
         _ ->
-            type(tuple, lists:zipwith(fun(T1, T2) -> glb(T1, T2, A, TEnv) end,
-                                      Tys1, Tys2))
+	    {Tys, Css} =
+		lists:unzip(lists:zipwith(fun(T1, T2) ->
+						  glb(T1, T2, A, TEnv)
+					  end,
+					  Tys1, Tys2)),
+	    {type(tuple, Tys), constraints:combine(Css)}
     end;
 
 %% Record types. Either exactly the same record (handled above) or tuple().
 glb_ty(Ty1 = {type, _, record, _}, {type, _, tuple, any}, _A, _TEnv) ->
-    Ty1;
+    ret(Ty1);
 glb_ty({type, _, tuple, any}, Ty2 = {type, _, record, _}, _A, _TEnv) ->
-    Ty2;
+    ret(Ty2);
 glb_ty({type, _, record, _}, {type, _, record, _}, _A, _TEnv) ->
-    type(none);
+    ret(type(none));
 
 %% Map types. These are a bit tricky and we can't reach this case in the
 %% current code. For now going with a very crude approximation.
 glb_ty(Ty1 = {type, _, map, Assocs1}, Ty2 = {type, _, map, Assocs2}, _A, _TEnv) ->
     case {Assocs1, Assocs2} of
-        {any, _} -> Ty2;
-        {_, any} -> Ty1;
-        _        -> type(none)
+        {any, _} -> ret(Ty2);
+        {_, any} -> ret(Ty1);
+        _        -> ret(type(none))
     end;
 
 %% Binary types. For now approximate this by returning the smallest type if
@@ -461,11 +471,11 @@ glb_ty(Ty1 = {type, _, map, Assocs1}, Ty2 = {type, _, map, Assocs2}, _A, _TEnv) 
 glb_ty(Ty1 = {type, _, binary, _},
        Ty2 = {type, _, binary, _}, _A, TEnv) ->
     case subtype(Ty1, Ty2, TEnv) of
-        {true, _} -> Ty1;    %% Will never produce constraints
+        {true, _} -> ret(Ty1);    %% Will never produce constraints
         false ->
             case subtype(Ty2, Ty1, TEnv) of
-                {true, _} -> Ty2;
-                false     -> type(none)
+                {true, _} -> ret(Ty2);
+                false     -> ret(type(none))
             end
     end;
 
@@ -474,7 +484,7 @@ glb_ty(Ty1 = {type, _, binary, _},
 glb_ty({type, _, 'fun', [{type, _, product, Args1}, Res1]},
        {type, _, 'fun', [{type, _, product, Args2}, Res2]}, A, TEnv) ->
     NoConstraints = constraints:empty(),
-    Res = glb(Res1, Res2, A, TEnv),
+    {Res, Cs} = glb(Res1, Res2, A, TEnv),
     Subtype =
         fun(Ts1, Ts2) ->
             try compat_tys(Ts1, Ts2, sets:new(), TEnv) of
@@ -483,11 +493,11 @@ glb_ty({type, _, 'fun', [{type, _, product, Args1}, Res1]},
             catch throw:nomatch -> false end
         end,
     case Subtype(Args1, Args2) of
-        true  -> type('fun', [type(product, Args2), Res]);
+        true  -> {type('fun', [type(product, Args2), Res]), Cs};
         false ->
             case Subtype(Args2, Args1) of
-                true  -> type('fun', [type(product, Args1), Res]);
-                false -> type(none)
+                true  -> {type('fun', [type(product, Args1), Res]), Cs};
+                false -> {type(none), Cs}
             end
     end;
 
@@ -496,15 +506,31 @@ glb_ty({ann_type, _, [{var, _, _}, Ty1]}, Ty2, A, TEnv) ->
     glb(Ty1, Ty2, A, TEnv);
 glb_ty(Ty1, {ann_type, _, [{var, _, _}, Ty2]}, A, TEnv) ->
     glb(Ty1, Ty2, A, TEnv);
+glb_ty(Var = {var, _, _}, Ty2, _A, _TEnv) ->
+    V = new_type_var(),
+    {{var, erl_anno:new(0), V}
+    ,constraints:add_var(V,
+       constraints:combine(
+	 constraints:upper(V, Var),
+	 constraints:upper(V, Ty2)
+	))};
+glb_ty(Ty1, Var = {var, _, _}, _A, _TEnv) ->
+    V = new_type_var(),
+    {{var, erl_anno:new(0), V}
+    ,constraints:add_var(V,
+       constraints:combine(
+	 constraints:upper(V, Var),
+	 constraints:upper(V, Ty1)
+	))};
 
 %% normalize and remove_pos only does the top layer
 glb_ty({type, _, Name, Args1}, {type, _, Name, Args2}, A, TEnv)
         when length(Args1) == length(Args2) ->
-    Args = [ glb(Arg1, Arg2, A, TEnv) || {Arg1, Arg2} <- lists:zip(Args1, Args2) ],
-    type(Name, Args);
+    {Args, Css} = lists:unzip([ glb(Arg1, Arg2, A, TEnv) || {Arg1, Arg2} <- lists:zip(Args1, Args2) ]),
+    {type(Name, Args), constraints:combine(Css)};
 
 %% Incompatible
-glb_ty(_Ty1, _Ty2, _A, _TEnv) -> type(none).
+glb_ty(_Ty1, _Ty2, _A, _TEnv) -> {type(none), constraints:empty()}.
 
 %% Normalize
 %% ---------
@@ -1205,14 +1231,21 @@ solve_bounds(TEnv, Cs) ->
     solve_bounds(TEnv, Env, SCCs, #{}).
 
 solve_bounds(TEnv, Defs, [{acyclic, X} | SCCs], Acc) ->
-    Ty1 = case Defs of
-              #{X := Tys} ->
-                  Tys1 = subst_ty(Acc, Tys),
-                  %% Take intersection after substitution to get rid of type variables.
-                  lists:foldl(fun(S, T) -> glb(S, T, TEnv) end, type(term), Tys1);
-              _NoBoundsForX ->
-                  type(any) %% or should we return term()?
-          end,
+    %% TODO: Don't drop the constraints.
+    {Ty1, _Cs} =
+      case Defs of
+	  #{X := Tys} ->
+	      Tys1 = subst_ty(Acc, Tys),
+	      %% Take intersection after substitution to
+	      %% get rid of type variables.
+	      lists:foldl(fun(S, {T, Css}) ->
+				  {Ty, Cs} = glb(S, T, TEnv),
+				  {Ty, constraints:combine(Cs, Css)}
+			  end,
+			  {type(term), constraints:empty()}, Tys1);
+	  _NoBoundsForX ->
+	      type(any) %% or should we return term()?
+      end,
     solve_bounds(TEnv, maps:remove(X, Defs), SCCs, Acc#{ X => Ty1 });
 solve_bounds(_, _, [{cyclic, Xs} | _], _) ->
     throw({cyclic_dependencies, Xs});
@@ -1696,10 +1729,10 @@ type_check_arith_op(Env, Op, P, Arg1, Arg2) ->
     case compat_arith_type(Ty1,Ty2) of
         false ->
           throw({type_error, arith_error, Op, P, Ty1, Ty2});
-        Ty ->
+        {Ty, Cs3} ->
             {Ty
             ,union_var_binds(VB1, VB2, Env#env.tenv)
-            ,constraints:combine(Cs1, Cs2)}
+            ,constraints:combine([Cs1, Cs2, Cs3])}
     end.
 
 type_check_int_op(Env, Op, P, Arg1, Arg2) ->
@@ -1709,12 +1742,12 @@ type_check_int_op(Env, Op, P, Arg1, Arg2) ->
     case compat_arith_type(Ty1,Ty2) of
         false ->
             throw({type_error, int_error, Op, P, Ty1, Ty2});
-        {type, _, Ty, []} when Ty == float orelse Ty == number ->
+        {{type, _, Ty, []}, _} when Ty == float orelse Ty == number ->
             throw({type_error, int_error, Op, P, Ty1, Ty2});
-        Ty ->
+        {Ty, Cs3} ->
             {Ty
             ,union_var_binds(VB1, VB2, Env#env.tenv)
-            ,constraints:combine(Cs1, Cs2)}
+            ,constraints:combine([Cs1, Cs2, Cs3])}
     end.
 
 type_check_list_op(Env, Op, P, Arg1, Arg2) ->
@@ -1797,39 +1830,39 @@ type_check_call_ty_union(Env, Tys, Args, E) ->
      constraints:combine(Css)}.
 
 compat_arith_type(Any = {type, _, any, []}, {type, _, any, []}) ->
-    Any;
+    {Any, constraints:empty()};
 compat_arith_type(Any = {type, _, any, []}, Ty) ->
     case subtype(Ty, type(number), #tenv{}) of
         false ->
             false;
         _ ->
-            Any
+            {Any, constraints:empty()}
     end;
 compat_arith_type(Ty, Any = {type, _, any, []}) ->
     case subtype(Ty, type(number), #tenv{}) of
         false ->
             false;
         _ ->
-            Any
+            {Any, constraints:empty()}
     end;
 compat_arith_type(Ty1, Ty2) ->
     TInteger = type(integer),
     case {subtype(Ty1, TInteger, #tenv{})
          ,subtype(Ty2, TInteger, #tenv{})} of
-        {{true,_},{true,_}} ->
-            TInteger;
+        {{true, C1}, {true, C2}} ->
+            {TInteger, constraints:combine(C1, C2)};
         _ ->
             TFloat = type(float),
             case {subtype(Ty1, TFloat, #tenv{})
                  ,subtype(Ty2, TFloat, #tenv{})} of
-                {{true,_},{true,_}} ->
-                    TFloat;
+                {{true, C1},{true, C2}} ->
+                    {TFloat, constraints:combine(C1, C2)};
                 _ ->
                     TNumber = type(number),
                     case {subtype(Ty1, TNumber, #tenv{})
                          ,subtype(Ty2, TNumber, #tenv{})} of
-                        {{true,_},{true,_}} ->
-                            TNumber;
+                        {{true, C1},{true, C2}} ->
+                            {TNumber, constraints:combine(C1, C2)};
                         _ ->
                             false
                     end
@@ -2290,7 +2323,7 @@ type_check_int_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
     type_check_arith_op_in(Env, integer, ResTy, Op, P, Arg1, Arg2).
 
 type_check_arith_op_in(Env, Kind, ResTy, Op, P, Arg1, Arg2) ->
-    ResTy1 = glb(type(Kind), ResTy, Env#env.tenv),
+    {ResTy1, Cs} = glb(type(Kind), ResTy, Env#env.tenv),
     case ResTy1 of
         %% TODO: allow none() if checking against none()? Not clear that
         %% this is sensible, since in that case you'd like to only require
@@ -2301,15 +2334,15 @@ type_check_arith_op_in(Env, Kind, ResTy, Op, P, Arg1, Arg2) ->
             throw({type_error, Tag, Op, P, ResTy});
         %% Fall back to inference mode if target is any()
         {type, _, any, []} ->
-            {_, VB, Cs} = type_check_arith_op(Env, Op, P, Arg1, Arg2),
-            {VB, Cs};
+            {_, VB, Cs1} = type_check_arith_op(Env, Op, P, Arg1, Arg2),
+            {VB, constraints:combine(Cs, Cs1)};
         _ ->
             case arith_op_arg_types(Op, ResTy1) of
                 {ArgTy1, ArgTy2} ->
                     {VarBinds1, Cs1} = type_check_expr_in(Env, ArgTy1, Arg1),
                     {VarBinds2, Cs2} = type_check_expr_in(Env, ArgTy2, Arg2),
                     {union_var_binds(VarBinds1, VarBinds2, Env#env.tenv),
-                     constraints:combine([Cs1, Cs2])};
+                     constraints:combine([Cs, Cs1, Cs2])};
                 false ->
                     throw({type_error, op_type_too_precise, Op, P, ResTy1})
             end
@@ -2462,20 +2495,20 @@ type_check_list_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
             '--' -> type(list, [type(term)]);
             '++' -> type(maybe_improper_list, [type(term), type(term)])
         end,
-    ResTy1 = glb(Target, ResTy, Env#env.tenv),
+    {ResTy1, Cs} = glb(Target, ResTy, Env#env.tenv),
     case ResTy1 of
         {type, _, none, []} ->
             throw({type_error, list_op_error, Op, P, ResTy});
         {type, _, any, []} ->
-            {_, VB, Cs} = type_check_list_op(Env, Op, P, Arg1, Arg2),
-            {VB, Cs};
+            {_, VB, Cs1} = type_check_list_op(Env, Op, P, Arg1, Arg2),
+            {VB, constraints:combine(Cs, Cs1)};
         _ ->
             case list_op_arg_types(Op, ResTy1) of
                 {ArgTy1, ArgTy2} ->
                     {VarBinds1, Cs1} = type_check_expr_in(Env, ArgTy1, Arg1),
                     {VarBinds2, Cs2} = type_check_expr_in(Env, ArgTy2, Arg2),
                     {union_var_binds(VarBinds1, VarBinds2, Env#env.tenv),
-                     constraints:combine([Cs1, Cs2])};
+                     constraints:combine([Cs, Cs1, Cs2])};
                 false ->
                     throw({type_error, op_type_too_precise, Op, P, ResTy1})
             end
@@ -2514,14 +2547,15 @@ type_check_unary_op_in(Env, ResTy, Op, P, Arg) ->
             '+'    -> type(number);
             '-'    -> type(number)
         end,
-    ResTy1 = glb(Target, ResTy, Env#env.tenv),
+    {ResTy1, Cs} = glb(Target, ResTy, Env#env.tenv),
     case ResTy1 of
         %% TODO: allow if ResTy == none()?
         {type, _, none, []} ->
             throw({type_error, unary_error, Op, P, Target, ResTy});
         _ ->
             ArgTy = unary_op_arg_type(Op, ResTy1),
-            type_check_expr_in(Env, ArgTy, Arg)
+            {VB, Cs1} = type_check_expr_in(Env, ArgTy, Arg),
+	    {VB, constraints:combine(Cs, Cs1)}
     end.
 
 %% Which type should we check the argument against if we want the given type
@@ -3099,7 +3133,7 @@ refine_ty(Ty, {Tag, _, V}, TEnv) when ?is_int_type(Ty),
     end;
 refine_ty(Ty1, Ty2, TEnv) ->
     case glb(Ty1, Ty2, TEnv) of
-        ?type(none)  -> throw(disjoint);     %% disjoint
+        {?type(none), _}  -> throw(disjoint);     %% disjoint
         _NotDisjoint -> throw(no_refinement) %% imprecision
     end.
 
@@ -3229,10 +3263,11 @@ add_type_pat(Pat, ?type(union, UnionTys)=UnionTy, TEnv, VEnv) ->
         _SomeTysMatched ->
             %% TODO: The constraints should be merged with *or* semantics
             %%       and var binds with intersection
-            {glb(PatTys, TEnv),
+	    {Ty, Cs} = glb(PatTys, TEnv),
+            {Ty,
              normalize(type(union, UBounds), TEnv),
              union_var_binds(VEnvs, TEnv),
-             constraints:combine(Css)}
+             constraints:combine([Cs|Css])}
     end;
 add_type_pat(Lit = {integer, P, _}, Ty, TEnv, VEnv) ->
     case subtype(Lit, Ty, TEnv) of
@@ -3357,12 +3392,14 @@ add_type_pat({match, _, Pat1, {var, _, _Var}=Pat2}, Ty, TEnv, VEnv) ->
     %% Refine using Pat1 first to be able to bind Pat2 to a refined type.
     {PatTy1, Ty1, VEnv1, Cs2} = add_type_pat(Pat1, Ty, TEnv, VEnv),
     {PatTy2, Ty2, VEnv2, Cs1} = add_type_pat(Pat2, Ty1, TEnv, VEnv1),
-    {glb(PatTy1, PatTy2, TEnv), Ty2, VEnv2, constraints:combine(Cs1, Cs2)};
+    {GlbTy, Cs3} = glb(PatTy1, PatTy2, TEnv),
+    {GlbTy, Ty2, VEnv2, constraints:combine([Cs1, Cs2, Cs3])};
 add_type_pat({match, _, Pat1, Pat2}, Ty, TEnv, VEnv) ->
     %% Use the refined type of Pat2 to bind vars in Pat1.
     {PatTy1, Ty1, VEnv1, Cs1} = add_type_pat(Pat2, Ty, TEnv, VEnv),
     {PatTy2, Ty2, VEnv2, Cs2} = add_type_pat(Pat1, Ty1, TEnv, VEnv1),
-    {glb(PatTy1, PatTy2, TEnv), Ty2, VEnv2, constraints:combine(Cs1, Cs2)};
+    {GlbTy, Cs3} = glb(PatTy1, PatTy2, TEnv),
+    {GlbTy, Ty2, VEnv2, constraints:combine([Cs1, Cs2, Cs3])};
 add_type_pat({op, _, '++', Pat1, Pat2}, Ty, TEnv, VEnv) ->
     {_, _, VEnv1, Cs1} = add_type_pat(Pat1, Ty, TEnv, VEnv),
     {_, _, VEnv2, Cs2} = add_type_pat(Pat2, Ty, TEnv, VEnv1),
@@ -3608,7 +3645,8 @@ union_var_binds(VB1, VB2, TEnv) ->
 union_var_binds([], _) ->
     #{};
 union_var_binds(VarBindsList, TEnv) ->
-    Glb = fun(_K, S, T) -> glb(S, T, TEnv) end,
+    % TODO: Don't drop the constraints
+    Glb = fun(_K, S, T) -> {T, _Cs} = glb(S, T, TEnv), T end,
     union_var_binds_help(VarBindsList, Glb).
 
 %% Tail recursive helper.
@@ -3618,7 +3656,8 @@ union_var_binds_help([VB1, VB2 | Rest], Glb) ->
 union_var_binds_help([VB], _) -> VB.
 
 add_var_binds(VEnv, VarBinds, TEnv) ->
-    Glb = fun(_K, S, T) -> glb(S, T, TEnv) end,
+    % TODO: Don't drop the constraints
+    Glb = fun(_K, S, T) -> {T, _C} = glb(S, T, TEnv), T end,
     gradualizer_lib:merge_with(Glb, VEnv, VarBinds).
 
 get_rec_field_type(FieldWithAnno, RecFields) ->

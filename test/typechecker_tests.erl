@@ -144,8 +144,8 @@ not_subtype_test_() ->
     ].
 
 -define(glb(T1, T2, R),
-    [ ?_assertEqual(deep_normalize(R), deep_normalize(glb(T1, T2))),
-      ?_assertEqual(deep_normalize(R), deep_normalize(glb(T2, T1))) ]).
+    [ ?_assertEqual(deep_normalize(R), deep_normalize(element(1,glb(T1, T2)))),
+      ?_assertEqual(deep_normalize(R), deep_normalize(element(1,glb(T2, T1)))) ]).
 
 glb_test_() ->
 
