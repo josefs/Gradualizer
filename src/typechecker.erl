@@ -2527,13 +2527,15 @@ list_op_arg_types(ListOp, {type, _, union, Tys}) ->
     end;
 list_op_arg_types('++', Ty) ->
     case list_view(Ty) of
-        {empty, _, _}       -> {type(nil), type(nil)};
+        false            -> false;
+        {empty, _, _}    -> {type(nil), type(nil)};
         {Empty, Elem, _} ->
             Arg1 = from_list_view({Empty, Elem, type(nil)}),
             {Arg1, Ty}
     end;
 list_op_arg_types('--', Ty) ->
     case list_view(Ty) of   %% Could go with [A] -- [term()] :: [A], but would miss legitimate errors
+        false            -> false;
         {any, Elem, _}   -> {type(list, [Elem]), type(list, [Elem])};
         {empty, _, _}    -> {type(nil), type(list, [type(term)])};
         {nonempty, _, _} -> false
