@@ -2630,15 +2630,12 @@ type_check_comprehension_in(Env, ResTy, Compr, Expr, P, [Pred | Quals]) ->
     {VB2, Cs2} = type_check_comprehension_in(Env, ResTy, Compr, Expr, P, Quals),
     {union_var_binds(VB1, VB2, Env#env.tenv), constraints:combine(Cs1, Cs2)}.
 
-% We use a special format for map associations here. We don't
-% put the Key and Value in a list because we want to be able to
-% search for the Key using listskeyfind/3 in update_assocs/2 below.
 type_check_assocs(Env, [{Assoc, P, Key, Val}| Assocs])
   when Assoc == map_field_assoc orelse Assoc == map_field_exact ->
     {KeyTy, _KeyVB, Cs1} = type_check_expr(Env#env{infer = true}, Key),
     {ValTy, _ValVB, Cs2} = type_check_expr(Env#env{infer = true}, Val),
     {AssocTys, VB, Cs}   = type_check_assocs(Env, Assocs),
-    {[{type, P, Assoc, KeyTy, ValTy} | AssocTys], VB
+    {[{type, P, Assoc, [KeyTy, ValTy]} | AssocTys], VB
     ,constraints:combine([Cs, Cs1, Cs2])};
 type_check_assocs(_Env, []) ->
     {[], #{}, constraints:empty()}.
@@ -2648,7 +2645,7 @@ update_map_type({type, _, Ty, Arg}, AssocTys)
 	 Ty == any, Arg == []
 	 ->
     type(map, [{type, P, map_field_exact, [Key, ValueType]}
-	       || {type, P, _Assoc, Key, ValueType} <- AssocTys ]
+	       || {type, P, _Assoc, [Key, ValueType]} <- AssocTys ]
          %% the original type could have any keys
          %% so we also need to include and optional any() => any()
          %% in the updated map type
@@ -2663,7 +2660,7 @@ update_map_type({type, P, map, Assocs}, AssocTys) ->
 
 %% Override existing key's value types and append those key types
 %% which are not updated
-update_assocs([{type, P, _Assoc, Key, ValueType} | AssocTys],
+update_assocs([{type, P, _Assoc, [Key, ValueType]} | AssocTys],
 	      Assocs) ->
     [{type, P, map_field_exact, [Key, ValueType]}|
      case take_assoc(typelib:remove_pos(Key), Assocs, []) of
