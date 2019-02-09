@@ -99,3 +99,14 @@
 -spec lists:zipwith (fun((X, Y)    -> T), [X], [Y])      -> [T].
 -spec lists:zipwith3(fun((X, Y, Z) -> T), [X], [Y], [Z]) -> [T].
 
+%% Proplists: Changing term() to any() in the most frequently used functions.
+-spec proplists:delete(any(), list()) -> list().
+-spec proplists:get_all_values(any(), list()) -> list().
+-spec proplists:get_value(any(), list()) -> any().
+-spec proplists:get_value(any(), list(), any()) -> any().
+-spec proplists:get_bool(any(), list()) -> boolean().
+-spec proplists:get_keys(list()) -> list().
+-spec proplists:lookup(any(), list()) -> none | tuple().
+-spec proplists:lookup_all(any(), list()) -> [tuple()].
+-spec proplists:append_values(any(), list()) -> list().
+-spec proplists:substitute_aliases([{any(), any()}], list()) -> list().
