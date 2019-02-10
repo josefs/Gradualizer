@@ -1294,14 +1294,20 @@ subst_ty(_, Ty) -> Ty.
 %% Returns the type of the expression, a collection of variables bound in
 %% the expression together with their type and constraints.
 %-spec type_check_expr(#env, any()) -> { any(), #{ any() => any()}, #{ any() => any()} }.
-type_check_expr(Env, {var, P, Var}) ->
+type_check_expr(Env, Expr) ->
+    Res = {Ty, _VarBinds, _Cs} = do_type_check_expr(Env, Expr),
+    ?verbose(Env, "~s: Inferred type of ~s :: ~s~n",
+             [format_location(Expr, brief), erl_prettypr:format(Expr), typelib:pp_type(Ty)]),
+    Res.
+
+do_type_check_expr(Env, {var, P, Var}) ->
     case Env#env.venv of
         #{Var := Ty} ->
             return(Ty);
         #{} ->
             throw({unknown_variable, P, Var})
     end;
-type_check_expr(Env, {match, _, Pat, Expr}) ->
+do_type_check_expr(Env, {match, _, Pat, Expr}) ->
     {Ty, VarBinds, Cs} = type_check_expr(Env, Expr),
     NormTy = normalize(Ty, Env#env.tenv),
     {_PatTy, UBoundNorm, Env2, Cs2} =
@@ -1310,14 +1316,14 @@ type_check_expr(Env, {match, _, Pat, Expr}) ->
     UBound = case UBoundNorm of NormTy -> Ty;
                                 _Other -> UBoundNorm end,
     {UBound, Env2, constraints:combine(Cs,Cs2)};
-type_check_expr(Env, {'if', _, Clauses}) ->
+do_type_check_expr(Env, {'if', _, Clauses}) ->
     infer_clauses(Env, Clauses);
-type_check_expr(Env, {'case', _, Expr, Clauses}) ->
+do_type_check_expr(Env, {'case', _, Expr, Clauses}) ->
     {_ExprTy, VarBinds, Cs1} = type_check_expr(Env, Expr),
     VEnv = add_var_binds(Env#env.venv, VarBinds, Env#env.tenv),
     {Ty, VB, Cs2} = infer_clauses(Env#env{ venv = VEnv}, Clauses),
     {Ty, union_var_binds(VarBinds, VB, Env#env.tenv), constraints:combine(Cs1, Cs2)};
-type_check_expr(Env, {tuple, P, TS}) ->
+do_type_check_expr(Env, {tuple, P, TS}) ->
     { Tys, VarBindsList, Css} = lists:unzip3([ type_check_expr(Env, Expr)
                                               || Expr <- TS ]),
     InferredTy =
@@ -1332,7 +1338,7 @@ type_check_expr(Env, {tuple, P, TS}) ->
                 {type, P, tuple, Tys}
         end,
     { InferredTy, union_var_binds(VarBindsList, Env#env.tenv), constraints:combine(Css) };
-type_check_expr(Env, {cons, _, Head, Tail}) ->
+do_type_check_expr(Env, {cons, _, Head, Tail}) ->
     {Ty1, VB1, Cs1} = type_check_expr(Env, Head),
     {Ty2, VB2, Cs2} = type_check_expr(Env, Tail),
     VB = union_var_binds(VB1, VB2, Env#env.tenv),
@@ -1366,7 +1372,7 @@ type_check_expr(Env, {cons, _, Head, Tail}) ->
                                     Env#env.tenv),
             {type(nonempty_list, [FinalElemTy]), VB, Cs4}
     end;
-type_check_expr(Env, {bin, _, BinElements} = BinExpr) ->
+do_type_check_expr(Env, {bin, _, BinElements} = BinExpr) ->
     %% <<Expr:Size/TypeSpecifierList, ...>>
     VarBindAndCsList =
         lists:map(fun ({bin_element, _P, Expr, _Size, _Specif} = BinElem) ->
@@ -1386,58 +1392,58 @@ type_check_expr(Env, {bin, _, BinElements} = BinExpr) ->
     {RetTy,
      union_var_binds(VarBinds, Env#env.tenv),
      constraints:combine(Css)};
-type_check_expr(Env, {call, P, Name, Args}) ->
+do_type_check_expr(Env, {call, P, Name, Args}) ->
     {FunTy, VarBinds1, Cs1} = type_check_fun(Env, Name, length(Args)),
     {ResTy, VarBinds2, Cs2} = type_check_call_ty(Env, expect_fun_type(Env, FunTy), Args
                                                 ,{Name, P, FunTy}),
     {ResTy, union_var_binds(VarBinds1, VarBinds2, Env#env.tenv),
             constraints:combine(Cs1, Cs2)};
 
-type_check_expr(Env, {lc, _, Expr, Qualifiers}) ->
+do_type_check_expr(Env, {lc, _, Expr, Qualifiers}) ->
     type_check_comprehension(Env, lc, Expr, Qualifiers);
-type_check_expr(Env, {bc, _, Expr, Qualifiers}) ->
+do_type_check_expr(Env, {bc, _, Expr, Qualifiers}) ->
     type_check_comprehension(Env, bc, Expr, Qualifiers);
-type_check_expr(Env, {block, _, Block}) ->
+do_type_check_expr(Env, {block, _, Block}) ->
     type_check_block(Env, Block);
 
 % Don't return the type of anything other than something
 % which ultimately comes from a function type spec.
-type_check_expr(#env{infer = false}, {string, _, _}) ->
+do_type_check_expr(#env{infer = false}, {string, _, _}) ->
     return(type(any));
-type_check_expr(#env{infer = false}, {nil, _}) ->
+do_type_check_expr(#env{infer = false}, {nil, _}) ->
     return(type(any));
-type_check_expr(#env{infer = false}, {atom, _, _Atom}) ->
+do_type_check_expr(#env{infer = false}, {atom, _, _Atom}) ->
     return(type(any));
-type_check_expr(#env{infer = false}, {integer, _, _N}) ->
+do_type_check_expr(#env{infer = false}, {integer, _, _N}) ->
     return(type(any));
-type_check_expr(#env{infer = false}, {float, _, _F}) ->
+do_type_check_expr(#env{infer = false}, {float, _, _F}) ->
     return(type(any));
-type_check_expr(#env{infer = false}, {char, _, _C}) ->
+do_type_check_expr(#env{infer = false}, {char, _, _C}) ->
     return(type(any));
 
 %% When infer = true, we do propagate the types of literals,
 %% list cons, tuples, etc.
-type_check_expr(#env{infer = true}, {string, _, ""}) ->
+do_type_check_expr(#env{infer = true}, {string, _, ""}) ->
     return(type(nil));
-type_check_expr(#env{infer = true}, {string, _, [_|_]}) ->
+do_type_check_expr(#env{infer = true}, {string, _, [_|_]}) ->
     return(type(nonempty_string));
-type_check_expr(#env{infer = true}, {nil, _}) ->
+do_type_check_expr(#env{infer = true}, {nil, _}) ->
     return(type(nil));
-type_check_expr(#env{infer = true}, {atom, _, _} = Atom) ->
+do_type_check_expr(#env{infer = true}, {atom, _, _} = Atom) ->
     return(Atom);
-type_check_expr(#env{infer = true}, {integer, _, _N} = Integer) ->
+do_type_check_expr(#env{infer = true}, {integer, _, _N} = Integer) ->
     return(Integer);
-type_check_expr(#env{infer = true}, {float, _, _F}) ->
+do_type_check_expr(#env{infer = true}, {float, _, _F}) ->
     return(type(float));
-type_check_expr(#env{infer = true}, {char, _, _C} = Char) ->
+do_type_check_expr(#env{infer = true}, {char, _, _C} = Char) ->
     return(Char);
 
 %% Maps
-type_check_expr(Env, {map, _, Assocs}) ->
+do_type_check_expr(Env, {map, _, Assocs}) ->
     {_AssocTys, VB, Cs} = type_check_assocs(Env, Assocs),
     % TODO: When the --infer flag is set we should return the type of the map
     {type(any), VB, Cs};
-type_check_expr(Env, {map, _, Expr, Assocs}) ->
+do_type_check_expr(Env, {map, _, Expr, Assocs}) ->
     {Ty, VBExpr, Cs1} = type_check_expr(Env, Expr),
     {AssocTys, VBAssocs, Cs2} = type_check_assocs(Env, Assocs),
     MapTy = update_map_type(Ty, AssocTys),
@@ -1445,23 +1451,23 @@ type_check_expr(Env, {map, _, Expr, Assocs}) ->
     {MapTy, union_var_binds(VBExpr, VBAssocs, Env#env.tenv), constraints:combine(Cs1, Cs2)};
 
 %% Records
-type_check_expr(Env, {record_field, Anno, Expr, Record, FieldWithAnno}) ->
+do_type_check_expr(Env, {record_field, Anno, Expr, Record, FieldWithAnno}) ->
     {VB, Cs} = type_check_expr_in(Env, {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Record}]}, Expr),
     Rec = get_record_fields(Record, Anno, Env#env.tenv),
     Ty = get_rec_field_type(FieldWithAnno, Rec),
     {Ty, VB, Cs};
-type_check_expr(Env, {record, Anno, Expr, Record, Fields}) ->
+do_type_check_expr(Env, {record, Anno, Expr, Record, Fields}) ->
     RecTy = {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Record}]},
     {VB1, Cs1} = type_check_expr_in(Env, RecTy, Expr),
     Rec = get_record_fields(Record, Anno, Env#env.tenv),
     {VB2, Cs2} = type_check_fields(Env, Rec, Fields),
     {RecTy, union_var_binds(VB1, VB2, Env#env.tenv), constraints:combine(Cs1, Cs2)};
-type_check_expr(Env, {record, Anno, Record, Fields}) ->
+do_type_check_expr(Env, {record, Anno, Record, Fields}) ->
     RecTy    = {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Record}]},
     Rec      = get_record_fields(Record, Anno, Env#env.tenv),
     {VB, Cs} = type_check_fields(Env, Rec, Fields),
     {RecTy, VB, Cs};
-type_check_expr(Env, {record_index, Anno, Name, FieldWithAnno}) ->
+do_type_check_expr(Env, {record_index, Anno, Name, FieldWithAnno}) ->
     case Env#env.infer of
         true ->
             RecFields = get_record_fields(Name, Anno, Env#env.tenv),
@@ -1472,9 +1478,9 @@ type_check_expr(Env, {record_index, Anno, Name, FieldWithAnno}) ->
     end;
 
 %% Functions
-type_check_expr(Env, {'fun', _, {clauses, Clauses}}) ->
+do_type_check_expr(Env, {'fun', _, {clauses, Clauses}}) ->
     type_check_fun(Env, Clauses);
-type_check_expr(Env, {'fun', P, {function, Name, Arity}}) ->
+do_type_check_expr(Env, {'fun', P, {function, Name, Arity}}) ->
     case get_bounded_fun_type_list(Name, Arity, Env, P) of
         AnyType = {type, _, any, []} ->
             {AnyType, #{}, constraints:empty()};
@@ -1482,7 +1488,7 @@ type_check_expr(Env, {'fun', P, {function, Name, Arity}}) ->
             Ty = bounded_type_list_to_type(Env#env.tenv, BoundedFunTypeList),
             {Ty, #{}, constraints:empty()}
     end;
-type_check_expr(Env, {'fun', P, {function, M, F, A}}) ->
+do_type_check_expr(Env, {'fun', P, {function, M, F, A}}) ->
     case {get_atom(Env, M), get_atom(Env, F), A} of
         {{atom, _, Module}, {atom, _, Function}, {integer, _, Arity}} ->
             case gradualizer_db:get_spec(Module, Function, Arity) of
@@ -1495,7 +1501,7 @@ type_check_expr(Env, {'fun', P, {function, M, F, A}}) ->
         _ -> %% Not enough information to check the type of the call.
             {type(any), #{}, constraints:empty()}
     end;
-type_check_expr(Env, {named_fun, _, FunName, Clauses}) ->
+do_type_check_expr(Env, {named_fun, _, FunName, Clauses}) ->
     %% Pick a type for the fun itself, to be used when checking references to
     %% itself inside the fun, e.g. recursive calls.
     FunTy = if
@@ -1512,9 +1518,9 @@ type_check_expr(Env, {named_fun, _, FunName, Clauses}) ->
                                           ,Env#env.venv, Env#env.tenv) },
     type_check_fun(NewEnv, Clauses);
 
-type_check_expr(Env, {'receive', _, Clauses}) ->
+do_type_check_expr(Env, {'receive', _, Clauses}) ->
     infer_clauses(Env, Clauses);
-type_check_expr(Env, {'receive', _, Clauses, _After, Block}) ->
+do_type_check_expr(Env, {'receive', _, Clauses, _After, Block}) ->
     {TyClauses, VarBinds1, Cs1} = infer_clauses(Env, Clauses),
     {TyBlock,   VarBinds2, Cs2} = type_check_block(Env, Block),
     {normalize({type, erl_anno:new(0), union, [TyClauses, TyBlock]}, Env#env.tenv)
@@ -1522,14 +1528,14 @@ type_check_expr(Env, {'receive', _, Clauses, _After, Block}) ->
     ,constraints:combine(Cs1, Cs2)};
 
 %% Operators
-type_check_expr(Env, {op, _, '!', Proc, Val}) ->
+do_type_check_expr(Env, {op, _, '!', Proc, Val}) ->
     % Message passing is always untyped, which is why we discard the types
     {_, VB1, Cs1} = type_check_expr(Env, Proc),
     {_, VB2, Cs2} = type_check_expr(Env, Val),
     {type(any)
     ,union_var_binds(VB1, VB2, Env#env.tenv)
     ,constraints:combine(Cs1, Cs2)};
-type_check_expr(Env, {op, P, 'not', Arg}) ->
+do_type_check_expr(Env, {op, P, 'not', Arg}) ->
     {Ty, VB, Cs1} = type_check_expr(Env, Arg),
     case subtype(Ty, {type, P, boolean, []}, Env#env.tenv) of
         {true, Cs2} ->
@@ -1538,7 +1544,7 @@ type_check_expr(Env, {op, P, 'not', Arg}) ->
         false ->
             throw({type_error, non_boolean_argument_to_not, P, Ty})
     end;
-type_check_expr(Env, {op, P, 'bnot', Arg}) ->
+do_type_check_expr(Env, {op, P, 'bnot', Arg}) ->
     {Ty, VB, Cs1} = type_check_expr(Env, Arg),
     case subtype(Ty, {type, P, integer, []}, Env#env.tenv) of
         {true, Cs2} ->
@@ -1546,7 +1552,7 @@ type_check_expr(Env, {op, P, 'bnot', Arg}) ->
         false ->
             throw({type_error, non_integer_argument_to_bnot, P, Ty})
     end;
-type_check_expr(Env, {op, P, '+', Arg}) ->
+do_type_check_expr(Env, {op, P, '+', Arg}) ->
     {Ty, VB, Cs1} = type_check_expr(Env, Arg),
     case subtype(Ty, {type, P, number ,[]}, Env#env.tenv) of
         {true, Cs2} ->
@@ -1554,7 +1560,7 @@ type_check_expr(Env, {op, P, '+', Arg}) ->
         false ->
             throw({type_error, non_number_argument_to_plus, P, Ty})
     end;
-type_check_expr(Env, {op, P, '-', Arg}) ->
+do_type_check_expr(Env, {op, P, '-', Arg}) ->
     {Ty, VB, Cs1} = type_check_expr(Env, Arg),
     case subtype(Ty, {type, P, number ,[]}, Env#env.tenv) of
         {true, Cs2} ->
@@ -1563,11 +1569,11 @@ type_check_expr(Env, {op, P, '-', Arg}) ->
         false ->
             throw({type_error, non_number_argument_to_minus, P, Ty})
     end;
-type_check_expr(Env, {op, P, BoolOp, Arg1, Arg2}) when
+do_type_check_expr(Env, {op, P, BoolOp, Arg1, Arg2}) when
       (BoolOp == 'andalso') or (BoolOp == 'and') or
       (BoolOp == 'orelse')  or (BoolOp == 'or') or (BoolOp == 'xor') ->
     type_check_logic_op(Env, BoolOp, P, Arg1, Arg2);
-type_check_expr(Env, {op, P, RelOp, Arg1, Arg2}) when
+do_type_check_expr(Env, {op, P, RelOp, Arg1, Arg2}) when
       (RelOp == '=:=') or (RelOp == '==') or
       (RelOp == '=/=') or (RelOp == '/=') or
       % It's debatable whether we should allow comparison between any types
@@ -1575,23 +1581,23 @@ type_check_expr(Env, {op, P, RelOp, Arg1, Arg2}) when
       (RelOp == '>=')  or (RelOp == '=<') or
       (RelOp == '>')  or (RelOp == '<') ->
     type_check_rel_op(Env, RelOp, P, Arg1, Arg2);
-type_check_expr(Env, {op, P, Op, Arg1, Arg2}) when
+do_type_check_expr(Env, {op, P, Op, Arg1, Arg2}) when
       Op == '+' orelse Op == '-' orelse Op == '*' orelse Op == '/' ->
     type_check_arith_op(Env, Op, P, Arg1, Arg2);
-type_check_expr(Env, {op, P, Op, Arg1, Arg2}) when
+do_type_check_expr(Env, {op, P, Op, Arg1, Arg2}) when
       Op == 'div'  orelse Op == 'rem' orelse
       Op == 'band' orelse Op == 'bor' orelse Op == 'bxor' orelse
       Op == 'bsl'  orelse Op == 'bsr' ->
     type_check_int_op(Env, Op, P, Arg1, Arg2);
-type_check_expr(Env, {op, P, Op, Arg1, Arg2}) when
+do_type_check_expr(Env, {op, P, Op, Arg1, Arg2}) when
       Op == '++' orelse Op == '--' ->
     type_check_list_op(Env, Op, P, Arg1, Arg2);
 
 %% Exception constructs
 %% There is no typechecking of exceptions
-type_check_expr(Env, {'catch', _, Arg}) ->
+do_type_check_expr(Env, {'catch', _, Arg}) ->
     type_check_expr(Env, Arg);
-type_check_expr(Env, {'try', _, Block, CaseCs, CatchCs, AfterBlock}) ->
+do_type_check_expr(Env, {'try', _, Block, CaseCs, CatchCs, AfterBlock}) ->
     {Ty,  VB,   Cs1} = type_check_block(Env, Block),
     Env2 = Env#env{ venv = add_var_binds(VB, Env#env.venv, Env#env.tenv) },
     {TyC, _VB2, Cs2} = infer_clauses(Env2, CaseCs),
@@ -1962,8 +1968,8 @@ type_check_comprehension(Env, Compr, Expr, [Guard | Quals]) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 type_check_expr_in(Env, ResTy, Expr) ->
-    ?verbose(Env, "~p: Checking that ~s :: ~s~n",
-            [element(2, Expr), erl_prettypr:format(Expr), typelib:pp_type(ResTy)]),
+    ?verbose(Env, "~s: Checking that ~s :: ~s~n",
+            [format_location(Expr, brief), erl_prettypr:format(Expr), typelib:pp_type(ResTy)]),
     NormResTy = normalize(ResTy, Env#env.tenv),
     ?throw_orig_type(do_type_check_expr_in(Env, NormResTy, Expr),
                      ResTy, NormResTy).
@@ -3020,8 +3026,8 @@ check_clauses(Env, ArgsTy, ResTy, Clauses) ->
         {RefinedTys :: [type()] , VarBinds :: map(), constraints:constraints()}.
 check_clause(_Env, [?type(none)|_], _ResTy, {clause, P, _Args, _Guards, _Block}) ->
     throw({type_error, unreachable_clause, P});
-check_clause(Env, ArgsTy, ResTy, {clause, P, Args, Guards, Block}) ->
-    ?verbose(Env, "~p: Checking clause :: ~s~n", [P, typelib:pp_type(ResTy)]),
+check_clause(Env, ArgsTy, ResTy, C = {clause, P, Args, Guards, Block}) ->
+    ?verbose(Env, "~s: Checking clause :: ~s~n", [format_location(C, brief), typelib:pp_type(ResTy)]),
     case {length(ArgsTy), length(Args)} of
         {L, L} ->
             {PatTys, _UBounds, VEnv2, Cs1} =
@@ -4117,6 +4123,16 @@ maybe_format_column(Expr) ->
             "";
         Column ->
             " at column " ++ integer_to_list(Column)
+    end.
+
+format_location(Expr, brief) ->
+    case erl_anno:location(element(2, Expr)) of
+        {Line, Col} ->
+            io_lib:format("~p:~p", [Line, Col]);
+        Line when is_integer(Line) ->
+            integer_to_list(Line);
+        undefined ->
+            ""
     end.
 
 -spec gen_partition(pos_integer(), list(tuple()),
