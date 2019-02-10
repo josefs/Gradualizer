@@ -3659,7 +3659,7 @@ union_var_binds_help([VB], _) -> VB.
 
 add_var_binds(VEnv, VarBinds, TEnv) ->
     % TODO: Don't drop the constraints
-    Glb = fun(_K, S, T) -> {T, _C} = glb(S, T, TEnv), T end,
+    Glb = fun(_K, Ty1, Ty2) -> {Ty, _C} = glb(Ty1, Ty2, TEnv), Ty end,
     gradualizer_lib:merge_with(Glb, VEnv, VarBinds).
 
 get_rec_field_type(FieldWithAnno, RecFields) ->
