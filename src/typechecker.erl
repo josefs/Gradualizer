@@ -6,6 +6,12 @@
 -compile([{nowarn_deprecated_function,{erlang,get_stacktrace,0}}]).
 -endif.
 
+-define(verbose(Env, Fmt, Args),
+        case Env#env.verbose of
+            true -> io:format(Fmt, Args);
+            false -> ok
+        end).
+
 -define(throw_orig_type(EXPR, ORIGTYPE, NORMTYPE),
         try EXPR
         catch
@@ -1956,8 +1962,8 @@ type_check_comprehension(Env, Compr, Expr, [Guard | Quals]) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 type_check_expr_in(Env, ResTy, Expr) ->
-    verbose(Env, "~p: Checking that ~s :: ~s~n",
-            [element(2, Expr), erl_pp:expr(Expr), typelib:pp_type(ResTy)]),
+    ?verbose(Env, "~p: Checking that ~s :: ~s~n",
+            [element(2, Expr), erl_prettypr:format(Expr), typelib:pp_type(ResTy)]),
     NormResTy = normalize(ResTy, Env#env.tenv),
     ?throw_orig_type(do_type_check_expr_in(Env, NormResTy, Expr),
                      ResTy, NormResTy).
@@ -3015,7 +3021,7 @@ check_clauses(Env, ArgsTy, ResTy, Clauses) ->
 check_clause(_Env, [?type(none)|_], _ResTy, {clause, P, _Args, _Guards, _Block}) ->
     throw({type_error, unreachable_clause, P});
 check_clause(Env, ArgsTy, ResTy, {clause, P, Args, Guards, Block}) ->
-    verbose(Env, "~p: Checking clause :: ~s~n", [P, typelib:pp_type(ResTy)]),
+    ?verbose(Env, "~p: Checking clause :: ~s~n", [P, typelib:pp_type(ResTy)]),
     case {length(ArgsTy), length(Args)} of
         {L, L} ->
             {PatTys, _UBounds, VEnv2, Cs1} =
@@ -3175,7 +3181,7 @@ check_guards(Env, Guards) ->
                 end, Guards), Env#env.tenv).
 
 type_check_function(Env, {function,_, Name, NArgs, Clauses}) ->
-    verbose(Env, "Checking function ~p/~p~n", [Name, NArgs]),
+    ?verbose(Env, "Checking function ~p/~p~n", [Name, NArgs]),
     case maps:find({Name, NArgs}, Env#env.fenv) of
         {ok, FunTy} ->
             check_clauses_fun(Env, expect_fun_type(Env, FunTy), Clauses);
@@ -3698,7 +3704,7 @@ type_check_forms(Forms, Opts) ->
     ParseData =
         collect_specs_types_opaques_and_functions(Forms),
     Env = create_env(ParseData, Opts),
-    verbose(Env, "Checking module ~p~n", [ParseData#parsedata.module]),
+    ?verbose(Env, "Checking module ~p~n", [ParseData#parsedata.module]),
     lists:foldr(fun (Function, Errors) when Errors =:= [];
                                          not StopOnFirstError ->
                         try type_check_function(Env, Function) of
