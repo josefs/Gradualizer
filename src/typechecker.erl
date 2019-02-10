@@ -1244,7 +1244,7 @@ solve_bounds(TEnv, Defs, [{acyclic, X} | SCCs], Acc) ->
 			  end,
 			  {type(term), constraints:empty()}, Tys1);
 	  _NoBoundsForX ->
-	      type(any) %% or should we return term()?
+	      {type(any), constraints:empty()} %% or should we return term()?
       end,
     solve_bounds(TEnv, maps:remove(X, Defs), SCCs, Acc#{ X => Ty1 });
 solve_bounds(_, _, [{cyclic, Xs} | _], _) ->

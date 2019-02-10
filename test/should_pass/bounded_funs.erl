@@ -1,19 +1,25 @@
 -module(bounded_funs).
 
--export([f/0, h/0, funs/0]).
+-export([calls/0, funs/0]).
 
--spec f() -> term().
-f() ->
-    g(myatom).
+-spec calls() -> term().
+calls() ->
+    V1 = g(myatom),
+    V2 = ets:lookup_element(myatom, asd, 2),
+    V3 = prepend(myatom, [asd]),
+    {V1, V2, V3}.
+
+funs() ->
+    F1 = fun g/1,
+    F2 = fun ets:lookup_element/3,
+    F3 = fun prepend/2,
+    {F1, F2, F3}.
 
 -spec g(Atom) -> any() when Atom :: atom().
 g(A) ->
     A.
 
-h() ->
-    ets:lookup_element(myatom, asd, 2).
-
-funs() ->
-    F1 = fun g/1,
-    F2 = fun ets:lookup_element/3,
-    {F1, F2}.
+%% Constraint with free var E
+-spec prepend(Elem, [E]) -> [E] when Elem :: E.
+prepend(Elem, L) ->
+    [Elem|L].
