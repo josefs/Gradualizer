@@ -43,6 +43,8 @@ pp_type(Type = {type, _, bounded_fun, _}) ->
     {match, [S]} = re:run(TypeDef, <<"-spec foo\\s*(.*)\\.\\n*$">>,
                           [{capture, all_but_first, list}, dotall]),
     "fun(" ++ S ++ ")";
+pp_type({var, _, TyVar}) ->
+    TyVar;
 pp_type(Type) ->
     %% erl_pp can handle type definitions, so wrap Type in a type definition
     %% and then take the type from that.
