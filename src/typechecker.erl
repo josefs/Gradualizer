@@ -397,6 +397,28 @@ glb_ty(_Ty1, {type, _, none, []} = Ty2, _A, _TEnv) ->
 glb_ty(Ty, Ty, _A, _TEnv) ->
     ret(Ty);
 
+%% Type variables. TODO: can we get here with constrained type variables?
+glb_ty({ann_type, _, [{var, _, _}, Ty1]}, Ty2, A, TEnv) ->
+    glb(Ty1, Ty2, A, TEnv);
+glb_ty(Ty1, {ann_type, _, [{var, _, _}, Ty2]}, A, TEnv) ->
+    glb(Ty1, Ty2, A, TEnv);
+glb_ty(Var = {var, _, _}, Ty2, _A, _TEnv) ->
+    V = new_type_var(),
+    {{var, erl_anno:new(0), V}
+    ,constraints:add_var(V,
+       constraints:combine(
+	 constraints:upper(V, Var),
+	 constraints:upper(V, Ty2)
+	))};
+glb_ty(Ty1, Var = {var, _, _}, _A, _TEnv) ->
+    V = new_type_var(),
+    {{var, erl_anno:new(0), V}
+    ,constraints:add_var(V,
+       constraints:combine(
+	 constraints:upper(V, Var),
+	 constraints:upper(V, Ty1)
+	))};
+
 %% Union types: glb distributes over unions
 glb_ty({type, Ann, union, Ty1s}, Ty2, A, TEnv) ->
     {Tys, Css} = lists:unzip([ glb_ty(Ty1, Ty2, A, TEnv) || Ty1 <- Ty1s ]),
@@ -500,28 +522,6 @@ glb_ty({type, _, 'fun', [{type, _, product, Args1}, Res1]},
                 false -> {type(none), Cs}
             end
     end;
-
-%% Type variables. TODO: can we get here with constrained type variables?
-glb_ty({ann_type, _, [{var, _, _}, Ty1]}, Ty2, A, TEnv) ->
-    glb(Ty1, Ty2, A, TEnv);
-glb_ty(Ty1, {ann_type, _, [{var, _, _}, Ty2]}, A, TEnv) ->
-    glb(Ty1, Ty2, A, TEnv);
-glb_ty(Var = {var, _, _}, Ty2, _A, _TEnv) ->
-    V = new_type_var(),
-    {{var, erl_anno:new(0), V}
-    ,constraints:add_var(V,
-       constraints:combine(
-	 constraints:upper(V, Var),
-	 constraints:upper(V, Ty2)
-	))};
-glb_ty(Ty1, Var = {var, _, _}, _A, _TEnv) ->
-    V = new_type_var(),
-    {{var, erl_anno:new(0), V}
-    ,constraints:add_var(V,
-       constraints:combine(
-	 constraints:upper(V, Var),
-	 constraints:upper(V, Ty1)
-	))};
 
 %% normalize and remove_pos only does the top layer
 glb_ty({type, _, Name, Args1}, {type, _, Name, Args2}, A, TEnv)
