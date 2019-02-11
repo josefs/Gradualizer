@@ -2087,7 +2087,6 @@ do_type_check_expr_in(Env, ResTy, {map, _, Expr, Assocs} = Map) ->
     {Ty, VBExpr, Cs1} = type_check_expr(Env, Expr),
     {AssocTys, VBAssocs, Cs2} = type_check_assocs(Env, Assocs),
     UpdatedTy = update_map_type(Ty, AssocTys),
-    io:format("update-map: ~p~n~p~n~p~n", [AssocTys, UpdatedTy, ResTy]),
     case subtype(UpdatedTy, ResTy, Env#env.tenv) of
         {true, Cs3} ->
             {union_var_binds(VBExpr, VBAssocs, Env#env.tenv),
