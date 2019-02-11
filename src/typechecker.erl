@@ -2338,11 +2338,11 @@ type_check_arith_op_in(Env, Kind, ResTy, Op, P, Arg1, Arg2) ->
             {VB, constraints:combine(Cs, Cs1)};
         _ ->
             case arith_op_arg_types(Op, ResTy1) of
-                {ArgTy1, ArgTy2} ->
-                    {VarBinds1, Cs1} = type_check_expr_in(Env, ArgTy1, Arg1),
-                    {VarBinds2, Cs2} = type_check_expr_in(Env, ArgTy2, Arg2),
+                {ArgTy1, ArgTy2, Cs1} ->
+                    {VarBinds1, Cs2} = type_check_expr_in(Env, ArgTy1, Arg1),
+                    {VarBinds2, Cs3} = type_check_expr_in(Env, ArgTy2, Arg2),
                     {union_var_binds(VarBinds1, VarBinds2, Env#env.tenv),
-                     constraints:combine([Cs, Cs1, Cs2])};
+                     constraints:combine([Cs, Cs1, Cs2, Cs3])};
                 false ->
                     throw({type_error, op_type_too_precise, Op, P, ResTy1})
             end
@@ -2353,7 +2353,7 @@ type_check_arith_op_in(Env, Kind, ResTy, Op, P, Arg1, Arg2) ->
 
 %% any() is always fine
 arith_op_arg_types(_Op, Ty = {type, _, any, []}) ->
-    {Ty, Ty};
+    {Ty, Ty, constraints:empty()};
 
 %% '/' can't produce an integer type
 arith_op_arg_types('/', Ty) when ?is_int_type(Ty) ->
@@ -2361,7 +2361,7 @@ arith_op_arg_types('/', Ty) when ?is_int_type(Ty) ->
 
 %% integer() is closed under all operators except '/'
 arith_op_arg_types(_, Ty = {type, _, integer, []}) ->
-    {Ty, Ty};
+    {Ty, Ty, constraints:empty()};
 
 %% float() is closed under non-integer-exclusive operations and accepts
 %% any number() for '/'.
@@ -2370,8 +2370,8 @@ arith_op_arg_types(_, Ty = {type, _, integer, []}) ->
 arith_op_arg_types(Op, Ty = {type, _, float, []}) ->
     case Op of
         _ when Op == '+'; Op == '*'; Op == '-' ->
-            {Ty, Ty};
-        '/' -> {type(number), type(number)}
+            {Ty, Ty, constraints:empty()};
+        '/' -> {type(number), type(number), constraints:empty()}
     end;
 
 %% Singleton types are not closed under any operations
@@ -2381,27 +2381,28 @@ arith_op_arg_types(_, {T, _, _}) when T == integer; T == char ->
 %% pos_integer() is closed under '+',  '*', and 'bor'
 arith_op_arg_types(Op, Ty = {type, _, pos_integer, []}) ->
     case lists:member(Op, ['+', '*', 'bor']) of
-        true -> {Ty, Ty};
+        true -> {Ty, Ty, constraints:empty()};
         false -> false
     end;
 
 %% Special case for integer recursion: pos_integer() - 1 :: non_neg_integer()
 arith_op_arg_types('-', ?type(non_neg_integer)) ->
-    {type(pos_integer), {integer, erl_anno:new(0), 1}};
+    {type(pos_integer), {integer, erl_anno:new(0), 1}, constraints:empty()};
 
 %% non_neg_integer() are closed under everything except '-' and '/'
 arith_op_arg_types(Op, Ty = {type, _, non_neg_integer, []}) ->
     case lists:member(Op, ['+', '*', 'div', 'rem', 'band', 'bor', 'bxor']) of
         %% Shift amounts can be negative
-        _ when Op == 'bsl'; Op == 'bsr' -> {Ty, type(integer)};
-        true -> {Ty, Ty};
+        _ when Op == 'bsl'; Op == 'bsr' -> {Ty, type(integer)
+					   ,constraints:empty()};
+        true -> {Ty, Ty, constraints:empty()};
         false -> false
     end;
 
 %% neg_integer() is only closed under '+'
 arith_op_arg_types(Op, Ty = {type, _, neg_integer, []}) ->
     case Op of
-        '+' -> {Ty, Ty};
+        '+' -> {Ty, Ty, constraints:empty()};
         _   -> false
     end;
 
@@ -2415,14 +2416,16 @@ arith_op_arg_types(Op, {type, _, range, _} = Ty) ->
     case int_type_to_range(Ty) of
         {0, B} when Op == 'rem' ->
             [TyR] = int_range_to_types({0, B + 1}),
-            {type(non_neg_integer), TyR};
+            {type(non_neg_integer), TyR, constraints:empty()};
         %% bsr and div make things smaller for any non_neg/pos second argument
-        {0, _} when Op == 'bsr' -> {Ty, type(non_neg_integer)};
-        {0, _} when Op == 'div' -> {Ty, type(pos_integer)};
+        {0, _} when Op == 'bsr' -> {Ty, type(non_neg_integer)
+				   ,constraints:empty()};
+        {0, _} when Op == 'div' -> {Ty, type(pos_integer)
+				   ,constraints:empty()};
         {0, B} ->
             case is_power_of_two(B + 1) andalso
                  lists:member(Op, ['band', 'bor', 'bxor']) of
-                true -> {Ty, Ty};
+                true -> {Ty, Ty, constraints:empty()};
                 false -> false
             end;
         _ -> false
@@ -2431,12 +2434,29 @@ arith_op_arg_types(Op, {type, _, range, _} = Ty) ->
 %% We get normalised types here, so number() is expanded to integer() | float().
 arith_op_arg_types(Op, {type, _, union, Tys}) ->
     ArgTys = [ arith_op_arg_types(Op, Ty) || Ty <- Tys ],
-    case [ A || A = {_, _} <- ArgTys ] of   %% filter failures
+    case [ A || A = {_, _, _} <- ArgTys ] of   %% filter failures
         []      -> false;
         ArgTys1 ->
-            {LeftArgs, RightArgs} = lists:unzip(ArgTys1),
-            {type(union, LeftArgs), type(union, RightArgs)}
+            {LeftArgs, RightArgs, Css} = lists:unzip3(ArgTys1),
+            {type(union, LeftArgs)
+	    ,type(union, RightArgs)
+	    ,constraints:combine(Css)}
     end;
+
+%% When the expected type is a type variable we have to
+%% constrain it appropriately. We generate new type variables for the
+%% two arguments.
+arith_op_arg_types(_Op, VarTy={var, _, TyVar}) ->
+    LTyVar = new_type_var(),
+    RTyVar = new_type_var(),
+    {type_var(LTyVar), type_var(RTyVar),
+     constraints:add_var(LTyVar,
+     constraints:add_var(RTyVar,
+     constraints:combine(
+		       [constraints:upper(TyVar, type(number))
+		       ,constraints:upper(LTyVar, VarTy)
+		       ,constraints:upper(RTyVar, VarTy)
+		       ])))};
 
 %% Cases like Op = '-', Ty = neg_integer()
 arith_op_arg_types(_Op, _Ty) ->
@@ -3623,6 +3643,9 @@ type(Name, Args) ->
     {type, erl_anno:new(0), Name, Args}.
 
 type(Name) -> type(Name, []).
+
+type_var(Name) ->
+    {var, erl_anno:new(0), Name}.
 
 return(X) ->
     { X, #{}, constraints:empty() }.
