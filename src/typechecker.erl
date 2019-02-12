@@ -4152,9 +4152,7 @@ format_location(Expr, brief) ->
         {Line, Col} ->
             io_lib:format("~p:~p", [Line, Col]);
         Line when is_integer(Line) ->
-            integer_to_list(Line);
-        undefined ->
-            ""
+            integer_to_list(Line)
     end.
 
 -spec gen_partition(pos_integer(), list(tuple()),
