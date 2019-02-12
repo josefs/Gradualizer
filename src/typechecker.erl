@@ -1296,7 +1296,7 @@ subst_ty(_, Ty) -> Ty.
 %-spec type_check_expr(#env, any()) -> { any(), #{ any() => any()}, #{ any() => any()} }.
 type_check_expr(Env, Expr) ->
     Res = {Ty, _VarBinds, _Cs} = do_type_check_expr(Env, Expr),
-    ?verbose(Env, "~s: Inferred type of ~s :: ~s~n",
+    ?verbose(Env, "~s: Propagated type of ~s :: ~s~n",
              [format_location(Expr, brief), erl_prettypr:format(Expr), typelib:pp_type(Ty)]),
     Res.
 
