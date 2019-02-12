@@ -2,12 +2,10 @@
 
 %% This module contains specs to replace incorrect or inexact specs in OTP.
 
--type ext_binary() :: binary().
-
 -spec erlang:apply(function(), [any()]) -> any().
--spec erlang:apply(atom(), function(), [any()]) -> any().
--spec erlang:binary_to_term(ext_binary()) -> any().
--spec erlang:binary_to_term(ext_binary(), [safe | unsafe]) -> any() | {any(), pos_integer()}.
+-spec erlang:apply(module(), atom(), [any()]) -> any().
+-spec erlang:binary_to_term(binary()) -> any().
+-spec erlang:binary_to_term(binary(), [safe | used]) -> any() | {any(), pos_integer()}.
 -spec erlang:element(pos_integer(), tuple()) -> any().
 -spec erlang:erase() -> [{any(), any()}].
 -spec erlang:erase(any()) -> any() | undefined.
@@ -41,8 +39,8 @@
 				  , arity() | [any()]
 				  , [{file, string()}|{line, pos_integer()}]}].
 -spec erlang:hd([A, ...]) -> A.
--spec erlang:max(any(), any()) -> any().
--spec erlang:min(any(), any()) -> any().
+-spec erlang:max(A, B) -> A | B.
+-spec erlang:min(A, B) -> A | B.
 -spec erlang:port_call(port() | atom(), integer(), any()) -> any().
 %% TODO: erlang:process_info
 -spec erlang:put(any(), any()) -> any().
@@ -50,13 +48,13 @@
       Class      :: error | exit | throw,
       Reason     :: any(),
       Stacktrace :: [{module(), atom(), arity() | [any()]} |
-		     {function(), [any()]}] |
-		    [{module(), atom(), arity() | [any()], [{atom(), any()}]} |
-		     {function(), [any()], [{atom(), any()}]}].
+                     {function(), [any()]}] |
+                    [{module(), atom(), arity() | [any()], [{atom(), any()}]} |
+                     {function(), [any()], [{atom(), any()}]}].
 -spec erlang:send(pid() | port() | atom() | {atom(), node()}, any()) -> any().
 -spec erlang:send(pid() | port() | atom() | {atom(), node()}, any()
-		 , [nosuspend | noconnect])
-		 -> ok | nosuspend | noconnect.
+                 ,[nosuspend | noconnect])
+                -> ok | nosuspend | noconnect.
 %% TODO: erlang:system_info({allocator, atom()) -> [term()]
 %% TODO: erlang:system_info({allocator_sizes, atom()) -> [term()]
 %% TODO: erlang:system_info(os_monotonic_time_source) -> [{atom(), term()}].
