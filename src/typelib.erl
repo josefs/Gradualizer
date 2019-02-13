@@ -106,10 +106,6 @@ remove_pos({type, _, Type, any}) when Type == tuple; Type == map ->
 remove_pos({type, _, Assoc, Tys}) when Assoc == map_field_exact;
 				      Assoc == map_field_assoc ->
     {type, erl_anno:new(0), Assoc, lists:map(fun remove_pos/1, Tys)};
-% Special format of map fields used while updating
-remove_pos({type, _, Assoc, Key, Value}) when Assoc == map_field_exact;
-					      Assoc == map_field_assoc ->
-    {type, erl_anno:new(0), Assoc, remove_pos(Key), remove_pos(Value)};
 remove_pos({remote_type, _, [Mod, Name, Params]}) ->
     Params1 = lists:map(fun remove_pos/1, Params),
     {remote_type, erl_anno:new(0), [Mod, Name, Params1]};
