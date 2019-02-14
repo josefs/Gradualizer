@@ -49,6 +49,16 @@ escript:
 gradualize: escript
 	./gradualizer -pa src/ src/*.erl
 
+.PHONY: nocrashongradualize
+nocrashongradualize: escript
+	./gradualizer -pa src/ src/*.erl; \
+    EXIT=$$?; \
+    if [ $$EXIT -eq 0 ] || [ $$EXIT -eq 1 ]; then \
+        exit 0; \
+    else \
+        exit $$EXIT; \
+    fi
+
 .PHONY: clean
 clean:
 	rebar3 clean
@@ -79,4 +89,4 @@ dialyze:
 check: tests dialyze gradualize
 
 .PHONY: travischeck
-travischeck: cover dialyze
+travischeck: cover dialyze nocrashongradualize
