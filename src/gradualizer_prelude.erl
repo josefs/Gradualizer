@@ -64,8 +64,6 @@
 -spec erlang:tl([A, ...]) -> [A].
 -spec erlang:tuple_to_list(tuple()) -> list().
 
-
-
 %% change return Val to any() from term()
 -spec application:get_env(Par) -> 'undefined' | {'ok', Val} when
       Par :: atom(),

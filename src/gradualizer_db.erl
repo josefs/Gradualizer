@@ -4,6 +4,8 @@
 %% as the type for all parameters and return values.
 -module(gradualizer_db).
 
+-include("gradualizer_db.hrl").
+
 -ifdef(OTP_RELEASE).
 -compile([{nowarn_deprecated_function,{erlang,get_stacktrace,0}}]).
 -endif.
@@ -142,7 +144,8 @@ import_module(Module) ->
 -spec init(opts()) -> {ok, state()}.
 init(Opts0) ->
     Opts = maps:merge(?default_opts, Opts0),
-    State1 = #state{opts = Opts},
+    State1 = #state{opts = Opts,
+                    specs = ?BUILT_IN_SPECS},
     State2 = case Opts of
                  #{autoimport := true} ->
                     State1#state{srcmap = get_src_map(), beammap = get_beam_map()};

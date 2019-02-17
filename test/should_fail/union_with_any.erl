@@ -20,5 +20,5 @@ f2() ->
 -spec get_atom() -> atom().
 get_atom() -> banana.
 
--spec inc(number()) -> number().
+-spec inc(integer()) -> integer().
 inc(N) -> N + 1.

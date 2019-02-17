@@ -1582,13 +1582,18 @@ do_type_check_expr(Env, {op, P, RelOp, Arg1, Arg2}) when
       (RelOp == '>')  or (RelOp == '<') ->
     type_check_rel_op(Env, RelOp, P, Arg1, Arg2);
 do_type_check_expr(Env, {op, P, Op, Arg1, Arg2}) when
-      Op == '+' orelse Op == '-' orelse Op == '*' orelse Op == '/' ->
-    type_check_arith_op(Env, Op, P, Arg1, Arg2);
-do_type_check_expr(Env, {op, P, Op, Arg1, Arg2}) when
+      Op == '+' orelse Op == '-' orelse Op == '*' orelse Op == '/' orelse
       Op == 'div'  orelse Op == 'rem' orelse
       Op == 'band' orelse Op == 'bor' orelse Op == 'bxor' orelse
-      Op == 'bsl'  orelse Op == 'bsr' ->
-    type_check_int_op(Env, Op, P, Arg1, Arg2);
+      Op == 'bsl'  orelse Op == 'bsr'->
+    FunTy = case gradualizer_db:get_spec(erlang, Op, 2) of
+        {ok, Types} ->
+            [ typelib:annotate_user_types(erlang, T) || T <- Types ]
+    end,
+    type_check_call_ty(Env,
+                       expect_fun_type(Env, FunTy),
+                       [Arg1, Arg2],
+                       {{atom, P, Op}, P, FunTy});
 do_type_check_expr(Env, {op, P, Op, Arg1, Arg2}) when
       Op == '++' orelse Op == '--' ->
     type_check_list_op(Env, Op, P, Arg1, Arg2);
@@ -2267,13 +2272,19 @@ do_type_check_expr_in(Env, ResTy, {op, P, Op, Arg}) when
       Op == 'not'; Op == 'bnot'; Op == '+'; Op == '-' ->
     type_check_unary_op_in(Env, ResTy, Op, P, Arg);
 do_type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
-      Op == '+' orelse Op == '-' orelse Op == '*' orelse Op == '/' ->
-    type_check_arith_op_in(Env, ResTy, Op, P, Arg1, Arg2);
-do_type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
+      Op == '+' orelse Op == '-' orelse Op == '*' orelse Op == '/' orelse
       Op == 'div'  orelse Op == 'rem' orelse
       Op == 'band' orelse Op == 'bor' orelse Op == 'bxor' orelse
       Op == 'bsl'  orelse Op == 'bsr' ->
-    type_check_int_op_in(Env, ResTy, Op, P, Arg1, Arg2);
+    FunTy = case gradualizer_db:get_spec(erlang, Op, 2) of
+        {ok, Types} ->
+            [ typelib:annotate_user_types(erlang, T) || T <- Types ]
+    end,
+    type_check_call(Env,
+                    ResTy,
+                    expect_fun_type(Env, FunTy),
+                    [Arg1, Arg2],
+                    {P, {atom, P, Op}, FunTy});
 do_type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
       Op == 'and' orelse Op == 'or' orelse Op == 'xor' orelse
       Op == 'andalso' orelse Op == 'orelse' ->
