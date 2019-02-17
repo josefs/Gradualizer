@@ -71,6 +71,10 @@ subtype_test_() ->
      ?_assert(subtype(?t( nonempty_list()   ), ?t( [a]              ))),
      ?_assert(subtype(?t( nonempty_list()   ), ?t( [a, ...]         ))),
      ?_assert(subtype(?t( [a, ...]          ), ?t( [a]              ))),
+     ?_assert(subtype(?t( []                ), ?t( iolist()         ))),
+     ?_assert(subtype(?t( maybe_improper_list(byte(), binary()) ), ?t( iolist() ))),
+     ?_assert(subtype(?t( nonempty_list()   ), ?t( iodata()         ))),
+     ?_assert(subtype(?t( [byte()]          ), ?t( string()         ))),
 
      %% Tuples
      ?_assert(subtype(?t( {a,b,c}           ), ?t( tuple()          ))),
@@ -356,7 +360,7 @@ type_check_in_test_() ->
 
 infer_types_test_() ->
     %% Checking type_check_expr with inference enabled
-    [?_assertEqual("{1, nonempty_string(), [], banana, float(), $c}",
+    [?_assertEqual("{1, [$e | $h | $l | $o, ...], [], banana, float(), $c}",
                    type_check_expr(_Env = "",
                                    _Expr = "{1, \"hello\", \"\", banana, 3.14, $c}",
                                    [infer])),

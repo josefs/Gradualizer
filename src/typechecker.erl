@@ -633,7 +633,10 @@ expand_builtin_aliases({type, Ann, iolist, []}) ->
     Union = [{type, Ann, byte, []},
              {type, Ann, binary, []},
              {type, Ann, iolist, []}],
-    {type, Ann, maybe_improper_list, [{type, Ann, union, Union}]};
+    Tail = [{type, Ann, nil, []},
+            {type, Ann, binary, []}],
+    {type, Ann, maybe_improper_list, [{type, Ann, union, Union},
+                                      {type, Ann, union, Tail}]};
 expand_builtin_aliases({type, Ann, function, []}) ->
     {type, Ann, 'fun', []};
 expand_builtin_aliases({type, Ann, module, []}) ->
@@ -876,11 +879,12 @@ negate_bool_type(Ty) ->
 list_view(Ty = {type, _, T, Args}) when ?is_list_type(Ty) ->
     Empty =
         case T of
-            nil                    -> empty;
-            list                   -> any;
-            nonempty_list          -> nonempty;
-            maybe_improper_list    -> any;
-            nonempty_improper_list -> nonempty
+            nil                          -> empty;
+            list                         -> any;
+            nonempty_list                -> nonempty;
+            maybe_improper_list          -> any;
+            nonempty_improper_list       -> nonempty;
+            nonempty_maybe_improper_list -> nonempty
         end,
     Elem =
         case Args of
@@ -920,31 +924,31 @@ from_list_view({Empty, Elem, Term}) ->
 %% its type parameter. One example is the list type, and there are
 %% cases where we need to get the type of the elements.
 
--spec expect_list_type(type(), allow_nil_type | dont_allow_nil_type) ->
+-spec expect_list_type(type(), allow_nil_type | dont_allow_nil_type, #tenv{}) ->
           {elem_ty,  type(),   constraints:constraints()}    %% There is exactly one element type
         | {elem_tys, [type()], constraints:constraints()}  %% A union can give rise to multiple elem types
         | any                   %% If we don't know the element type
         | {type_error, type()}. %% If the argument is not compatible with lists
 
-expect_list_type({type, _, T, []}, _)
+expect_list_type({type, _, T, []}, _, _)
   when T == 'list' orelse T == 'any' orelse
        T == 'nonempty_list' orelse T == 'maybe_improper_list' ->
     any;
-expect_list_type({type, _, T, [ElemTy]}, _)
+expect_list_type({type, _, T, [ElemTy]}, _, _)
   when T == 'list' orelse T == 'nonempty_list' ->
     {elem_ty, ElemTy, constraints:empty()};
-expect_list_type(?type(term) = TermTy, _EmptyOrNot) ->
+expect_list_type(?type(term) = TermTy, _EmptyOrNot, _) ->
     {elem_ty, TermTy, constraints:empty()};
-expect_list_type({type, _, maybe_improper_list, [ElemTy, _]}, _) ->
+expect_list_type({type, _, maybe_improper_list, [ElemTy, _]}, _, _) ->
     {elem_ty, ElemTy, constraints:empty()};
-expect_list_type({type, _, nil, []}, allow_nil_type) ->
+expect_list_type({type, _, nil, []}, allow_nil_type, _) ->
     any;
-expect_list_type({type, _, string, []}, _) ->
+expect_list_type({type, _, string, []}, _, _) ->
     {elem_ty, type(char), constraints:empty()};
-expect_list_type({ann_type, _, [_, Ty]}, N) ->
-    expect_list_type(Ty, N);
-expect_list_type(Union = {type, _, union, UnionTys}, N) ->
-    {Tys, Cs} = expect_list_union(UnionTys, [], constraints:empty(), no_any, N),
+expect_list_type({ann_type, _, [_, Ty]}, N, TEnv) ->
+    expect_list_type(Ty, N, TEnv);
+expect_list_type(Union = {type, _, union, UnionTys}, N, TEnv) ->
+    {Tys, Cs} = expect_list_union(UnionTys, [], constraints:empty(), no_any, N, TEnv),
     case Tys of
         [] ->
             {type_error, Union};
@@ -953,44 +957,64 @@ expect_list_type(Union = {type, _, union, UnionTys}, N) ->
         _ ->
             {elem_tys, Tys, Cs}
     end;
-expect_list_type({var, _, Var}, _) ->
+expect_list_type({var, _, Var}, _, _) ->
     TyVar = new_type_var(),
     {elem_ty
     ,{var, erl_anno:new(0), TyVar}
     ,constraints:add_var(TyVar,
       constraints:upper(Var, {type, erl_anno:new(0), list, [TyVar]}))
     };
-expect_list_type(Ty, _) ->
+expect_list_type(Ty, _, _) ->
     {type_error, Ty}.
 
 
-expect_list_union([Ty|Tys], AccTy, AccCs, Any, N) ->
-    case expect_list_type(Ty, N) of
+expect_list_union([Ty|Tys], AccTy, AccCs, Any, N, TEnv) ->
+    case expect_list_type(normalize(Ty, TEnv), N, TEnv) of
         {type_error, _} ->
-            expect_list_union(Tys, AccTy, AccCs, Any, N);
+            expect_list_union(Tys, AccTy, AccCs, Any, N, TEnv);
         any ->
             expect_list_union(Tys
                              ,[type(any) | AccTy]
                              ,AccCs
                              ,any
-                             ,N);
+                             ,N
+                             ,TEnv);
         {elem_ty, NTy, Cs} ->
             expect_list_union(Tys
                              ,[NTy | AccTy]
                              ,constraints:combine(Cs, AccCs)
                              ,Any
-                             ,N);
+                             ,N
+                             ,TEnv);
         {elem_tys, NTys, Cs} ->
             expect_list_union(Tys
                              ,NTys ++ AccTy
                              ,constraints:combine(Cs, AccCs)
                              ,Any
-                             ,N)
+                             ,N
+                             ,TEnv)
     end;
-expect_list_union([], AccTy, AccCs, any, _N) ->
+expect_list_union([], AccTy, AccCs, any, _N, _TEnv) ->
     {[type(any) | AccTy], AccCs};
-expect_list_union([], AccTy, AccCs, _NoAny, _N) ->
+expect_list_union([], AccTy, AccCs, _NoAny, _N, _TEnv) ->
     {AccTy, AccCs}.
+
+infer_literal_string("") ->
+    type(nil);
+infer_literal_string(Str) ->
+    SortedChars = lists:usort(Str),
+    case lists:all(fun(C) -> C =< 255 end, SortedChars) of
+        _ when length(SortedChars) =< 10 ->
+            %% heuristics: if there are not more than 10 different charactes
+            %% list them explicitely as singleton types
+            CharTypes = [{char, erl_anno:new(0), C} || C <- SortedChars],
+            type(nonempty_list, [type(union, CharTypes)]);
+        true ->
+            %% the literal is a latin1 string
+            type(nonempty_list, [type(byte)]);
+        false ->
+            type(nonempty_string)
+    end.
 
 expect_tuple_type({type, _, tuple, any}, _N) ->
     any;
@@ -1059,7 +1083,11 @@ allow_empty_list({type, P, nonempty_list, []}) ->
 allow_empty_list({type, P, nonempty_list, [T]}) ->
     {type, P, list, [T]};
 allow_empty_list(Ty) ->
-    Ty.
+    case list_view(Ty) of
+        {_Empty, _Elem, Term} ->
+            type(union, [Ty, Term]);
+        false -> Ty
+    end.
 
 %% Categorizes a function type.
 %% Normalizes the type (expand user-def and remote types). Errors for non-fun
@@ -1296,7 +1324,7 @@ subst_ty(_, Ty) -> Ty.
 %-spec type_check_expr(#env, any()) -> { any(), #{ any() => any()}, #{ any() => any()} }.
 type_check_expr(Env, Expr) ->
     Res = {Ty, _VarBinds, _Cs} = do_type_check_expr(Env, Expr),
-    ?verbose(Env, "~s: Propagated type of ~s :: ~s~n",
+    ?verbose(Env, "~s: Propagated type of ~ts :: ~ts~n",
              [format_location(Expr, brief), erl_prettypr:format(Expr), typelib:pp_type(Ty)]),
     Res.
 
@@ -1353,7 +1381,7 @@ do_type_check_expr(Env, {cons, _, Head, Tail}) ->
         {_, _} ->
             %% Propagate type information from tail, which must be a list type
             {TailElemTys, Cs4} =
-                case expect_list_type(Ty2, dont_allow_nil_type) of
+                case expect_list_type(Ty2, dont_allow_nil_type, Env#env.tenv) of
                     any ->
                         {[type(any)], Cs};
                     {elem_ty, ElemTy, Cs3} ->
@@ -1423,10 +1451,9 @@ do_type_check_expr(#env{infer = false}, {char, _, _C}) ->
 
 %% When infer = true, we do propagate the types of literals,
 %% list cons, tuples, etc.
-do_type_check_expr(#env{infer = true}, {string, _, ""}) ->
-    return(type(nil));
-do_type_check_expr(#env{infer = true}, {string, _, [_|_]}) ->
-    return(type(nonempty_string));
+do_type_check_expr(#env{infer = true}, {string, _, Chars}) ->
+    ActualyTy = infer_literal_string(Chars),
+    return(ActualyTy);
 do_type_check_expr(#env{infer = true}, {nil, _}) ->
     return(type(nil));
 do_type_check_expr(#env{infer = true}, {atom, _, _} = Atom) ->
@@ -1920,7 +1947,7 @@ type_check_comprehension(Env, bc, Expr, []) ->
     {RetTy, #{}, Cs};
 type_check_comprehension(Env, Compr, Expr, [{generate, P, Pat, Gen} | Quals]) ->
     {Ty,  _,  Cs1} = type_check_expr(Env, Gen),
-    case expect_list_type(Ty, allow_nil_type) of
+    case expect_list_type(Ty, allow_nil_type, Env#env.tenv) of
         {elem_ty, ElemTy, Cs} ->
             {_PatTy, _UBound, NewVEnv, Cs2} =
                 add_type_pat(Pat, ElemTy, Env#env.tenv, Env#env.venv),
@@ -1968,7 +1995,7 @@ type_check_comprehension(Env, Compr, Expr, [Guard | Quals]) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 type_check_expr_in(Env, ResTy, Expr) ->
-    ?verbose(Env, "~s: Checking that ~s :: ~s~n",
+    ?verbose(Env, "~s: Checking that ~ts :: ~ts~n",
             [format_location(Expr, brief), erl_prettypr:format(Expr), typelib:pp_type(ResTy)]),
     NormResTy = normalize(ResTy, Env#env.tenv),
     ?throw_orig_type(do_type_check_expr_in(Env, NormResTy, Expr),
@@ -2020,7 +2047,7 @@ do_type_check_expr_in(Env, Ty, Char = {char, _, _}) ->
            throw({type_error, Char, Char, Ty})
     end;
 do_type_check_expr_in(Env, Ty, Cons = {cons, _, H, T}) ->
-    case expect_list_type(Ty, dont_allow_nil_type) of
+    case expect_list_type(Ty, dont_allow_nil_type, Env#env.tenv) of
         {elem_ty, ETy, Cs} ->
             {VB1, Cs1} = type_check_expr_in(Env, ETy, H),
             {VB2, Cs2} = type_check_expr_in(Env, allow_empty_list(Ty),  T),
@@ -2044,10 +2071,7 @@ do_type_check_expr_in(Env, Ty, {nil, _} = Nil) ->
             throw({type_error, Nil, type(nil), Ty})
     end;
 do_type_check_expr_in(Env, Ty, {string, _, Chars} = String) ->
-    ActualTy = case Chars of
-                   []    -> type(nil);
-                   [_|_] -> type(nonempty_string)
-               end,
+    ActualTy = infer_literal_string(Chars),
     case subtype(ActualTy, Ty, Env#env.tenv) of
       {true, Cs} ->
         {#{}, Cs};
@@ -2620,7 +2644,7 @@ unary_op_arg_type('-', Ty = {type, _, float, []}) ->
         BinGen  :: {b_generate, erl_anno:anno(), erl_parse:abstract_expr(), erl_parse:abstract_expr()},
         Filter  :: erl_parse:abstract_expr().
 type_check_comprehension_in(Env, ResTy, lc, Expr, P, []) ->
-    case expect_list_type(ResTy, allow_nil_type) of
+    case expect_list_type(ResTy, allow_nil_type, Env#env.tenv) of
         any ->
             {_Ty, _VB, Cs} = type_check_expr(Env, Expr),
             {#{}, Cs};
@@ -2656,7 +2680,7 @@ type_check_comprehension_in(Env, ResTy, bc, Expr, P, []) ->
 type_check_comprehension_in(Env, ResTy, Compr, Expr, P,
                             [{generate, P_Gen, Pat, Gen} | Quals]) ->
     {Ty, _VB1, Cs1} = type_check_expr(Env, Gen),
-    case expect_list_type(Ty, allow_nil_type) of
+    case expect_list_type(Ty, allow_nil_type, Env#env.tenv) of
         any ->
             NewEnv = Env#env{venv = add_any_types_pat(Pat, Env#env.venv)},
             {_VB2, Cs2} = type_check_comprehension_in(NewEnv, ResTy, Compr, Expr, P, Quals),
@@ -3366,7 +3390,7 @@ add_type_pat(Nil = {nil, P}, Ty, TEnv, VEnv) ->
     end;
 add_type_pat(CONS = {cons, P, PH, PT}, ListTy, TEnv, VEnv) ->
     %% TODO: Return non-empty list type as upper bound.
-    case expect_list_type(normalize(ListTy, TEnv), dont_allow_nil_type) of
+    case expect_list_type(normalize(ListTy, TEnv), dont_allow_nil_type, TEnv) of
         any ->
             VEnv2 = add_any_types_pat(PH, VEnv),
             TailTy = normalize(type(union, [ListTy, type(nil)]), TEnv),
