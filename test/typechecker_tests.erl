@@ -205,12 +205,20 @@ glb_test_() ->
 
      %% Functions
      ?glb( t("fun((integer(), number()) -> a | b)"),
-           t("fun((number(),  number())  -> b | c)"),
+           t("fun((number(),  number()) -> b | c)"),
            t("fun((number(),  number()) -> b)")),
 
      ?glb( t("fun((integer(), number()) -> a | b)"),
            t("fun((number(),  float())  -> b | c)"),
            ?t(none()) ), %% Should be same as previous
+
+     ?glb( t("fun((...) -> a | b)"),
+           t("fun((...) -> b | c)"),
+           t("fun((...) -> b)")),
+
+     ?glb( t("fun((...)                -> a | b)"),
+           t("fun((number(), number()) -> b | c)"),
+           t("fun((number(), number()) -> b)")),
 
      %% Annotated types
      ?glb( ?t(X :: integer()), ?t(number()), ?t(integer()) ),

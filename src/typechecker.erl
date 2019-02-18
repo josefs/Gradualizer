@@ -528,6 +528,17 @@ glb_ty({type, _, 'fun', [{type, _, product, Args1}, Res1]},
                 false -> {type(none), Cs}
             end
     end;
+glb_ty({type, _, 'fun', [{type, _, any} = Any, Res1]},
+       {type, _, 'fun', [{type, _, any}, Res2]}, A, TEnv) ->
+    {Res, Cs} = glb(Res1, Res2, A, TEnv),
+    {type('fun', [Any, Res]), Cs};
+
+glb_ty({type, _, 'fun', [{type, _, any}, Res1]},
+       {type, _, 'fun', [{type, _, product, _} = TArgs2, _]} = T2, A, TEnv) ->
+    glb_ty(type('fun', [TArgs2, Res1]), T2, A, TEnv);
+glb_ty({type, _, 'fun', [{type, _, product, _} = TArgs1, _]} = T1,
+       {type, _, 'fun', [{type, _, any}, Res2]}, A, TEnv) ->
+    glb_ty(T1, type('fun', [TArgs1, Res2]), A, TEnv);
 
 %% normalize and remove_pos only does the top layer
 glb_ty({type, _, Name, Args1}, {type, _, Name, Args2}, A, TEnv)
