@@ -360,7 +360,7 @@ type_check_in_test_() ->
 
 infer_types_test_() ->
     %% Checking type_check_expr with inference enabled
-    [?_assertEqual("{1, [$e | $h | $l | $o, ...], [], banana, float(), $c}",
+    [?_assertEqual("{1, [101 | 104 | 108 | 111, ...], [], banana, float(), $c}",
                    type_check_expr(_Env = "",
                                    _Expr = "{1, \"hello\", \"\", banana, 3.14, $c}",
                                    [infer])),
@@ -384,6 +384,11 @@ infer_types_test_() ->
      ?_assertMatch("<<_:7, _:_*16>>",
                    type_check_expr(_Env = "f() -> receive X -> X end.",
                                    _Expr = "<<(f())/utf16, 7:7>>",
+                                   [infer])),
+     %% infer exact type of strings
+     ?_assertMatch("[$0..$c, ...]",
+                   type_check_expr(_Env = "",
+                                   _Expr = "\"0123456789abc\"",
                                    [infer])),
      %% infer exact type of record index
      ?_assertMatch("2",
