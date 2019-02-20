@@ -1003,17 +1003,15 @@ infer_literal_string("") ->
     type(nil);
 infer_literal_string(Str) ->
     SortedChars = lists:usort(Str),
-    case lists:all(fun(C) -> C =< 255 end, SortedChars) of
-        _ when length(SortedChars) =< 10 ->
-            %% heuristics: if there are not more than 10 different charactes
+    if length(SortedChars) =< 10 ->
+            %% heuristics: if there are not more than 10 different characters
             %% list them explicitely as singleton types
             CharTypes = [{char, erl_anno:new(0), C} || C <- SortedChars],
-            type(nonempty_list, [type(union, CharTypes)]);
-        true ->
-            %% the literal is a latin1 string
-            type(nonempty_list, [type(byte)]);
-        false ->
-            type(nonempty_string)
+            type(nonempty_list, [normalize(type(union, CharTypes), #tenv{})]);
+       true ->
+            type(nonempty_list,
+                 [type(range, [{char, erl_anno:new(0), hd(SortedChars)},
+                               {char, erl_anno:new(0), lists:last(SortedChars)}])])
     end.
 
 expect_tuple_type({type, _, tuple, any}, _N) ->

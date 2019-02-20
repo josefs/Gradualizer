@@ -2,7 +2,7 @@
 
 -export([utf/0]).
 
-%% an iodata can only contain bytes, no utf characters
+%% an iodata can only contain bytes, no unicode code points above 255
 utf() ->
     %% the last character is hexadecimal 256
     %% (unicode "Latin Capital Letter a with Macron")
