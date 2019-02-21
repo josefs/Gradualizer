@@ -1418,6 +1418,15 @@ do_type_check_expr(Env, {bin, _, BinElements} = BinExpr) ->
     {RetTy,
      union_var_binds(VarBinds, Env#env.tenv),
      constraints:combine(Css)};
+do_type_check_expr(Env, {call, P, {atom, _, '::'}, [Expr, {string, _, TypeStr}]}) ->
+    %% Magic function used as type annotation.
+    try typelib:parse_type(TypeStr) of
+        Type ->
+            {VarBinds, Cs} = type_check_expr_in(Env, Type, Expr),
+            {Type, VarBinds, Cs}
+    catch error:_ ->
+        throw({bad_type_annotation, P, TypeStr})
+    end;
 do_type_check_expr(Env, {call, P, Name, Args}) ->
     {FunTy, VarBinds1, Cs1} = type_check_fun(Env, Name, length(Args)),
     {ResTy, VarBinds2, Cs2} = type_check_call_ty(Env, expect_fun_type(Env, FunTy), Args
@@ -2193,6 +2202,19 @@ do_type_check_expr_in(Env, ResTy, {'case', _, Expr, Clauses}) ->
     {union_var_binds(VarBinds, VB, Env#env.tenv), constraints:combine(Cs1,Cs2)};
 do_type_check_expr_in(Env, ResTy, {'if', _, Clauses}) ->
     check_clauses(Env, [], ResTy, Clauses);
+do_type_check_expr_in(Env, ResTy, {call, P, {atom, _, '::'}, [Expr, {string, _, TypeStr}]} = TyAnno) ->
+    try typelib:parse_type(TypeStr) of
+        Type ->
+            case subtype(Type, ResTy, Env#env.tenv) of
+                {true, Cs1} ->
+                    {VarBinds, Cs2} = type_check_expr_in(Env, Type, Expr),
+                    {VarBinds, constraints:combine(Cs1, Cs2)};
+                false ->
+                    throw({type_error, TyAnno, ResTy, Type})
+            end
+    catch error:_ ->
+        throw({bad_type_annotation, P, TypeStr})
+    end;
 do_type_check_expr_in(Env, ResTy, {call, P, Name, Args}) ->
     {FunTy, VarBinds, Cs} = type_check_fun(Env, Name, length(Args)),
     {VarBinds2, Cs2} = type_check_call(Env, ResTy, expect_fun_type(Env, FunTy), Args,
@@ -4122,6 +4144,9 @@ handle_type_error({type_error, map, P, ResTy, MapTy}) ->
 handle_type_error({type_error, mismatch, Ty, Expr}) ->
     io:format("The expression ~s at line ~p does not have type ~s~n",
               [erl_pp:expr(Expr), erl_anno:line(element(2, Expr)), typelib:pp_type(Ty)]);
+handle_type_error({bad_type_annotation, P, TypeStr}) ->
+    io:format("The type annotation ~p on line ~p is not a valid type~n",
+              [TypeStr, erl_anno:line(P)]);
 handle_type_error(type_error) ->
     io:format("TYPE ERROR~n").
 
