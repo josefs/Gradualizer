@@ -1,6 +1,6 @@
 -module(annotated_types).
 
--export([f/1]).
+-export([f/1, g/0, h/1, i/1]).
 
 -include_lib("gradualizer/include/gradualizer.hrl").
 
@@ -13,6 +13,12 @@ f(Expr) ->
 g() ->
     receive {age, Age} -> ?annotate_type(Age, non_neg_integer()) end.
 
+-spec h(non_neg_integer()) -> ok.
+h(N) ->
+    do_stuff_with_arity(?assert_type(N, arity())).
+
+i(X) ->
+    do_stuff_with_arity(?annotate_type(X, arity())).
 
 -spec do_stuff_with_arity(arity()) -> ok.
 do_stuff_with_arity(_Arity) -> ok.

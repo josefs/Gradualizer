@@ -1,4 +1,3 @@
 ignore:
   - "src/rebar_prv_gradualizer.erl$"
-  - "src/ty.erl$"
   - "src/gradualizer_cli.erl$"
