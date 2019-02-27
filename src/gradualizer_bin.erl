@@ -5,7 +5,7 @@
 
 %% Computes the type of a bitstring expression or pattern based on the sizes
 %% of the elements. The returned type is a normalized bitstring type.
--spec compute_type(ExprOrPat) -> erl_parse:abstract_type()
+-spec compute_type(ExprOrPat) -> gradualizer_type:abstract_type()
         when ExprOrPat :: {bin, _, _},
              ExprOrPat :: erl_parse:abstract_expr().
 compute_type(Bin) ->
@@ -20,7 +20,7 @@ bitstr_concat({B1, U1}, {B2, U2}) ->
 bitstr_concat(none, _) -> none;
 bitstr_concat(_, none) -> none.
 
--spec bitstr_view_to_type(bitstr_view()) -> erl_parse:abstract_type().
+-spec bitstr_view_to_type(bitstr_view()) -> gradualizer_type:abstract_type().
 bitstr_view_to_type({B, U}) ->
     Anno = erl_anno:new(0),
     {type, Anno, binary, [{integer, Anno, B}, {integer, Anno, U}]};

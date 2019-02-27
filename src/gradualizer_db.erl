@@ -25,7 +25,7 @@
          code_change/3]).
 
 %% Types for the Erlang Abstract Format
--type type() :: erl_parse:abstract_type().
+-type type() :: gradualizer_type:abstract_type().
 
 %% Compiled regular expression
 -type regexp() :: {re_pattern, _, _, _, _}.

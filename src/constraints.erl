@@ -4,7 +4,7 @@
 
 -export_type([constraints/0]).
 
--type type() :: erl_parse:abstract_type().
+-type type() :: gradualizer_type:abstract_type().
 
 -record(constraints, {
           lower_bounds = #{}        :: #{ atom() => [type()] },
