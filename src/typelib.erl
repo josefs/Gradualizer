@@ -6,7 +6,7 @@
          pp_type/1, debug_type/3, parse_type/1]).
 -export_type([constraint/0, function_type/0, extended_type/0]).
 
--type type() :: erl_parse:abstract_type().
+-type type() :: gradualizer_type:abstract_type().
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% Parsing and pretty printing types
