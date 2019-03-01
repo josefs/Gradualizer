@@ -85,7 +85,7 @@ compatible(Ty1, Ty2, TEnv) ->
 
 %% The first argument is a "compatible subtype" of the second.
 
--spec subtype(type() | gradualizer_type:af_character(), type(), #tenv{}) -> {true, any()} | false.
+-spec subtype(type(), type(), #tenv{}) -> {true, any()} | false.
 subtype(Ty1, Ty2, TEnv) ->
     try compat(Ty1, Ty2, sets:new(), TEnv) of
         {_Memoization, Constraints} ->
@@ -3300,7 +3300,7 @@ type_check_function(Env, {function,_, Name, NArgs, Clauses}) ->
             throw({internal_error, missing_type_spec, Name, NArgs})
     end.
 
--spec add_types_pats(Pats :: [erl_parse:abstract_expr()],
+-spec add_types_pats(Pats :: [gradualizer_type:abstract_pattern()],
                      Tys  :: [type()],
                      TEnv :: #tenv{},
                      VEnv :: map()) -> {PatTys      :: [type()],
@@ -3336,7 +3336,7 @@ add_types_pats([Pat | Pats], [Ty | Tys], TEnv, VEnv, PatTysAcc, UBoundsAcc, CsAc
                    [PatTy|PatTysAcc], [UBound|UBoundsAcc], [Cs1|CsAcc]).
 
 %% Type check a pattern against a normalized type and add variable bindings.
--spec add_type_pat(Pat  :: erl_parse:abstract_expr(),
+-spec add_type_pat(Pat  :: gradualizer_type:abstract_pattern(),
                    Type :: type(),
                    TEnv :: #tenv{},
                    VEnv :: map()) ->
@@ -3584,7 +3584,7 @@ add_type_pat_fields([{record_field, _, {var, _, '_'}, _Pat}|Fields],
 
 %% Given a pattern for a key, finds the matching association in the map type and
 %% returns the value type. Returns 'error' if the key is not valid in the map.
--spec add_type_pat_map_key(Key         :: erl_parse:abstract_expr(),
+-spec add_type_pat_map_key(Key         :: gradualizer_type:abstract_pattern(),
                            MapTyAssocs :: [{type, erl_anno:anno(),
                                             map_field_exact | map_field_assoc,
                                             [type()]}] | any,
@@ -3612,14 +3612,14 @@ transpose(M) ->
   [lists:map(fun hd/1, M) | transpose(lists:map(fun tl/1, M))].
 
 
--spec add_any_types_pats([erl_parse:abstract_expr()], VEnv :: map()) ->
+-spec add_any_types_pats([gradualizer_type:abstract_pattern()], VEnv :: map()) ->
                              NewVEnv :: map().
 add_any_types_pats([], VEnv) ->
     VEnv;
 add_any_types_pats([Pat|Pats], VEnv) ->
     add_any_types_pats(Pats, add_any_types_pat(Pat, VEnv)).
 
--spec add_any_types_pat(erl_parse:abstract_expr(), VEnv :: map()) ->
+-spec add_any_types_pat(gradualizer_type:abstract_pattern(), VEnv :: map()) ->
                             NewVEnv :: map().
 add_any_types_pat({atom, _, _}, VEnv) ->
     VEnv;
