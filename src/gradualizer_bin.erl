@@ -7,7 +7,7 @@
 %% of the elements. The returned type is a normalized bitstring type.
 -spec compute_type(ExprOrPat) -> gradualizer_type:abstract_type()
         when ExprOrPat :: {bin, _, _},
-             ExprOrPat :: erl_parse:abstract_expr().
+             ExprOrPat :: gradualizer_type:abstract_expr().
 compute_type(Bin) ->
     View = bin_view(Bin),
     bitstr_view_to_type(View).
