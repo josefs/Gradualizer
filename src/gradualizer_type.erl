@@ -21,7 +21,7 @@
 -export_type([abstract_type/0]).
 
 %% Export the additional types that gradualizer uses
--export_type([af_character/0]).
+-export_type([abstract_pattern/0]).
 
 %% Start of Abstract Format
 
@@ -56,6 +56,8 @@
                        | af_remote_fun()
                        | af_fun()
                        | af_named_fun().
+
+-type abstract_pattern() :: af_pattern().
 
 -type af_record_update(T) :: {'record',
                               anno(),
