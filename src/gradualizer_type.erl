@@ -18,7 +18,9 @@
 
 -module(gradualizer_type).
 
--export_type([abstract_type/0]).
+-export_type([abstract_expr/0,
+              abstract_clause/0,
+              abstract_type/0]).
 
 %% Export the additional types that gradualizer uses
 -export_type([abstract_pattern/0]).
@@ -57,6 +59,7 @@
                        | af_fun()
                        | af_named_fun().
 
+-type abstract_clause() :: af_clause().
 -type abstract_pattern() :: af_pattern().
 
 -type af_record_update(T) :: {'record',

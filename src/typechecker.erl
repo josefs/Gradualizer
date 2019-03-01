@@ -56,7 +56,7 @@
 
 -type typed_record_field() :: {typed_record_field,
                                {record_field, erl_anno:anno(), Name :: {atom, erl_anno:anno(), atom()},
-                                DefaultValue :: erl_parse:abstract_expr()},
+                                DefaultValue :: gradualizer_type:abstract_expr()},
                                 Type :: type()}.
 
 %% Type environment, passed around while comparing compatible subtypes
@@ -2737,14 +2737,14 @@ unary_op_arg_type('-', Ty = {type, _, float, []}) ->
 -spec type_check_comprehension_in(Env        :: #env{},
                                   ResTy      :: type(),
                                   Compr      :: lc | bc,
-                                  Expr       :: erl_parse:abstract_expr(),
+                                  Expr       :: gradualizer_type:abstract_expr(),
                                   Position   :: erl_anno:anno(),
                                   Qualifiers :: [ListGen | BinGen | Filter]) ->
         {map(), constraints:constraints()}
        when
-        ListGen :: {generate, erl_anno:anno(), erl_parse:abstract_expr(), erl_parse:abstract_expr()},
-        BinGen  :: {b_generate, erl_anno:anno(), erl_parse:abstract_expr(), erl_parse:abstract_expr()},
-        Filter  :: erl_parse:abstract_expr().
+        ListGen :: {generate, erl_anno:anno(), gradualizer_type:abstract_expr(), gradualizer_type:abstract_expr()},
+        BinGen  :: {b_generate, erl_anno:anno(), gradualizer_type:abstract_expr(), gradualizer_type:abstract_expr()},
+        Filter  :: gradualizer_type:abstract_expr().
 type_check_comprehension_in(Env, ResTy, lc, Expr, P, []) ->
     case expect_list_type(ResTy, allow_nil_type, Env#env.tenv) of
         any ->
@@ -3092,7 +3092,7 @@ get_atom(_Env, _) ->
 
 
 %% Infers (or at least propagates types from) fun/receive/try/case/if clauses.
--spec infer_clauses(#env{}, [erl_parse:abstract_clause()]) ->
+-spec infer_clauses(#env{}, [gradualizer_type:abstract_clause()]) ->
         {type(), VarBinds :: map(), constraints:constraints()}.
 infer_clauses(Env, Clauses) ->
     {Tys, VarBindsList, Css} =
@@ -3103,7 +3103,7 @@ infer_clauses(Env, Clauses) ->
     ,union_var_binds(VarBindsList, Env#env.tenv)
     ,constraints:combine(Css)}.
 
--spec infer_clause(#env{}, erl_parse:abstract_clause()) ->
+-spec infer_clause(#env{}, gradualizer_type:abstract_clause()) ->
         {type(), VarBinds :: map(), constraints:constraints()}.
 infer_clause(Env, {clause, _, Args, Guards, Block}) ->
     EnvNew = Env#env{ venv = add_any_types_pats(Args, Env#env.venv) },
@@ -3156,7 +3156,7 @@ check_clauses_fun(Env, {fun_ty_union, Tys, Cs1}, Clauses) ->
 
 %% Checks a list of clauses (if/case/fun/try/catch/receive).
 -spec check_clauses(Env :: #env{}, ArgsTy :: [type()] | any, ResTy :: type(),
-                    Clauses :: [erl_parse:abstract_clause()]) ->
+                    Clauses :: [gradualizer_type:abstract_clause()]) ->
                         {VarBinds :: map(), constraints:constraints()}.
 check_clauses(Env, any, ResTy, [{clause, _, Args, _, _} | _] = Clauses) ->
     %% 'any' is the ... in the type fun((...) -> ResTy)
@@ -3182,7 +3182,7 @@ check_clauses(Env, ArgsTy, ResTy, Clauses) ->
 %% * case/try/catch/receive clauses have 1 argument;
 %% * function clauses have any number of arguments;
 %% * the patterns for catch C:E:T is represented as {C,E,T}
--spec check_clause(#env{}, [type()], type(), erl_parse:abstract_clause()) ->
+-spec check_clause(#env{}, [type()], type(), gradualizer_type:abstract_clause()) ->
         {RefinedTys :: [type()] , VarBinds :: map(), constraints:constraints()}.
 check_clause(_Env, [?type(none)|_], _ResTy, {clause, P, _Args, _Guards, _Block}) ->
     throw({type_error, unreachable_clause, P});
@@ -3743,7 +3743,7 @@ add_any_types_pat({op, _, _Op, _Pat}, VEnv) ->
 %% Get type from specifiers in a bit syntax, e.g. <<Foo/float-little>>
 -spec type_of_bin_element({bin_element,
                            Anno       :: erl_anno:anno(),
-                           Expr       :: erl_parse:abstract_expr(),
+                           Expr       :: gradualizer_type:abstract_expr(),
                            Size       :: non_neg_integer() |
                                          default,
                            Specifiers :: [atom() | {unit, pos_integer()}] |
@@ -4431,7 +4431,7 @@ handle_type_error({bad_type_annotation, TypeLit}, Opts) ->
 handle_type_error(type_error, _) ->
     io:format("TYPE ERROR~n").
 
--spec describe_expr(erl_parse:abstract_expr()) -> string().
+-spec describe_expr(gradualizer_type:abstract_expr()) -> string().
 describe_expr({atom, _, _})               -> "atom";
 describe_expr({bin, _, _})                -> "bit expression";
 describe_expr({char, _, _})               -> "character";
@@ -4451,7 +4451,7 @@ describe_expr({string, _, _})             -> "string";
 describe_expr({var, _, _})                -> "variable";
 describe_expr(_)                          -> "expression".
 
--spec print_type_error(erl_parse:abstract_expr(),
+-spec print_type_error(gradualizer_type:abstract_expr(),
                        typelib:extended_type(),
                        typelib:extended_type(),
                        proplists:proplist()) -> ok.
