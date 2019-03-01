@@ -174,7 +174,6 @@
 %% qlc
 
 -type cache() :: ets | list | no.
--type key_pos() :: pos_integer() | [pos_integer()].
 -type max_list_size() :: non_neg_integer().
 -type tmp_file_usage() :: allowed | not_allowed | info_msg
                         | warning_msg  | error_msg.
