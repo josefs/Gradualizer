@@ -476,7 +476,15 @@ glb_ty(Ty1 = {type, _, tuple, Tys1}, Ty2 = {type, _, tuple, Tys2}, A, TEnv) ->
 						  glb(T1, T2, A, TEnv)
 					  end,
 					  Tys1, Tys2)),
-	    {type(tuple, Tys), constraints:combine(Css)}
+            TupleType =
+                case lists:any(fun(?type(none)) -> true; (_) -> false end,
+                               Tys) of
+                    true ->
+                        type(none);
+                    false ->
+                        type(tuple, Tys)
+                end,
+	    {TupleType, constraints:combine(Css)}
     end;
 
 %% Record types. Either exactly the same record (handled above) or tuple().
