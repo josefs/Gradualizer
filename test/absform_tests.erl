@@ -7,7 +7,8 @@ function_type_list_to_fun_types_test() ->
         merl:quote("-spec f(T)-> boolean() when T :: tuple();"
                    "       (atom()) -> any()."),
     BoundedFunTypeList = absform:normalize_function_type_list(FunTypeList),
-    Ty = typechecker:bounded_type_list_to_type({tenv, [], []}, BoundedFunTypeList),
+    Ty = typechecker:bounded_type_list_to_type(
+           typechecker:create_tenv(?MODULE, [], []), BoundedFunTypeList),
     ?assertMatch({type, 0, union,
                   [{type,1,'fun',
                     [{type,1,product,[{type,0,tuple,any}]},
