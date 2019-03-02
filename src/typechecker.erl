@@ -51,7 +51,8 @@
                                 Type :: type()}.
 
 %% Type environment, passed around while comparing compatible subtypes
--record(tenv, {types = #{} :: #{{Name :: atom(), arity()} => {Params :: [atom()],
+-record(tenv, {module :: module(),
+               types = #{} :: #{{Name :: atom(), arity()} => {Params :: [atom()],
                                                               Body :: type()}},
                records = #{} :: #{Name :: atom()          => [typed_record_field()]}
               }).
@@ -363,16 +364,24 @@ glb(Ts, TEnv) ->
                 Ts).
 
 glb(T1, T2, A, TEnv) ->
-    Ty1 = typelib:remove_pos(normalize(T1, TEnv)),
-    Ty2 = typelib:remove_pos(normalize(T2, TEnv)),
     case maps:is_key({T1, T2}, A) of
         %% If we hit a recursive case we approximate with none(). Conceivably
         %% you could do some fixed point iteration here, but let's wait for an
         %% actual use case.
         true -> {type(none), constraints:empty()};
         false ->
-	    {Ty, Cs} = glb_ty(Ty1, Ty2, A#{ {Ty1, Ty2} => 0 }, TEnv),
-            {normalize(Ty, TEnv), Cs}
+            case gradualizer_cache:get_glb(TEnv#tenv.module, T1, T2) of
+                false ->
+                    Ty1 = typelib:remove_pos(normalize(T1, TEnv)),
+                    Ty2 = typelib:remove_pos(normalize(T2, TEnv)),
+                    {Ty, Cs} = glb_ty(Ty1, Ty2, A#{ {Ty1, Ty2} => 0 }, TEnv),
+                    NormTy = normalize(Ty, TEnv),
+                    gradualizer_cache:store_glb(TEnv#tenv.module, T1, T2, {NormTy, Cs}),
+                    {NormTy, Cs};
+                TyCs ->
+                    %% these two types have already been seen and calculated
+                    TyCs
+            end
     end.
 
 %% If either type is any() we don't know anything
@@ -3815,6 +3824,8 @@ type_check_forms(Forms, Opts) ->
         {ok, _Pid}                    -> ok;
         {error, {already_started, _}} -> ok
     end,
+    ok = gradualizer_cache:ensure_started(),
+
     ParseData =
         collect_specs_types_opaques_and_functions(Forms),
     Env = create_env(ParseData, Opts),
@@ -3859,7 +3870,8 @@ type_check_forms(Forms, Opts) ->
                         Errors
                 end, [], ParseData#parsedata.functions).
 
-create_env(#parsedata{specs     = Specs
+create_env(#parsedata{module    = Module
+                     ,specs     = Specs
                      ,functions = Funs
                      ,types     = Types
                      ,opaques   = Opaques
@@ -3867,7 +3879,7 @@ create_env(#parsedata{specs     = Specs
                      ,imports   = Imports
                      }, Opts) ->
     FEnv = create_fenv(Specs, Funs),
-    TEnv = create_tenv(Types ++ Opaques, Records),
+    TEnv = create_tenv(Module, Types ++ Opaques, Records),
     Imported = maps:from_list([{{F, A}, M} || {M, F, A} <- Imports]),
     #env{fenv = FEnv,
          tenv = TEnv,
@@ -3876,7 +3888,7 @@ create_env(#parsedata{specs     = Specs
          infer = proplists:get_bool(infer, Opts),
          verbose = proplists:get_bool(verbose, Opts)}.
 
-create_tenv(TypeDefs, RecordDefs) ->
+create_tenv(Module, TypeDefs, RecordDefs) ->
     TypeMap =
         maps:from_list([begin
                             Id       = {Name, length(Vars)},
@@ -3887,8 +3899,10 @@ create_tenv(TypeDefs, RecordDefs) ->
         maps:from_list([{Name, lists:map(fun absform:normalize_record_field/1,
                                          Fields)}
                             || {Name, Fields} <- RecordDefs]),
-    #tenv{types   = TypeMap,
-          records = RecordMap}.
+    #tenv{module  = Module,
+          types   = TypeMap,
+          records = RecordMap
+         }.
 
 create_fenv(Specs, Funs) ->
 % We're taking advantage of the fact that if a key occurrs more than once

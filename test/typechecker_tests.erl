@@ -228,30 +228,34 @@ glb_test_() ->
 
 %% Call to glb never returns
 glb_issue_test_() ->
-    [?_assertMatch(Result when is_tuple(Result),
-                   glb( ?t([erl_parse:abstract_type()]),
-                        {type,0,list,[{type,0,union,[{ann_type,0,[{var,891,'Name'},{user_type,[{file,"erl_parse.erl"},{location,0}],af_atom,[]}]},
-                                                     {user_type,[{file,"erl_parse.erl"},{location,0}],af_record_field_type,[]}]}]}
-                      )
-                  )].
+    {setup,
+     fun gradualizer_cache:ensure_started/0,
+     fun(_) -> gradualizer_cache:stop() end,
+     [?_assertMatch(Result when is_tuple(Result),
+                    glb( ?t([erl_parse:abstract_type()]),
+                         {type,0,list,[{type,0,union,[{ann_type,0,[{var,891,'Name'},{user_type,[{file,"erl_parse.erl"},{location,0}],af_atom,[]}]},
+                                                      {user_type,[{file,"erl_parse.erl"},{location,0}],af_record_field_type,[]}]}]}
+                       )
+                  )
+     ]}.
 
 normalize_test_() ->
     [
      {"Merge intervals",
       ?_assertEqual(?t( 1..6 ),
                     typechecker:normalize(?t( 1..3|4..6 ),
-                                          typechecker:create_tenv([], [])))},
+                                          typechecker:create_tenv(?MODULE, [], [])))},
      {"Remove singleton atoms if atom() is present",
       ?_assertEqual(?t( atom() ),
                     typechecker:normalize(?t( a | atom() | b ),
-                                          typechecker:create_tenv([], [])))},
+                                          typechecker:create_tenv(?MODULE, [], [])))},
      {"Evaluate numeric operators in types",
       %% ?t(-8) is parsed as {op,0,'-',{integer,0,8}}
       ?_assertEqual({integer, 0 , -8},
                     typechecker:normalize(?t( (bnot 3) *
                                               (( + 7 ) rem ( 5 div - 2 ) ) bxor
                                               (1 bsl 6 bsr 4) ),
-                                          typechecker:create_tenv([], [])))}
+                                          typechecker:create_tenv(?MODULE, [], [])))}
     ].
 
 normalize_e2e_test_() ->
@@ -531,7 +535,7 @@ undefined_records_test_() ->
     ].
 
 subtype(T1, T2) ->
-    case typechecker:subtype(T1, T2, {tenv, #{}, #{}}) of
+    case typechecker:subtype(T1, T2, typechecker:create_tenv(?MODULE, [], [])) of
         {true, _} ->
             true;
         false ->
@@ -539,13 +543,13 @@ subtype(T1, T2) ->
     end.
 
 glb(T1, T2) ->
-    glb(T1, T2, {tenv, #{}, #{}}).
+    glb(T1, T2, typechecker:create_tenv(?MODULE, [], [])).
 
 glb(T1, T2, Env) ->
     typechecker:glb(T1, T2, Env).
 
 deep_normalize(T) ->
-    deep_normalize(T, typechecker:create_tenv([], [])).
+    deep_normalize(T, typechecker:create_tenv(?MODULE, [], [])).
 
 deep_normalize(T, TEnv) ->
     case typechecker:normalize(T, TEnv) of
