@@ -6,6 +6,7 @@
    [kernel,
     stdlib
    ]},
+  {mod, {gradualizer_app, []}},
   {env,[
       {providers, [rebar_prv_gradualizer]}
   ]},

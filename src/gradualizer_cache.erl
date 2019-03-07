@@ -10,8 +10,6 @@
 
 %% API
 -export([start_link/0,
-         ensure_started/0,
-         stop/0,
          get_glb/3,
          store_glb/4
         ]).
@@ -37,18 +35,6 @@
                       {error, Error :: any()}.
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
-
--spec ensure_started() -> ok | {error, Error :: any()}.
-ensure_started() ->
-    case start_link() of
-        {ok, _} -> ok;
-        {error, {already_started, _}} -> ok;
-        Error -> Error
-    end.
-
--spec stop() -> ok.
-stop() ->
-    gen_server:call(?SERVER, stop).
 
 %%
 %% GLB Cache
@@ -84,8 +70,8 @@ init([]) ->
     ets:new(?GLB_CACHE, [set, public, named_table]),
     {ok, #state{}}.
 
-handle_call(stop, _From, State) ->
-    {stop, normal, ok, State}.
+handle_call(_Request, _From, State) ->
+    {reply, unknown_request, State}.
 
 handle_cast(_Request, State) ->
     {noreply, State}.
