@@ -3828,11 +3828,7 @@ type_check_forms(Forms, Opts) ->
     File = proplists:get_value(print_file, Opts),
     NoReportErrors = proplists:get_bool(return_errors, Opts),
 
-    case gradualizer_db:start_link() of
-        {ok, _Pid}                    -> ok;
-        {error, {already_started, _}} -> ok
-    end,
-    ok = gradualizer_cache:ensure_started(),
+    {ok, _} = application:ensure_all_started(gradualizer),
 
     ParseData =
         collect_specs_types_opaques_and_functions(Forms),

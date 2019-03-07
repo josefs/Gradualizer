@@ -14,9 +14,15 @@ subtype_test_() ->
      ?_assert(subtype(?t( any()             ), ?t( 1..10            ))),
      ?_assert(subtype(?t( 1..10             ), ?t( any()            ))),
 
-     %% Term and none
-     ?_assert(subtype(?t( sets:set()        ), ?t( term()           ))),
-     ?_assert(subtype(?t( none()            ), ?t( sets:set()       ))),
+     %% remote types need gradualizer_db to be started
+     {setup,
+      fun setup_app/0,
+      fun cleanup_app/1,
+      [
+       %% Term and none
+       ?_assert(subtype(?t( sets:set()        ), ?t( term()           ))),
+       ?_assert(subtype(?t( none()            ), ?t( sets:set()       )))
+      ]},
 
      %% Integer
      ?_assert(subtype(?t( 1                 ), ?t( 1                ))),
@@ -229,8 +235,8 @@ glb_test_() ->
 %% Call to glb never returns
 glb_issue_test_() ->
     {setup,
-     fun gradualizer_cache:ensure_started/0,
-     fun(_) -> gradualizer_cache:stop() end,
+     fun setup_app/0,
+     fun cleanup_app/1,
      [?_assertMatch(Result when is_tuple(Result),
                     glb( ?t([erl_parse:abstract_type()]),
                          {type,0,list,[{type,0,union,[{ann_type,0,[{var,891,'Name'},{user_type,[{file,"erl_parse.erl"},{location,0}],af_atom,[]}]},
@@ -533,6 +539,18 @@ undefined_records_test_() ->
                                    "-spec f() -> term().",
                                    "f() -> #r{f2 = 1}."]))
     ].
+
+%%
+%% Helper functions
+%%
+
+setup_app() ->
+    {ok, Apps} = application:ensure_all_started(gradualizer),
+    Apps.
+
+cleanup_app(Apps) ->
+    [ok = application:stop(App) || App <- Apps],
+    ok.
 
 subtype(T1, T2) ->
     case typechecker:subtype(T1, T2, typechecker:create_tenv(?MODULE, [], [])) of

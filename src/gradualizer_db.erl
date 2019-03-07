@@ -275,11 +275,7 @@ call(Request) ->
     call(Request, 5000).
 
 call(Request, Timeout) ->
-    try gen_server:call(?name, Request, Timeout)
-    catch exit:{noproc, _} ->
-            {ok, _} = start_link(),
-            gen_server:call(?name, Request, Timeout)
-    end.
+    gen_server:call(?name, Request, Timeout).
 
 %% helper for handle_call for get_type, get_exported_type, get_opaque_type.
 -spec handle_get_type(module(), Name :: atom(), Params :: [type()],
