@@ -98,8 +98,6 @@ subtype(Ty1, Ty2, TEnv) ->
 
 %% Check if at least on of the types in a list is a subtype of a type.
 %% Used when checking intersection types.
-any_subtype(Tys, Ty, TEnv) when not is_list(Tys) ->
-    any_subtype([Ty], Ty, TEnv);
 any_subtype([], _Ty, _TEnv) ->
     false;
 any_subtype([Ty1|Tys], Ty, TEnv) ->
@@ -1257,7 +1255,6 @@ new_type_var() ->
 
 bounded_type_list_to_type(TEnv, Types) ->
     case unfold_bounded_type_list(TEnv, Types) of
-        []   -> type(none);
         [Ty] -> Ty;
         Tys  -> type(union, Tys)
     end.
@@ -4067,13 +4064,6 @@ handle_type_error({type_error, fun_res_type, P, Func, FunResTy, ResTy}) ->
     Name = erl_pp:expr(Func), %% {atom, _, Name} or {remote, Mod, Name}
     io:format("The function ~s on line ~p is expected to return ~s but it returns ~s~n",
               [Name, P, typelib:pp_type(ResTy), typelib:pp_type(FunResTy)]);
-handle_type_error({type_error, {'fun', _, _} = Fun, ActualTy, ExpectedTy}) ->
-    io:format("The fun object ~s on line ~p is expected "
-              "to have type ~s but it has type ~s~n",
-              [erl_pp:expr(Fun),
-               line_no(Fun),
-               typelib:pp_type(ExpectedTy),
-               typelib:pp_type(ActualTy)]);
 handle_type_error({type_error, expected_fun_type, P, Func, FunTy}) ->
     Name = erl_pp:expr(Func),
     io:format("Expected function ~s on line ~p to have a function type,~n"
