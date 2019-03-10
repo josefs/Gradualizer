@@ -6,10 +6,14 @@
 %%%   in the given directory.
 %%% - `print_file': if `true' prefix error printouts with the file name the
 %%%   error is from.
-%%% - `crash_on_error`: if `true` crash on the first produced error
-%%% - `return_errors`: if `true`, turns of error printing and errors
+%%% - `crash_on_error': if `true` crash on the first produced error
+%%% - `return_errors': if `true`, turns off error printing and errors
 %%%   (in their internal format) are returned in a list instead of being
 %%%   condensed into a single ok | nok.
+%%% - `fmt_location': how to format location when pretty printing errors
+%%%   - `none': no location for easier comparison
+%%%   - `brief': for machine processing ("LINE:COLUMN:" before message text)
+%%%   - `verbose': for human readers ("on line LINE at column COLUMN" within the message text)
 -module(gradualizer).
 
 -export([type_check_file/1,
@@ -151,5 +155,6 @@ type_check_forms(File, Forms, Opts) ->
         {false, []} ->
             ok;
         {false, [_|_]} ->
+            typechecker:print_errors(Errors, Opts),
             nok
     end.
