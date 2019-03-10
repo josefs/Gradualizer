@@ -33,7 +33,8 @@ gen_should_fail() ->
               fun() ->
                       Errors = gradualizer:type_check_file(File, [return_errors]),
                       %% Test that error formatting doesn't crash
-                      lists:foreach(fun({_, Error}) -> typechecker:handle_type_error(Error) end, Errors),
+                      Opts = [{fmt_location, brief}],
+                      lists:foreach(fun({_, Error}) -> typechecker:handle_type_error(Error, Opts) end, Errors),
                       {ok, Forms} = gradualizer_file_utils:get_forms_from_erl(File),
                       ExpectedErrors = typechecker:number_of_exported_functions(Forms),
                       ?_assertEqual(ExpectedErrors, length(Errors))
