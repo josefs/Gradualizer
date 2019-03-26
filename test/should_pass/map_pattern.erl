@@ -16,3 +16,18 @@ map_union(#{b := B}) -> B.
 
 -spec any_map(map()) -> ok.
 any_map(#{apa := _}) -> ok.
+
+-spec map_term(term()) -> any().
+map_term(#{}) ->
+    ok.
+
+-spec map_type_var(nonempty_list(#{atom() => integer()} | atom())) -> integer().
+map_type_var(L) ->
+    V = lists:nth(2, L),
+    %% at this point V :: T
+    case V of
+        %% pattern matching a map against a type var
+        #{k := Int} ->
+            Int
+    end.
+

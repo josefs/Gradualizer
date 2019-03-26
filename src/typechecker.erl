@@ -3531,6 +3531,19 @@ add_type_pat({record, P, Record, Fields}, Ty, TEnv, VEnv) ->
             {VEnv2, Cs2} = add_type_pat_fields(Fields, Record, TEnv, VEnv),
             {type(none), Ty, VEnv2, constraints:combine(Cs1, Cs2)}
     end;
+add_type_pat({map, _, _} = MapPat, {var, _, Var} = TyVar, _TEnv, VEnv) ->
+    %% FIXME this is a quite rudimentary implementation
+    %% - variables from the map pattern become any()
+    %% - the contraint could contain the map keys
+    Cs = constraints:add_var(
+           Var, constraints:upper(Var, type(map, any))),
+    {type(none), TyVar, add_any_types_pat(MapPat, VEnv), Cs};
+add_type_pat({map, _, _} = MapPat, ?type(term), TEnv, VEnv) ->
+    %% TODO instead of implemented an expect_map_type properly
+    %% just handle the one missing case here
+    %% expect_map_type(term()) would return #{term() => term()}
+    AllMapsTy = type(map, [type(map_field_assoc, [type(term), type(term)])]),
+    add_type_pat(MapPat, AllMapsTy, TEnv, VEnv);
 add_type_pat({map, _P, PatAssocs}, {type, _, map, MapTyAssocs} = MapTy, TEnv, VEnv) ->
     %% Check each Key := Value and binds vars in Value.
     {NewVEnv, Css} =
