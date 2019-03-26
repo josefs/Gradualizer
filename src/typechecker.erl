@@ -3705,10 +3705,15 @@ add_any_types_pat({bin, _, BinElements}, VEnv) ->
                     end,
                     VEnv,
                     BinElements);
-add_any_types_pat({var, _,'_'}, VEnv) ->
+add_any_types_pat({var, _, '_'}, VEnv) ->
     VEnv;
-add_any_types_pat({var, _,A}, VEnv) ->
-    VEnv#{ A => type(any) };
+add_any_types_pat({var, _, A}, VEnv) ->
+    case VEnv of
+        #{A := _} ->
+            VEnv;
+        _ ->
+            VEnv#{ A => type(any) }
+    end;
 add_any_types_pat({op, _, '++', _Pat1, Pat2}, VEnv) ->
     %% Pat1 cannot contain any variables so there is no need to traverse it.
     add_any_types_pat(Pat2, VEnv);
