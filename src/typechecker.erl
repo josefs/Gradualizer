@@ -1115,29 +1115,24 @@ allow_empty_list(Ty) ->
         false -> Ty
     end.
 
+-type fun_ty() :: any
+		| {fun_ty, [type()], type(), constraints:constraints()}
+		| {fun_ty_any_args, type(), constraints:constraints()}
+		| {fun_ty_intersection, [fun_ty()], constraints:constraints()}
+		| {fun_ty_union, [fun_ty()], constraints:constraints()}
+		.
+
 %% Categorizes a function type.
 %% Normalizes the type (expand user-def and remote types). Errors for non-fun
 %% types are returned with the original non-normalized type.
--spec expect_fun_type(#env{}, type()) -> any
-                                       | {type_error, type()}
-                                       | {fun_ty, [type()], type(), constraints:constraints()}
-                                       | {fun_ty_any_args, type(), constraints:constraints()}
-                                       | {fun_ty_intersection, [type()], constraints:constraints()}
-                                       | {fun_ty_union, [any()], constraints:constraints()}
-                                       .
+-spec expect_fun_type(#env{}, type()) -> fun_ty() | {type_error, type()}.
 expect_fun_type(Env, Type) ->
     case expect_fun_type1(Env, normalize(Type, Env#env.tenv)) of
         type_error -> {type_error, Type};
         Other -> Other
     end.
 
--spec expect_fun_type1(#env{}, type()) -> any
-                               | type_error
-                               | {fun_ty, [type()], type(), constraints:constraints()}
-                               | {fun_ty_any_args, type(), constraints:constraints()}
-                               | {fun_ty_intersection, [type()], constraints:constraints()}
-                               | {fun_ty_union, [any()], constraints:constraints()}
-                               .
+-spec expect_fun_type1(#env{}, type()) -> fun_ty() | type_error.
 expect_fun_type1(Env, BTy = {type, _, bounded_fun, [Ft, _Fc]}) ->
     Sub = bounded_type_subst(Env#env.tenv, BTy),
     case expect_fun_type1(Env, Ft) of
@@ -1193,7 +1188,7 @@ expect_fun_type1(_Env, {type, _, term, []}) ->
 expect_fun_type1(_Env, _Ty) ->
     type_error.
 
--spec expect_intersection_type(#env{}, [tuple()]) -> any().
+-spec expect_intersection_type(#env{}, [tuple()]) -> [fun_ty()] | type_error.
 expect_intersection_type(_Env, []) ->
     [];
 expect_intersection_type(Env, [FunTy|Tys]) ->
@@ -1209,6 +1204,7 @@ expect_intersection_type(Env, [FunTy|Tys]) ->
             end
     end.
 
+-spec expect_fun_type_union(#env{}, [tuple()]) -> [fun_ty()].
 expect_fun_type_union(_Env, []) ->
     [];
 expect_fun_type_union(Env, [Ty|Tys]) ->
