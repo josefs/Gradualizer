@@ -1,6 +1,8 @@
 -module(return_fun_fail).
 
--compile(export_all).
+-export([return_fun_union/0,
+	 return_fun_remote/0
+	]).
 
 -spec return_fun_union() -> integer() | fun(() -> atom()).
 return_fun_union() ->
