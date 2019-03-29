@@ -1,5 +1,9 @@
 -module(records).
 
+-export([f/0, g/1, h/0, i/0, j/0,
+         rec_field_subtype/1,
+         rec_index_subtype/0]).
+
 -record(r, {f1     :: atom(),
             f2 = 1 :: integer()}).
 
