@@ -289,7 +289,7 @@ compat_record_fields([], [], A, _TEnv) ->
 compat_record_fields([{typed_record_field, _NameAndDefaultValue1, T1} | Fs1],
                      [{typed_record_field, _NameAndDefaultValue2, T2} | Fs2],
                      A, TEnv) ->
-    {A1, Cs1} = compat_ty(T1, T2, A, TEnv),
+    {A1, Cs1} = compat(T1, T2, A, TEnv),
     {A2, Cs2} = compat_record_fields(Fs1, Fs2, A1, TEnv),
     {A2, constraints:combine(Cs1, Cs2)};
 compat_record_fields(_, _, _, _) ->
