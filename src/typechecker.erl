@@ -3554,7 +3554,7 @@ add_type_pat({op, _, '++', Pat1, Pat2}, Ty, TEnv, VEnv) ->
     {_, _, VEnv1, Cs1} = add_type_pat(Pat1, Ty, TEnv, VEnv),
     {_, _, VEnv2, Cs2} = add_type_pat(Pat2, Ty, TEnv, VEnv1),
     {type(none), Ty, VEnv2, constraints:combine(Cs1,Cs2)};
-add_type_pat(Expr={op, P, _Op, _Pat1, _Pat2}, Ty, TEnv, VEnv) ->
+add_type_pat(OpPat = {op, _Anno, _Op, _Pat1, _Pat2}, Ty, TEnv, VEnv) ->
     %% Operator patterns are evaluated at compile-time by the compiler.
     %% So we simply evaluate them and check the type of the resulting value.
     %% This simplified situations like this: suppose Ty = non_neg_integer() and
@@ -3563,38 +3563,30 @@ add_type_pat(Expr={op, P, _Op, _Pat1, _Pat2}, Ty, TEnv, VEnv) ->
     %% the pattern has the correct type) but we also need to check that the left
     %% argument is not smaller than the right argument. But instead of implementing
     %% such a check, we simply evaluate the pattern as an expression.
-    {value, Val, _} = erl_eval:expr(Expr, orddict:new()),
-    {PatTy, ValType} = if is_integer(Val) ->
-                              {{integer, erl_anno:new(0), Val},
-                               {integer, erl_anno:new(0), Val}};
-                          is_float(Val) ->
-                              {type(none), type(float)}
-                       end,
-    case subtype(ValType, Ty, TEnv) of
-        {true, Cs} ->
-            {PatTy, ValType, VEnv, Cs};
-        false ->
-            throw({type_error, operator_pattern, P, Expr, Ty})
-    end;
-add_type_pat(Expr={op, P, _Op, _Pat}, Ty, TEnv, VEnv) ->
-    {value, Val, _} = erl_eval:expr(Expr, orddict:new()),
-    {PatTy, ValType} = if is_integer(Val) ->
-                              {{integer, erl_anno:new(0), Val},
-                               {integer, erl_anno:new(0), Val}};
-                          is_float(Val) ->
-                              {type(none), type(float)}
-                       end,
-    case subtype(ValType, Ty, TEnv) of
-        {true, Cs} ->
-            {PatTy, ValType, VEnv, Cs};
-        false ->
-            throw({type_error, operator_pattern, P, Expr, Ty})
-    end;
+    add_type_pat_literal(OpPat, Ty, TEnv, VEnv);
+add_type_pat(OpPat = {op, _Anno, _Op, _Pat}, Ty, TEnv, VEnv) ->
+    add_type_pat_literal(OpPat, Ty, TEnv, VEnv);
 add_type_pat(Pat, {ann_type, _, [_, Ty]}, TEnv, VEnv) ->
     add_type_pat(Pat, Ty, TEnv, VEnv);
 
 add_type_pat(Pat, Ty, _TEnv, _VEnv) ->
     throw({type_error, pattern, element(2, Pat), Pat, Ty}).
+
+add_type_pat_literal(Pat, Ty, TEnv, VEnv) ->
+    case erl_eval:partial_eval(Pat) of
+        Pat ->
+            %% illegal, non-constant pattern
+            %% should not appear in compilable code
+            throw({illegal_pattern, Pat});
+        Literal ->
+            try
+                add_type_pat(Literal, Ty, TEnv, VEnv)
+            catch
+                _TypeError ->
+                    %% throw with the original pattern
+                    throw({type_error, operator_pattern, Pat, Ty})
+            end
+    end.
 
 add_type_pat_fields([], _, _TEnv, VEnv) ->
     ret(VEnv);
@@ -4016,6 +4008,9 @@ handle_type_error({undef, user_type, LINE, {Name, Arity}}) ->
 handle_type_error({not_exported, remote_type, {{atom, LINE, _} = Module, Name, Arity}}) ->
     io:format("The type ~s:~s/~p on line ~p is not exported~n",
               [erl_pp:expr(Module), erl_pp:expr(Name), Arity, LINE]);
+handle_type_error({illegal_pattern, Pat}) ->
+    io:format("Illegal pattern ~s on line ~p~n",
+              [erl_pp:expr(Pat), line_no(Pat)]);
 handle_type_error({type_error, compat, _LINE, Ty1, Ty2}) ->
     io:format("The type ~s is not compatible with type ~s~n"
              ,[typelib:pp_type(Ty1), typelib:pp_type(Ty2)]);
@@ -4136,10 +4131,10 @@ handle_type_error({type_error, list_op_error, ListOp, P, Ty, _}) ->
     io:format("The operator ~p on line ~p is given an argument "
               "with a non-list type ~s~n",
               [ListOp, P, typelib:pp_type(Ty)]);
-handle_type_error({type_error, operator_pattern, P, Expr, Ty}) ->
+handle_type_error({type_error, operator_pattern, Pat, Ty}) ->
     io:format("The operator pattern ~s on line ~p is expected to have type "
               "~s~n"
-             ,[erl_pp:expr(Expr), P, typelib:pp_type(Ty)]);
+             ,[erl_pp:expr(Pat), line_no(Pat), typelib:pp_type(Ty)]);
 handle_type_error({type_error, tuple_error, P, Expr, Ty}) ->
     io:format("A tuple {~s} at line ~p didn't match any of the types in the union ~s~n",
               [erl_pp:exprs(Expr), P, typelib:pp_type(Ty)]);

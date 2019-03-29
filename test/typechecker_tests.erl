@@ -543,16 +543,22 @@ add_type_pat_test_() ->
                                  "f(#r{f = F}) -> F."]))}
     ].
 
-%% it is the responsibility of the compiler to catch undefined records
+%% it is the responsibility of the compiler to catch semantically
+%% invalid programs (such as one with undefined records)
 %% but to improve code coverage we test them quickly.
 %% Gradualizer should not crash but return error nicely
-undefined_records_test_() ->
-    [?_assertNot(type_check_forms(["-spec f() -> term().",
+illegal_forms_test_() ->
+    [%% undefined records
+     ?_assertNot(type_check_forms(["-spec f() -> term().",
                                    "f() -> #r{f = 1}."])),
      ?_assertNot(type_check_forms(["-record(r, {f1}).",
                                    "-spec f() -> term().",
-                                   "f() -> #r{f2 = 1}."]))
+                                   "f() -> #r{f2 = 1}."])),
+     %% illegal pattern
+     ?_assertNot(type_check_forms(["-spec f(term()) -> term().",
+                                   "f(1 + A) -> ok."]))
     ].
+
 
 %%
 %% Helper functions
