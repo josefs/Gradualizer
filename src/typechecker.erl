@@ -3835,6 +3835,7 @@ get_rec_field_index_and_type(FieldWithAnno, [], _) ->
 %%% Main entry point
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+-spec type_check_forms(list(), proplists:proplist()) -> list().
 type_check_forms(Forms, Opts) ->
     StopOnFirstError = proplists:get_bool(stop_on_first_error, Opts),
     CrashOnError = proplists:get_bool(crash_on_error, Opts),
@@ -3845,8 +3846,10 @@ type_check_forms(Forms, Opts) ->
         collect_specs_types_opaques_and_functions(Forms),
     Env = create_env(ParseData, Opts),
     ?verbose(Env, "Checking module ~p~n", [ParseData#parsedata.module]),
-    lists:foldr(fun (Function, Errors) when Errors =:= [];
-                                         not StopOnFirstError ->
+    AllErrors =
+        lists:foldr(
+          fun (Function, Errors) when Errors =:= [];
+                                      not StopOnFirstError ->
                         try type_check_function(Env, Function) of
                             {_VarBinds, _Cs} ->
                                 Errors
@@ -3872,9 +3875,10 @@ type_check_forms(Forms, Opts) ->
                                 end,
                                 erlang:raise(error, Error, Trace)
                         end;
-                    (_Function, Errors) ->
-                        Errors
-                end, [], ParseData#parsedata.functions).
+              (_Function, Errors) ->
+                  Errors
+          end, [], ParseData#parsedata.functions),
+    lists:reverse(AllErrors).
 
 create_env(#parsedata{module    = Module
                      ,specs     = Specs
