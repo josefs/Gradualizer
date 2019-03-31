@@ -54,7 +54,7 @@ print_usage() ->
     io:format("                                 - 'none': no location for easier comparison~n"),
     io:format("                                 - 'brief': for machine processing~n"),
     io:format("                                   (\"LINE:COLUMN:\" before message text)~n"),
-    io:format("                                 - 'verbose': for human readers~n"),
+    io:format("                                 - 'verbose' (default): for human readers~n"),
     io:format("                                   (\"on line LINE at column COLUMN\" within the message text)~n").
 
 
