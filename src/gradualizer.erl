@@ -13,7 +13,8 @@
 %%% - `fmt_location': how to format location when pretty printing errors
 %%%   - `none': no location for easier comparison
 %%%   - `brief': for machine processing ("LINE:COLUMN:" before message text)
-%%%   - `verbose': for human readers ("on line LINE at column COLUMN" within the message text)
+%%%   - `verbose' (default): for human readers
+%%%     ("on line LINE at column COLUMN" within the message text)
 %%% - `fmt_expr_fun': function to pretty print an expression AST
 %%%   (useful to support other languages)
 %%% - `fmt_type_fun': function to pretty print a type AST

@@ -15,6 +15,8 @@
 -compile([{nowarn_deprecated_function,{erlang,get_stacktrace,0}}]).
 -endif.
 
+-define(FMT_LOCATION_DEFAULT, verbose).
+
 -define(verbose(Env, Fmt, Args),
         case Env#env.verbose of
             true -> io:format(Fmt, Args);
@@ -4444,7 +4446,7 @@ line_no(Expr) ->
     erl_anno:line(element(2, Expr)).
 
 format_location(Expr, FmtType, Opts) ->
-    case proplists:get_value(fmt_location, Opts, verbose) of
+    case proplists:get_value(fmt_location, Opts, ?FMT_LOCATION_DEFAULT) of
         FmtType ->
             format_location(Expr, FmtType);
         _ ->
