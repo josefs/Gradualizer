@@ -4041,7 +4041,7 @@ handle_type_error({not_exported, remote_type, {{atom, Anno, _} = Module, Name, A
                pp_expr(Module, Opts), pp_expr(Name, Opts), Arity,
                format_location(Anno, verbose, Opts)]);
 handle_type_error({illegal_pattern, Pat}, Opts) ->
-    io:format("~sIllegal pattern ~s on line ~p~n",
+    io:format("~sIllegal pattern ~s~s~n",
               [format_location(Pat, brief, Opts),
                pp_expr(Pat, Opts),
                format_location(Pat, verbose, Opts)]);
@@ -4122,7 +4122,7 @@ handle_type_error({type_error, expected_fun_type, Anno, Func, FunTy}, Opts) ->
                pp_type(FunTy, Opts)]);
 handle_type_error({type_error, no_type_match_intersection, Anno, Func, FunTy}, Opts) ->
     Name = pp_expr(Func, Opts),
-    io:format("~sNone of the types of the function ~s at line ~p matches the "
+    io:format("~sNone of the types of the function ~s~s matches the "
               "call site. Here's the types of the function:~n~s~n",
               [format_location(Anno, brief, Opts),
                Name,
@@ -4268,7 +4268,7 @@ handle_type_error({type_error, operator_pattern, Pat, Ty}, Opts) ->
                format_location(Pat, verbose, Opts),
                pp_type(Ty, Opts)]);
 handle_type_error({type_error, tuple_error, Anno, Expr, Ty}, Opts) ->
-    io:format("~sA tuple {~s} at line ~p didn't match any of the types in the union ~s~n",
+    io:format("~sA tuple {~s}~s didn't match any of the types in the union ~s~n",
               [format_location(Anno, brief, Opts),
                erl_pp:exprs(Expr),
                format_location(Anno, verbose, Opts),
@@ -4346,13 +4346,13 @@ handle_type_error({type_error, receive_after, Anno, TyClauses, TyBlock}, Opts) -
                format_location(Anno, verbose, Opts),
                pp_type(TyClauses, Opts), pp_type(TyBlock, Opts)]);
 handle_type_error({type_error, lc, Anno, Ty}, Opts) ->
-    io:format("~sThe list comprehension at line ~p is expected to have type "
+    io:format("~sThe list comprehension~s is expected to have type "
               "~s which has no list subtypes~n",
               [format_location(Anno, brief, Opts),
                format_location(Anno, verbose, Opts),
                pp_type(Ty, Opts)]);
 handle_type_error({type_error, bc, Anno, Ty}, Opts) ->
-    io:format("~sThe binary comprehension at line ~p is expected to have type "
+    io:format("~sThe binary comprehension~s is expected to have type "
               "~s which has no binary subtypes~n",
               [format_location(Anno, brief, Opts),
                format_location(Anno, verbose, Opts),
