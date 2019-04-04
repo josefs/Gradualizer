@@ -2777,8 +2777,8 @@ type_check_comprehension_in(Env, ResTy, Compr, Expr, P,
             {_VB2, Cs2} = type_check_comprehension_in(NewEnv, ResTy, Compr, Expr, P, Quals),
             {#{}, constraints:combine(Cs1, Cs2)};
         {elem_ty, ElemTy, Cs} ->
-            {_PatTy, _UBound, NewVEnv, Cs2} =
-                add_type_pat(Pat, ElemTy, Env#env.tenv, Env#env.venv),
+            {_PatTys, _UBounds, NewVEnv, Cs2} =
+                add_types_pats([Pat], [ElemTy], Env#env.tenv, Env#env.venv),
             NewEnv = Env#env{venv = NewVEnv},
             {_VB2, Cs3} = type_check_comprehension_in(NewEnv, ResTy, Compr, Expr, P, Quals),
             {#{}, constraints:combine([Cs, Cs1, Cs2, Cs3])};

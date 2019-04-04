@@ -11,3 +11,9 @@
 -spec f([mychar()]) -> any().
 f("foo") ->
     ok.
+
+-type ok_tuple() :: {ok}.
+
+-spec g([ok_tuple()]) -> list().
+g(List) ->
+    [ok || {ok} <- List].
