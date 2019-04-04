@@ -2823,6 +2823,10 @@ type_check_assocs(Env, [{Assoc, P, Key, Val}| Assocs])
 type_check_assocs(_Env, []) ->
     {[], #{}, constraints:empty()}.
 
+update_map_type({ann_type, _, [_, Ty]}, AssocTys) ->
+    %% FIXME we really should get rid of `ann_type's right in the
+    %% begining or during normalization.
+    update_map_type(Ty, AssocTys);
 update_map_type({type, _, Ty, Arg}, AssocTys)
     when Ty == map, Arg == any;
 	 Ty == any, Arg == []
