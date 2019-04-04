@@ -3495,8 +3495,8 @@ add_type_pat(CONS = {cons, P, PH, PT}, ListTy, TEnv, VEnv) ->
         {type_error, _Ty} ->
             throw({type_error, cons_pat, P, CONS, ListTy})
     end;
-add_type_pat(String = {string, P, _}, Ty, _TEnv, VEnv) ->
-    case subtype(type(string), Ty, VEnv) of
+add_type_pat(String = {string, P, _}, Ty, TEnv, VEnv) ->
+    case subtype(type(string), Ty, TEnv) of
         {true, Cs} ->
             {type(none), type(string), VEnv, Cs};
         false ->
