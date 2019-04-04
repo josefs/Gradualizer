@@ -627,6 +627,8 @@ normalize({op, _, _, _Arg1, _Arg2} = Op, _TEnv) ->
     erl_eval:partial_eval(Op);
 normalize({type, Ann, range, [T1, T2]}, TEnv) ->
     {type, Ann, range, [normalize(T1, TEnv), normalize(T2, TEnv)]};
+normalize({ann_type, _, [_Name, T]}, TEnv) ->
+    normalize(T, TEnv);
 normalize(Type, _TEnv) ->
     expand_builtin_aliases(Type).
 
