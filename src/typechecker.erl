@@ -1474,6 +1474,9 @@ do_type_check_expr(Env, {call, _, {atom, _, TypeOp}, [Expr, {string, _, TypeStr}
     catch error:_ ->
         throw({bad_type_annotation, TypeLit})
     end;
+do_type_check_expr(Env, {call, _, {atom, _, record_info}, [_, _]} = Call) ->
+    Ty = get_record_info_type(Call, Env#env.tenv),
+    {Ty, #{}, constraints:empty()};
 do_type_check_expr(Env, {call, P, Name, Args}) ->
     {FunTy, VarBinds1, Cs1} = type_check_fun(Env, Name, length(Args)),
     {ResTy, VarBinds2, Cs2} = type_check_call_ty(Env, expect_fun_type(Env, FunTy), Args
@@ -2274,6 +2277,14 @@ do_type_check_expr_in(Env, ResTy,
             end
     catch error:_ ->
         throw({bad_type_annotation, TypeLit})
+    end;
+do_type_check_expr_in(Env, ResTy, {call, _, {atom, _, record_info}, [_, _]} = Call) ->
+    Ty = get_record_info_type(Call, Env#env.tenv),
+    case subtype(Ty, ResTy, Env#env.tenv) of
+        {true, Cs} ->
+            {#{}, Cs};
+        false ->
+            throw({type_error, Call, ResTy, Ty})
     end;
 do_type_check_expr_in(Env, ResTy, {call, P, Name, Args}) ->
     {FunTy, VarBinds, Cs} = type_check_fun(Env, Name, length(Args)),
@@ -3851,6 +3862,20 @@ get_rec_field_index_and_type(FieldWithAnno, [_|RecFieldTypes], I) ->
 get_rec_field_index_and_type(FieldWithAnno, [], _) ->
     throw({undef, record_field, FieldWithAnno}).
 
+%% Helper for finding the return type of record_info/2
+-spec get_record_info_type(erl_parse:abstract_expr(), #tenv{}) -> type().
+get_record_info_type({call, Anno, {atom, _, record_info},
+                            [{atom, _, fields}, {atom, _, RecName}]}, TEnv) ->
+    Fields = get_record_fields(RecName, Anno, TEnv),
+    Names = [Name || {typed_record_field, {record_field, _, Name, _}, _Ty} <- Fields],
+    type(list, [type(union, Names)]);
+get_record_info_type({call, Anno, {atom, _, record_info},
+                            [{atom, _, size}, {atom, _, RecName}]}, TEnv) ->
+    Fields = get_record_fields(RecName, Anno, TEnv),
+    {integer, erl_anno:new(0), length(Fields) + 1};
+get_record_info_type(Expr, _TEnv) ->
+    throw({illegal_record_info, Expr}).
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% Main entry point
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -3940,10 +3965,6 @@ create_fenv(Specs, Funs) ->
 % case it will mean that if there is a spec, then that will take precedence
 % over the default type any().
     maps:from_list(
-      % Built-in macro. TODO: Improve the type. We could provide a very
-      % exact type for record_info by evaluating the call at compile time.
-      [ {{record_info, 2}, type(any)}
-      ] ++
       [ {{Name, NArgs}, type(any)}
         || {function,_, Name, NArgs, _Clauses} <- Funs
       ] ++
@@ -4063,6 +4084,11 @@ handle_type_error({illegal_pattern, Pat}, Opts) ->
               [format_location(Pat, brief, Opts),
                pp_expr(Pat, Opts),
                format_location(Pat, verbose, Opts)]);
+handle_type_error({illegal_record_info, Expr}, Opts) ->
+    io:format("~sIllegal record info ~s~s~n",
+              [format_location(Expr, brief, Opts),
+               pp_expr(Expr, Opts),
+               format_location(Expr, verbose, Opts)]);
 handle_type_error({type_error, list, _Anno, Ty1, Ty}, Opts) ->
     io:format("~sThe type ~s cannot be an element of a list of type ~s~n",
               [format_location(_Anno, brief, Opts),
