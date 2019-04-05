@@ -554,6 +554,8 @@ illegal_forms_test_() ->
      ?_assertNot(type_check_forms(["-record(r, {f1}).",
                                    "-spec f() -> term().",
                                    "f() -> #r{f2 = 1}."])),
+     %% invalid record_info
+     ?_assertNot(type_check_forms(["f() -> record_info(foo, bar)."])),
      %% illegal pattern
      ?_assertNot(type_check_forms(["-spec f(term()) -> term().",
                                    "f(1 + A) -> ok."]))
