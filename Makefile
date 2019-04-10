@@ -47,11 +47,11 @@ escript:
 
 .PHONY: gradualize
 gradualize: escript
-	./gradualizer -pa src/ -I include src/*.erl
+	./gradualizer -pa src/ -I include -- src/*.erl
 
 .PHONY: nocrashongradualize
 nocrashongradualize: escript
-	./gradualizer -pa src/ src/*.erl; \
+	./gradualizer -pa src/ -I include -- src/*.erl; \
     EXIT=$$?; \
     if [ $$EXIT -eq 0 ] || [ $$EXIT -eq 1 ]; then \
         exit 0; \
