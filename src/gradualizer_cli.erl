@@ -12,10 +12,11 @@ handle_args(Args) ->
     HasHelp = proplists:get_bool(help, Opts),
     HasVersion = proplists:get_bool(version, Opts),
     Status = if
-        HasHelp -> print_usage(), ok;
-        HasVersion -> print_version(), ok;
-        true -> gradualizer:type_check_files(Rest, Opts)
-    end,
+                 HasHelp -> print_usage(), ok;
+                 HasVersion -> print_version(), ok;
+                 Rest =:= [] -> erlang:error("No files specified to check (try --)");
+                 true -> gradualizer:type_check_files(Rest, Opts)
+             end,
     case Status of
         ok -> halt(0);
         nok -> halt(1)
@@ -34,6 +35,9 @@ print_usage() ->
     io:format("Usage: gradualizer [options] [PATH...]~n"),
     io:format("A type checker for Erlang/Elixir~n~n"),
     io:format("       PATH                      Files or directories to type check~n"),
+    io:format("       --                        Signals that no more options will follow. The following~n"),
+    io:format("                                 arguments are treated as filenames, even if~n"),
+    io:format("                                 they start with hyphens.~n"),
     io:format("  -h,  --help                    display this help and exit~n"),
     io:format("       --infer                   Infer type information from literals and other~n"),
     io:format("                                 language constructs~n"),
@@ -87,13 +91,15 @@ parse_opts([A | Args], Opts) ->
     end.
 
 -spec handle_path_add(string(), [string()], gradualizer:options()) -> {[string()], gradualizer:options()}.
-handle_path_add(A, [], _) ->
-    erlang:error(string:join(["Missing argument for", A], " "));
-handle_path_add(A, [Path | Args], Opts) ->
-    case code:add_patha(Path) of
-        true       -> parse_opts(Args, Opts);
-        {error, _} -> erlang:error(string:join(["Bad directory for ", A, ": ", Path], ""))
-    end.
+handle_path_add(A, Args, Opts) ->
+    {Paths, RestArgs} = lists:splitwith(fun no_start_dash/1, Args),
+    case Paths of
+        [] ->
+            erlang:error(string:join(["Missing argument for", A], " "));
+        _ ->
+            code:add_pathsa(Paths)
+    end,
+    parse_opts(RestArgs, Opts).
 
 -spec handle_include_path([string()], gradualizer:options()) -> {[string()], gradualizer:options()}.
 handle_include_path([Dir | Args], Opts) ->
@@ -112,3 +118,8 @@ handle_fmt_location([FmtTypeStr | Args], Opts) ->
     catch _:_ ->
             erlang:error(lists:append(["Bad value for fmt-location: ", FmtTypeStr]))
     end.
+
+no_start_dash("-" ++ _) ->
+    false;
+no_start_dash(_) ->
+    true.
