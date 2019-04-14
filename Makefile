@@ -47,7 +47,7 @@ escript:
 
 .PHONY: gradualize
 gradualize: escript
-	./gradualizer -pa src/ src/*.erl
+	./gradualizer -pa src/ -I include src/*.erl
 
 .PHONY: nocrashongradualize
 nocrashongradualize: escript
