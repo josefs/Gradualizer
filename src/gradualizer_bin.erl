@@ -3,6 +3,8 @@
 
 -export([compute_type/1]).
 
+-include("gradualizer.hrl").
+
 %% Computes the type of a bitstring expression or pattern based on the sizes
 %% of the elements. The returned type is a normalized bitstring type.
 -spec compute_type(ExprOrPat) -> gradualizer_type:abstract_type()
@@ -39,7 +41,7 @@ bin_element_view({bin_element, Anno, {Lit, _, _}, default, _Spec} = BinElem)
     %% Size is not allowed for utf8/utf16/utf32.
     Bin = {bin, Anno, [BinElem]},
     {value, Value, []} = erl_eval:expr(Bin, []),
-    {bit_size(Value), 0};
+    {bit_size(?assert_type(Value, bitstring())), 0};
 bin_element_view({bin_element, Anno, {string, _, Chars}, Size, Spec}) ->
     %% Expand <<"ab":32/float>> to <<$a:32/float, $b:32/float>>
     %% FIXME: Not true for float, integer
@@ -88,7 +90,7 @@ get_type_specifier(Specifiers) when is_list(Specifiers) ->
                  S == bitstring orelse S == bits orelse
                  S == utf8 orelse S == utf16 orelse
                  S == utf32] of
-        [S|_] -> S;
+        [S|_] -> ?assert_type(S, atom());
         []    -> integer   %% default
     end;
 get_type_specifier(default) -> integer.

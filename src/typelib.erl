@@ -12,6 +12,8 @@
 %%% Parsing and pretty printing types
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+-include("gradualizer.hrl").
+
 -type constraint() :: {type, erl_anno:anno(),
                              constraint,
                              {atom, erl_anno:anno(), is_subtype},
@@ -34,7 +36,7 @@ pp_type(Types = [_|_]) ->
 pp_type({type, _, bounded_fun, [FunType, []]}) ->
     %% Bounded fun with empty constraints gets printed with a trailing "when"
     %% when pretty-printed as a spec (next clause)
-    pp_type(FunType);
+    pp_type(?assert_type(FunType, function_type()));
 pp_type(Type = {type, _, bounded_fun, _}) ->
     %% erl_pp can't handle bounded_fun in type definitions
     %% We invent our own syntax here, e.g. "fun((A) -> ok when A :: atom())"
@@ -44,6 +46,7 @@ pp_type(Type = {type, _, bounded_fun, _}) ->
                           [{capture, all_but_first, list}, dotall]),
     "fun(" ++ S ++ ")";
 pp_type({var, _, TyVar}) ->
+    %% TODO: In type(), TyVar should be an atom but we use a string.
     TyVar;
 pp_type(Type) ->
     %% erl_pp can handle type definitions, so wrap Type in a type definition
@@ -150,7 +153,8 @@ annotate_user_types(_Filename, Type) ->
 get_module_from_annotation(Anno) ->
     case erl_anno:file(Anno) of
         File when is_list(File) ->
-            {ok, list_to_existing_atom(filename:basename(File, ".erl"))};
+            Basename = filename:basename(File, ".erl"),
+            {ok, list_to_existing_atom(?assert_type(Basename, string()))};
         undefined ->
             none
     end.
