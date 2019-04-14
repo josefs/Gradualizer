@@ -3,7 +3,7 @@
 -module(gradualizer_file_utils).
 
 -export([
-            get_forms_from_erl/1,
+            get_forms_from_erl/2,
             get_forms_from_beam/1
         ]).
 
@@ -19,9 +19,10 @@
 
 -export_type([parsed_file_error/0, abstract_forms/0]).
 
--spec get_forms_from_erl(file:filename()) -> parsed_file() | parsed_file_error().
-get_forms_from_erl(File) ->
-    case epp_parse_file(File) of
+-spec get_forms_from_erl(file:filename(), IncludePaths :: [file:name()]) ->
+    parsed_file() | parsed_file_error().
+get_forms_from_erl(File, Includes) ->
+    case epp_parse_file(File, Includes) of
         {ok, Forms} ->
             {ok, Forms};
         {error, enoent} ->
@@ -31,12 +32,12 @@ get_forms_from_erl(File) ->
     end.
 
 %% @doc Preprocess and parse a file including column numbers in the result
-epp_parse_file(File) ->
+epp_parse_file(File, Includes) ->
     case file:open(File, [read]) of
         {ok, Fd} ->
             try
                 StartLocation = {1, 1},
-                case epp:open(File, Fd, StartLocation, [], []) of
+                case epp:open(File, Fd, StartLocation, Includes, []) of
                     {ok, Epp} ->
                         %% The undocumented `epp:parse_file/1' just
                         %% takes an internal state, and calls the

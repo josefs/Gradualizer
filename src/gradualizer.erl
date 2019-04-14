@@ -1,13 +1,15 @@
 %%% @doc Main external API of the Gradualizer
 %%%
 %%% The functions `type_check(file|module|dir)' accept the following options:
+%%% - `{i, Dir}': Include path for `-include' and `-include_lib' when checking
+%%%   Erlang source files. Specify multiple times for multiple include paths.
 %%% - `stop_on_first_error': if `true' stop type checking at the first error,
 %%%   if `false' continue checking all functions in the given file and all files
 %%%   in the given directory.
 %%% - `print_file': if `true' prefix error printouts with the file name the
 %%%   error is from.
-%%% - `crash_on_error': if `true` crash on the first produced error
-%%% - `return_errors': if `true`, turns off error printing and errors
+%%% - `crash_on_error': if `true' crash on the first produced error
+%%% - `return_errors': if `true', turns off error printing and errors
 %%%   (in their internal format) are returned in a list instead of being
 %%%   condensed into a single ok | nok.
 %%% - `fmt_location': how to format location when pretty printing errors
@@ -49,7 +51,8 @@ type_check_file(File, Opts) ->
     ParsedFile =
         case filename:extension(File) of
             ".erl" ->
-                gradualizer_file_utils:get_forms_from_erl(File);
+                Includes = proplists:get_all_values(i, Opts),
+                gradualizer_file_utils:get_forms_from_erl(File, Includes);
             ".beam" ->
                 gradualizer_file_utils:get_forms_from_beam(File);
             Ext ->

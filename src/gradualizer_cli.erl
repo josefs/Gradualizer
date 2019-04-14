@@ -42,6 +42,8 @@ print_usage() ->
     io:format("       --verbose                 Show what Gradualizer is doing~n"),
     io:format("  -pa, --path-add                Add the specified directory to the beginning of~n"),
     io:format("                                 the code path; see erl -pa             [string]~n"),
+    io:format("  -I                             Include path for Erlang source files; see -I in~n"),
+    io:format("                                 the manual page erlc(1)~n"),
     io:format("       --print-file              prefix error printouts with the file name the~n"),
     io:format("                                 error is from~n"),
     io:format("       --no-print-file           inverse of --print-file~n"),
@@ -70,6 +72,7 @@ parse_opts([A | Args], Opts) ->
         "--verbose"                -> parse_opts(Args, [verbose | Opts]);
         "-pa"                      -> handle_path_add(A, Args, Opts);
         "--path-add"               -> handle_path_add(A, Args, Opts);
+        "-I"                       -> handle_include_path(Args, Opts);
         "--print-file"             -> parse_opts(Args, [print_file | Opts]);
         "--no-print-file"          -> parse_opts(Args, [{print_file, false} | Opts]);
         "--stop-on-first-error"    -> parse_opts(Args, [stop_on_first_error | Opts]);
@@ -77,7 +80,7 @@ parse_opts([A | Args], Opts) ->
         "--crash-on-error"         -> parse_opts(Args, [crash_on_error | Opts]);
         "--no-crash-on-error"      -> parse_opts(Args, [{no_crash_on_error, false} | Opts]);
         "--version"                -> {[], [version]};
-	"--fmt-location"           -> handle_fmt_location(Args, Opts);
+        "--fmt-location"           -> handle_fmt_location(Args, Opts);
         "--"                       -> {Args, Opts};
         "-" ++ _                   -> erlang:error(string:join(["Unknown parameter:", A], " "));
         _                          -> {[A | Args], Opts}
@@ -91,6 +94,12 @@ handle_path_add(A, [Path | Args], Opts) ->
         true       -> parse_opts(Args, Opts);
         {error, _} -> erlang:error(string:join(["Bad directory for ", A, ": ", Path], ""))
     end.
+
+-spec handle_include_path([string()], gradualizer:options()) -> {[string()], gradualizer:options()}.
+handle_include_path([Dir | Args], Opts) ->
+    parse_opts(Args, [{i, Dir} | Opts]);
+handle_include_path([], _Opts) ->
+    error("Missing argument for -I").
 
 handle_fmt_location([FmtTypeStr | Args], Opts) ->
     try list_to_existing_atom(FmtTypeStr) of

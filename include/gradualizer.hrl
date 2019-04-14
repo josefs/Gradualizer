@@ -26,6 +26,7 @@
 %% convenience.
 %%
 -compile({inline, ['::'/2, ':::'/2]}).
+-compile({nowarn_unused_function, ['::'/2, ':::'/2]}).
 
 '::'(Expr, _Type) -> Expr.
 ':::'(Expr, _Type) -> Expr.
