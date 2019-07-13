@@ -3335,6 +3335,30 @@ pick_one_refinement_each([Ty|Tys], [RefTy|RefTys]) ->
     %% The last list is the list where to type is refined.
     RefHeadCombinations ++ RefTailCombinations.
 
+%% Is a type refinable to the point that we do exhaustiveness checking on it?
+refinable(?type(integer)) ->
+    true;
+refinable(?type(char)) ->
+    true;
+refinable(?type(non_neg_integer)) ->
+    true;
+refinable(?type(positive_integer)) ->
+    true;
+refinable(?type(negative_integer)) ->
+    true;
+refinable(?type(atom)) ->
+    true;
+refinable(?type(nil)) ->
+    true;
+refinable(?type(union,Tys)) ->
+    lists:all(fun refinable/1, Tys);
+refinable(?type(tuple, Tys)) ->
+    lists:all(fun refinable/1, Tys);
+refinable({ann_type, _, [_, Ty]}) ->
+    refinable(Ty);
+refinable(_) ->
+    false.
+
 %% TODO: implement proper checking of guards.
 check_guards(Env, Guards) ->
     union_var_binds(
