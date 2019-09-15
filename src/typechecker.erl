@@ -73,6 +73,7 @@
              ,tenv             :: #tenv{}
              ,infer    = false :: boolean()
              ,verbose  = false :: boolean()
+	     ,exhaust  = true  :: boolean()
              %,tyvenv  = #{}
              }).
 
@@ -836,8 +837,7 @@ int_type_to_range({type, _, non_neg_integer, []})      -> {0, pos_inf};
 int_type_to_range({type, _, pos_integer, []})          -> {1, pos_inf};
 int_type_to_range({type, _, range, [{Tag1, _, I1}, {Tag2, _, I2}]})
   when Tag1 =:= integer orelse Tag1 =:= char,
-       Tag2 =:= integer orelse Tag2 =:= char,
-       I1 =< I2                                        -> {I1, I2};
+       Tag2 =:= integer orelse Tag2 =:= char           -> {I1, I2};
 int_type_to_range({char, _, I})                        -> {I, I};
 int_type_to_range({integer, _, I})                     -> {I, I}.
 
@@ -854,6 +854,9 @@ int_range_to_types({neg_inf, I}) when I > 0 ->
     [type(neg_integer),
      {type, erl_anno:new(0), range, [{integer, erl_anno:new(0), 0}
                                     ,{integer, erl_anno:new(0), I}]}];
+int_range_to_types({neg_inf, I}) -> % I < -1
+    [{type, erl_anno:new(0), range, [{integer, erl_anno:new(0), neg_inf}
+                                    ,{integer, erl_anno:new(0), I}]}];
 int_range_to_types({I, pos_inf}) when I < -1 ->
     [{type, erl_anno:new(0), range, [{integer, erl_anno:new(0), I}
                                     ,{integer, erl_anno:new(0), -1}]},
@@ -864,9 +867,14 @@ int_range_to_types({0, pos_inf}) ->
     [type(non_neg_integer)];
 int_range_to_types({1, pos_inf}) ->
     [type(pos_integer)];
+int_range_to_types({I, pos_inf}) -> % I > 1
+    [{type, erl_anno:new(0), range, [{integer, erl_anno:new(0), I}
+                                    ,{integer, erl_anno:new(0), pos_inf}]}];
 int_range_to_types({I, I}) ->
     [{integer, erl_anno:new(0), I}];
-int_range_to_types({I, J}) when I < J ->
+int_range_to_types({I, J}) when is_integer(I) andalso
+				is_integer(J) andalso
+				I < J ->
     [{type, erl_anno:new(0), range, [{integer, erl_anno:new(0), I}
                                     ,{integer, erl_anno:new(0), J}]}];
 int_range_to_types({I, J}) when I > J ->
@@ -3167,7 +3175,7 @@ check_clauses(Env, [], {var, _, TyVar}, Clauses) ->
     {Ty, VarBinds, Cs} = infer_clauses(Env, Clauses),
     {VarBinds, constraints:combine(constraints:upper(TyVar, Ty), Cs)};
 check_clauses(Env, ArgsTy, ResTy, Clauses) ->
-    {VarBindsList, Css, _RefinedArgsTy} =
+    {VarBindsList, Css, RefinedArgsTy} =
         lists:foldl(fun (Clause, {VBs, Css, RefinedArgsTy}) ->
                             {NewRefinedArgsTy, VB, Cs} =
                                 check_clause(Env, RefinedArgsTy, ResTy, Clause),
@@ -3175,6 +3183,19 @@ check_clauses(Env, ArgsTy, ResTy, Clauses) ->
                     end,
                     {[], [], ArgsTy},
                     Clauses),
+    % Checking for exhaustive patternmatching
+    case {Env#env.exhaust
+	 ,ArgsTy =/= any andalso
+	  lists:all(fun refinable/1, ArgsTy)
+	 ,lists:all(fun no_guards/1, Clauses)
+	 ,is_list(RefinedArgsTy) andalso
+	  lists:any(fun (T) -> T =/= type(none) end, RefinedArgsTy)} of
+	{true, true, true, true} ->
+	    [{clause, P, _, _, _}|_] = Clauses,
+	    throw({nonexhaustive, P, pick_value(RefinedArgsTy)});
+	_ ->
+	    ok
+    end,
     {union_var_binds(VarBindsList, Env#env.tenv), constraints:combine(Css)}.
 
 %% This function checks clauses.
@@ -3288,7 +3309,15 @@ refine_ty(Ty, {Tag, _, V}, TEnv) when ?is_int_type(Ty),
         ?type(non_neg_integer) when V == 0 -> type(pos_integer);
         ?type(non_neg_integer) when V < 0  -> throw(disjoint);
         ?type(pos_integer)     when V =< 0 -> throw(disjoint);
+	?type(pos_integer) ->
+	    Tys = int_range_to_types({1, V - 1}) ++
+		  int_range_to_types({V + 1, pos_inf}),
+	    normalize(type(union, Tys), TEnv);
         ?type(neg_integer)     when V >= 0 -> throw(disjoint);
+	?type(neg_integer) ->
+	    Tys = int_range_to_types({neg_inf, V - 1}) ++
+		  int_range_to_types({V + 1, -1}),
+	    normalize(type(union, Tys), TEnv);
         ?type(integer)         when V == 0 ->
             type(union, [type(neg_integer), type(pos_integer)]);
         ?type(range, [{_TagLo, _, Lo}, {_TagHi, _, Hi}]) ->
@@ -3342,22 +3371,63 @@ refinable(?type(char)) ->
     true;
 refinable(?type(non_neg_integer)) ->
     true;
-refinable(?type(positive_integer)) ->
+refinable(?type(pos_integer)) ->
     true;
-refinable(?type(negative_integer)) ->
+refinable(?type(neg_integer)) ->
     true;
-refinable(?type(atom)) ->
+refinable({atom, _, _}) ->
     true;
 refinable(?type(nil)) ->
     true;
-refinable(?type(union,Tys)) ->
+refinable(?type(union,Tys)) when is_list(Tys) ->
     lists:all(fun refinable/1, Tys);
-refinable(?type(tuple, Tys)) ->
+refinable(?type(tuple, Tys)) when is_list(Tys) ->
     lists:all(fun refinable/1, Tys);
 refinable({ann_type, _, [_, Ty]}) ->
     refinable(Ty);
 refinable(_) ->
     false.
+
+% Given a type, pick a value of that type.
+% Used in exhaustiveness checking to show an example value
+% which is not covered by the cases.
+pick_value(List) when is_list(List) ->
+    [pick_value(Ty) || Ty <- List ];
+pick_value(?type(integer)) ->
+    0;
+pick_value(?type(char)) ->
+    "a";
+pick_value(?type(non_neg_integer)) ->
+    0;
+pick_value(?type(pos_integer)) ->
+    1;
+pick_value(?type(neg_integer)) ->
+    -1;
+pick_value(?type(float)) ->
+    0.0;
+pick_value(?type(atom)) ->
+    a;
+pick_value({atom, _, A}) ->
+    A;
+pick_value({ann_type, _, [_, Ty]}) ->
+    pick_value(Ty);
+pick_value(?type(union, [Ty|_])) ->
+    pick_value(Ty);
+pick_value(?type(tuple, any)) ->
+    {};
+pick_value(?type(tuple, Tys)) ->
+    list_to_tuple([pick_value(Ty) || Ty <- Tys]);
+pick_value(?type(list)) ->
+    [];
+pick_value(?type(list,_)) ->
+    [];
+pick_value(?type(range, [{_TagLo, _, neg_inf}, {_TagHi, _, Hi}])) ->
+    Hi;
+pick_value(?type(range, [{_TagLo, _, Lo}, {_TagHi, _, _Hi}])) ->
+    Lo.
+
+no_guards({clause, _, _, Guards, _}) ->
+    Guards == [].
 
 %% TODO: implement proper checking of guards.
 check_guards(Env, Guards) ->
@@ -4066,6 +4136,10 @@ print_error(Error, Opts) ->
 handle_type_error({type_error, Expression, ActualType, ExpectedType}, Opts)
   when is_tuple(Expression) ->
     print_type_error(Expression, ActualType, ExpectedType, Opts);
+handle_type_error({nonexhaustive, Anno, Example}, Opts) ->
+    io:format("Nonexhaustive patterns starting on line ~p.~n"
+	      "Example values which is not covered: ~p~n"
+	     ,[format_location(Anno, brief, Opts), Example]);
 handle_type_error({call_undef, Anno, Func, Arity}, Opts) ->
     io:format("~sCall to undefined function ~p/~p~s~n",
               [format_location(Anno, brief, Opts),
