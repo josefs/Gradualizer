@@ -3396,7 +3396,7 @@ pick_value(List) when is_list(List) ->
 pick_value(?type(integer)) ->
     0;
 pick_value(?type(char)) ->
-    "a";
+    $a;
 pick_value(?type(non_neg_integer)) ->
     0;
 pick_value(?type(pos_integer)) ->
