@@ -15,12 +15,23 @@ handle_args(Args) ->
                  HasHelp -> print_usage(), ok;
                  HasVersion -> print_version(), ok;
                  Rest =:= [] -> erlang:error("No files specified to check (try --)");
-                 true -> gradualizer:type_check_files(Rest, Opts)
+                 true ->
+                     Opts1 = add_default_print_file_to_opts(Rest, Opts),
+                     gradualizer:type_check_files(Rest, Opts1)
              end,
     case Status of
         ok -> halt(0);
         nok -> halt(1)
     end.
+
+%% Adds print_file option if there are more than one file to check and
+%% the print_file is not already specified.
+-spec add_default_print_file_to_opts(FilesToCheck :: list(),
+                                     gradualizer:options()) ->
+                                            gradualizer:options().
+add_default_print_file_to_opts(Files, Opts) ->
+    [print_file || not proplists:is_defined(print_file, Opts),
+                   length(Files) > 1 orelse filelib:is_dir(hd(Files))] ++ Opts.
 
 -spec get_ver(atom()) -> string().
 get_ver(App) ->
@@ -48,10 +59,13 @@ print_usage() ->
     io:format("                                 the code path; see erl -pa             [string]~n"),
     io:format("  -I                             Include path for Erlang source files; see -I in~n"),
     io:format("                                 the manual page erlc(1)~n"),
-    io:format("       --print-file              prefix error printouts with the file name the~n"),
-    io:format("                                 error is from~n"),
+    io:format("       --print-file              prefix error printouts with the file name~n"),
+    io:format("                                  - the default when checking a directory or more~n"),
+    io:format("                                    than one file~n"),
+    io:format("       --print-basename          prefix error printouts with the file basename~n"),
+    io:format("       --print-module            prefix error printouts with the module~n"),
     io:format("       --no-print-file           inverse of --print-file~n"),
-    io:format("                                  - the default behaviour~n"),
+    io:format("                                  - the default when checking a single file~n"),
     io:format("       --stop-on-first-error     stop type checking at the first error~n"),
     io:format("       --no-stop-on-first-error  inverse of --stop-on-first-error~n"),
     io:format("                                  - the default behaviour~n"),
@@ -78,6 +92,8 @@ parse_opts([A | Args], Opts) ->
         "--path-add"               -> handle_path_add(A, Args, Opts);
         "-I"                       -> handle_include_path(Args, Opts);
         "--print-file"             -> parse_opts(Args, [print_file | Opts]);
+        "--print-module"           -> parse_opts(Args, [{print_file, module} | Opts]);
+        "--print-basename"         -> parse_opts(Args, [{print_file, basename} | Opts]);
         "--no-print-file"          -> parse_opts(Args, [{print_file, false} | Opts]);
         "--stop-on-first-error"    -> parse_opts(Args, [stop_on_first_error | Opts]);
         "--no-stop-on-first-error" -> parse_opts(Args, [{stop_on_first_error, false} | Opts]);

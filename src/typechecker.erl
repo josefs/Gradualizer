@@ -4030,7 +4030,7 @@ print_errors(Errors, Opts) ->
     ok.
 
 print_error(Error, Opts) ->
-    File = proplists:get_value(print_file, Opts),
+    File = proplists:get_value(filename, Opts),
     FmtLoc = proplists:get_value(fmt_location, Opts, verbose),
     case File of
         undefined -> ok;

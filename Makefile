@@ -65,9 +65,38 @@ clean:
 	rm -rf _build
 	rm -f gradualizer
 
-.PHONY: tests
-tests:
+.PHONY: tests eunit cli-tests
+tests: eunit cli-tests
+
+eunit:
 	rebar3 eunit
+
+cli-tests: escript
+	# CLI test cases
+	# 1. When checking a dir; printing filename is the default
+	./gradualizer test/dir \
+	|perl -ne 'm%^test/dir/test_in_dir.erl:% or die "CLI 1 ($$_)"'
+	# 2. --no-print-file with directory
+	./gradualizer --no-print-file test/dir \
+	|perl -ne '/^The/ or die "CLI 2 ($$_)"'
+	# 3. --print-module with directory
+	./gradualizer --print-module test/dir \
+	|perl -ne '/^test_in_dir:/ or die "CLI 3 ($$_)"'
+	# 4. --print-basename with directory
+	./gradualizer --print-basename test/dir \
+	|perl -ne '/^test_in_dir.erl:/ or die "CLI 4 ($$_)"'
+	# 5. Checking a single file; not printing filename is the default
+	./gradualizer test/dir/test_in_dir.erl \
+	|perl -ne '/^The/ or die "CLI 5 ($$_)"'
+	# 6. Brief formatting
+	./gradualizer --fmt-location brief --print-basename test/dir \
+	|perl -ne '/^test_in_dir.erl:6:12: The variable N is ex/ or die "CLI 6 ($$_)"'
+	# 7. Verbose formatting, without filename
+	./gradualizer --fmt-location verbose --no-print-file test/dir \
+	|perl -ne '/^The variable N on line 6 at column 12/ or die "CLI 7 ($$_)"'
+	# 8. No location, no filename
+	./gradualizer --fmt-location none --no-print-file test/dir/test_in_dir.erl \
+	|perl -ne '/^The variable N is expected/ or die "CLI 8 ($$_)"'
 
 .PHONY: cover
 cover:
