@@ -2,8 +2,12 @@
 
 -module(gradualizer_lib).
 
--export([merge_with/3, top_sort/1]).
+-export([merge_with/3, top_sort/1, pick_value/1]).
 -export_type([graph/1]).
+
+%% Pattern macros
+-define(type(T), {type, _, T, []}).
+-define(type(T, A), {type, _, T, A}).
 
 %% merge_with for maps. Similar to merge_with for dicts.
 %% Arguably, this function should be in OTP.
@@ -75,3 +79,41 @@ from_edges(Is, Es) ->
 reverse_graph(G) ->
     from_edges(maps:keys(G), [ {J, I} || {I, Js} <- maps:to_list(G), J <- Js ]).
 
+
+% Given a type, pick a value of that type.
+% Used in exhaustiveness checking to show an example value
+% which is not covered by the cases.
+pick_value(List) when is_list(List) ->
+    [pick_value(Ty) || Ty <- List ];
+pick_value(?type(integer)) ->
+    0;
+pick_value(?type(char)) ->
+    $a;
+pick_value(?type(non_neg_integer)) ->
+    0;
+pick_value(?type(pos_integer)) ->
+    1;
+pick_value(?type(neg_integer)) ->
+    -1;
+pick_value(?type(float)) ->
+    0.0;
+pick_value(?type(atom)) ->
+    a;
+pick_value({atom, _, A}) ->
+    A;
+pick_value({ann_type, _, [_, Ty]}) ->
+    pick_value(Ty);
+pick_value(?type(union, [Ty|_])) ->
+    pick_value(Ty);
+pick_value(?type(tuple, any)) ->
+    {};
+pick_value(?type(tuple, Tys)) ->
+    list_to_tuple([pick_value(Ty) || Ty <- Tys]);
+pick_value(?type(list)) ->
+    [];
+pick_value(?type(list,_)) ->
+    [];
+pick_value(?type(range, [{_TagLo, _, neg_inf}, {_TagHi, _, Hi}])) ->
+    Hi;
+pick_value(?type(range, [{_TagLo, _, Lo}, {_TagHi, _, _Hi}])) ->
+    Lo.
