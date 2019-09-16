@@ -73,21 +73,21 @@
              ,tenv             :: #tenv{}
              ,infer    = false :: boolean()
              ,verbose  = false :: boolean()
-	     ,exhaust  = true  :: boolean()
+             ,exhaust  = true  :: boolean()
              %,tyvenv  = #{}
              }).
 
 %% Two types are compatible if one is a subtype of the other, or both.
 compatible(Ty1, Ty2, TEnv) ->
     case {subtype(Ty1, Ty2, TEnv), subtype(Ty2, Ty1, TEnv)} of
-        {{true, C1}, {true, C2}} ->
-            {true, constraints:combine(C1,C2)};
-        {false, T={true, _C2}} ->
-            T;
-        {T={true, _C1}, false} ->
-            T;
-        {false, false} ->
-            false
+	{{true, C1}, {true, C2}} ->
+	    {true, constraints:combine(C1,C2)};
+	{false, T={true, _C2}} ->
+	    T;
+	{T={true, _C1}, false} ->
+	    T;
+	{false, false} ->
+	    false
     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -3176,25 +3176,25 @@ check_clauses(Env, [], {var, _, TyVar}, Clauses) ->
     {VarBinds, constraints:combine(constraints:upper(TyVar, Ty), Cs)};
 check_clauses(Env, ArgsTy, ResTy, Clauses) ->
     {VarBindsList, Css, RefinedArgsTy} =
-        lists:foldl(fun (Clause, {VBs, Css, RefinedArgsTy}) ->
-                            {NewRefinedArgsTy, VB, Cs} =
-                                check_clause(Env, RefinedArgsTy, ResTy, Clause),
-                            {[VB | VBs], [Cs | Css], NewRefinedArgsTy}
-                    end,
-                    {[], [], ArgsTy},
-                    Clauses),
+	lists:foldl(fun (Clause, {VBs, Css, RefinedArgsTy}) ->
+			    {NewRefinedArgsTy, VB, Cs} =
+				check_clause(Env, RefinedArgsTy, ResTy, Clause),
+			    {[VB | VBs], [Cs | Css], NewRefinedArgsTy}
+		    end,
+		    {[], [], ArgsTy},
+		    Clauses),
     % Checking for exhaustive patternmatching
     case {Env#env.exhaust
-	 ,ArgsTy =/= any andalso
-	  lists:all(fun refinable/1, ArgsTy)
-	 ,lists:all(fun no_guards/1, Clauses)
-	 ,is_list(RefinedArgsTy) andalso
-	  lists:any(fun (T) -> T =/= type(none) end, RefinedArgsTy)} of
-	{true, true, true, true} ->
-	    [{clause, P, _, _, _}|_] = Clauses,
-	    throw({nonexhaustive, P, gradualizer_lib:pick_value(RefinedArgsTy)});
-	_ ->
-	    ok
+         ,ArgsTy =/= any andalso
+          lists:all(fun refinable/1, ArgsTy)
+         ,lists:all(fun no_guards/1, Clauses)
+         ,is_list(RefinedArgsTy) andalso
+          lists:any(fun (T) -> T =/= type(none) end, RefinedArgsTy)} of
+        {true, true, true, true} ->
+            [{clause, P, _, _, _}|_] = Clauses,
+            throw({nonexhaustive, P, gradualizer_lib:pick_value(RefinedArgsTy)});
+        _ ->
+            ok
     end,
     {union_var_binds(VarBindsList, Env#env.tenv), constraints:combine(Css)}.
 
