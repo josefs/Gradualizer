@@ -4101,7 +4101,7 @@ handle_type_error({type_error, Expression, ActualType, ExpectedType}, Opts)
 handle_type_error({nonexhaustive, Anno, Example}, Opts) ->
     io:format("Nonexhaustive patterns starting on line ~p.~n"
 	      "Example values which is not covered: ~p~n"
-	     ,[format_location(Anno, brief, Opts), Example]);
+	     ,[format_location(Anno, verbose, Opts), Example]);
 handle_type_error({call_undef, Anno, Func, Arity}, Opts) ->
     io:format("~sCall to undefined function ~p/~p~s~n",
               [format_location(Anno, brief, Opts),
