@@ -3192,7 +3192,7 @@ check_clauses(Env, ArgsTy, ResTy, Clauses) ->
 	  lists:any(fun (T) -> T =/= type(none) end, RefinedArgsTy)} of
 	{true, true, true, true} ->
 	    [{clause, P, _, _, _}|_] = Clauses,
-	    throw({nonexhaustive, P, pick_value(RefinedArgsTy)});
+	    throw({nonexhaustive, P, gradualizer_lib:pick_value(RefinedArgsTy)});
 	_ ->
 	    ok
     end,
