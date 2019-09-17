@@ -230,7 +230,7 @@
                      | af_function_type().
 
 -type af_integer_range_type() ::
-        {'type', anno(), 'range', [af_singleton_integer_type()]}.
+        {'type', anno(), 'range', [af_range_integer_type()]}.
 
 -type af_map_type() :: {'type', anno(), 'map', 'any'}
                      | {'type', anno(), 'map', [af_assoc_type()]}.
@@ -268,6 +268,9 @@
 -type af_function_type() ::
         {'type', anno(), 'fun',
          [{'type', anno(), 'product', [abstract_type()]} | abstract_type()]}.
+
+-type af_range_integer_type() :: 'pos_inf' | 'neg_inf'
+                               | af_singleton_integer_type().
 
 -type af_singleton_integer_type() :: af_integer()
                                    | af_character()
