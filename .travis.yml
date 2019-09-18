@@ -36,7 +36,7 @@ matrix:
 # The latest OTP version is special and therefore explicitly
 # included above instead.
 otp_release:
-  - 22.0
+
   - 21.0
   # Last minor version of older OTP releases
   - 20.3
