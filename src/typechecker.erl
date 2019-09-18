@@ -80,14 +80,14 @@
 %% Two types are compatible if one is a subtype of the other, or both.
 compatible(Ty1, Ty2, TEnv) ->
     case {subtype(Ty1, Ty2, TEnv), subtype(Ty2, Ty1, TEnv)} of
-	{{true, C1}, {true, C2}} ->
-	    {true, constraints:combine(C1,C2)};
-	{false, T={true, _C2}} ->
-	    T;
-	{T={true, _C1}, false} ->
-	    T;
-	{false, false} ->
-	    false
+        {{true, C1}, {true, C2}} ->
+            {true, constraints:combine(C1,C2)};
+        {false, T={true, _C2}} ->
+            T;
+        {T={true, _C1}, false} ->
+            T;
+        {false, false} ->
+            false
     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -3176,13 +3176,13 @@ check_clauses(Env, [], {var, _, TyVar}, Clauses) ->
     {VarBinds, constraints:combine(constraints:upper(TyVar, Ty), Cs)};
 check_clauses(Env, ArgsTy, ResTy, Clauses) ->
     {VarBindsList, Css, RefinedArgsTy} =
-	lists:foldl(fun (Clause, {VBs, Css, RefinedArgsTy}) ->
-			    {NewRefinedArgsTy, VB, Cs} =
-				check_clause(Env, RefinedArgsTy, ResTy, Clause),
-			    {[VB | VBs], [Cs | Css], NewRefinedArgsTy}
-		    end,
-		    {[], [], ArgsTy},
-		    Clauses),
+        lists:foldl(fun (Clause, {VBs, Css, RefinedArgsTy}) ->
+                            {NewRefinedArgsTy, VB, Cs} =
+                                check_clause(Env, RefinedArgsTy, ResTy, Clause),
+                            {[VB | VBs], [Cs | Css], NewRefinedArgsTy}
+                    end,
+                    {[], [], ArgsTy},
+                    Clauses),
     % Checking for exhaustive patternmatching
     case {Env#env.exhaust
          ,ArgsTy =/= any andalso
