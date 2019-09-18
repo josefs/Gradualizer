@@ -854,7 +854,7 @@ int_range_to_types({neg_inf, I}) when I > 0 ->
     [type(neg_integer),
      {type, erl_anno:new(0), range, [{integer, erl_anno:new(0), 0}
                                     ,{integer, erl_anno:new(0), I}]}];
-int_range_to_types({neg_inf, I}) -> % I < -1
+int_range_to_types({neg_inf, I}) when I < -1 ->
     [{type, erl_anno:new(0), range, [{integer, erl_anno:new(0), neg_inf}
                                     ,{integer, erl_anno:new(0), I}]}];
 int_range_to_types({I, pos_inf}) when I < -1 ->
@@ -867,7 +867,7 @@ int_range_to_types({0, pos_inf}) ->
     [type(non_neg_integer)];
 int_range_to_types({1, pos_inf}) ->
     [type(pos_integer)];
-int_range_to_types({I, pos_inf}) -> % I > 1
+int_range_to_types({I, pos_inf}) when I > 1 ->
     [{type, erl_anno:new(0), range, [{integer, erl_anno:new(0), I}
                                     ,{integer, erl_anno:new(0), pos_inf}]}];
 int_range_to_types({I, I}) ->
