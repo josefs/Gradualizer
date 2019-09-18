@@ -6,8 +6,8 @@
 %%% - `stop_on_first_error': if `true' stop type checking at the first error,
 %%%   if `false' continue checking all functions in the given file and all files
 %%%   in the given directory.
-%%% - `print_file': if `true' prefix error printouts with the file name the
-%%%   error is from.
+%%% - `{print_file, true | false | module | basename}': if `true' prefix error
+%%%   printouts with the file name the error is from. Default `false'.
 %%% - `crash_on_error': if `true' crash on the first produced error
 %%% - `return_errors': if `true', turns off error printing and errors
 %%%   (in their internal format) are returned in a list instead of being
@@ -56,16 +56,29 @@ type_check_file(File, Opts) ->
             ".beam" ->
                 gradualizer_file_utils:get_forms_from_beam(File);
             Ext ->
-                throw({unknown_file_extension, Ext})
+                case filelib:is_dir(File) of
+                    true -> type_check_dir(File, Opts);
+                    false -> throw({unknown_file_extension, Ext})
+                end
         end,
     case ParsedFile of
         {ok, Forms} ->
-            Opts2 = proplists:expand([{print_file, [{print_file, File}]}], Opts),
+            Opts2 = add_filename_to_opts(File, Opts),
             type_check_forms(File, Forms, Opts2);
         Error ->
             throw(Error)
     end.
 
+%% @doc Prepends `{filename, string()}', depending on whether and how the
+%%      filename should be printed according to the print_file option in Opts.
+add_filename_to_opts(Filename, Opts) ->
+    case proplists:get_value(print_file, Opts, false) of
+        false    -> Opts;
+        true     -> [{filename, Filename} | Opts];
+        basename -> [{filename, filename:basename(Filename)} | Opts];
+        module   -> [{filename, filename:rootname(
+                                  filename:basename(Filename))} | Opts]
+    end.
 
 %% @doc Type check a module
 -spec type_check_module(module()) -> ok | nok | [{file:filename(), any()}].
@@ -84,13 +97,11 @@ type_check_module(Module, Opts) when is_atom(Module) ->
     end.
 
 %% @doc Type check all source or beam files in a directory.
-%% (Option `print_file' is implicitely true)
 -spec type_check_dir(file:filename()) -> ok | nok | [{file:filename(), any()}].
 type_check_dir(Dir) ->
     type_check_dir(Dir, []).
 
 %% @doc Type check all source or beam files in a directory.
-%% (Option `print_file' is implicitely true)
 -spec type_check_dir(file:filename(), options()) ->
                             ok | nok | [{file:filename(), any()}].
 type_check_dir(Dir, Opts) ->
@@ -102,14 +113,12 @@ type_check_dir(Dir, Opts) ->
     end.
 
 %% @doc Type check a source or beam file
-%% (Option `print_file' is implicitely true)
 -spec type_check_files([file:filename()]) ->
                               ok | nok | [{file:filename(), any()}].
 type_check_files(Files) ->
     type_check_files(Files, []).
 
 %% @doc Type check a source or beam
-%% (Option `print_file' is implicitely true)
 -spec type_check_files([file:filename()], options()) ->
                               ok | nok | [{file:filename(), any()}].
 type_check_files(Files, Opts) ->
@@ -119,7 +128,7 @@ type_check_files(Files, Opts) ->
             lists:foldl(
               fun(File, Errors) when Errors =:= [];
                                      not StopOnFirstError ->
-                      type_check_file(File, [print_file|Opts]) ++ Errors;
+                      type_check_file_or_dir(File, Opts) ++ Errors;
                  (_, Errors) ->
                       Errors
               end, [], Files);
@@ -127,13 +136,24 @@ type_check_files(Files, Opts) ->
             lists:foldl(
               fun(File, Res) when Res =:= ok;
                                   not StopOnFirstError ->
-                      case type_check_file(File, [print_file|Opts]) of
+                      case type_check_file_or_dir(File, Opts) of
                           ok -> Res;
                           nok -> nok
                       end;
                  (_, nok) ->
                       nok
               end, ok, Files)
+    end.
+
+-spec type_check_file_or_dir(file:filename(), options()) ->
+                                    ok | nok | [{file:filename(), any()}].
+type_check_file_or_dir(File, Opts) ->
+    IsRegular = filelib:is_regular(File),
+    IsDir = filelib:is_dir(File),
+    if
+        IsDir     -> type_check_dir(File, Opts);
+        IsRegular -> type_check_file(File, Opts);
+        true      -> throw({file_not_found, File}) % TODO: better errors
     end.
 
 %% @doc Type check an abstract syntax tree of a module. This can be useful
