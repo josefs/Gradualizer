@@ -21,7 +21,7 @@ matrix:
   # At that point, update otp_release in the corresponding list below
 
   - env: TEST=".travis/travis_has_latest_otp_version"
-    otp_release: 21.2
+    otp_release: 22.1
 
   # Run make target specialized for the checks we want to make in Travis for
   # the latest OTP release.
@@ -36,9 +36,9 @@ matrix:
 # The latest OTP version is special and therefore explicitly
 # included above instead.
 otp_release:
-
-  - 21.0
+  - 22.0
   # Last minor version of older OTP releases
+  - 21.3
   - 20.3
   - 19.3
 
