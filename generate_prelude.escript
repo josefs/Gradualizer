@@ -6,8 +6,8 @@ main(_) ->
     try
         Val = create_prelude(),
         io:format("Prelude created: ~p~n", [Val])
-    catch C:R:S ->
-              io:format("Failed ~p:~p~n~p~n", [C, R, S])
+    catch C:R ->
+              io:format("Failed ~p:~p~n~p~n", [C, R, erlang:get_stacktrace()])
     end.
 
 create_prelude() ->
