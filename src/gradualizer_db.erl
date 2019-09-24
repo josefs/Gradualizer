@@ -256,19 +256,8 @@ code_change(_OldVsn, State, _Extra) ->
 
 -spec import_prelude(state()) -> state().
 import_prelude(State) ->
-    %% Read the beam from file system or from escript archive
-    case code:which(gradualizer_prelude) of
-        cover_compiled ->
-            %% Cover messes with the code server. Hopefully we're not
-            %% using cover when running as an escript.
-            ErlFile = filename:join(filename:dirname(?FILE),
-                                    "gradualizer_prelude.erl"),
-            import_erl_files([ErlFile], State);
-        Filename when is_list(Filename) ->
-            {ok, BeamCode, _Filename} = erl_prim_loader:get_file(Filename),
-            {ok, State1 = #state{}} = import_beam_files([BeamCode], State),
-            State1
-    end.
+    Forms = gradualizer_prelude:get_prelude(),
+    import_absform(gradualizer_prelude, Forms, State).
 
 %% @doc ensure DB server is started
 call(Request) ->
