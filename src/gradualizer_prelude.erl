@@ -1,5 +1,7 @@
 -module(gradualizer_prelude).
 
+-compile({parse_transform, gradualizer_prelude_parse_trans}).
+
 %% This module contains specs to replace incorrect or inexact specs in OTP.
 
 -spec erlang:apply(function(), [any()]) -> any().
