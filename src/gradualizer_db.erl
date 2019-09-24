@@ -344,19 +344,18 @@ import_module_from_erl(Mod, State) ->
 import_erl_files([File | Files], State) ->
     EppOpts = [{includes, guess_include_dirs(File)}],
     {ok, Forms} = epp:parse_file(File, EppOpts),
-    [{attribute, _, file, _} | Forms1] = Forms,
-    {attribute, _, module, Module} = lists:keyfind(module, 3, Forms1),
-    check_epp_errors(File, Forms1),
-    import_erl_files(Files, import_absform(Module, Forms1, State));
+    {attribute, _, module, Module} = lists:keyfind(module, 3, Forms),
+    check_epp_errors(File, Forms),
+    import_erl_files(Files, import_absform(Module, Forms, State));
 import_erl_files([], St) ->
     St.
 
 -spec import_beam_files([file:filename() | binary()], state()) -> {ok, state()} | gradualizer_file_utils:parsed_file_error().
 import_beam_files([File | Files], State) ->
     case gradualizer_file_utils:get_forms_from_beam(File) of
-        {ok, [{attribute, _, file, _} | Forms1]} ->
-            {attribute, _, module, Module} = lists:keyfind(module, 3, Forms1),
-            import_beam_files(Files, import_absform(Module, Forms1, State));
+        {ok, Forms} ->
+            {attribute, _, module, Module} = lists:keyfind(module, 3, Forms),
+            import_beam_files(Files, import_absform(Module, Forms, State));
         Error = {Status, _} when (Status /= ok) ->
             Error
     end;
