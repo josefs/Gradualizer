@@ -41,8 +41,8 @@ type_check_module_test() ->
      ?assertEqual(ok, gradualizer:type_check_module(Mod)).
 
 type_check_dir_test() ->
-    %% user_types.erl references remote_types.erl
-    %% it is not in the sourcemap of the DB so let's import it manually
+    %% user_types.erl is referenced by remote_types.erl.
+    %% It is not in the sourcemap of the DB so let's import it manually
     gradualizer_db:import_erl_files(["test/should_pass/user_types.erl"]),
     %% imported.erl references any.erl
     gradualizer_db:import_erl_files(["test/should_pass/any.erl"]),
