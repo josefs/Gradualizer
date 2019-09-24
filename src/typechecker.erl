@@ -597,7 +597,7 @@ normalize({user_type, P, Name, Args} = Type, TEnv) ->
                 opaque ->
                     Type;
                 not_found ->
-                    throw({undef, user_type, {Module, Name, length(Args)}})
+                    throw({undef, user_type, P, {Module, Name, length(Args)}})
             end;
         none ->
             %% Local user-defined type
@@ -4139,6 +4139,11 @@ handle_type_error({undef, user_type, Anno, {Name, Arity}}, Opts) ->
     io:format("~sUndefined user type ~p/~p~s~n",
               [format_location(Anno, brief, Opts),
                Name, Arity,
+               format_location(Anno, verbose, Opts)]);
+handle_type_error({undef, user_type, Anno, {Module, Name, Arity}}, Opts) ->
+    io:format("~sUndefined user type ~p:~p/~p~s~n",
+              [format_location(Anno, brief, Opts),
+               Module, Name, Arity,
                format_location(Anno, verbose, Opts)]);
 handle_type_error({not_exported, remote_type, {{atom, Anno, _} = Module, Name, Arity}}, Opts) ->
     io:format("~sThe type ~s:~s/~p~s is not exported~n",
