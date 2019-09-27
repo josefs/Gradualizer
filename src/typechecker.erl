@@ -4100,7 +4100,7 @@ handle_type_error({type_error, Expression, ActualType, ExpectedType}, Opts)
     print_type_error(Expression, ActualType, ExpectedType, Opts);
 handle_type_error({nonexhaustive, Anno, Example}, Opts) ->
     io:format("~sNonexhaustive patterns~s~n"
-	      "Example values which is not covered: ~p~n"
+	      "Example values which are not covered: ~p~n"
 	     ,[format_location(Anno, brief, Opts),
 	       format_location(Anno, verbose, Opts),
 	       Example]);
