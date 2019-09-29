@@ -254,17 +254,16 @@ code_change(_OldVsn, State, _Extra) ->
 
 -spec import_prelude(state()) -> state().
 import_prelude(State = #state{loaded = Loaded}) ->
-    Forms = gradualizer_prelude:get_prelude(),
-    FormsByModule = partition_forms_by_override_module(gradualizer_prelude, Forms),
+    FormsByModule = gradualizer_prelude:get_modules_and_forms(),
     %% Import forms each of the modules to override
-    State1 = lists:foldl(fun ({Module, FormsThisModule}, StateAcc) ->
-                                 import_absform(Module, FormsThisModule, StateAcc)
+    State1 = lists:foldl(fun ({Module, Forms}, StateAcc) ->
+                                 import_absform(Module, Forms, StateAcc)
                          end,
                          State,
                          FormsByModule),
     %% Mark the just overridden modules as not yet loaded, to make sure they
     %% are loaded on demand
-    State1#state{loaded = Loaded#{gradualizer_prelude => true}}.
+    State1#state{loaded = Loaded}.
 
 %% @doc ensure DB server is started
 call(Request) ->
@@ -374,22 +373,6 @@ import_absform(Module, Forms1, State) ->
         records = RecMap1,
         loaded  = Loaded1
     }.
-
-%% If the forms contain {attribute, _, override_module, Module}, we consider
-%% the following forms to belong to Module.
--spec partition_forms_by_override_module(module(), gradualizer_file_utils:abstract_forms()) ->
-                       [{module(), gradualizer_file_utils:abstract_forms()}].
-partition_forms_by_override_module(CurrentModule, Forms) ->
-    {FormsThisModule,
-     FormsOtherModules} = lists:splitwith(fun ({attribute, _, override_module, _}) -> false;
-                                              (_Form)                              -> true
-                                          end, Forms),
-    [{CurrentModule, FormsThisModule} | case FormsOtherModules of
-                                            [] ->
-                                                [];
-                                            [{attribute, _, override_module, M} | Rest] ->
-                                                partition_forms_by_override_module(M, Rest)
-                                        end].
 
 %% Include dirs for OTP apps are given in makefiles. We can never
 %% guarrantee to get them right without extracting the types during
