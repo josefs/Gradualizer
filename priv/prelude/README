@@ -1,0 +1,9 @@
+This directory is the Gradualizer prelude. It is used to define and override
+types and specs in modules from OTP.
+
+Most of the overrides are replacing term() with any() in specs, because in OTP,
+they are considered synonyms but in Gradualizer, they are not. Another common
+correction is overriding a spec such as foo(term()) -> term() with a polymorphic
+one such as foo(A) -> A.
+
+For more information about the gradual type system, see the manual.
