@@ -1,6 +1,11 @@
 -module(gradualizer_prelude_parse_trans).
 
+%% This file is compiled first and used for compiling other files,
+%% so no dependencies to other modules within the application.
+
 -export([parse_transform/2]).
+
+-type forms() :: [erl_parse:abstract_form() | {error, _} | {eof, _}].
 
 parse_transform(Forms, _Options) ->
     replace_get_modules_and_forms(Forms).
@@ -15,15 +20,15 @@ replace_get_modules_and_forms([Form | RestForms]) ->
     [Form | replace_get_modules_and_forms(RestForms)].
 
 %% The value to be returned by the function in the parse transformed module
--spec get_module_forms_tuples() -> [{module(), gradualizer_file_utils:abstract_forms()}].
+-spec get_module_forms_tuples() -> [{module(), forms()}].
 get_module_forms_tuples() ->
     Files = filelib:wildcard(filename:join([code:priv_dir(gradualizer), "prelude", "*.erl"])),
     lists:map(fun get_module_and_forms/1, Files).
 
 %% Parses and returns the forms of a file along with the module given in the -module attribute
--spec get_module_and_forms(file:filename()) -> {module(), gradualizer_file_utils:abstract_forms()}.
+-spec get_module_and_forms(file:filename()) -> {module(), forms()}.
 get_module_and_forms(File) ->
-    {ok, Forms} = gradualizer_file_utils:get_forms_from_erl(File, []),
+    {ok, Forms} = epp:parse_file(File, []),
     [{attribute, _, file, _},
      {attribute, _, module, Module} | _] = Forms,
     {Module, Forms}.
