@@ -34,11 +34,13 @@ type_check_forms_test_() ->
     ].
 
 type_check_beam_file_test() ->
-     ?_assertEqual(ok, gradualizer:type_check_file("_build/test/lib/gradualizer/test/any.beam")).
+    Dir = filename:dirname(?FILE), % this differs when /not/ using rebar
+    BeamFile = filename:join(Dir, "any.beam"),
+    ?_assertEqual(ok, gradualizer:type_check_file(BeamFile)).
 
 type_check_module_test() ->
-     {module, Mod} = code:load_abs("_build/test/lib/gradualizer/test/any"),
-     ?assertEqual(ok, gradualizer:type_check_module(Mod)).
+    {module, Mod} = code:load_file(any),
+    ?assertEqual(ok, gradualizer:type_check_module(Mod)).
 
 type_check_dir_test() ->
     %% user_types.erl is referenced by remote_types.erl.

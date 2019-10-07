@@ -5,7 +5,7 @@
          incompatible_cast/0, incompatible_cast/1,
          syntax_error_1/0, syntax_error_2/0]).
 
--include_lib("gradualizer/include/gradualizer.hrl").
+-include("../../include/gradualizer.hrl").
 
 -spec downcast_using_annotation(integer()) -> any().
 downcast_using_annotation(N) ->

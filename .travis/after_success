@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 
 if [ "$ENABLE_COVER" = true ]; then
-  echo "Exporting coverage report..."
-  rebar3 covertool generate
-  bash <(curl -s https://codecov.io/bash) -f "./_build/test/covertool/gradualizer.covertool.xml"
+  echo "Sending coverage report..."
+  bash <(curl -s https://codecov.io/bash) -f "cover/coverage.xml"
   echo "Report sent!"
 fi

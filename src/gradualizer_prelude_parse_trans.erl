@@ -22,7 +22,8 @@ replace_get_modules_and_forms([Form | RestForms]) ->
 %% The value to be returned by the function in the parse transformed module
 -spec get_module_forms_tuples() -> [{module(), forms()}].
 get_module_forms_tuples() ->
-    Files = filelib:wildcard(filename:join([code:priv_dir(gradualizer), "prelude", "*.erl"])),
+    Path = [filename:dirname(?FILE), "..", "priv", "prelude", "*.erl"],
+    Files = filelib:wildcard(filename:join(Path)),
     lists:map(fun get_module_and_forms/1, Files).
 
 %% Parses and returns the forms of a file along with the module given in the -module attribute
