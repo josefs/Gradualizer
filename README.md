@@ -2,10 +2,10 @@
 <h2 align="center">A type checker for Erlang</h2>
 <p align="center">
   <a href="https://travis-ci.com/josefs/Gradualizer">
-    <img src="https://img.shields.io/travis/com/josefs/Gradualizer.svg?style=flat-square" alt="Travis CI" />
+    <img src="https://img.shields.io/travis/com/josefs/Gradualizer/master.svg?style=flat-square" alt="Travis CI" />
   </a>
   <a href="https://codecov.io/gh/josefs/Gradualizer">
-    <img src="https://img.shields.io/codecov/c/github/josefs/Gradualizer.svg?style=flat-square" alt="Codecov" />
+    <img src="https://img.shields.io/codecov/c/github/josefs/Gradualizer/master.svg?style=flat-square" alt="Codecov" />
   </a>
 </p>
 
