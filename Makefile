@@ -41,9 +41,9 @@ ERLC_OPTS = -I include -pa ebin +debug_info
 app: $(beams) ebin/gradualizer.app
 
 ebin:
-	mkdir ebin
+	mkdir -p ebin
 
-ebin/%.beam: src/%.erl ebin
+ebin/%.beam: src/%.erl | ebin
 	erlc $(ERLC_OPTS) -o ebin $<
 
 # Compile-time dependencies between modules and other files
@@ -53,7 +53,7 @@ ebin/gradualizer_prelude.beam: priv/prelude \
 # .app file
 # TODO When we start using git tags, insert version from
 # `git describe --tags`
-ebin/gradualizer.app: src/gradualizer.app.src ebin
+ebin/gradualizer.app: src/gradualizer.app.src | ebin
 	cp $< $@
 
 .PHONY: shell
@@ -164,7 +164,7 @@ cli-tests: bin/gradualizer
 
 .PHONY: cover
 cover: EUNIT_OPTS =
-cover: compile-tests test/covertool.beam
+cover: compile-tests
 	mkdir -p cover
 	erl -noinput -pa ebin -pa test -eval \
 	 '%% Cover compile, run eunit, export and generate reports \
@@ -174,9 +174,13 @@ cover: compile-tests test/covertool.beam
 	  end, % \
 	  $(erl_run_eunit), % \
 	  cover:export("cover/eunit.coverdata"), % \
-	  cover:analyse_to_file([{outdir, "cover"}]), % \
-	  cover:reset(), % because covertool imports it again \
-	  covertool:main(["-cover", "cover/eunit.coverdata", % \
+	  cover:analyse_to_file([{outdir, "cover"}]), % plain text \
+	  cover:analyse_to_file([{outdir, "cover"}, html]), % \
+	  halt().'
+
+cover/coverage.xml: cover test/covertool.beam
+	erl -noinput -pa test -eval \
+	 'covertool:main(["-cover", "cover/eunit.coverdata", % \
 	                  "-output", "cover/coverage.xml", % \
 	                  "-appname", "gradualizer"]), % \
 	  halt().'
@@ -213,4 +217,4 @@ $(DIALYZER_PLT):
 check: tests dialyze gradualize
 
 .PHONY: travischeck
-travischeck: cover dialyze nocrashongradualize
+travischeck: cover/coverage.xml dialyze nocrashongradualize
