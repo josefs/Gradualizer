@@ -2915,6 +2915,12 @@ type_check_fun(_Env, {remote, _, _Expr, _}, Arity)->
            lists:duplicate(Arity, type(any))},
           {type,0,any,[]}]},
         []]}], #{}, constraints:empty()};
+type_check_fun(Env, Var = {var, _, _Fun}, Arity) ->
+    case do_type_check_expr(Env, Var) of
+        FunType = {{type,0,'fun', [{type,0,product,Vars}, {type,0,any,[]}]}
+                 ,_,_} when length(Vars) =:= Arity -> FunType;
+        _ -> type_check_expr(Env, Var)
+    end;
 type_check_fun(Env, Expr, _Arity) ->
     type_check_expr(Env, Expr).
 
@@ -3218,24 +3224,25 @@ check_clauses(Env, ArgsTy, ResTy, Clauses) ->
         {RefinedTys :: [type()] , VarBinds :: map(), constraints:constraints()}.
 check_clause(_Env, [?type(none)|_], _ResTy, {clause, P, _Args, _Guards, _Block}) ->
     throw({type_error, unreachable_clause, P});
-check_clause(Env, ArgsTy, ResTy, C = {clause, P, Args, Guards, Block}) ->
+check_clause(_Env, ArgsTy, _ResTy, {clause, P, Args, _Guards, _Block})
+  when length(ArgsTy) =/= length(Args) ->
+    throw({argument_length_mismatch, P, length(ArgsTy), length(Args)});
+check_clause(Env, ArgsTy, ResTy, C = {clause, _, Args, Guards, Block}) ->
     ?verbose(Env, "~sChecking clause :: ~s~n", [format_location(C, brief), typelib:pp_type(ResTy)]),
-    case {length(ArgsTy), length(Args)} of
-        {L, L} ->
-            {PatTys, _UBounds, VEnv2, Cs1} =
-                add_types_pats(Args, ArgsTy, Env#env.tenv, Env#env.venv),
-            EnvNew      = Env#env{ venv =  VEnv2 },
-            VarBinds1   = check_guards(EnvNew, Guards),
-            EnvNewest   = EnvNew#env{ venv = add_var_binds(EnvNew#env.venv, VarBinds1, Env#env.tenv) },
-            {VarBinds2, Cs2} = type_check_block_in(EnvNewest, ResTy, Block),
-            RefinedTys  = refine_clause_arg_tys(ArgsTy, PatTys,
-                                                Guards, Env#env.tenv),
-            {RefinedTys
-            ,union_var_binds([VarBinds1, VarBinds2, VEnv2], Env#env.tenv)
-            ,constraints:combine(Cs1, Cs2)};
-        {LenTy, LenArgs} ->
-            throw({argument_length_mismatch, P, LenTy, LenArgs})
-    end;
+    {PatTys, _UBounds, VEnv2, Cs1} = add_types_pats(Args, ArgsTy, Env#env.tenv, Env#env.venv),
+    EnvNew      = Env#env{ venv =  VEnv2 },
+    %%%
+    %% Here I want to simply check if the block inside the clause typechecks,
+    %% taking the refined guards into consideration
+    VarBinds1   = check_guards(EnvNew, Guards),
+    EnvNewest   = EnvNew#env{ venv = refine_var_binds(EnvNew#env.venv, VarBinds1, Env#env.tenv) },
+    {VarBinds2, Cs2} = type_check_block_in(EnvNewest, ResTy, Block),
+    %%%
+    RefinedTys  = refine_clause_arg_tys(ArgsTy, PatTys,
+                                        Guards, Env#env.tenv),
+    {RefinedTys
+     ,union_var_binds([VarBinds1, VarBinds2, VEnv2], Env#env.tenv)
+     ,constraints:combine(Cs1, Cs2)};
 %% DEBUG
 check_clause(_Env, _ArgsTy, _ResTy, Term) ->
     io:format("DEBUG: check_clause term: ~p~n", [Term]),
@@ -3402,16 +3409,89 @@ refinable(_) ->
 no_guards({clause, _, _, Guards, _}) ->
     Guards == [].
 
-%% TODO: implement proper checking of guards.
+
 check_guards(Env, Guards) ->
     union_var_binds(
-      lists:map(fun (GuardSeq) ->
-                        union_var_binds(
-                          lists:map(fun (Guard) ->
-                                                {_Ty, VB, _Cs} = type_check_expr(Env, Guard), % Do we need to thread the Env?
-                                                VB
-                                    end, GuardSeq), Env#env.tenv)
-                end, Guards), Env#env.tenv).
+      lists:map(fun(GuardSeq) -> check_guards_sequence(Env, GuardSeq) end, Guards),
+      Env#env.tenv).
+
+check_guards_sequence(Env, GuardSeq) ->
+    union_var_binds(
+      lists:map(fun(Guard) -> when_guard_test(Env, Guard) end, GuardSeq),
+      Env#env.tenv).
+
+% If Gt is an atomic literal L, then Rep(Gt) = Rep(L).
+when_guard_test(_Env, {atom, _, _}) -> #{};
+% If Gt is a function call A(Gt_1, ..., Gt_k), where A is an atom,
+%       then Rep(Gt) = {call,LINE,Rep(A),[Rep(Gt_1), ..., Rep(Gt_k)]}.
+% If Gt is a function call A_m:A(Gt_1, ..., Gt_k),
+%       where A_m is the atom erlang and A is an atom or an operator,
+%       then Rep(Gt) = {call,LINE,{remote,LINE,Rep(A_m),Rep(A)},[Rep(Gt_1), ..., Rep(Gt_k)]}.
+when_guard_test(Env, {call, _, {atom, _, Fun}, Vars}) ->
+    check_guard_call(Env, Fun, Vars);
+when_guard_test(Env, {call, _, {remote,_,_,{atom, _, Fun}}, Vars}) ->
+    check_guard_call(Env, Fun, Vars);
+when_guard_test(Env, Guard) ->
+    {_Ty, VB, _Cs} = type_check_expr(Env, Guard), % Do we need to thread the Env?
+    VB.
+
+% If Gt is a bitstring constructor <<Gt_1:Size_1/TSL_1, ..., Gt_k:Size_k/TSL_k>>, where each
+% Size_i is a guard test and each TSL_i is a type specificer list, then Rep(Gt) =
+% {bin,LINE,[{bin_element,LINE,Rep(Gt_1),Rep(Size_1),Rep(TSL_1)}, ...,
+%            {bin_element,LINE,Rep(Gt_k),Rep(Size_k),Rep(TSL_k)}]}.
+% For Rep(TSL), see above. An omitted Size_i is represented by default.  An omitted TSL_i is represented by default.
+
+% If Gt is a cons skeleton [Gt_h | Gt_t], then Rep(Gt) = {cons,LINE,Rep(Gt_h),Rep(Gt_t)}.
+% If Gt is a map creation #{A_1, ..., A_k}, where each A_i is an association Gt_i_1 => Gt_i_2, then Rep(Gt) = {map,LINE,[Rep(A_1), ..., Rep(A_k)]}. For Rep(A), see above.
+% If Gt is a map update Gt_0#{A_1, ..., A_k}, where each A_i is an association Gt_i_1 => Gt_i_2 or Gt_i_1 := Gt_i_2, then Rep(Gt) = {map,LINE,Rep(Gt_0),[Rep(A_1), ..., Rep(A_k)]}. For Rep(A), see above.
+% If Gt is nil, [], then Rep(Gt) = {nil,LINE}.
+% If Gt is an operator guard test Gt_1 Op Gt_2, where Op is a binary operator other than match operator =, then Rep(Gt) = {op,LINE,Op,Rep(Gt_1),Rep(Gt_2)}.
+% If Gt is an operator guard test Op Gt_0, where Op is a unary operator, then Rep(Gt) = {op,LINE,Op,Rep(Gt_0)}.
+% If Gt is a parenthesized guard test ( Gt_0 ), then Rep(Gt) = Rep(Gt_0), that is, parenthesized guard tests cannot be distinguished from their bodies.
+% If Gt is a record creation #Name{Field_1=Gt_1, ..., Field_k=Gt_k}, where each Field_i is an atom or _, then Rep(Gt) = {record,LINE,Name,[{record_field,LINE,Rep(Field_1),Rep(Gt_1)}, ..., {record_field,LINE,Rep(Field_k),Rep(Gt_k)}]}.
+% If Gt is a record field access Gt_0#Name.Field, where Field is an atom, then Rep(Gt) = {record_field,LINE,Rep(Gt_0),Name,Rep(Field)}.
+% If Gt is a record field index #Name.Field, where Field is an atom, then Rep(Gt) = {record_index,LINE,Name,Rep(Field)}.
+% If Gt is a tuple skeleton {Gt_1, ..., Gt_k}, then Rep(Gt) = {tuple,LINE,[Rep(Gt_1), ..., Rep(Gt_k)]}.
+% If Gt is a variable pattern V, then Rep(Gt) = {var,LINE,A}, where A is an atom with a printname consisting of the same characters as V.
+
+% {function,LINE,Name,Arity,[Rep(Fc_1), ...,Rep(Fc_k)]}.
+% If Ft is a function type (T_1, ..., T_n) -> T_0, where each T_i is a type, then Rep(Ft) =
+check_guard_call(_Env, TypeBIF, Vars = [{var, _, Var}|_]) ->
+    case proplists:get_value(TypeBIF, test_bifs()) of
+        undefined -> #{};
+        'fun' -> is_function_fun_type(Var, Vars);
+        Val -> #{Var => {type, erl_anno:new(0), Val, []}}
+    end.
+
+is_function_fun_type(Fun, Vars) ->
+    case lists:keyfind(integer, 1, Vars) of
+        {integer, _ , N} ->
+            #{Fun => {type, erl_anno:new(0), 'fun',
+                      [{type, erl_anno:new(0), product, [type(any) || _<-lists:seq(1,N)]},
+                       type(any)]}};
+        false ->
+            %% TODO: make a fun type without args and arity — is it possible?
+            #{Fun => type(any)}
+    end.
+
+test_bifs() ->
+    [
+     {is_atom, atom},
+     {is_binary, binary},
+     {is_bitstring, bitstring},
+     {is_boolean, boolean},
+     {is_float, float},
+     {is_integer, integer},
+     {is_number, number},
+     {is_list, list},
+     {is_map, map},
+     {is_pid, pid},
+     {is_port, port},
+     {is_reference, reference},
+     {is_tuple, tuple},
+     {is_function, 'fun'},
+     {is_record, record}
+    ].
 
 type_check_function(Env, {function,_, Name, NArgs, Clauses}) ->
     ?verbose(Env, "Checking function ~p/~p~n", [Name, NArgs]),
@@ -3912,6 +3992,15 @@ union_var_binds_help([VB], _) -> VB.
 add_var_binds(VEnv, VarBinds, TEnv) ->
     % TODO: Don't drop the constraints
     Glb = fun(_K, Ty1, Ty2) -> {Ty, _C} = glb(Ty1, Ty2, TEnv), Ty end,
+    gradualizer_lib:merge_with(Glb, VEnv, VarBinds).
+
+refine_var_binds(VEnv, VarBinds, TEnv) ->
+    Glb = fun(_, Ty1, ?type(any)) -> Ty1;
+             (_, ?type(any), Ty2) -> Ty2;
+             (_K, Ty1, Ty2) ->
+                  {Ty, _C} = glb(Ty1, Ty2, TEnv),
+                  Ty
+          end,
     gradualizer_lib:merge_with(Glb, VEnv, VarBinds).
 
 get_rec_field_type(FieldWithAnno, RecFields) ->
