@@ -3410,14 +3410,22 @@ no_guards({clause, _, _, Guards, _}) ->
     Guards == [].
 
 
+%% Here at least one GuardSeq should be true, so we calculate the least upper bound
 check_guards(Env, Guards) ->
-    union_var_binds(
-      lists:map(fun(GuardSeq) -> check_guards_sequence(Env, GuardSeq) end, Guards),
-      Env#env.tenv).
+    X = lists:map(fun(GuardSeq) ->
+                          check_guards_sequence(Env, GuardSeq)
+                  end, Guards),
+    Glb = fun(_K, Ty1, Ty2) ->
+                  normalize({type, erl_anno:new(0), union, [Ty1, Ty2]}, Env#env.tenv)
+          end,
+    union_var_binds_help(X, Glb).
 
+%% Here, all Guards must be true, hence we calculate the greatest lower bound
 check_guards_sequence(Env, GuardSeq) ->
     union_var_binds(
-      lists:map(fun(Guard) -> when_guard_test(Env, Guard) end, GuardSeq),
+      lists:map(fun(Guard) ->
+                        when_guard_test(Env, Guard)
+                end, GuardSeq),
       Env#env.tenv).
 
 % If Gt is an atomic literal L, then Rep(Gt) = Rep(L).
@@ -3987,7 +3995,8 @@ union_var_binds(VarBindsList, TEnv) ->
 union_var_binds_help([VB1, VB2 | Rest], Glb) ->
     VB = gradualizer_lib:merge_with(Glb, VB1, VB2),
     union_var_binds_help([VB | Rest], Glb);
-union_var_binds_help([VB], _) -> VB.
+union_var_binds_help([VB], _) -> VB;
+union_var_binds_help([], _) -> #{}.
 
 add_var_binds(VEnv, VarBinds, TEnv) ->
     % TODO: Don't drop the constraints
