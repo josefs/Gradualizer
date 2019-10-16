@@ -3948,6 +3948,8 @@ type_check_forms(Forms, Opts) ->
     CrashOnError = proplists:get_bool(crash_on_error, Opts),
 
     {ok, _} = application:ensure_all_started(gradualizer),
+    proplists:get_bool(no_prelude, Opts) orelse gradualizer_db:import_prelude(),
+    gradualizer_db:import_extra_specs(proplists:get_all_values(specs_override, Opts)),
 
     ParseData =
         collect_specs_types_opaques_and_functions(Forms),

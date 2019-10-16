@@ -3,7 +3,7 @@
 %% This file is compiled first and used for compiling other files,
 %% so no dependencies to other modules within the application.
 
--export([parse_transform/2]).
+-export([parse_transform/2, get_module_forms_tuples/1]).
 
 -type forms() :: [erl_parse:abstract_form() | {error, _} | {eof, _}].
 
@@ -12,18 +12,16 @@ parse_transform(Forms, _Options) ->
 
 %% Replaces the function body of get_modules_and_forms/0
 replace_get_modules_and_forms([{function, Anno, get_modules_and_forms, 0, _OldBody} | RestForms]) ->
-    ModuleFormsTuples = get_module_forms_tuples(),
+    ModuleFormsTuples = get_module_forms_tuples(filename:join([filename:dirname(?FILE), "..", "priv", "prelude"])),
     BodyClauses = [{clause, Anno, [], [],
                     [erl_parse:abstract(ModuleFormsTuples)]}],
     [{function, Anno, get_modules_and_forms, 0, BodyClauses} | RestForms];
 replace_get_modules_and_forms([Form | RestForms]) ->
     [Form | replace_get_modules_and_forms(RestForms)].
 
-%% The value to be returned by the function in the parse transformed module
--spec get_module_forms_tuples() -> [{module(), forms()}].
-get_module_forms_tuples() ->
-    Path = [filename:dirname(?FILE), "..", "priv", "prelude", "*.erl"],
-    Files = filelib:wildcard(filename:join(Path)),
+-spec get_module_forms_tuples(filelib:filename()) -> [{module(), forms()}].
+get_module_forms_tuples(Dir) ->
+    Files = filelib:wildcard(filename:join([Dir, "*.specs.erl"])),
     lists:map(fun get_module_and_forms/1, Files).
 
 %% Parses and returns the forms of a file along with the module given in the -module attribute
