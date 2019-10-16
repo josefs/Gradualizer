@@ -69,6 +69,9 @@ print_usage() ->
     io:format("       --stop-on-first-error     stop type checking at the first error~n"),
     io:format("       --no-stop-on-first-error  inverse of --stop-on-first-error~n"),
     io:format("                                  - the default behaviour~n"),
+    io:format("       --no-prelude              Do not override OTP specs.~n"),
+    io:format("       --specs-override-dir      Add specs overrides from the *.specs.erl files in~n"),
+    io:format("                                 this directory.~n"),
     io:format("       --fmt-location            How to format location when pretty printing errors~n"),
     io:format("                                 (Column is only available if analyzing from source)~n"),
     io:format("                                 - 'none': no location for easier comparison~n"),
@@ -90,7 +93,7 @@ parse_opts([A | Args], Opts) ->
         "--verbose"                -> parse_opts(Args, [verbose | Opts]);
         "-pa"                      -> handle_path_add(A, Args, Opts);
         "--path-add"               -> handle_path_add(A, Args, Opts);
-        "-I"                       -> handle_include_path(Args, Opts);
+        "-I"                       -> handle_include_path(A, Args, Opts);
         "--print-file"             -> parse_opts(Args, [print_file | Opts]);
         "--print-module"           -> parse_opts(Args, [{print_file, module} | Opts]);
         "--print-basename"         -> parse_opts(Args, [{print_file, basename} | Opts]);
@@ -100,6 +103,8 @@ parse_opts([A | Args], Opts) ->
         "--crash-on-error"         -> parse_opts(Args, [crash_on_error | Opts]);
         "--no-crash-on-error"      -> parse_opts(Args, [{no_crash_on_error, false} | Opts]);
         "--version"                -> {[], [version]};
+        "--no-prelude"             -> parse_opts(Args, [no_prelude | Opts]);
+        "--specs-override-dir"     -> handle_specs_override(A, Args, Opts);
         "--fmt-location"           -> handle_fmt_location(Args, Opts);
         "--"                       -> {Args, Opts};
         "-" ++ _                   -> erlang:error(string:join(["Unknown parameter:", A], " "));
@@ -117,11 +122,17 @@ handle_path_add(A, Args, Opts) ->
     end,
     parse_opts(RestArgs, Opts).
 
--spec handle_include_path([string()], gradualizer:options()) -> {[string()], gradualizer:options()}.
-handle_include_path([Dir | Args], Opts) ->
+-spec handle_include_path(string(), [string()], gradualizer:options()) -> {[string()], gradualizer:options()}.
+handle_include_path(_, [Dir | Args], Opts) ->
     parse_opts(Args, [{i, Dir} | Opts]);
-handle_include_path([], _Opts) ->
-    error("Missing argument for -I").
+handle_include_path(A, [], _Opts) ->
+    erlang:error(string:join(["Missing argument for", A], " ")).
+
+-spec handle_specs_override(string(), [string()], gradualizer:options()) -> {[string()], gradualizer:options()}.
+handle_specs_override(_, [Dir | Args], Opts) ->
+    parse_opts(Args, [{specs_override, Dir} | Opts]);
+handle_specs_override(A, [], _Opts) ->
+    erlang:error(string:join(["Missing argument for", A], " ")).
 
 handle_fmt_location([FmtTypeStr | Args], Opts) ->
     try list_to_existing_atom(FmtTypeStr) of

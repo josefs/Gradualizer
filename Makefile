@@ -161,6 +161,12 @@ cli-tests: bin/gradualizer
 	# 8. No location, no filename
 	bin/gradualizer --fmt-location none --no-print-file test/dir/test_in_dir.erl \
 	|perl -ne '/^The variable N is expected/ or die "CLI 8 ($$_)"'
+	# 9. Possible to exclude prelude (-0777 from https://stackoverflow.com/a/30594643/497116)
+	bin/gradualizer --no-prelude test/should_pass/cyclic_otp_specs.erl \
+	|perl -0777 -ne '/^The type spec/g or die "CLI 9 ($$_)"'
+	# 10. Excluding prelude and then including it is a no-op
+	bin/gradualizer --no-prelude --specs-override-dir priv/prelude \
+	  test/should_pass/cyclic_otp_specs.erl || (echo "CLI 10"; exit 1)
 
 .PHONY: cover
 cover: EUNIT_OPTS =

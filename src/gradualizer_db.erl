@@ -16,8 +16,8 @@
          get_modules/0, get_types/1,
          save/1, load/1,
          import_module/1,
-         import_erl_files/1, import_beam_files/1,
-         import_app/1, import_otp/0]).
+         import_erl_files/1, import_beam_files/1, import_extra_specs/1,
+         import_app/1, import_otp/0, import_prelude/0]).
 
 %% Callbacks
 -behaviour(gen_server).
@@ -116,6 +116,14 @@ import_app(App) ->
 import_otp() ->
     call(import_otp, infinity).
 
+-spec import_prelude() -> ok.
+import_prelude() ->
+    call(import_prelude, infinity).
+
+-spec import_extra_specs(file:filename()) -> ok.
+import_extra_specs(Dirs) ->
+    call({import_extra_specs, Dirs}, infinity).
+
 -spec import_module(module()) -> ok | not_found.
 import_module(Module) ->
     call({import_module, Module}, infinity).
@@ -147,8 +155,7 @@ init(Opts0) ->
                  _ ->
                     State1
              end,
-    State3 = import_prelude(State2),
-    {ok, State3}.
+    {ok, State2}.
 
 -spec handle_call(any(), {pid(), term()}, state()) -> {reply, term(), state()}.
 handle_call({get_spec, M, F, A}, _From, State) ->
@@ -233,7 +240,13 @@ handle_call(import_otp, _From, State) ->
     Pattern = code:lib_dir() ++ "/*/src/*.erl",
     Files = filelib:wildcard(Pattern),
     State1 = import_erl_files(Files, State),
-    {reply, ok, State1}.
+    {reply, ok, State1};
+handle_call(import_prelude, _From, State) ->
+    State2 = import_prelude(State),
+    {reply, ok, State2};
+handle_call({import_extra_specs, Dirs}, _From, State) ->
+    State2 = lists:foldl(fun import_extra_specs/2, State, Dirs),
+    {reply, ok, State2}.
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
@@ -255,6 +268,19 @@ code_change(_OldVsn, State, _Extra) ->
 -spec import_prelude(state()) -> state().
 import_prelude(State = #state{loaded = Loaded}) ->
     FormsByModule = gradualizer_prelude:get_modules_and_forms(),
+    %% Import forms each of the modules to override
+    State1 = lists:foldl(fun ({Module, Forms}, StateAcc) ->
+                                 import_absform(Module, Forms, StateAcc)
+                         end,
+                         State,
+                         FormsByModule),
+    %% Mark the just overridden modules as not yet loaded, to make sure they
+    %% are loaded on demand
+    State1#state{loaded = Loaded}.
+
+-spec import_extra_specs(filelib:filename(), state()) -> state().
+import_extra_specs(Dir, State = #state{loaded = Loaded}) ->
+    FormsByModule = gradualizer_prelude_parse_trans:get_module_forms_tuples(Dir),
     %% Import forms each of the modules to override
     State1 = lists:foldl(fun ({Module, Forms}, StateAcc) ->
                                  import_absform(Module, Forms, StateAcc)
