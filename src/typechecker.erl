@@ -3227,14 +3227,14 @@ check_clause(_Env, [?type(none)|_], _ResTy, {clause, P, _Args, _Guards, _Block})
 check_clause(_Env, ArgsTy, _ResTy, {clause, P, Args, _Guards, _Block})
   when length(ArgsTy) =/= length(Args) ->
     throw({argument_length_mismatch, P, length(ArgsTy), length(Args)});
-check_clause(Env, ArgsTy, ResTy, C = {clause, _, Args, Guards, Block}) ->
+check_clause(Env, ArgsTy, ResTy, C = {clause, P, Args, Guards, Block}) ->
     ?verbose(Env, "~sChecking clause :: ~s~n", [format_location(C, brief), typelib:pp_type(ResTy)]),
     {PatTys, _UBounds, VEnv2, Cs1} = add_types_pats(Args, ArgsTy, Env#env.tenv, Env#env.venv),
     EnvNew      = Env#env{ venv =  VEnv2 },
     %%%
     %% Here I want to simply check if the block inside the clause typechecks,
     %% taking the refined guards into consideration
-    VarBinds1   = check_guards(EnvNew, Guards),
+    VarBinds1   = check_guards(EnvNew, Guards, P),
     EnvNewest   = EnvNew#env{ venv = refine_var_binds(EnvNew#env.venv, VarBinds1, Env#env.tenv) },
     {VarBinds2, Cs2} = type_check_block_in(EnvNewest, ResTy, Block),
     %%%
@@ -3410,15 +3410,26 @@ no_guards({clause, _, _, Guards, _}) ->
     Guards == [].
 
 
+fail_if_unreachable_clause(VarBinds, P) ->
+    maps:fold(fun
+                  (_K,?type(none),_Acc) ->
+                      throw({type_error, unreachable_clause, P});
+                  (_K,_V,Acc) ->
+                      Acc
+              end,
+             VarBinds,
+             VarBinds).
+
 %% Here at least one GuardSeq should be true, so we calculate the least upper bound
-check_guards(Env, Guards) ->
+check_guards(Env, Guards, P) ->
     X = lists:map(fun(GuardSeq) ->
                           check_guards_sequence(Env, GuardSeq)
                   end, Guards),
     Glb = fun(_K, Ty1, Ty2) ->
                   normalize({type, erl_anno:new(0), union, [Ty1, Ty2]}, Env#env.tenv)
           end,
-    union_var_binds_help(X, Glb).
+    VarBinds = union_var_binds_help(X, Glb),
+    fail_if_unreachable_clause(VarBinds, P).
 
 %% Here, all Guards must be true, hence we calculate the greatest lower bound
 check_guards_sequence(Env, GuardSeq) ->
