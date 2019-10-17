@@ -2152,7 +2152,7 @@ do_type_check_expr_in(Env, Ty, {bin, _Anno, _BinElements} = Bin) ->
           end,
     {_Ty, VarBinds, Cs2} = type_check_expr(Env, Bin),
     {VarBinds, constraints:combine(Cs1, Cs2)};
-do_type_check_expr_in(Env, ResTy, {tuple, LINE, TS}) ->
+do_type_check_expr_in(Env, ResTy, {tuple, _, TS} = Tup) ->
     case expect_tuple_type(ResTy, length(TS)) of
         {elem_ty, Tys, Cs} ->
             {VBs, Css} = lists:unzip([ type_check_expr_in(Env, Ty, Expr)
@@ -2161,7 +2161,8 @@ do_type_check_expr_in(Env, ResTy, {tuple, LINE, TS}) ->
         {elem_tys, Tyss, Cs} ->
             case type_check_tuple_union_in(Env, Tyss, TS) of
                 none ->
-                    throw({type_error, tuple, LINE, ResTy});
+                    {Ty, _VB, _Cs} = type_check_expr(Env#env{infer = true}, Tup),
+                    throw({type_error, Tup, Ty, ResTy});
                 {VBs, Css} ->
                     {union_var_binds(VBs, Env#env.tenv), constraints:combine([Cs|Css])}
             end;
@@ -2170,7 +2171,8 @@ do_type_check_expr_in(Env, ResTy, {tuple, LINE, TS}) ->
                                            || Expr <- TS ]),
             {union_var_binds(VBs, Env#env.tenv), constraints:combine(Css)};
         {type_error, _} ->
-            throw({type_error, tuple, LINE, ResTy})
+                    {Ty, _VB, _Cs} = type_check_expr(Env#env{infer = true}, Tup),
+                    throw({type_error, Tup, Ty, ResTy})
     end;
 
 %% Maps
@@ -4382,21 +4384,10 @@ handle_type_error({type_error, operator_pattern, Pat, Ty}, Opts) ->
                pp_expr(Pat, Opts),
                format_location(Pat, verbose, Opts),
                pp_type(Ty, Opts)]);
-handle_type_error({type_error, tuple_error, Anno, Expr, Ty}, Opts) ->
-    io:format("~sA tuple {~s}~s didn't match any of the types in the union ~s~n",
-              [format_location(Anno, brief, Opts),
-               erl_pp:exprs(Expr),
-               format_location(Anno, verbose, Opts),
-               pp_type(Ty, Opts)]);
 handle_type_error({type_error, pattern, Anno, Pat, Ty}, Opts) ->
     io:format("~sThe pattern ~s~s doesn't have the type ~s~n",
               [format_location(Anno, brief, Opts),
                pp_expr(Pat, Opts),
-               format_location(Anno, verbose, Opts),
-               pp_type(Ty, Opts)]);
-handle_type_error({type_error, tuple, Anno, Ty}, Opts) ->
-    io:format("~sThe tuple~s does not have type ~s~n",
-              [format_location(Anno, brief, Opts),
                format_location(Anno, verbose, Opts),
                pp_type(Ty, Opts)]);
 handle_type_error({unknown_variable, Anno, Var}, Opts) ->
