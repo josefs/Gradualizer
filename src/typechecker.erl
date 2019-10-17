@@ -3420,24 +3420,34 @@ fail_if_unreachable_clause(VarBinds, P) ->
              VarBinds,
              VarBinds).
 
+normalize_any(T = {type, P, union, Types}) ->
+    case lists:any(fun ({type, _, any, []}) -> true; (_) -> false end, Types) of
+        true -> {type, P, any, []};
+        _ -> T
+    end;
+normalize_any(T) ->
+    T.
+
 %% Here at least one GuardSeq should be true, so we calculate the least upper bound
 check_guards(Env, Guards, P) ->
     X = lists:map(fun(GuardSeq) ->
                           check_guards_sequence(Env, GuardSeq)
                   end, Guards),
     Lub = fun(_K, Ty1, Ty2) ->
-                  normalize({type, erl_anno:new(0), union, [Ty1, Ty2]}, Env#env.tenv)
+                  NTy = normalize({type, erl_anno:new(0), union, [Ty1, Ty2]}, Env#env.tenv),
+                  normalize_any(NTy)
           end,
     VarBinds = union_var_binds_help(X, Lub),
     fail_if_unreachable_clause(VarBinds, P).
 
 %% Here, all Guards must be true, hence we calculate the greatest lower bound
 check_guards_sequence(Env, GuardSeq) ->
-    union_var_binds(
+    RefTys = union_var_binds(
       lists:map(fun(Guard) ->
                         when_guard_test(Env, Guard)
                 end, GuardSeq),
-      Env#env.tenv).
+      Env#env.tenv),
+    maps:merge(Env#env.venv, RefTys).
 
 % If Gt is an atomic literal L, then Rep(Gt) = Rep(L).
 when_guard_test(_Env, {atom, _, _}) -> #{};

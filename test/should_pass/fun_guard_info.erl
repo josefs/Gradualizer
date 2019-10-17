@@ -3,7 +3,8 @@
          guard_is_atom/1,
          remote_guard/1,
          fun_correct_arity/1,
-         fun_unspecified_arity/1
+         fun_unspecified_arity/1,
+         fun_different_variables/2
         ]).
 
 -spec guard_is_atom(atom() | list()) -> list().
@@ -28,3 +29,8 @@ fun_unspecified_arity(Fun) when is_function(Fun) ->
     Fun(0,1);
 fun_unspecified_arity(_Fun) -> true.
 
+-spec fun_different_variables(any(), any()) -> any().
+fun_different_variables(A,B)
+  when is_atom(A), is_integer(B);
+       is_integer(A), is_atom(B) ->
+    ok.
