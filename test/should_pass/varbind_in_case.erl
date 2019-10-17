@@ -28,3 +28,13 @@ merge_vars(A, B, C) ->
         false -> V = C
     end,
     V.
+
+-spec tuple_bind({foo, integer()} | {bar, float()}) -> number().
+tuple_bind(A) ->
+    case A of
+        {foo, N} ->
+            ok;
+        {bar, N} ->
+            ok
+        end,
+    N.

@@ -3116,7 +3116,8 @@ infer_clauses(Env, Clauses) ->
 -spec infer_clause(#env{}, gradualizer_type:abstract_clause()) ->
         {type(), VarBinds :: map(), constraints:constraints()}.
 infer_clause(Env, {clause, _, Args, Guards, Block}) ->
-    EnvNew = Env#env{ venv = add_any_types_pats(Args, Env#env.venv) },
+    VEnv = add_any_types_pats(Args, Env#env.venv),
+    EnvNew = Env#env{ venv = VEnv },
     % TODO: Can there be variable bindings in a guard? Right now we just
     % discard them.
     % TODO: Should we check that guards return boolean()?
@@ -3125,7 +3126,8 @@ infer_clause(Env, {clause, _, Args, Guards, Block}) ->
                                         type_check_expr(EnvNew, Guard)
                                 end, GuardConj)
               end, Guards),
-    type_check_block(EnvNew, Block).
+    {Ty, VB, Cs} = type_check_block(EnvNew, Block),
+    {Ty, union_var_binds(VB, VEnv, Env#env.tenv), Cs}.
 
 
 check_clauses_intersect(Env, Ty, Clauses) when not is_list(Ty) ->
@@ -3222,7 +3224,7 @@ check_clause(Env, ArgsTy, ResTy, C = {clause, P, Args, Guards, Block}) ->
             RefinedTys  = refine_clause_arg_tys(ArgsTy, PatTys,
                                                 Guards, Env#env.tenv),
             {RefinedTys
-            ,union_var_binds(VarBinds1, VarBinds2, Env#env.tenv)
+            ,union_var_binds([VarBinds1, VarBinds2, VEnv2], Env#env.tenv)
             ,constraints:combine(Cs1, Cs2)};
         {LenTy, LenArgs} ->
             throw({argument_length_mismatch, P, LenTy, LenArgs})
