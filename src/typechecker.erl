@@ -3446,10 +3446,10 @@ when_guard_test(_Env, {atom, _, _}) -> #{};
 % If Gt is a function call A_m:A(Gt_1, ..., Gt_k),
 %       where A_m is the atom erlang and A is an atom or an operator,
 %       then Rep(Gt) = {call,LINE,{remote,LINE,Rep(A_m),Rep(A)},[Rep(Gt_1), ..., Rep(Gt_k)]}.
-when_guard_test(Env, {call, _, {atom, _, Fun}, Vars}) ->
-    check_guard_call(Env, Fun, Vars);
-when_guard_test(Env, {call, _, {remote,_,_,{atom, _, Fun}}, Vars}) ->
-    check_guard_call(Env, Fun, Vars);
+when_guard_test(Env, {call, P, {atom, _, Fun}, Vars}) ->
+    check_guard_call(Env, P, Fun, Vars);
+when_guard_test(Env, {call, P, {remote,_,_,{atom, _, Fun}}, Vars}) ->
+    check_guard_call(Env, P, Fun, Vars);
 when_guard_test(Env, Guard) ->
     {_Ty, VB, _Cs} = type_check_expr(Env, Guard), % Do we need to thread the Env?
     VB.
@@ -3475,18 +3475,18 @@ when_guard_test(Env, Guard) ->
 
 % {function,LINE,Name,Arity,[Rep(Fc_1), ...,Rep(Fc_k)]}.
 % If Ft is a function type (T_1, ..., T_n) -> T_0, where each T_i is a type, then Rep(Ft) =
-check_guard_call(_Env, TypeBIF, Vars = [{var, _, Var}|_]) ->
+check_guard_call(_Env, P, TypeBIF, Vars = [{var, _, Var}|_]) ->
     case proplists:get_value(TypeBIF, test_bifs()) of
         undefined -> #{};
-        'fun' -> is_function_fun_type(Var, Vars);
-        Val -> #{Var => {type, erl_anno:new(0), Val, []}}
+        'fun' -> is_function_fun_type(P, Var, Vars);
+        Val -> #{Var => {type, P, Val, []}}
     end.
 
-is_function_fun_type(Fun, Vars) ->
+is_function_fun_type(P, Fun, Vars) ->
     case lists:keyfind(integer, 1, Vars) of
         {integer, _ , N} ->
-            #{Fun => {type, erl_anno:new(0), 'fun',
-                      [{type, erl_anno:new(0), product, [type(any) || _<-lists:seq(1,N)]},
+            #{Fun => {type, P, 'fun',
+                      [{type, P, product, [type(any) || _<-lists:seq(1,N)]},
                        type(any)]}};
         false ->
             %% TODO: make a fun type without args and arity — is it possible?
