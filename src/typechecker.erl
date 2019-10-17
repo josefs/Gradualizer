@@ -4435,11 +4435,6 @@ handle_type_error({type_error, record_pattern, Anno, Record, Ty}, Opts) ->
                Record,
                format_location(Anno, verbose, Opts),
                pp_type(Ty, Opts)]);
-handle_type_error({type_error, map, Anno, ExpectedTy}, Opts) ->
-    io:format("~sThe map~s does not have type ~s~n",
-              [format_location(Anno, brief, Opts),
-               format_location(Anno, verbose, Opts),
-               pp_type(ExpectedTy, Opts)]);
 handle_type_error({type_error, badkey, KeyExpr, MapType}, Opts) ->
     %% Compare to the runtime error raised by maps:get(Key, Map) error:{badkey, Key}.
     io:format("~sThe expression ~s~s is not a valid key in the map type ~s~n",
@@ -4473,12 +4468,6 @@ handle_type_error({type_error, cyclic_type_vars, _Anno, Ty, Xs}, Opts) ->
                pp_type(Ty, Opts),
                [ "s" || length(Xs) > 1 ],
                string:join(lists:map(fun atom_to_list/1, lists:sort(Xs)), ", ")]);
-handle_type_error({type_error, map, Anno, ResTy, MapTy}, Opts) ->
-    io:format("~sThe map~s is expected to have type:~n~s~n"
-	      "but has the type:~n~s~n",
-	      [format_location(Anno, brief, Opts),
-               format_location(Anno, verbose, Opts),
-               pp_type(ResTy, Opts), pp_type(MapTy, Opts)]);
 handle_type_error({type_error, mismatch, Ty, Expr}, Opts) ->
     io:format("~sThe expression ~s~s does not have type ~s~n",
               [format_location(Expr, brief, Opts),
