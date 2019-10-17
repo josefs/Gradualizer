@@ -3425,10 +3425,10 @@ check_guards(Env, Guards, P) ->
     X = lists:map(fun(GuardSeq) ->
                           check_guards_sequence(Env, GuardSeq)
                   end, Guards),
-    Glb = fun(_K, Ty1, Ty2) ->
+    Lub = fun(_K, Ty1, Ty2) ->
                   normalize({type, erl_anno:new(0), union, [Ty1, Ty2]}, Env#env.tenv)
           end,
-    VarBinds = union_var_binds_help(X, Glb),
+    VarBinds = union_var_binds_help(X, Lub),
     fail_if_unreachable_clause(VarBinds, P).
 
 %% Here, all Guards must be true, hence we calculate the greatest lower bound
