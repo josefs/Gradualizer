@@ -57,7 +57,7 @@ ebin/gradualizer.app: src/gradualizer.app.src | ebin
 	cp $< $@
 
 .PHONY: shell
-shell:
+shell: app
 	erl -pa ebin
 
 .PHONY: escript
