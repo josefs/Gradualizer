@@ -4494,6 +4494,7 @@ describe_expr({string, _, _})             -> "string";
 describe_expr({var, _, _})                -> "variable";
 describe_expr({lc, _, _, _})              -> "list comprehension";
 describe_expr({bc, _, _, _})              -> "binary comprehension";
+describe_expr({tuple, _, _})              -> "tuple";
 describe_expr(_)                          -> "expression".
 
 -spec print_type_error(gradualizer_type:abstract_expr(),
