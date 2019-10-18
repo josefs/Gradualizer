@@ -176,7 +176,8 @@ type_check_forms(Forms, Opts) ->
                             ok | nok | [{file:filename(), any()}].
 type_check_forms(File, Forms, Opts) ->
     ReturnErrors = proplists:get_bool(return_errors, Opts),
-    Errors = typechecker:type_check_forms(Forms, Opts),
+    OptsForModule = Opts ++ options_from_forms(Forms),
+    Errors = typechecker:type_check_forms(Forms, OptsForModule),
     case {ReturnErrors, Errors} of
         {true, _ } ->
             lists:map(fun(Error) -> {File, Error} end, Errors);
@@ -186,3 +187,12 @@ type_check_forms(File, Forms, Opts) ->
             typechecker:print_errors(Errors, Opts),
             nok
     end.
+
+%% Extract -gradualizer(Options) from AST
+-spec options_from_forms([erl_parse:abstract_form()]) -> options().
+options_from_forms([{attribute, _L, gradualizer, Opts} | Fs]) when is_list(Opts) ->
+    Opts ++ options_from_forms(Fs);
+options_from_forms([{attribute, _L, gradualizer, Opt} | Fs]) ->
+    [Opt | options_from_forms(Fs)];
+options_from_forms([_F | Fs]) -> options_from_forms(Fs);
+options_from_forms([]) -> [].
