@@ -4405,13 +4405,6 @@ handle_type_error({unknown_variable, Anno, Var}, Opts) ->
               [format_location(Anno, brief, Opts),
                Var,
                format_location(Anno, verbose, Opts)]);
-handle_type_error({type_error, bit_type, Expr, Anno, Ty1, Ty2}, Opts) ->
-    io:format("~sThe expression ~s inside the bit expression~s has type ~s "
-              "but the type specifier indicates ~s~n",
-              [format_location(Anno, brief, Opts),
-               pp_expr(Expr, Opts),
-               format_location(Anno, verbose, Opts),
-               pp_type(Ty1, Opts), pp_type(Ty2, Opts)]);
 handle_type_error({type_error, check_clauses}, _Opts) ->
     %%% TODO: Improve quality of type error
     io:format("Type error in clauses");
