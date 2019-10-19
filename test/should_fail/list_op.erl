@@ -1,12 +1,16 @@
 -module(list_op).
--export([append/1,
+-export([append_right_error/1,
+         append_left_error/1,
          append/0,
          subtract/1,
          subtract/2,
          subtract/0]).
 
--spec append(integer()) -> _ | integer().
-append(X) -> [1] ++ X.
+-spec append_right_error(integer()) -> _ | integer().
+append_right_error(X) -> [1] ++ X.
+
+-spec append_left_error(integer()) -> _ | integer().
+append_left_error(X) -> X ++ [1].
 
 %% FIXME checking this function used to crash
 %% now it returns the following error
