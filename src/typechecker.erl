@@ -2005,11 +2005,13 @@ type_check_comprehension(Env, bc, Expr, []) ->
                     %% Possibly a union of bitstring types; ok for now.
                     type(any);
                 NormTy ->
-                    P = line_no(Expr),
-                    throw({type_error, bc, P, Expr, NormTy})
+                    BitstringTy = {type, erl_anno:new(0), binary,
+                            [{integer, erl_anno:new(0), 0},
+                             {integer, erl_anno:new(0), 1}]},
+                    throw({type_error, Expr, NormTy, BitstringTy})
             end,
     {RetTy, #{}, Cs};
-type_check_comprehension(Env, Compr, Expr, [{generate, P, Pat, Gen} | Quals]) ->
+type_check_comprehension(Env, Compr, Expr, [{generate, _, Pat, Gen} | Quals]) ->
     {Ty,  _,  Cs1} = type_check_expr(Env, Gen),
     case expect_list_type(Ty, allow_nil_type, Env#env.tenv) of
         {elem_ty, ElemTy, Cs} ->
@@ -2032,7 +2034,7 @@ type_check_comprehension(Env, Compr, Expr, [{generate, P, Pat, Gen} | Quals]) ->
             {TyL, VB, Cs2} = type_check_comprehension(NewEnv, Compr, Expr, Quals),
             {TyL, VB, constraints:combine([Cs,Cs1,Cs2])};
         {type_error, BadTy} ->
-            throw({type_error, generator, P, BadTy})
+            throw({type_error, Gen, BadTy, type(list)})
     end;
 type_check_comprehension(Env, Compr, Expr, [{b_generate, _P, Pat, Gen} | Quals]) ->
     BitStringTy = type(binary, [{integer, erl_anno:new(0), 0},
@@ -2794,7 +2796,7 @@ type_check_comprehension_in(Env, ResTy, OrigExpr, bc, Expr, _P, []) ->
     {_VB, Cs} = type_check_expr_in(Env, ExprTy, Expr),
     {#{}, Cs};
 type_check_comprehension_in(Env, ResTy, OrigExpr, Compr, Expr, P,
-                            [{generate, P_Gen, Pat, Gen} | Quals]) ->
+                            [{generate, _, Pat, Gen} | Quals]) ->
     {Ty, _VB1, Cs1} = type_check_expr(Env, Gen),
     case expect_list_type(Ty, allow_nil_type, Env#env.tenv) of
         any ->
@@ -2814,7 +2816,7 @@ type_check_comprehension_in(Env, ResTy, OrigExpr, Compr, Expr, P,
             {_VB2, Cs2} = type_check_comprehension_in(NewEnv, ResTy, OrigExpr, Compr, Expr, P, Quals),
             {#{}, constraints:combine([Cs, Cs1, Cs2])};
         {type_error, BadTy} ->
-            throw({type_error, generator, P_Gen, BadTy})
+            throw({type_error, Gen, BadTy, type(list)})
     end;
 type_check_comprehension_in(Env, ResTy, OrigExpr, Compr, Expr, P,
                             [{b_generate, _P_Gen, Pat, Gen} | Quals]) ->
@@ -4410,25 +4412,6 @@ handle_type_error({type_error, bit_type, Expr, Anno, Ty1, Ty2}, Opts) ->
                pp_expr(Expr, Opts),
                format_location(Anno, verbose, Opts),
                pp_type(Ty1, Opts), pp_type(Ty2, Opts)]);
-handle_type_error({type_error, generator, Anno, Ty}, Opts) ->
-    io:format("~sThe generator in a list comprehension~s is expected "
-              "to return a list type, but returns ~s~n",
-              [format_location(Anno, brief, Opts),
-               format_location(Anno, verbose, Opts),
-               pp_type(Ty, Opts)]);
-handle_type_error({type_error, b_generate, Anno, Ty}, Opts) ->
-    io:format("~sThe binary generator~s is expected "
-              "to return a bitstring type, but returns ~s~n",
-              [format_location(Anno, brief, Opts),
-               format_location(Anno, verbose, Opts),
-               pp_type(Ty, Opts)]);
-handle_type_error({type_error, bc, Anno, Expr, Ty}, Opts) ->
-    io:format("~sThe expression ~s in the bit string comprehension~s "
-              "has type ~s but a bit type is expected.~n",
-              [format_location(Anno, brief, Opts),
-               pp_expr(Expr, Opts),
-               format_location(Anno, verbose, Opts),
-               pp_type(Ty, Opts)]);
 handle_type_error({type_error, check_clauses}, _Opts) ->
     %%% TODO: Improve quality of type error
     io:format("Type error in clauses");
