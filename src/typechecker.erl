@@ -4439,25 +4439,33 @@ handle_type_error(type_error, _) ->
 
 -spec describe_expr(gradualizer_type:abstract_expr()) -> string().
 describe_expr({atom, _, _})               -> "atom";
+describe_expr({bc, _, _, _})              -> "binary comprehension";
 describe_expr({bin, _, _})                -> "bit expression";
+describe_expr({block,_,_})                -> "block";
 describe_expr({char, _, _})               -> "character";
+describe_expr({call, _, _})               -> "function call";
+describe_expr({'catch', _, _})            -> "catch expression";
+describe_expr({'case', _, _, _})          -> "case expression";
 describe_expr({cons, _, _, _})            -> "list";
 describe_expr({float, _, _})              -> "float";
-describe_expr({'fun', _, _})              -> "fun";
+describe_expr({'fun', _, _})              -> "fun expression";
 describe_expr({integer, _, _})            -> "integer";
+describe_expr({'if', _, _})               -> "if expression";
+describe_expr({lc, _, _, _})              -> "list comprehension";
 describe_expr({map, _, _})                -> "map";
-describe_expr({map, _, _, _} )            -> "map update";
-describe_expr({named_fun, _, _, _})       -> "named fun";
+describe_expr({map, _, _, _})             -> "map update";
+describe_expr({match, _, _, _})           -> "match";
+describe_expr({named_fun, _, _, _})       -> "named fun expression";
 describe_expr({nil, _})                   -> "empty list";
 describe_expr({record, _, _, _})          -> "record";
+describe_expr({'receive', _, _, _, _})    -> "receive expression";
 describe_expr({record, _, _, _, _})       -> "record update";
 describe_expr({record_field, _, _, _, _}) -> "record field";
 describe_expr({record_index, _, _, _})    -> "record index";
 describe_expr({string, _, _})             -> "string";
-describe_expr({var, _, _})                -> "variable";
-describe_expr({lc, _, _, _})              -> "list comprehension";
-describe_expr({bc, _, _, _})              -> "binary comprehension";
 describe_expr({tuple, _, _})              -> "tuple";
+describe_expr({'try', _, _, _, _, _})     -> "try expression";
+describe_expr({var, _, _})                -> "variable";
 describe_expr(_)                          -> "expression".
 
 -spec print_type_error(gradualizer_type:abstract_expr(),
