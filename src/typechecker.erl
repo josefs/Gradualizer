@@ -1681,9 +1681,9 @@ do_type_check_expr(Env, {op, P, Op, Arg1, Arg2}) when
       Op == 'band' orelse Op == 'bor' orelse Op == 'bxor' orelse
       Op == 'bsl'  orelse Op == 'bsr' ->
     type_check_int_op(Env, Op, P, Arg1, Arg2);
-do_type_check_expr(Env, {op, P, Op, Arg1, Arg2}) when
+do_type_check_expr(Env, {op, _, Op, Arg1, Arg2}) when
       Op == '++' orelse Op == '--' ->
-    type_check_list_op(Env, Op, P, Arg1, Arg2);
+    type_check_list_op(Env, Arg1, Arg2);
 
 %% Exception constructs
 %% There is no typechecking of exceptions
@@ -1853,7 +1853,7 @@ type_check_int_op(Env, Op, P, Arg1, Arg2) ->
             ,constraints:combine([Cs1, Cs2, Cs3])}
     end.
 
-type_check_list_op(Env, Op, P, Arg1, Arg2) ->
+type_check_list_op(Env, Arg1, Arg2) ->
   {Ty1, VB1, Cs1} = type_check_expr(Env, Arg1),
   {Ty2, VB2, Cs2} = type_check_expr(Env, Arg2),
 
@@ -1867,9 +1867,9 @@ type_check_list_op(Env, Op, P, Arg1, Arg2) ->
       ,constraints:combine([Cs1, Cs2, Cs3, Cs4])
       };
     {false, _} ->
-      throw({type_error, list_op_error, Op, P, Ty1, Arg1});
+      throw({type_error, Arg1, Ty1, type(list)});
     {_, false} ->
-      throw({type_error, list_op_error, Op, P, Ty2, Arg2})
+        throw({type_error, Arg2, Ty2, type(list)})
   end.
 
 type_check_call_ty(Env, {fun_ty, ArgsTy, ResTy, Cs}, Args, E) ->
@@ -2422,9 +2422,9 @@ do_type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
       Op == '>=' orelse Op == '=<' orelse
       Op == '>' orelse Op == '<' ->
     type_check_rel_op_in(Env, ResTy, Op, P, Arg1, Arg2);
-do_type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
+do_type_check_expr_in(Env, ResTy, {op, _, Op, _, _} = OrigExpr) when
       Op == '++' orelse Op == '--' ->
-    type_check_list_op_in(Env, ResTy, Op, P, Arg1, Arg2);
+    type_check_list_op_in(Env, ResTy, OrigExpr);
 
 do_type_check_expr_in(Env, ResTy, {block, _, Block}) ->
     type_check_block_in(Env, ResTy, Block);
@@ -2656,7 +2656,7 @@ type_check_rel_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
           throw({type_error, rel_error, Op, P, ResTy})
     end.
 
-type_check_list_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
+type_check_list_op_in(Env, ResTy, {op, P, Op, Arg1, Arg2} = Expr) ->
     Target =
         %% '--' always produces a proper list, but '++' gives you an improper
         %% list if the second argument is improper.
@@ -2667,9 +2667,10 @@ type_check_list_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
     {ResTy1, Cs} = glb(Target, ResTy, Env#env.tenv),
     case ResTy1 of
         {type, _, none, []} ->
-            throw({type_error, list_op_error, Op, P, ResTy});
+            % Tested by test/should_fail/list_op.erl subtract/1
+            throw({type_error, Expr, type(list), ResTy});
         {type, _, any, []} ->
-            {_, VB, Cs1} = type_check_list_op(Env, Op, P, Arg1, Arg2),
+            {_, VB, Cs1} = type_check_list_op(Env, Arg1, Arg2),
             {VB, constraints:combine(Cs, Cs1)};
         _ ->
             case list_op_arg_types(Op, ResTy1) of
@@ -4373,20 +4374,6 @@ handle_type_error({type_error, rel_error, LogicOp, Anno, Ty1, Ty2}, Opts) ->
                LogicOp,
                format_location(Anno, verbose, Opts),
                pp_type(Ty1, Opts), pp_type(Ty2, Opts)]);
-handle_type_error({type_error, list_op_error, ListOp, Anno, Ty}, Opts) ->
-    io:format("~sThe operator ~p~s is expected to have type "
-              "~s, which has no list subtypes~n",
-              [format_location(Anno, brief, Opts),
-               ListOp,
-               format_location(Anno, verbose, Opts),
-               pp_type(Ty, Opts)]);
-handle_type_error({type_error, list_op_error, ListOp, Anno, Ty, _}, Opts) ->
-    io:format("~sThe operator ~p~s is given an argument "
-              "with a non-list type ~s~n",
-              [format_location(Anno, brief, Opts),
-               ListOp,
-               format_location(Anno, verbose, Opts),
-               pp_type(Ty, Opts)]);
 handle_type_error({type_error, operator_pattern, Pat, Ty}, Opts) ->
     io:format("~sThe operator pattern ~s~s is expected to have type "
               "~s~n",
