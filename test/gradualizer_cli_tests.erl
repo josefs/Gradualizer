@@ -23,10 +23,12 @@ defaults_dir_test() ->
                  gradualizer_cli:handle_args(["test/dir"])).
 
 no_file_test() ->
-    ?assertError(_, gradualizer_cli:handle_args(["--infer"])).
+    ?assertMatch({error, "No files"++_},
+                 gradualizer_cli:handle_args(["--infer"])).
 
 invalid_arg_test() ->
-    ?assertError(_, gradualizer_cli:handle_args(["--invalid-arg", "file.erl"])).
+    ?assertMatch({error, "Unknown"++_},
+                 gradualizer_cli:handle_args(["--invalid-arg", "file.erl"])).
 
 infer_test() ->
     {ok, _Files, Opts} = gradualizer_cli:handle_args(["--infer", "--", "file.erl"]),
@@ -50,16 +52,16 @@ include_multi_test() ->
     ?assertEqual(["file.erl"], Files).
 
 include_error_test_() ->
-    [?_assertError(_, gradualizer_cli:handle_args(["-I", "include"])),
-     ?_assertError(_, gradualizer_cli:handle_args(["-I"]))].
+    [?_assertMatch({error, "No files"++_}, gradualizer_cli:handle_args(["-I", "include"])),
+     ?_assertMatch({error, "Missing "++_}, gradualizer_cli:handle_args(["-I"]))].
 
 pa_test_() ->
     %% Skipping the successful cases which have side-effects of calling
     %% code:add_pathsa/1 directly, e.g. ["-pa", "dir1", "dir2", "--", "file.erl"]
-    [?_assertError(_, gradualizer_cli:handle_args(["-pa", "ebin"])),
-     ?_assertError(_, gradualizer_cli:handle_args(["--path-add", "ebin", "file.erl"])),
-     ?_assertError(_, gradualizer_cli:handle_args(["-pa", "ebin", "file.erl"])),
-     ?_assertError(_, gradualizer_cli:handle_args(["-pa", "--", "file.erl"]))].
+    [?_assertMatch({error, "No files"++_}, gradualizer_cli:handle_args(["-pa", "ebin"])),
+     ?_assertMatch({error, "No files"++_}, gradualizer_cli:handle_args(["--path-add", "ebin", "file.erl"])),
+     ?_assertMatch({error, "No files"++_}, gradualizer_cli:handle_args(["-pa", "ebin", "file.erl"])),
+     ?_assertMatch({error, "Missing "++_}, gradualizer_cli:handle_args(["-pa", "--", "file.erl"]))].
 
 print_file_true_test() ->
     {ok, _Files, Opts} = gradualizer_cli:handle_args(["--print-file", "file.erl"]),
@@ -97,9 +99,9 @@ fmt_location_none_test() ->
     {ok, _Files, Opts} = gradualizer_cli:handle_args(["--fmt-location", "none", "file.erl"]),
     ?assertEqual(none, proplists:get_value(fmt_location, Opts)).
 fmt_location_invalid1_test() ->
-    ?assertError(_, gradualizer_cli:handle_args(["--fmt-location", "backwards", "file.erl"])).
+    ?assertMatch({error, _}, gradualizer_cli:handle_args(["--fmt-location", "backwards", "file.erl"])).
 fmt_location_invalid2_test() ->
-    ?assertError(_, gradualizer_cli:handle_args(["--fmt-location", "normal", "file.erl"])).
+    ?assertMatch({error, _}, gradualizer_cli:handle_args(["--fmt-location", "normal", "file.erl"])).
 
 prelude_test() ->
     {ok, _Files, Opts} = gradualizer_cli:handle_args(["--no-prelude", "file.erl"]),
@@ -114,4 +116,4 @@ specs_override_2_dirs_test() ->
     ?assertEqual(["d1"], proplists:get_all_values(specs_override, Opts)),
     ?assertEqual(["d2", "--", "file.erl"], Files).
 specs_override_fail_test() ->
-    ?assertError(_, gradualizer_cli:handle_args(["--specs-override-dir"])).
+    ?assertMatch({error, _}, gradualizer_cli:handle_args(["--specs-override-dir"])).

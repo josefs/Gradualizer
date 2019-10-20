@@ -6,6 +6,9 @@ main(Args) ->
     case handle_args(Args) of
         help    -> print_usage();
         version -> print_version();
+        {error, Message} ->
+            io:format(standard_error, "~s~n", [Message]),
+            halt(1);
         {ok, Files, Opts} ->
             case gradualizer:type_check_files(Files, Opts) of
                 ok -> ok;
@@ -13,20 +16,25 @@ main(Args) ->
             end
     end.
 
--spec handle_args([string()]) -> usage | version |
+-spec handle_args([string()]) -> help | version | {error, string()} |
                                  {ok, [string()], gradualizer:options()}.
 handle_args([]) -> help;
 handle_args(Args) ->
-    {Rest, Opts} = parse_opts(Args, []),
-    HasHelp = proplists:get_bool(help, Opts),
-    HasVersion = proplists:get_bool(version, Opts),
-    if
-        HasHelp -> help;
-        HasVersion -> version;
-        Rest =:= [] -> erlang:error("No files specified to check (try --)");
-        true ->
-            Opts1 = add_default_print_file_to_opts(Rest, Opts),
-            {ok, Rest, Opts1}
+    try parse_opts(Args, []) of
+        {Rest, Opts} ->
+            HasHelp = proplists:get_bool(help, Opts),
+            HasVersion = proplists:get_bool(version, Opts),
+            if
+                HasHelp -> help;
+                HasVersion -> version;
+                Rest =:= [] -> {error, "No files specified to check (try --)"};
+                true ->
+                    Opts1 = add_default_print_file_to_opts(Rest, Opts),
+                    {ok, Rest, Opts1}
+            end
+    catch
+        error:Message when is_list(Message) ->
+            {error, Message}
     end.
 
 %% Adds print_file option if there are more than one file to check and
