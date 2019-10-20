@@ -65,27 +65,27 @@ print_usage() ->
     io:format("  -h,  --help                    display this help and exit~n"),
     io:format("       --infer                   Infer type information from literals and other~n"),
     io:format("                                 language constructs~n"),
-    io:format("       --no-infer                Only use type information from function specs~n"),
+    io:format("       --no_infer                Only use type information from function specs~n"),
     io:format("                                  - the default behaviour~n"),
     io:format("       --verbose                 Show what Gradualizer is doing~n"),
-    io:format("  -pa, --path-add                Add the specified directory to the beginning of~n"),
+    io:format("  -pa, --path_add                Add the specified directory to the beginning of~n"),
     io:format("                                 the code path; see erl -pa             [string]~n"),
     io:format("  -I                             Include path for Erlang source files; see -I in~n"),
     io:format("                                 the manual page erlc(1)~n"),
-    io:format("       --print-file              prefix error printouts with the file name~n"),
+    io:format("       --print_file              prefix error printouts with the file name~n"),
     io:format("                                  - the default when checking a directory or more~n"),
     io:format("                                    than one file~n"),
-    io:format("       --print-basename          prefix error printouts with the file basename~n"),
-    io:format("       --print-module            prefix error printouts with the module~n"),
-    io:format("       --no-print-file           inverse of --print-file~n"),
+    io:format("       --print_basename          prefix error printouts with the file basename~n"),
+    io:format("       --print_module            prefix error printouts with the module~n"),
+    io:format("       --no_print_file           inverse of --print-file~n"),
     io:format("                                  - the default when checking a single file~n"),
-    io:format("       --stop-on-first-error     stop type checking at the first error~n"),
-    io:format("       --no-stop-on-first-error  inverse of --stop-on-first-error~n"),
+    io:format("       --stop_on_first_error     stop type checking at the first error~n"),
+    io:format("       --no_stop_on_first_error  inverse of --stop-on-first-error~n"),
     io:format("                                  - the default behaviour~n"),
-    io:format("       --no-prelude              Do not override OTP specs.~n"),
-    io:format("       --specs-override-dir      Add specs overrides from the *.specs.erl files in~n"),
+    io:format("       --no_prelude              Do not override OTP specs.~n"),
+    io:format("       --specs_override_dir      Add specs overrides from the *.specs.erl files in~n"),
     io:format("                                 this directory.~n"),
-    io:format("       --fmt-location            How to format location when pretty printing errors~n"),
+    io:format("       --fmt_location            How to format location when pretty printing errors~n"),
     io:format("                                 (Column is only available if analyzing from source)~n"),
     io:format("                                 - 'none': no location for easier comparison~n"),
     io:format("                                 - 'brief': for machine processing~n"),
@@ -102,23 +102,23 @@ parse_opts([A | Args], Opts) ->
         "-h"                       -> {[], [help]};
         "--help"                   -> {[], [help]};
         "--infer"                  -> parse_opts(Args, [infer | Opts]);
-        "--no-infer"               -> parse_opts(Args, [{infer, false} | Opts]);
+        "--no_infer"               -> parse_opts(Args, [{infer, false} | Opts]);
         "--verbose"                -> parse_opts(Args, [verbose | Opts]);
         "-pa"                      -> handle_path_add(A, Args, Opts);
-        "--path-add"               -> handle_path_add(A, Args, Opts);
+        "--path_add"               -> handle_path_add(A, Args, Opts);
         "-I"                       -> handle_include_path(A, Args, Opts);
-        "--print-file"             -> parse_opts(Args, [print_file | Opts]);
-        "--print-module"           -> parse_opts(Args, [{print_file, module} | Opts]);
-        "--print-basename"         -> parse_opts(Args, [{print_file, basename} | Opts]);
-        "--no-print-file"          -> parse_opts(Args, [{print_file, false} | Opts]);
-        "--stop-on-first-error"    -> parse_opts(Args, [stop_on_first_error | Opts]);
-        "--no-stop-on-first-error" -> parse_opts(Args, [{stop_on_first_error, false} | Opts]);
-        "--crash-on-error"         -> parse_opts(Args, [crash_on_error | Opts]);
-        "--no-crash-on-error"      -> parse_opts(Args, [{crash_on_error, false} | Opts]);
+        "--print_file"             -> parse_opts(Args, [print_file | Opts]);
+        "--print_module"           -> parse_opts(Args, [{print_file, module} | Opts]);
+        "--print_basename"         -> parse_opts(Args, [{print_file, basename} | Opts]);
+        "--no_print_file"          -> parse_opts(Args, [{print_file, false} | Opts]);
+        "--stop_on_first_error"    -> parse_opts(Args, [stop_on_first_error | Opts]);
+        "--no_stop_on_first_error" -> parse_opts(Args, [{stop_on_first_error, false} | Opts]);
+        "--crash_on_error"         -> parse_opts(Args, [crash_on_error | Opts]);
+        "--no_crash_on_error"      -> parse_opts(Args, [{crash_on_error, false} | Opts]);
         "--version"                -> {[], [version]};
-        "--no-prelude"             -> parse_opts(Args, [{prelude, false}| Opts]);
-        "--specs-override-dir"     -> handle_specs_override(A, Args, Opts);
-        "--fmt-location"           -> handle_fmt_location(Args, Opts);
+        "--no_prelude"             -> parse_opts(Args, [{prelude, false}| Opts]);
+        "--specs_override_dir"     -> handle_specs_override(A, Args, Opts);
+        "--fmt_location"           -> handle_fmt_location(Args, Opts);
         "--"                       -> {Args, Opts};
         "-" ++ _                   -> erlang:error(string:join(["Unknown parameter:", A], " "));
         _                          -> {[A | Args], Opts}
