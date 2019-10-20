@@ -1778,7 +1778,7 @@ type_check_logic_op(Env, Op, P, Arg1, Arg2) ->
     {Ty1, VB1, Cs1} = type_check_expr(Env, Arg1),
     case subtype(Ty1, {type, P, bool, []}, Env#env.tenv) of
         false ->
-            throw({type_error, boolop, Op, P, Ty1});
+            throw({type_error, Arg1, Ty1, type(boolean)});
         {true, Cs2} ->
             {Ty2, VB2, Cs3} = type_check_expr(Env#env{ venv = UnionVarBindsSecondArg(Env#env.venv,VB1 )}, Arg2),
             % Allow any() in second argument for shortcut operators
@@ -1786,7 +1786,7 @@ type_check_logic_op(Env, Op, P, Arg1, Arg2) ->
                           true                            -> type(bool) end,
             case subtype(Ty2, SndArgTy, Env#env.tenv) of
                 false ->
-                    throw({type_error, boolop, Op, P, Ty2});
+                    throw({type_error, Arg2, Ty2, type(boolean)});
                 {true, Cs4} ->
                     Inferred =
                         case Op of
@@ -4247,13 +4247,6 @@ handle_type_error({type_error, no_type_match_intersection, Anno, Func, FunTy}, O
                Name,
                format_location(Anno, verbose, Opts),
                pp_intersection_type(FunTy, Opts)]);
-handle_type_error({type_error, boolop, BoolOp, Anno, Ty}, Opts) ->
-    io:format("~sThe operator ~p~s is given a non-boolean argument "
-              "of type ~s~n",
-              [format_location(Anno, brief, Opts),
-               BoolOp,
-               format_location(Anno, verbose, Opts),
-               pp_type(Ty, Opts)]);
 handle_type_error({type_error, relop, RelOp, Anno, Ty1, Ty2}, Opts) ->
     io:format("~sThe operator ~p~s requires arguments of "
               "compatible types.~nHowever, it has arguments "
