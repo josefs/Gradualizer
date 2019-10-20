@@ -2412,16 +2412,16 @@ do_type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
       Op == 'band' orelse Op == 'bor' orelse Op == 'bxor' orelse
       Op == 'bsl'  orelse Op == 'bsr' ->
     type_check_int_op_in(Env, ResTy, Op, P, Arg1, Arg2);
-do_type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
+do_type_check_expr_in(Env, ResTy, {op, _, Op, _, _} = OrigExpr) when
       Op == 'and' orelse Op == 'or' orelse Op == 'xor' orelse
       Op == 'andalso' orelse Op == 'orelse' ->
-    type_check_logic_op_in(Env, ResTy, Op, P, Arg1, Arg2);
-do_type_check_expr_in(Env, ResTy, {op, P, Op, Arg1, Arg2}) when
+    type_check_logic_op_in(Env, ResTy, OrigExpr);
+do_type_check_expr_in(Env, ResTy, {op, _, Op, _, _} = OrigExpr) when
       Op == '=:=' orelse Op == '==' orelse
       Op == '=/=' orelse Op == '/=' orelse
       Op == '>=' orelse Op == '=<' orelse
       Op == '>' orelse Op == '<' ->
-    type_check_rel_op_in(Env, ResTy, Op, P, Arg1, Arg2);
+    type_check_rel_op_in(Env, ResTy, OrigExpr);
 do_type_check_expr_in(Env, ResTy, {op, _, Op, _, _} = OrigExpr) when
       Op == '++' orelse Op == '--' ->
     type_check_list_op_in(Env, ResTy, OrigExpr);
@@ -2611,7 +2611,7 @@ arith_op_arg_types(_Op, VarTy={var, _, TyVar}) ->
 arith_op_arg_types(_Op, _Ty) ->
     false.
 
-type_check_logic_op_in(Env, ResTy, Op, P, Arg1, Arg2) when Op == 'andalso'; Op == 'orelse' ->
+type_check_logic_op_in(Env, ResTy, {op, _, Op, Arg1, Arg2} = OrigExpr) when Op == 'andalso'; Op == 'orelse' ->
     Bool   = type(boolean),
     Target = case Op of
                  'andalso' -> {atom, erl_anno:new(0), false};
@@ -2626,9 +2626,11 @@ type_check_logic_op_in(Env, ResTy, Op, P, Arg1, Arg2) when Op == 'andalso'; Op =
             {union_var_binds(VarBinds1, VarBinds2, Env#env.tenv),
              constraints:combine([Cs, Cs1, Cs2])};
         false ->
-            throw({type_error, logic_error, Op, P, ResTy})
+            {Arg2Ty, _VB, _Cs} = type_check_expr(Env#env{infer = true}, Arg2),
+            Ty = type(union, [Arg2Ty, Target]), Env#env{infer = true},
+            throw({type_error, OrigExpr, Ty, ResTy})
     end;
-type_check_logic_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
+type_check_logic_op_in(Env, ResTy, {op, _, _, Arg1, Arg2} = OrigExpr) ->
     Bool = type(boolean),
     case subtype(Bool, ResTy, Env#env.tenv) of
         {true, Cs} ->
@@ -2637,11 +2639,12 @@ type_check_logic_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
           {union_var_binds(VarBinds1, VarBinds2, Env#env.tenv)
           ,constraints:combine([Cs, Cs1, Cs2])};
         false ->
-          throw({type_error, logic_error, Op, P, ResTy})
+          throw({type_error, OrigExpr, Bool, ResTy})
     end.
 
-type_check_rel_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
-    case subtype(type(boolean), ResTy, Env#env.tenv) of
+type_check_rel_op_in(Env, ResTy, {op, P, Op, Arg1, Arg2} = OrigExpr) ->
+    Ty = type(boolean),
+    case subtype(Ty, ResTy, Env#env.tenv) of
         {true, Cs0} ->
           {ResTy1, VarBinds1, Cs1} = type_check_expr(Env, Arg1),
           {ResTy2, VarBinds2, Cs2} = type_check_expr(Env, Arg2),
@@ -2653,7 +2656,7 @@ type_check_rel_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
                   throw({type_error, rel_error, Op, P, ResTy1, ResTy2})
           end;
         false ->
-          throw({type_error, rel_error, Op, P, ResTy})
+          throw({type_error, OrigExpr, Ty, ResTy})
     end.
 
 type_check_list_op_in(Env, ResTy, {op, P, Op, Arg1, Arg2} = Expr) ->
@@ -4342,29 +4345,6 @@ handle_type_error({type_error, non_integer_argument_to_bnot, Anno, Ty}, Opts) ->
     io:format("~sThe 'bnot' expression~s has a non-integer argument "
               " of type ~s~n",
               [format_location(Anno, brief, Opts),
-               format_location(Anno, verbose, Opts),
-               pp_type(Ty, Opts)]);
-handle_type_error({type_error, logic_error, LogicOp, Anno, Ty}, Opts) when LogicOp == 'andalso'; LogicOp == 'orelse' ->
-    Target = if LogicOp == 'andalso' -> false;
-                LogicOp == 'orelse'  -> true end,
-    io:format("~sThe operator ~p~s is expected to have type "
-              "~s which does not include '~p'~n",
-              [format_location(Anno, brief, Opts),
-               LogicOp,
-               format_location(Anno, verbose, Opts),
-               pp_type(Ty, Opts), Target]);
-handle_type_error({type_error, logic_error, LogicOp, Anno, Ty}, Opts) ->
-    io:format("~sThe operator ~p~s is expected to have type "
-              "~s which is not a supertype of boolean()~n",
-              [format_location(Anno, brief, Opts),
-               LogicOp,
-               format_location(Anno, verbose, Opts),
-               pp_type(Ty, Opts)]);
-handle_type_error({type_error, rel_error, LogicOp, Anno, Ty}, Opts) ->
-    io:format("~sThe operator ~p~s is expected to have type "
-              "~s which is not a supertype of boolean()~n",
-              [format_location(Anno, brief, Opts),
-               LogicOp,
                format_location(Anno, verbose, Opts),
                pp_type(Ty, Opts)]);
 handle_type_error({type_error, rel_error, LogicOp, Anno, Ty1, Ty2}, Opts) ->
