@@ -1912,7 +1912,7 @@ type_check_call_ty(Env, {fun_ty_union, Tyss, Cs}, Args, E) ->
     {ResTy, VarBinds, CsI} = type_check_call_ty_union(Env, Tyss, Args, E),
     {ResTy, VarBinds, constraints:combine(Cs, CsI)};
 type_check_call_ty(_Env, {type_error, _}, _Args, {Name, P, FunTy}) ->
-    throw({type_error, call, P, FunTy, Name}).
+    throw({type_error, Name, FunTy, type('fun')}).
 
 type_check_call_ty_intersect(_Env, [], _Args, {Name, P, FunTy}) ->
     throw({type_error, call_intersect, P, FunTy, Name});
@@ -4207,18 +4207,6 @@ handle_type_error({type_error, call_arity, Anno, Fun, TyArity, CallArity}, Opts)
                pp_expr(Fun, Opts),
                format_location(Anno, verbose, Opts),
                TyArity, ["s" || TyArity /= 1], CallArity]);
-handle_type_error({type_error, call, _Anno, Name, TyArgs, ArgTys}, Opts) ->
-    io:format("~sThe function ~p expects arguments of type~n~p~n but is given "
-              "arguments of type~n~p~n",
-              [format_location(_Anno, brief, Opts),
-               Name, TyArgs, ArgTys]);
-handle_type_error({type_error, call, Anno, Ty, Name}, Opts) ->
-    io:format("~sThe function ~s, called~s doesn't have a function type~n"
-             "Rather, it has the following type~n~s~n",
-              [format_location(Anno, brief, Opts),
-               pp_expr(Name, Opts),
-               format_location(Anno, verbose, Opts),
-               pp_type(Ty, Opts)]);
 handle_type_error({type_error, call_intersect, Anno, FunTy, Name}, Opts) ->
     io:format("~sThe type of the function ~s, called~s doesn't match "
               "the surrounding calling context.~n"
