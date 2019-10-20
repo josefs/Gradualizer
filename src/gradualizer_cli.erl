@@ -116,7 +116,7 @@ parse_opts([A | Args], Opts) ->
         "--crash-on-error"         -> parse_opts(Args, [crash_on_error | Opts]);
         "--no-crash-on-error"      -> parse_opts(Args, [{crash_on_error, false} | Opts]);
         "--version"                -> {[], [version]};
-        "--no-prelude"             -> parse_opts(Args, [no_prelude | Opts]);
+        "--no-prelude"             -> parse_opts(Args, [{prelude, false}| Opts]);
         "--specs-override-dir"     -> handle_specs_override(A, Args, Opts);
         "--fmt-location"           -> handle_fmt_location(Args, Opts);
         "--"                       -> {Args, Opts};

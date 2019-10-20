@@ -176,7 +176,10 @@ type_check_forms(Forms, Opts) ->
                             ok | nok | [{file:filename(), any()}].
 type_check_forms(File, Forms, Opts) ->
     ReturnErrors = proplists:get_bool(return_errors, Opts),
-    OptsForModule = normalize_options(options_from_forms(Forms), Opts),
+    OptsForModule =
+	options_from_forms(Forms) ++
+	Opts ++
+	[prelude], % using prelude is the default if nothing else is specified
     Errors = typechecker:type_check_forms(Forms, OptsForModule),
     case {ReturnErrors, Errors} of
         {true, _ } ->
@@ -196,13 +199,3 @@ options_from_forms([{attribute, _L, gradualizer, Opt} | Fs]) ->
     [Opt | options_from_forms(Fs)];
 options_from_forms([_F | Fs]) -> options_from_forms(Fs);
 options_from_forms([]) -> [].
-
-%% Normalize options so that module local options override options
-%% from the top level
-normalize_options(ModOpts, Opts) ->
-    proplists:normalize(ModOpts ++ Opts ++ [prelude] % using prelude is the default
-		       ,[{negations, [{no_infer, infer}
-				     ,{no_prelude, prelude}
-				     ]
-			 }]
-		       ).
