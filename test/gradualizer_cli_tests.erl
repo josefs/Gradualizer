@@ -105,7 +105,7 @@ fmt_location_invalid2_test() ->
 
 prelude_test() ->
     {ok, _Files, Opts} = gradualizer_cli:handle_args(["--no-prelude", "file.erl"]),
-    ?assertEqual(true, proplists:get_value(no_prelude, Opts)).
+    ?assertEqual(false, proplists:get_value(prelude, Opts)).
 
 specs_override_dir_test() ->
     {ok, _Files, Opts} = gradualizer_cli:handle_args(["--specs-override-dir", "dir", "file.erl"]),
