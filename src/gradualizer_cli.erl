@@ -1,27 +1,32 @@
 -module(gradualizer_cli).
--export([main/1]).
+-export([main/1, handle_args/1]).
 
 -spec main([string()]) -> ok.
-main([]) ->
-    print_usage();
-main(Args) -> handle_args(Args).
+main(Args) ->
+    case handle_args(Args) of
+        help    -> print_usage();
+        version -> print_version();
+        {ok, Files, Opts} ->
+            case gradualizer:type_check_files(Files, Opts) of
+                ok -> ok;
+                nok -> halt(1)
+            end
+    end.
 
--spec handle_args([string()]) -> no_return().
+-spec handle_args([string()]) -> usage | version |
+                                 {ok, [string()], gradualizer:options()}.
+handle_args([]) -> help;
 handle_args(Args) ->
     {Rest, Opts} = parse_opts(Args, []),
     HasHelp = proplists:get_bool(help, Opts),
     HasVersion = proplists:get_bool(version, Opts),
-    Status = if
-                 HasHelp -> print_usage(), ok;
-                 HasVersion -> print_version(), ok;
-                 Rest =:= [] -> erlang:error("No files specified to check (try --)");
-                 true ->
-                     Opts1 = add_default_print_file_to_opts(Rest, Opts),
-                     gradualizer:type_check_files(Rest, Opts1)
-             end,
-    case Status of
-        ok -> halt(0);
-        nok -> halt(1)
+    if
+        HasHelp -> help;
+        HasVersion -> version;
+        Rest =:= [] -> erlang:error("No files specified to check (try --)");
+        true ->
+            Opts1 = add_default_print_file_to_opts(Rest, Opts),
+            {ok, Rest, Opts1}
     end.
 
 %% Adds print_file option if there are more than one file to check and
@@ -101,7 +106,7 @@ parse_opts([A | Args], Opts) ->
         "--stop-on-first-error"    -> parse_opts(Args, [stop_on_first_error | Opts]);
         "--no-stop-on-first-error" -> parse_opts(Args, [{stop_on_first_error, false} | Opts]);
         "--crash-on-error"         -> parse_opts(Args, [crash_on_error | Opts]);
-        "--no-crash-on-error"      -> parse_opts(Args, [{no_crash_on_error, false} | Opts]);
+        "--no-crash-on-error"      -> parse_opts(Args, [{crash_on_error, false} | Opts]);
         "--version"                -> {[], [version]};
         "--no-prelude"             -> parse_opts(Args, [no_prelude | Opts]);
         "--specs-override-dir"     -> handle_specs_override(A, Args, Opts);
