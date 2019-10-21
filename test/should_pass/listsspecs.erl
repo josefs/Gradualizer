@@ -34,10 +34,9 @@ filtermap() ->
 flatmap() ->
     lists:flatmap(fun (X) -> integer_to_list(X) end, [1,2,3]).
 
-% Defining types in gradualizer_prelude doesn't work yet
-%-spec flatten() -> [integer()].
-%flatten() ->
-%    lists:flatten([[1,2],[3,4]]).
+-spec flatten() -> [integer()].
+flatten() ->
+    lists:flatten([[1,2],[3,4]]).
 
 -spec foldl() -> integer().
 foldl() ->
