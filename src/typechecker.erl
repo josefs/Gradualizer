@@ -1627,14 +1627,15 @@ do_type_check_expr(Env, {op, _, '!', Proc, Val}) ->
     {type(any)
     ,union_var_binds(VB1, VB2, Env#env.tenv)
     ,constraints:combine(Cs1, Cs2)};
-do_type_check_expr(Env, {op, P, 'not', Arg}) ->
+do_type_check_expr(Env, {op, _, 'not', Arg} = Expr) ->
     {Ty, VB, Cs1} = type_check_expr(Env, Arg),
-    case subtype(Ty, {type, P, boolean, []}, Env#env.tenv) of
+    BoolTy = type(boolean),
+    case subtype(Ty, BoolTy, Env#env.tenv) of
         {true, Cs2} ->
             NormTy = normalize(Ty, Env#env.tenv),
             {negate_bool_type(NormTy), VB, constraints:combine(Cs1, Cs2)};
         false ->
-            throw({type_error, non_boolean_argument_to_not, P, Ty})
+            throw({type_error, Expr, Ty, BoolTy})
     end;
 do_type_check_expr(Env, {op, _, 'bnot', Arg}) ->
     {Ty, VB, Cs1} = type_check_expr(Env, Arg),
@@ -4300,12 +4301,6 @@ handle_type_error({type_error, non_number_argument_to_plus, Anno, Ty}, Opts) ->
 handle_type_error({type_error, non_number_argument_to_minus, Anno, Ty}, Opts) ->
     io:format("~sThe negated expression~s has a non-numeric argument "
               "of type:~n~s~n",
-              [format_location(Anno, brief, Opts),
-               format_location(Anno, verbose, Opts),
-               pp_type(Ty, Opts)]);
-handle_type_error({type_error, non_boolean_argument_to_not, Anno, Ty}, Opts) ->
-    io:format("~sThe 'not' expression~s has a non-boolean argument "
-              "of type ~s~n",
               [format_location(Anno, brief, Opts),
                format_location(Anno, verbose, Opts),
                pp_type(Ty, Opts)]);
