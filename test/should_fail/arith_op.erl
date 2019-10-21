@@ -1,7 +1,8 @@
 -module(arith_op).
 -export([failplus/1, faildivvar/1, faildivlit/1, failpositivedivision/1,
          faildivprecise/1, failplusprecise/2, failminusprecisepos/2,
-         failminusnonneg/2, failminuspreciseneg/2]).
+         failminusnonneg/2, failminuspreciseneg/2,
+         failbnot/1]).
 
 -spec failplus(_) -> tuple().
 failplus(X) -> X + X.
@@ -29,3 +30,8 @@ failminusnonneg(X, Y) -> X - Y.
 
 -spec failminuspreciseneg(neg_integer(), non_neg_integer()) -> neg_integer().
 failminuspreciseneg(X, Y) -> X - Y.
+
+-spec failbnot(string()) -> integer().
+failbnot(S) ->
+    O = bnot(S),
+    O.
