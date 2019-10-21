@@ -1636,13 +1636,14 @@ do_type_check_expr(Env, {op, P, 'not', Arg}) ->
         false ->
             throw({type_error, non_boolean_argument_to_not, P, Ty})
     end;
-do_type_check_expr(Env, {op, P, 'bnot', Arg}) ->
+do_type_check_expr(Env, {op, _, 'bnot', Arg}) ->
     {Ty, VB, Cs1} = type_check_expr(Env, Arg),
-    case subtype(Ty, {type, P, integer, []}, Env#env.tenv) of
+    IntTy = type(integer),
+    case subtype(Ty, IntTy, Env#env.tenv) of
         {true, Cs2} ->
             {type(integer), VB, constraints:combine(Cs1, Cs2)};
         false ->
-            throw({type_error, non_integer_argument_to_bnot, P, Ty})
+            throw({type_error, Arg, Ty, IntTy})
     end;
 do_type_check_expr(Env, {op, P, '+', Arg}) ->
     {Ty, VB, Cs1} = type_check_expr(Env, Arg),
@@ -4315,12 +4316,6 @@ handle_type_error({type_error, unary_error, Op, Anno, TargetTy, Ty}, Opts) ->
                Op,
                format_location(Anno, verbose, Opts),
                pp_type(Ty, Opts), pp_type(TargetTy, Opts)]);
-handle_type_error({type_error, non_integer_argument_to_bnot, Anno, Ty}, Opts) ->
-    io:format("~sThe 'bnot' expression~s has a non-integer argument "
-              " of type ~s~n",
-              [format_location(Anno, brief, Opts),
-               format_location(Anno, verbose, Opts),
-               pp_type(Ty, Opts)]);
 handle_type_error({type_error, rel_error, LogicOp, Anno, Ty1, Ty2}, Opts) ->
     io:format("~sThe operator ~p~s is given two arguments with "
               "non-compatible types:~n~s~n~s~n",
