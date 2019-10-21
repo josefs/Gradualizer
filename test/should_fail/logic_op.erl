@@ -2,7 +2,8 @@
 -export([failand/1, failand2/1,
          failandleft/2, failandleft2/2,
          failandright/2, failandright2/2,
-         failandalso/1, failandalso2/1]).
+         failandalso/1, failandalso2/1,
+         failnot/1]).
 
 -spec failand(boolean()) -> tuple().
 failand(X) -> X and X.
@@ -34,4 +35,9 @@ failandalso(X) -> X andalso {}.
 -spec failandalso2(boolean()) -> tuple().
 failandalso2(X) ->
     O = X andalso {},
+    O.
+
+-spec failnot(integer()) -> boolean().
+failnot(N) ->
+    O = not(N),
     O.
