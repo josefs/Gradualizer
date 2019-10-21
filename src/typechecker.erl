@@ -1911,7 +1911,7 @@ type_check_call_ty(Env, {fun_ty_intersection, Tyss, Cs}, Args, E) ->
 type_check_call_ty(Env, {fun_ty_union, Tyss, Cs}, Args, E) ->
     {ResTy, VarBinds, CsI} = type_check_call_ty_union(Env, Tyss, Args, E),
     {ResTy, VarBinds, constraints:combine(Cs, CsI)};
-type_check_call_ty(_Env, {type_error, _}, _Args, {Name, P, FunTy}) ->
+type_check_call_ty(_Env, {type_error, _}, _Args, {Name, _P, FunTy}) ->
     throw({type_error, Name, FunTy, type('fun')}).
 
 type_check_call_ty_intersect(_Env, [], _Args, {Name, P, FunTy}) ->
@@ -2298,9 +2298,9 @@ do_type_check_expr_in(Env, ResTy, {call, _, {atom, _, record_info}, [_, _]} = Ca
         false ->
             throw({type_error, Call, ResTy, Ty})
     end;
-do_type_check_expr_in(Env, ResTy, {call, P, Name, Args}) ->
+do_type_check_expr_in(Env, ResTy, {call, P, Name, Args} = OrigExpr) ->
     {FunTy, VarBinds, Cs} = type_check_fun(Env, Name, length(Args)),
-    {VarBinds2, Cs2} = type_check_call(Env, ResTy, expect_fun_type(Env, FunTy), Args,
+    {VarBinds2, Cs2} = type_check_call(Env, ResTy, OrigExpr, expect_fun_type(Env, FunTy), Args,
                                        {P, Name, FunTy}),
     {union_var_binds(VarBinds, VarBinds2, Env#env.tenv), constraints:combine(Cs, Cs2)};
 do_type_check_expr_in(Env, ResTy, {lc, P, Expr, Qualifiers} = OrigExpr) ->
@@ -2921,24 +2921,24 @@ type_check_fun(_Env, {remote, _, _Expr, _}, Arity)->
 type_check_fun(Env, Expr, _Arity) ->
     type_check_expr(Env, Expr).
 
-type_check_call_intersection(Env, ResTy, [Ty], Args, E) ->
-    type_check_call(Env, ResTy, Ty, Args, E);
-type_check_call_intersection(Env, ResTy, Tys, Args, E) ->
-    type_check_call_intersection_(Env, ResTy, Tys, Args, E).
-type_check_call_intersection_(_Env, _ResTy, [], _Args, {P, Name, Ty}) ->
+type_check_call_intersection(Env, ResTy, OrigExpr, [Ty], Args, E) ->
+    type_check_call(Env, ResTy, OrigExpr, Ty, Args, E);
+type_check_call_intersection(Env, ResTy, OrigExpr, Tys, Args, E) ->
+    type_check_call_intersection_(Env, ResTy, OrigExpr, Tys, Args, E).
+type_check_call_intersection_(_Env, _ResTy, _, [], _Args, {P, Name, Ty}) ->
     throw({type_error, no_type_match_intersection, P, Name, Ty});
-type_check_call_intersection_(Env, ResTy, [Ty | Tys], Args, E) ->
+type_check_call_intersection_(Env, ResTy, OrigExpr, [Ty | Tys], Args, E) ->
     try
-        type_check_call(Env, ResTy, Ty, Args, E)
+        type_check_call(Env, ResTy, OrigExpr, Ty, Args, E)
     catch
         Error when element(1, Error) == type_error ->
-            type_check_call_intersection_(Env, ResTy, Tys, Args, E)
+            type_check_call_intersection_(Env, ResTy, OrigExpr, Tys, Args, E)
     end.
 
-type_check_call(_Env, _ResTy, {fun_ty, ArgsTy, _FunResTy, _Cs}, Args, {P, Name, _})
+type_check_call(_Env, _ResTy, _, {fun_ty, ArgsTy, _FunResTy, _Cs}, Args, {P, Name, _})
         when length(ArgsTy) /= length(Args) ->
     throw({type_error, call_arity, P, Name, length(ArgsTy), length(Args)});
-type_check_call(Env, ResTy, {fun_ty, ArgsTy, FunResTy, Cs}, Args, {P, Name, _}) ->
+type_check_call(Env, ResTy, OrigExpr, {fun_ty, ArgsTy, FunResTy, Cs}, Args, _) ->
     {VarBindsList, Css} =
         lists:unzip(
           lists:zipwith(fun (ArgTy, Arg) ->
@@ -2950,9 +2950,9 @@ type_check_call(Env, ResTy, {fun_ty, ArgsTy, FunResTy, Cs}, Args, {P, Name, _}) 
             { union_var_binds(VarBindsList, Env#env.tenv)
             , constraints:combine([Cs, Cs1 | Css]) };
         false ->
-            throw({type_error, fun_res_type, P, Name, FunResTy, ResTy})
+            throw({type_error, OrigExpr, FunResTy, ResTy})
     end;
-type_check_call(Env, ResTy, {fun_ty_any_args, FunResTy, Cs}, Args, {P, Name, _})  ->
+type_check_call(Env, ResTy, OrigExpr, {fun_ty_any_args, FunResTy, Cs}, Args, _)  ->
     {_Tys, VarBindsList, Css} =
         lists:unzip3(
           lists:map(fun (Arg) ->
@@ -2964,9 +2964,9 @@ type_check_call(Env, ResTy, {fun_ty_any_args, FunResTy, Cs}, Args, {P, Name, _})
             { union_var_binds(VarBindsList, Env#env.tenv)
             , constraints:combine([Cs, Cs1 | Css]) };
         false ->
-            throw({type_error, fun_res_type, P, Name, FunResTy, ResTy})
+            throw({type_error, OrigExpr, FunResTy, ResTy})
     end;
-type_check_call(Env, _ResTy, any, Args, _E) ->
+type_check_call(Env, _ResTy, _, any, Args, _E) ->
     {_Tys, VarBindsList, Css} =
         lists:unzip3(
           lists:map(fun (Arg) ->
@@ -2974,21 +2974,21 @@ type_check_call(Env, _ResTy, any, Args, _E) ->
                     end, Args)
          ),
     {union_var_binds(VarBindsList, Env#env.tenv), constraints:combine(Css)};
-type_check_call(Env, ResTy, {fun_ty_intersection, Tys, Cs1}, Args, E) ->
-    {VB, Cs2} = type_check_call_intersection(Env, ResTy, Tys, Args, E),
+type_check_call(Env, ResTy, OrigExpr, {fun_ty_intersection, Tys, Cs1}, Args, E) ->
+    {VB, Cs2} = type_check_call_intersection(Env, ResTy, OrigExpr, Tys, Args, E),
     {VB, constraints:combine(Cs1, Cs2)};
-type_check_call(Env, ResTy, {fun_ty_union, Tys, Cs1}, Args, E) ->
-    {VB, Cs2} = type_check_call_union(Env, ResTy, Tys, Args, E),
+type_check_call(Env, ResTy, OrigExpr, {fun_ty_union, Tys, Cs1}, Args, E) ->
+    {VB, Cs2} = type_check_call_union(Env, ResTy, OrigExpr, Tys, Args, E),
     {VB, constraints:combine(Cs1, Cs2)};
-type_check_call(_Env, _ResTy, {type_error, _}, _Args, {P, Name, FunTy}) ->
-    throw({type_error, expected_fun_type, P, Name, FunTy}).
+type_check_call(_Env, _ResTy, _, {type_error, _}, _Args, {_, Name, FunTy}) ->
+    throw({type_error, Name, FunTy, type('fun')}).
 
 
-type_check_call_union(_Env, _ResTy, [], _Args, _E) ->
+type_check_call_union(_Env, _ResTy, _, [], _Args, _E) ->
     {#{}, constraints:empty()};
-type_check_call_union(Env, ResTy, [Ty|Tys], Args, E) ->
-    {VB1, Cs1} = type_check_call(Env, ResTy, Ty, Args, E),
-    {VB2, Cs2} = type_check_call_union(Env, ResTy, Tys, Args, E),
+type_check_call_union(Env, ResTy, OrigExpr, [Ty|Tys], Args, E) ->
+    {VB1, Cs1} = type_check_call(Env, ResTy, OrigExpr, Ty, Args, E),
+    {VB2, Cs2} = type_check_call_union(Env, ResTy, OrigExpr, Tys, Args, E),
     %% TODO: It's not clear to me what should be returned here.
     %% When combining all the varbinds we should really create
     %% a union of all types for a variable.
@@ -4224,13 +4224,6 @@ handle_type_error({type_error, mfa, Anno, M, F, A, ResTy, FunTy}, Opts) ->
                format_location(Anno, verbose, Opts),
                pp_type(ResTy, Opts),
                pp_intersection_type(FunTy, Opts)]);
-handle_type_error({type_error, fun_res_type, Anno, Func, FunResTy, ResTy}, Opts) ->
-    Name = pp_expr(Func, Opts), %% {atom, _, Name} or {remote, Mod, Name}
-    io:format("~sThe function ~s~s is expected to return ~s but it returns ~s~n",
-              [format_location(Anno, brief, Opts),
-               Name,
-               format_location(Anno, verbose, Opts),
-               pp_type(ResTy, Opts), pp_type(FunResTy, Opts)]);
 handle_type_error({type_error, expected_fun_type, Anno, Func, FunTy}, Opts) ->
     Name = pp_expr(Func, Opts),
     io:format("~sExpected function ~s~s to have a function type,~n"
