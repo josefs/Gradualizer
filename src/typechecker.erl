@@ -4112,7 +4112,7 @@ print_error(Error, Opts) ->
     handle_type_error(Error, Opts).
 
 handle_type_error(Error, Opts) ->
-    gradualizer_fmt:handle_type_error(Error, Opts).
+    io:put_chars(gradualizer_fmt:format_type_error(Error, Opts)).
 
 line_no(Expr) ->
     erl_anno:line(element(2, Expr)).
