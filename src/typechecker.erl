@@ -2629,7 +2629,7 @@ type_check_logic_op_in(Env, ResTy, {op, _, Op, Arg1, Arg2} = OrigExpr) when Op =
              constraints:combine([Cs, Cs1, Cs2])};
         false ->
             {Arg2Ty, _VB, _Cs} = type_check_expr(Env#env{infer = true}, Arg2),
-            Ty = type(union, [Arg2Ty, Target]), Env#env{infer = true},
+            Ty = type(union, [Arg2Ty, Target]),
             throw({type_error, OrigExpr, Ty, ResTy})
     end;
 type_check_logic_op_in(Env, ResTy, {op, _, _, Arg1, Arg2} = OrigExpr) ->
