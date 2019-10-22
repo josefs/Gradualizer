@@ -1,6 +1,6 @@
 -module(annotated_types).
 
--export([f/1, g/0, h/1, i/1]).
+-export([f/1, g/0, h/1, i/1, named_record_arg/1]).
 
 -include_lib("gradualizer/include/gradualizer.hrl").
 
@@ -22,3 +22,9 @@ i(X) ->
 
 -spec do_stuff_with_arity(arity()) -> ok.
 do_stuff_with_arity(_Arity) -> ok.
+
+-record(r, {}).
+-type r() :: #r{}.
+
+-spec named_record_arg(R :: r()) -> {ok, R}.
+named_record_arg(#r{} = R) -> {ok, R}.
