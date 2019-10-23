@@ -5,5 +5,5 @@
 -record(r, {}).
 -type r() :: #r{}.
 
--spec named_record_arg(R :: r()) -> {ok, R}.
-named_record_arg(#r{} = R) -> {ok, R}.
+-spec named_record_arg(R :: r()) -> ok.
+named_record_arg(#r{} = R) -> ok.
