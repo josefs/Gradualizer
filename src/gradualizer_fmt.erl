@@ -44,283 +44,347 @@ format_type_error({type_error, Expression, ActualType, ExpectedType}, Opts)
   when is_tuple(Expression) ->
     format_type_error(Expression, ActualType, ExpectedType, Opts);
 format_type_error({nonexhaustive, Anno, Example}, Opts) ->
-    io_lib:format("~sNonexhaustive patterns~s~n"
-	      "Example values which are not covered: ~p~n"
-	     ,[format_location(Anno, brief, Opts),
-	       format_location(Anno, verbose, Opts),
-	       Example]);
+    io_lib:format(
+      "~sNonexhaustive patterns~s~n"
+      "Example values which are not covered: ~p~n",
+      [format_location(Anno, brief, Opts),
+       format_location(Anno, verbose, Opts),
+       Example]);
 format_type_error({call_undef, Anno, Func, Arity}, Opts) ->
-    io_lib:format("~sCall to undefined function ~p/~p~s~n",
-              [format_location(Anno, brief, Opts),
-               Func, Arity,
-               format_location(Anno, verbose, Opts)]);
+    io_lib:format(
+      "~sCall to undefined function ~p/~p~s~n",
+      [format_location(Anno, brief, Opts),
+       Func,
+       Arity,
+       format_location(Anno, verbose, Opts)]);
 format_type_error({call_undef, Anno, Module, Func, Arity}, Opts) ->
-    io_lib:format("~sCall to undefined function ~p:~p/~p~s~n",
-              [format_location(Anno, brief, Opts),
-               Module, Func, Arity,
-               format_location(Anno, verbose, Opts)]);
+    io_lib:format(
+      "~sCall to undefined function ~p:~p/~p~s~n",
+      [format_location(Anno, brief, Opts),
+       Module,
+       Func,
+       Arity,
+       format_location(Anno, verbose, Opts)]);
 format_type_error({undef, record, Anno, {Module, RecName}}, Opts) ->
     io_lib:format("~sUndefined record ~p:~p~s~n",
-              [format_location(Anno, brief, Opts),
-               Module, RecName,
-               format_location(Anno, verbose, Opts)]);
+		  [format_location(Anno, brief, Opts),
+		   Module,
+		   RecName,
+		   format_location(Anno, verbose, Opts)]);
 format_type_error({undef, record, Anno, RecName}, Opts) ->
     io_lib:format("~sUndefined record ~p~s~n",
-              [format_location(Anno, brief, Opts),
-               RecName,
-               format_location(Anno, verbose, Opts)]);
+		  [format_location(Anno, brief, Opts),
+		   RecName,
+		   format_location(Anno, verbose, Opts)]);
 format_type_error({undef, record_field, FieldName}, Opts) ->
-    io_lib:format("~sUndefined record field ~s~s~n",
-              [format_location(FieldName, brief, Opts),
-               pp_expr(FieldName, Opts),
-               format_location(FieldName, verbose, Opts)]);
+    io_lib:format(
+      "~sUndefined record field ~s~s~n",
+      [format_location(FieldName, brief, Opts),
+       pp_expr(FieldName, Opts),
+       format_location(FieldName, verbose, Opts)]);
 format_type_error({undef, Type, {{atom, Anno, Module}, {atom, _, Name}, Arity}}, Opts)
   when Type =:= user_type; Type =:= remote_type ->
-    io_lib:format("~sUndefined ~p ~p:~p/~p~s~n",
-              [format_location(Anno, brief, Opts),
-               Type, Module, Name, Arity,
-               format_location(Anno, verbose, Opts)]);
+    io_lib:format(
+      "~sUndefined ~p ~p:~p/~p~s~n",
+      [format_location(Anno, brief, Opts),
+       Type,
+       Module,
+       Name,
+       Arity,
+       format_location(Anno, verbose, Opts)]);
 format_type_error({undef, user_type, Anno, {Name, Arity}}, Opts) ->
-    io_lib:format("~sUndefined user type ~p/~p~s~n",
-              [format_location(Anno, brief, Opts),
-               Name, Arity,
-               format_location(Anno, verbose, Opts)]);
+    io_lib:format(
+      "~sUndefined user type ~p/~p~s~n",
+      [format_location(Anno, brief, Opts),
+       Name,
+       Arity,
+       format_location(Anno, verbose, Opts)]);
 format_type_error({undef, user_type, Anno, {Module, Name, Arity}}, Opts) ->
-    io_lib:format("~sUndefined user type ~p:~p/~p~s~n",
-              [format_location(Anno, brief, Opts),
-               Module, Name, Arity,
-               format_location(Anno, verbose, Opts)]);
+    io_lib:format(
+      "~sUndefined user type ~p:~p/~p~s~n",
+      [format_location(Anno, brief, Opts),
+       Module,
+       Name,
+       Arity,
+       format_location(Anno, verbose, Opts)]);
 format_type_error({not_exported, remote_type, {{atom, Anno, _} = Module, Name, Arity}}, Opts) ->
-    io_lib:format("~sThe type ~s:~s/~p~s is not exported~n",
-              [format_location(Anno, brief, Opts),
-               pp_expr(Module, Opts), pp_expr(Name, Opts), Arity,
-               format_location(Anno, verbose, Opts)]);
+    io_lib:format(
+      "~sThe type ~s:~s/~p~s is not exported~n",
+      [format_location(Anno, brief, Opts),
+       pp_expr(Module, Opts),
+       pp_expr(Name, Opts),
+       Arity,
+       format_location(Anno, verbose, Opts)]);
 format_type_error({illegal_pattern, Pat}, Opts) ->
     io_lib:format("~sIllegal pattern ~s~s~n",
-              [format_location(Pat, brief, Opts),
-               pp_expr(Pat, Opts),
-               format_location(Pat, verbose, Opts)]);
+		  [format_location(Pat, brief, Opts),
+		   pp_expr(Pat, Opts),
+		   format_location(Pat, verbose, Opts)]);
 format_type_error({illegal_record_info, Expr}, Opts) ->
-    io_lib:format("~sIllegal record info ~s~s~n",
-              [format_location(Expr, brief, Opts),
-               pp_expr(Expr, Opts),
-               format_location(Expr, verbose, Opts)]);
+    io_lib:format(
+      "~sIllegal record info ~s~s~n",
+      [format_location(Expr, brief, Opts),
+       pp_expr(Expr, Opts),
+       format_location(Expr, verbose, Opts)]);
 format_type_error({type_error, list, _Anno, Ty1, Ty}, Opts) ->
-    io_lib:format("~sThe type ~s cannot be an element of a list of type ~s~n",
-              [format_location(_Anno, brief, Opts),
-               pp_type(Ty1, Opts), pp_type(Ty, Opts)]);
+    io_lib:format(
+      "~sThe type ~s cannot be an element of a list of type ~s~n",
+      [format_location(_Anno, brief, Opts),
+       pp_type(Ty1, Opts),
+       pp_type(Ty, Opts)]);
 format_type_error({type_error, list, Anno, Ty}, Opts) ->
-    io_lib:format("~sThe expression of type ~s~s is not a list type~n",
-              [format_location(Anno, brief, Opts),
-               pp_type(Ty, Opts),
-               format_location(Anno, verbose, Opts)]);
+    io_lib:format(
+      "~sThe expression of type ~s~s is not a list type~n",
+      [format_location(Anno, brief, Opts),
+       pp_type(Ty, Opts),
+       format_location(Anno, verbose, Opts)]);
 format_type_error({type_error, cons_pat, Anno, Cons, Ty}, Opts) ->
-    io_lib:format("~sThe pattern ~s~s does not have type:~n~s~n",
-              [format_location(Anno, brief, Opts),
-               pp_expr(Cons, Opts),
-               format_location(Anno, verbose, Opts),
-               pp_type(Ty, Opts)]);
+    io_lib:format(
+      "~sThe pattern ~s~s does not have type:~n~s~n",
+      [format_location(Anno, brief, Opts),
+       pp_expr(Cons, Opts),
+       format_location(Anno, verbose, Opts),
+       pp_type(Ty, Opts)]);
 format_type_error({argument_length_mismatch, Anno, LenTy, LenArgs}, Opts) ->
-    io_lib:format("~sThe clause~s is expected to have ~p argument(s) "
-              "but it has ~p~n ",
-              [format_location(Anno, brief, Opts),
-               format_location(Anno, verbose, Opts),
-               LenTy, LenArgs]);
+    io_lib:format(
+      "~sThe clause~s is expected to have ~p argument(s) "
+      "but it has ~p~n ",
+      [format_location(Anno, brief, Opts),
+       format_location(Anno, verbose, Opts),
+       LenTy,
+       LenArgs]);
 format_type_error({type_error, unreachable_clause, Anno}, Opts) ->
-    io_lib:format("~sThe clause~s cannot be reached~n",
-              [format_location(Anno, brief, Opts),
-               format_location(Anno, verbose, Opts)]);
+    io_lib:format(
+      "~sThe clause~s cannot be reached~n",
+      [format_location(Anno, brief, Opts),
+       format_location(Anno, verbose, Opts)]);
 format_type_error({type_error, call_arity, Anno, Fun, TyArity, CallArity}, Opts) ->
-    io_lib:format("~sThe function ~s~s expects ~p argument~s, but is given ~p~n",
-              [format_location(Anno, brief, Opts),
-               pp_expr(Fun, Opts),
-               format_location(Anno, verbose, Opts),
-               TyArity, ["s" || TyArity /= 1], CallArity]);
+    io_lib:format(
+      "~sThe function ~s~s expects ~p argument~s, but is given ~p~n",
+      [format_location(Anno, brief, Opts),
+       pp_expr(Fun, Opts),
+       format_location(Anno, verbose, Opts),
+       TyArity,
+       ["s" || TyArity /= 1],
+       CallArity]);
 format_type_error({type_error, call_intersect, Anno, FunTy, Name}, Opts) ->
-    io_lib:format("~sThe type of the function ~s, called~s doesn't match "
-              "the surrounding calling context.~n"
-              "It has the following type~n~s~n",
-              [format_location(Anno, brief, Opts),
-               pp_expr(Name, Opts),
-               format_location(Anno, verbose, Opts),
-               pp_intersection_type(FunTy, Opts)]);
+    io_lib:format(
+      "~sThe type of the function ~s, called~s doesn't match "
+      "the surrounding calling context.~n"
+      "It has the following type~n~s~n",
+      [format_location(Anno, brief, Opts),
+       pp_expr(Name, Opts),
+       format_location(Anno, verbose, Opts),
+       pp_intersection_type(FunTy, Opts)]);
 format_type_error({type_error, mfa, Anno, M, F, A, ResTy, FunTy}, Opts) ->
-    io_lib:format("~sThe mfa ~p:~p/~p~s is expected to have type : ~n~s~n"
-              "but has type : ~n"
-              "~s~n",
-              [format_location(Anno, brief, Opts),
-               M, F, A,
-               format_location(Anno, verbose, Opts),
-               pp_type(ResTy, Opts),
-               pp_intersection_type(FunTy, Opts)]);
+    io_lib:format(
+      "~sThe mfa ~p:~p/~p~s is expected to have type : ~n~s~n"
+      "but has type : ~n"
+      "~s~n",
+      [format_location(Anno, brief, Opts),
+       M,
+       F,
+       A,
+       format_location(Anno, verbose, Opts),
+       pp_type(ResTy, Opts),
+       pp_intersection_type(FunTy, Opts)]);
 format_type_error({type_error, expected_fun_type, Anno, Func, FunTy}, Opts) ->
     Name = pp_expr(Func, Opts),
-    io_lib:format("~sExpected function ~s~s to have a function type,~n"
-              "but it has the following type:~n~s~n",
-              [format_location(Anno, brief, Opts),
-               Name,
-               format_location(Anno, verbose, Opts),
-               pp_type(FunTy, Opts)]);
+    io_lib:format(
+      "~sExpected function ~s~s to have a function type,~n"
+      "but it has the following type:~n~s~n",
+      [format_location(Anno, brief, Opts),
+       Name,
+       format_location(Anno, verbose, Opts),
+       pp_type(FunTy, Opts)]);
 format_type_error({type_error, no_type_match_intersection, Anno, Func, FunTy}, Opts) ->
     Name = pp_expr(Func, Opts),
-    io_lib:format("~sNone of the types of the function ~s~s matches the "
-              "call site. Here's the types of the function:~n~s~n",
-              [format_location(Anno, brief, Opts),
-               Name,
-               format_location(Anno, verbose, Opts),
-               pp_intersection_type(FunTy, Opts)]);
+    io_lib:format(
+      "~sNone of the types of the function ~s~s matches the "
+      "call site. Here's the types of the function:~n~s~n",
+      [format_location(Anno, brief, Opts),
+       Name,
+       format_location(Anno, verbose, Opts),
+       pp_intersection_type(FunTy, Opts)]);
 format_type_error({type_error, relop, RelOp, Anno, Ty1, Ty2}, Opts) ->
-    io_lib:format("~sThe operator ~p~s requires arguments of "
-              "compatible types.~nHowever, it has arguments "
-              "of type ~s and ~s~n",
-              [format_location(Anno, brief, Opts),
-               RelOp,
-               format_location(Anno, verbose, Opts),
-               pp_type(Ty1, Opts), pp_type(Ty2, Opts)]);
+    io_lib:format(
+      "~sThe operator ~p~s requires arguments of "
+      "compatible types.~nHowever, it has arguments "
+      "of type ~s and ~s~n",
+      [format_location(Anno, brief, Opts),
+       RelOp,
+       format_location(Anno, verbose, Opts),
+       pp_type(Ty1, Opts),
+       pp_type(Ty2, Opts)]);
 format_type_error({type_error, op_type_too_precise, '/' = Op, Anno, Ty}, Opts) when ?is_int_type(Ty) ->
-    io_lib:format("~sThe operator ~p~s is expected to have type "
-              "~s which is not a supertype of float()~n",
-              [format_location(Anno, brief, Opts),
-               Op,
-               format_location(Anno, verbose, Opts),
-               pp_type(Ty, Opts)]);
+    io_lib:format(
+      "~sThe operator ~p~s is expected to have type "
+      "~s which is not a supertype of float()~n",
+      [format_location(Anno, brief, Opts),
+       Op,
+       format_location(Anno, verbose, Opts),
+       pp_type(Ty, Opts)]);
 format_type_error({type_error, op_type_too_precise, Op, Anno, Ty}, Opts) ->
-    io_lib:format("~sThe operator ~p~s is expected to have type "
-              "~s which is too precise to be statically checked~n",
-              [format_location(Anno, brief, Opts),
-               Op,
-               format_location(Anno, verbose, Opts),
-               pp_type(Ty, Opts)]);
+    io_lib:format(
+      "~sThe operator ~p~s is expected to have type "
+      "~s which is too precise to be statically checked~n",
+      [format_location(Anno, brief, Opts),
+       Op,
+       format_location(Anno, verbose, Opts),
+       pp_type(Ty, Opts)]);
 format_type_error({type_error, arith_error, ArithOp, Anno, Ty1, Ty2}, Opts) ->
-    io_lib:format("~sThe operator ~p~s is requires numeric arguments, but "
-              "has arguments of type ~s and ~s~n",
-              [format_location(Anno, brief, Opts),
-               ArithOp,
-               format_location(Anno, verbose, Opts),
-               pp_type(Ty1, Opts), pp_type(Ty2, Opts)]);
+    io_lib:format(
+      "~sThe operator ~p~s is requires numeric arguments, but "
+      "has arguments of type ~s and ~s~n",
+      [format_location(Anno, brief, Opts),
+       ArithOp,
+       format_location(Anno, verbose, Opts),
+       pp_type(Ty1, Opts),
+       pp_type(Ty2, Opts)]);
 format_type_error({type_error, int_error, ArithOp, Anno, Ty1, Ty2}, Opts) ->
-    io_lib:format("~sThe operator ~p~s is requires integer arguments, but "
-              " has arguments of type ~s and ~s~n",
-              [format_location(Anno, brief, Opts),
-               ArithOp,
-               format_location(Anno, verbose, Opts),
-               pp_type(Ty1, Opts), pp_type(Ty2, Opts)]);
+    io_lib:format(
+      "~sThe operator ~p~s is requires integer arguments, but "
+      " has arguments of type ~s and ~s~n",
+      [format_location(Anno, brief, Opts),
+       ArithOp,
+       format_location(Anno, verbose, Opts),
+       pp_type(Ty1, Opts),
+       pp_type(Ty2, Opts)]);
 format_type_error({type_error, arith_error, ArithOp, Anno, Ty}, Opts) ->
-    io_lib:format("~sThe operator ~p~s is expected to have type "
-              "~s which has no numeric subtypes~n",
-              [format_location(Anno, brief, Opts),
-               ArithOp,
-               format_location(Anno, verbose, Opts),
-               pp_type(Ty, Opts)]);
+    io_lib:format(
+      "~sThe operator ~p~s is expected to have type "
+      "~s which has no numeric subtypes~n",
+      [format_location(Anno, brief, Opts),
+       ArithOp,
+       format_location(Anno, verbose, Opts),
+       pp_type(Ty, Opts)]);
 format_type_error({type_error, int_error, IntOp, Anno, Ty}, Opts) ->
-    io_lib:format("~sThe operator ~p~s is expected to have type "
-              "~s which has no integer subtypes~n",
-              [format_location(Anno, brief, Opts),
-               IntOp,
-               format_location(Anno, verbose, Opts),
-               pp_type(Ty, Opts)]);
+    io_lib:format(
+      "~sThe operator ~p~s is expected to have type "
+      "~s which has no integer subtypes~n",
+      [format_location(Anno, brief, Opts),
+       IntOp,
+       format_location(Anno, verbose, Opts),
+       pp_type(Ty, Opts)]);
 format_type_error({type_error, non_number_argument_to_plus, Anno, Ty}, Opts) ->
-    io_lib:format("~sThe plus expression~s has a non-numeric argument "
-              "of type:~n~s~n",
-              [format_location(Anno, brief, Opts),
-               format_location(Anno, verbose, Opts),
-               pp_type(Ty, Opts)]);
+    io_lib:format(
+      "~sThe plus expression~s has a non-numeric argument "
+      "of type:~n~s~n",
+      [format_location(Anno, brief, Opts),
+       format_location(Anno, verbose, Opts),
+       pp_type(Ty, Opts)]);
 format_type_error({type_error, non_number_argument_to_minus, Anno, Ty}, Opts) ->
-    io_lib:format("~sThe negated expression~s has a non-numeric argument "
-              "of type:~n~s~n",
-              [format_location(Anno, brief, Opts),
-               format_location(Anno, verbose, Opts),
-               pp_type(Ty, Opts)]);
+    io_lib:format(
+      "~sThe negated expression~s has a non-numeric argument "
+      "of type:~n~s~n",
+      [format_location(Anno, brief, Opts),
+       format_location(Anno, verbose, Opts),
+       pp_type(Ty, Opts)]);
 format_type_error({type_error, unary_error, Op, Anno, TargetTy, Ty}, Opts) ->
-    io_lib:format("~sThe application of unary '~s'~s is expected to have type "
-              "~s, which has no shared subtype with ~s~n",
-              [format_location(Anno, brief, Opts),
-               Op,
-               format_location(Anno, verbose, Opts),
-               pp_type(Ty, Opts), pp_type(TargetTy, Opts)]);
+    io_lib:format(
+      "~sThe application of unary '~s'~s is expected to have type "
+      "~s, which has no shared subtype with ~s~n",
+      [format_location(Anno, brief, Opts),
+       Op,
+       format_location(Anno, verbose, Opts),
+       pp_type(Ty, Opts),
+       pp_type(TargetTy, Opts)]);
 format_type_error({type_error, rel_error, LogicOp, Anno, Ty1, Ty2}, Opts) ->
-    io_lib:format("~sThe operator ~p~s is given two arguments with "
-              "non-compatible types:~n~s~n~s~n",
-              [format_location(Anno, brief, Opts),
-               LogicOp,
-               format_location(Anno, verbose, Opts),
-               pp_type(Ty1, Opts), pp_type(Ty2, Opts)]);
+    io_lib:format(
+      "~sThe operator ~p~s is given two arguments with "
+      "non-compatible types:~n~s~n~s~n",
+      [format_location(Anno, brief, Opts),
+       LogicOp,
+       format_location(Anno, verbose, Opts),
+       pp_type(Ty1, Opts),
+       pp_type(Ty2, Opts)]);
 format_type_error({type_error, operator_pattern, Pat, Ty}, Opts) ->
-    io_lib:format("~sThe operator pattern ~s~s is expected to have type "
-              "~s~n",
-              [format_location(Pat, brief, Opts),
-               pp_expr(Pat, Opts),
-               format_location(Pat, verbose, Opts),
-               pp_type(Ty, Opts)]);
+    io_lib:format(
+      "~sThe operator pattern ~s~s is expected to have type "
+      "~s~n",
+      [format_location(Pat, brief, Opts),
+       pp_expr(Pat, Opts),
+       format_location(Pat, verbose, Opts),
+       pp_type(Ty, Opts)]);
 format_type_error({type_error, pattern, Anno, Pat, Ty}, Opts) ->
-    io_lib:format("~sThe pattern ~s~s doesn't have the type ~s~n",
-              [format_location(Anno, brief, Opts),
-               pp_expr(Pat, Opts),
-               format_location(Anno, verbose, Opts),
-               pp_type(Ty, Opts)]);
+    io_lib:format(
+      "~sThe pattern ~s~s doesn't have the type ~s~n",
+      [format_location(Anno, brief, Opts),
+       pp_expr(Pat, Opts),
+       format_location(Anno, verbose, Opts),
+       pp_type(Ty, Opts)]);
 format_type_error({unknown_variable, Anno, Var}, Opts) ->
-    io_lib:format("~sUnknown variable ~p~s.~n",
-              [format_location(Anno, brief, Opts),
-               Var,
-               format_location(Anno, verbose, Opts)]);
+    io_lib:format(
+      "~sUnknown variable ~p~s.~n",
+      [format_location(Anno, brief, Opts),
+       Var,
+       format_location(Anno, verbose, Opts)]);
 format_type_error({type_error, check_clauses}, _Opts) ->
-    %%% TODO: Improve quality of type error
+    %% TODO: Improve quality of type error
     io_lib:format("Type error in clauses", []);
 format_type_error({type_error, record_pattern, Anno, Record, Ty}, Opts) ->
-    io_lib:format("~sThe record patterns for record #~p~s is expected to have"
-              " type ~s.~n"
-             ,[format_location(Anno, brief, Opts),
-               Record,
-               format_location(Anno, verbose, Opts),
-               pp_type(Ty, Opts)]);
+    io_lib:format(
+      "~sThe record patterns for record #~p~s is expected to have"
+      " type ~s.~n",
+      [format_location(Anno, brief, Opts),
+       Record,
+       format_location(Anno, verbose, Opts),
+       pp_type(Ty, Opts)]);
 format_type_error({type_error, badkey, KeyExpr, MapType}, Opts) ->
     %% Compare to the runtime error raised by maps:get(Key, Map) error:{badkey, Key}.
-    io_lib:format("~sThe expression ~s~s is not a valid key in the map type ~s~n",
-              [format_location(KeyExpr, brief, Opts),
-               pp_expr(KeyExpr, Opts),
-               format_location(KeyExpr, verbose, Opts),
-               pp_type(MapType, Opts)]);
+    io_lib:format(
+      "~sThe expression ~s~s is not a valid key in the map type ~s~n",
+      [format_location(KeyExpr, brief, Opts),
+       pp_expr(KeyExpr, Opts),
+       format_location(KeyExpr, verbose, Opts),
+       pp_type(MapType, Opts)]);
 format_type_error({type_error, receive_after, Anno, TyClauses, TyBlock}, Opts) ->
-    io_lib:format("~sThe types in the clauses and the after block are incompatible~n"
-              "in the receive statement~s.~n"
-             "The type of the clauses is : ~s~n"
-             "The type of the after block is : ~s~n",
-              [format_location(Anno, brief, Opts),
-               format_location(Anno, verbose, Opts),
-               pp_type(TyClauses, Opts), pp_type(TyBlock, Opts)]);
+    io_lib:format(
+      "~sThe types in the clauses and the after block are incompatible~n"
+      "in the receive statement~s.~n"
+      "The type of the clauses is : ~s~n"
+      "The type of the after block is : ~s~n",
+      [format_location(Anno, brief, Opts),
+       format_location(Anno, verbose, Opts),
+       pp_type(TyClauses, Opts),
+       pp_type(TyBlock, Opts)]);
 format_type_error({type_error, cyclic_type_vars, _Anno, Ty, Xs}, Opts) ->
-    io_lib:format("~sThe type spec ~s has a cyclic dependency in variable~s ~s~n",
-              [format_location(_Anno, brief, Opts),
-               pp_type(Ty, Opts),
-               [ "s" || length(Xs) > 1 ],
-               string:join(lists:map(fun atom_to_list/1, lists:sort(Xs)), ", ")]);
+    io_lib:format(
+      "~sThe type spec ~s has a cyclic dependency in variable~s ~s~n",
+      [format_location(_Anno, brief, Opts),
+       pp_type(Ty, Opts),
+       [ "s" || length(Xs) > 1 ],
+       string:join(lists:map(fun atom_to_list/1, lists:sort(Xs)), ", ")]);
 format_type_error({type_error, mismatch, Ty, Expr}, Opts) ->
-    io_lib:format("~sThe expression ~s~s does not have type ~s~n",
-              [format_location(Expr, brief, Opts),
-               pp_expr(Expr, Opts),
-               format_location(Expr, verbose, Opts),
-               pp_type(Ty, Opts)]);
+    io_lib:format(
+      "~sThe expression ~s~s does not have type ~s~n",
+      [format_location(Expr, brief, Opts),
+       pp_expr(Expr, Opts),
+       format_location(Expr, verbose, Opts),
+       pp_type(Ty, Opts)]);
 format_type_error({bad_type_annotation, TypeLit}, Opts) ->
-    io_lib:format("~sThe type annotation ~p~s is not a valid type~n",
-              [format_location(TypeLit, brief, Opts),
-               pp_expr(TypeLit, Opts),
-               format_location(TypeLit, verbose, Opts)]);
+    io_lib:format(
+      "~sThe type annotation ~p~s is not a valid type~n",
+      [format_location(TypeLit, brief, Opts),
+       pp_expr(TypeLit, Opts),
+       format_location(TypeLit, verbose, Opts)]);
 format_type_error(type_error, _) ->
     io_lib:format("TYPE ERROR~n", []).
 
 -spec format_type_error(gradualizer_type:abstract_expr(),
-                       typelib:extended_type(),
-                       typelib:extended_type(),
-                       proplists:proplist()) -> io_lib:chars().
+			typelib:extended_type(),
+			typelib:extended_type(),
+			proplists:proplist()) -> io_lib:chars().
 format_type_error(Expression, ActualType, ExpectedType, Opts) ->
-    io_lib:format("~sThe ~s ~ts~s is expected "
-              "to have type ~ts but it has type ~ts~n",
-              [format_location(Expression, brief, Opts),
-               describe_expr(Expression),
-               pp_expr(Expression, Opts),
-               format_location(Expression, verbose, Opts),
-               pp_type(ExpectedType, Opts),
-               pp_type(ActualType, Opts)]).
+    io_lib:format(
+      "~sThe ~s ~ts~s is expected "
+      "to have type ~ts but it has type ~ts~n",
+      [format_location(Expression, brief, Opts),
+       describe_expr(Expression),
+       pp_expr(Expression, Opts),
+       format_location(Expression, verbose, Opts),
+       pp_type(ExpectedType, Opts),
+       pp_type(ActualType, Opts)]).
 
 -spec describe_expr(gradualizer_type:abstract_expr()) -> io_lib:chars().
 describe_expr({atom, _, _})               -> "atom";
