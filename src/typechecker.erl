@@ -4097,6 +4097,7 @@ number_of_exported_functions(Forms) ->
         false -> length(ParseData#parsedata.exports)
     end.
 
+%% TODO: Move these functions to gradualizer or gradualizer_fmt.
 print_errors(Errors, Opts) ->
     [print_error(Error, Opts) || Error <- Errors],
     ok.

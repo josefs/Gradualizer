@@ -86,7 +86,7 @@ bin/gradualizer: $(beams) ebin/gradualizer.app
 
 .PHONY: gradualize
 gradualize: escript
-	bin/gradualizer -pa ebin -- ebin
+	bin/gradualizer -pa ebin --color ebin
 
 .PHONY: nocrashongradualize
 nocrashongradualize: escript
@@ -139,31 +139,31 @@ cli-tests: bin/gradualizer
 	# CLI test cases
 	# 1. When checking a dir; printing filename is the default
 	bin/gradualizer test/dir \
-	|perl -ne 'm%^test/dir/test_in_dir.erl:% or die "CLI 1 ($$_)"'
+	2>&1|perl -0777 -ne 'm%^test/dir/test_in_dir.erl:% or die "CLI 1 ($$_)"'
 	# 2. --no-print-file with directory
 	bin/gradualizer --no_print_file test/dir \
-	|perl -ne '/^The/ or die "CLI 2 ($$_)"'
+	2>&1|perl -0777 -ne '/^The/ or die "CLI 2 ($$_)"'
 	# 3. --print-module with directory
 	bin/gradualizer --print_module test/dir \
-	|perl -ne '/^test_in_dir:/ or die "CLI 3 ($$_)"'
+	2>&1|perl -0777 -ne '/^test_in_dir:/ or die "CLI 3 ($$_)"'
 	# 4. --print-basename with directory
 	bin/gradualizer --print_basename test/dir \
-	|perl -ne '/^test_in_dir.erl:/ or die "CLI 4 ($$_)"'
+	2>&1|perl -0777 -ne '/^test_in_dir.erl:/ or die "CLI 4 ($$_)"'
 	# 5. Checking a single file; not printing filename is the default
 	bin/gradualizer test/dir/test_in_dir.erl \
-	|perl -ne '/^The/ or die "CLI 5 ($$_)"'
+	2>&1|perl -0777 -ne '/^The/ or die "CLI 5 ($$_)"'
 	# 6. Brief formatting
-	bin/gradualizer --fmt_location brief --print-basename test/dir \
-	|perl -ne '/^test_in_dir.erl:6:12: The variable N is ex/ or die "CLI 6 ($$_)"'
+	bin/gradualizer --fmt_location brief --print_basename test/dir \
+	2>&1|perl -0777 -ne '/^test_in_dir.erl:6:12: The variable/ or die "CLI 6 ($$_)"'
 	# 7. Verbose formatting, without filename
-	bin/gradualizer --fmt_location verbose --no-print-file test/dir \
-	|perl -ne '/^The variable N on line 6 at column 12/ or die "CLI 7 ($$_)"'
+	bin/gradualizer --fmt_location verbose --no_print_file --no_fancy test/dir \
+	2>&1|perl -ne '/^The variable N on line 6 at column 12/ or die "CLI 7 ($$_)"'
 	# 8. No location, no filename
-	bin/gradualizer --fmt_location none --no-print-file test/dir/test_in_dir.erl \
-	|perl -ne '/^The variable N is expected/ or die "CLI 8 ($$_)"'
+	bin/gradualizer --fmt_location none --no_print_file --no_fancy test/dir/test_in_dir.erl \
+	2>&1|perl -ne '/^The variable N is expected/ or die "CLI 8 ($$_)"'
 	# 9. Possible to exclude prelude (-0777 from https://stackoverflow.com/a/30594643/497116)
 	bin/gradualizer --no_prelude test/should_pass/cyclic_otp_specs.erl \
-	|perl -0777 -ne '/^The type spec/g or die "CLI 9 ($$_)"'
+	2>&1|perl -0777 -ne '/^The type spec/g or die "CLI 9 ($$_)"'
 	# 10. Excluding prelude and then including it is a no-op
 	bin/gradualizer --no_prelude --specs_override_dir priv/prelude \
 	  test/should_pass/cyclic_otp_specs.erl || (echo "CLI 10"; exit 1)

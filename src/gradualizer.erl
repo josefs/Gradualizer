@@ -21,6 +21,11 @@
 %%%   (useful to support other languages)
 %%% - `fmt_type_fun': function to pretty print a type AST
 %%%   (useful to support other languages)
+%%% - `{color, always | never | auto}': Use colors when printing fancy messages.
+%%%   Auto is the default but auto-detection of tty doesn't work when running
+%%%   as an escript. It works when running from the Erlang shell though.
+%%% - `{fancy, boolean()}': Use fancy error messages when possible. True by
+%%%   default. Doesn't work when a custom `fmt_expr_fun' is used.
 -module(gradualizer).
 
 -export([type_check_file/1,
@@ -187,8 +192,16 @@ type_check_forms(File, Forms, Opts) ->
         {false, []} ->
             ok;
         {false, [_|_]} ->
-            typechecker:print_errors(Errors, Opts),
+            Opts1 = add_source_file_and_forms_to_opts(File, Forms, Opts),
+            typechecker:print_errors(Errors, Opts1),
             nok
+    end.
+
+add_source_file_and_forms_to_opts(File, Forms, Opts) ->
+    Opts1 = [{forms, Forms}|Opts],
+    case filename:extension(File) == ".erl" andalso filelib:is_file(File) of
+        true -> [{source_file, File} | Opts1];
+        false -> Opts1
     end.
 
 %% Extract -gradualizer(Options) from AST
