@@ -42,7 +42,7 @@ format_location(Expr, verbose) ->
 -spec format_type_error(any(), any()) -> io_lib:chars().
 format_type_error({type_error, Expression, ActualType, ExpectedType}, Opts)
   when is_tuple(Expression) ->
-    format_type_error(Expression, ActualType, ExpectedType, Opts);
+    format_expr_type_error(Expression, ActualType, ExpectedType, Opts);
 format_type_error({nonexhaustive, Anno, Example}, Opts) ->
     io_lib:format(
       "~sNonexhaustive patterns~s~n"
@@ -371,20 +371,64 @@ format_type_error({bad_type_annotation, TypeLit}, Opts) ->
 format_type_error(type_error, _) ->
     io_lib:format("TYPE ERROR~n", []).
 
--spec format_type_error(gradualizer_type:abstract_expr(),
+-spec format_expr_type_error(gradualizer_type:abstract_expr(),
 			typelib:extended_type(),
 			typelib:extended_type(),
 			proplists:proplist()) -> io_lib:chars().
-format_type_error(Expression, ActualType, ExpectedType, Opts) ->
+format_expr_type_error(Expression, ActualType, ExpectedType, Opts) ->
+    Fancy = use_highlight_in_context(Opts),
+    {InlineExpr, FancyExpr} = if Fancy ->
+                                     {"", highlight_in_context(Expression, Opts)};
+                                 not Fancy ->
+                                     {" " ++ pp_expr(Expression, Opts), ""}
+                              end,
     io_lib:format(
-      "~sThe ~s ~ts~s is expected "
-      "to have type ~ts but it has type ~ts~n",
+      "~sThe ~s~ts~s is expected "
+      "to have type ~ts but it has type ~ts~n~ts",
       [format_location(Expression, brief, Opts),
        describe_expr(Expression),
-       pp_expr(Expression, Opts),
+       InlineExpr,
        format_location(Expression, verbose, Opts),
        pp_type(ExpectedType, Opts),
-       pp_type(ActualType, Opts)]).
+       pp_type(ActualType, Opts),
+       FancyExpr]).
+
+use_highlight_in_context(Opts) ->
+    case {proplists:get_value(fancy, Opts, true),
+          proplists:get_value(forms, Opts),
+          proplists:get_value(fmt_expr_fun, Opts)} of
+        {true, Forms, undefined} when is_list(Forms) ->
+            %% No formatting function is supplied, so we can use Erlang's
+            %% parser, lexer and pretty-printer
+            true;
+        _No ->
+            %% If we have pretty-printer, lexer and parser as options,
+            %% we could print highlighted in context for e.g. Elixir too.
+            false
+    end.
+
+highlight_in_context(AstNode, Opts) ->
+    Color = use_color(Opts),
+    [$\n, % blank line before
+     case proplists:get_value(source_file, Opts, undefined) of
+         undefined ->
+             Forms = proplists:get_value(forms, Opts), % must be present here
+             gradualizer_hilite:prettyprint_and_highlight(AstNode, Forms, Color);
+         SourceFile ->
+             {ok, SourceBin} = file:read_file(SourceFile),
+             Source = binary_to_list(SourceBin),
+             gradualizer_hilite:highlight_in_source(AstNode, Source, Color)
+     end,
+     $\n]. % blank line after
+
+-spec use_color(gradualizer:options()) -> boolean().
+use_color(Opts) ->
+    case proplists:get_value(color, Opts, auto) of
+        auto -> case io:columns() of {ok, _} -> true; _ -> false end;
+        always -> true;                    % auto/always/never
+        never -> false;                    % like for ls, grep, etc.
+        Bool when is_boolean(Bool) -> Bool % bool (undocumented)
+    end.
 
 -spec describe_expr(gradualizer_type:abstract_expr()) -> io_lib:chars().
 describe_expr({atom, _, _})               -> "atom";

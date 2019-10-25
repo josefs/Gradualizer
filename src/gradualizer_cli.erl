@@ -91,8 +91,13 @@ print_usage() ->
     io:format("                                 - 'brief': for machine processing~n"),
     io:format("                                   (\"LINE:COLUMN:\" before message text)~n"),
     io:format("                                 - 'verbose' (default): for human readers~n"),
-    io:format("                                   (\"on line LINE at column COLUMN\" within the message text)~n").
-
+    io:format("                                   (\"on line LINE at column COLUMN\" within the message text)~n"),
+    io:format("       --color [ COLOR ]         - Use colors when printing fancy messages. An optional~n"),
+    io:format("                                   argument is `always | never | auto'. However, auto-~n"),
+    io:format("                                   detection of a TTY doesn't work when running as an escript.~n"),
+    io:format("       --no_color                - Alias for `--color never'~n"),
+    io:format("       --fancy                   - Use fancy error messages when possible (on by default)~n"),
+    io:format("       --no_fancy                - Don't use fancy error messages.~n").
 
 -spec parse_opts([string()], gradualizer:options()) -> {[string()], gradualizer:options()}.
 parse_opts([], Opts) ->
@@ -119,6 +124,10 @@ parse_opts([A | Args], Opts) ->
         "--no_prelude"             -> parse_opts(Args, [{prelude, false}| Opts]);
         "--specs_override_dir"     -> handle_specs_override(A, Args, Opts);
         "--fmt_location"           -> handle_fmt_location(Args, Opts);
+        "--color"                  -> handle_color(Args, Opts);
+        "--no_color"               -> parse_opts(Args, [{color, never} | Opts]);
+        "--fancy"                  -> parse_opts(Args, [fancy | Opts]);
+        "--no_fancy"               -> parse_opts(Args, [{fancy, false} | Opts]);
         "--"                       -> {Args, Opts};
         "-" ++ _                   -> erlang:error(string:join(["Unknown parameter:", A], " "));
         _                          -> {[A | Args], Opts}
@@ -158,6 +167,13 @@ handle_fmt_location([FmtTypeStr | Args], Opts) ->
     catch _:_ ->
             erlang:error(lists:append(["Bad value for fmt-location: ", FmtTypeStr]))
     end.
+
+%% Handle Args after --color.
+-spec handle_color([string()], gradualizer:options()) -> {[string()], gradualizer:options()}.
+handle_color([A|Args], Opts) when A == always; A == never; A == auto ->
+    parse_opts(Args, [{color, A} | Opts]);
+handle_color(Args, Opts) ->
+    parse_opts(Args, [{color, always} | Opts]).
 
 no_start_dash("-" ++ _) ->
     false;
