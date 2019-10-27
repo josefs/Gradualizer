@@ -609,14 +609,14 @@ normalize({user_type, P, Name, Args} = Type, TEnv) ->
                     throw({undef, user_type, P, {Name, length(Args)}})
             end
     end;
-normalize({remote_type, P, [{atom, _, M} = Module, {atom, _, N} = Name, Args]}, TEnv) ->
+normalize({remote_type, P, [{atom, _, M}, {atom, _, N}, Args]}, TEnv) ->
     case gradualizer_db:get_exported_type(M, N, Args) of
         {ok, T} ->
             normalize(T, TEnv);
         opaque ->
             typelib:annotate_user_types(M, {user_type, P, N, Args});
         not_exported ->
-            throw({not_exported, remote_type, {Module, Name, length(Args)}});
+            throw({not_exported, remote_type, P, {M, N, length(Args)}});
         not_found ->
             throw({undef, remote_type, P, {M, N, length(Args)}})
     end;

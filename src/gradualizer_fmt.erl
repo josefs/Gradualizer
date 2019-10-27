@@ -100,12 +100,12 @@ format_type_error({undef, Type, Anno, {Module, Name, Arity}}, Opts)
        Name,
        Arity,
        format_location(Anno, verbose, Opts)]);
-format_type_error({not_exported, remote_type, {{atom, Anno, _} = Module, Name, Arity}}, Opts) ->
+format_type_error({not_exported, remote_type, Anno, {Module, Name, Arity}}, Opts) ->
     io_lib:format(
       "~sThe type ~s:~s/~p~s is not exported~n",
       [format_location(Anno, brief, Opts),
-       pp_expr(Module, Opts),
-       pp_expr(Name, Opts),
+       Module,
+       Name,
        Arity,
        format_location(Anno, verbose, Opts)]);
 format_type_error({illegal_pattern, Pat}, Opts) ->
