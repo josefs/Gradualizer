@@ -1418,7 +1418,10 @@ expect_binary_type({var, _, Var}, _) ->
     {elem_ty
     ,{var, erl_anno:new(0), TyVar}
     ,constraints:add_var(TyVar,
-      constraints:upper(Var, {type, erl_anno:new(0), binary, [TyVar]}))
+      constraints:upper(Var, {type, erl_anno:new(0), binary,
+                              [{integer, erl_anno:new(0), 0},
+                               {integer, erl_anno:new(0), 1}]}
+                       ))
     };
 expect_binary_type(Ty, _) ->
     {type_error, Ty}.
