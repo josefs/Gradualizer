@@ -1,13 +1,13 @@
--module(undefined_user_type).
+-module(undefined_errors_test).
 
 -include_lib("eunit/include/eunit.hrl").
 
-undefined_user_type_test_() ->
+undefined_errors_test_() ->
     {setup,
      fun () ->
          {ok, Apps} = application:ensure_all_started(gradualizer),
          gradualizer_db:import_erl_files(
-             ["priv/test/undefined_user_type_helper.erl"]),
+             ["priv/test/undefined_errors_helper.erl"]),
          Apps
      end,
      fun (Apps) ->
@@ -15,7 +15,7 @@ undefined_user_type_test_() ->
          ok
      end,
      ?_test(begin
-        File = "test/misc/undefined_user_type.erl",
+        File = "test/misc/undefined_errors.erl",
         Errors = gradualizer:type_check_file(File, [return_errors]),
         %% Test that error formatting doesn't crash
         Opts = [{fmt_location, brief},
