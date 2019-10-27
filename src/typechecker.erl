@@ -618,7 +618,7 @@ normalize({remote_type, P, [{atom, _, M} = Module, {atom, _, N} = Name, Args]}, 
         not_exported ->
             throw({not_exported, remote_type, {Module, Name, length(Args)}});
         not_found ->
-            throw({undef, remote_type, {Module, Name, length(Args)}})
+            throw({undef, remote_type, P, {M, N, length(Args)}})
     end;
 normalize({op, _, _, _Arg} = Op, _TEnv) ->
     erl_eval:partial_eval(Op);
