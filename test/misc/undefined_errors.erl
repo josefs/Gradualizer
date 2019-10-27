@@ -3,7 +3,8 @@
          local_call/0, remote_call/0,
          local_record/1, remote_record/0,
          record_field/1,
-         normalize_remote_type/0]).
+         normalize_remote_type/0,
+         not_exported/0]).
 
 -spec local_type() -> undefined_type().
 local_type() -> ok.
@@ -37,3 +38,6 @@ record_field(R) -> if
 
 -spec normalize_remote_type() -> ok.
 normalize_remote_type() -> undefined_errors_helper:und_ty().
+
+-spec not_exported() -> undefined_errors_helper:not_exported_type().
+not_exported() -> undefined_errors_helper:not_exp_ty().
