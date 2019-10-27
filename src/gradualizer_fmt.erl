@@ -84,27 +84,20 @@ format_type_error({undef, record_field, FieldName}, Opts) ->
       [format_location(FieldName, brief, Opts),
        pp_expr(FieldName, Opts),
        format_location(FieldName, verbose, Opts)]);
-format_type_error({undef, Type, {{atom, Anno, Module}, {atom, _, Name}, Arity}}, Opts)
-  when Type =:= user_type; Type =:= remote_type ->
-    io_lib:format(
-      "~sUndefined ~p ~p:~p/~p~s~n",
-      [format_location(Anno, brief, Opts),
-       Type,
-       Module,
-       Name,
-       Arity,
-       format_location(Anno, verbose, Opts)]);
 format_type_error({undef, user_type, Anno, {Name, Arity}}, Opts) ->
     io_lib:format(
-      "~sUndefined user type ~p/~p~s~n",
+      "~sUndefined type ~p/~p~s~n",
       [format_location(Anno, brief, Opts),
        Name,
        Arity,
        format_location(Anno, verbose, Opts)]);
-format_type_error({undef, user_type, Anno, {Module, Name, Arity}}, Opts) ->
+format_type_error({undef, Type, Anno, {Module, Name, Arity}}, Opts)
+  when Type =:= user_type; Type =:= remote_type ->
+    TypeS = case Type of user_type -> "type"; remote_type -> "remote type" end,
     io_lib:format(
-      "~sUndefined user type ~p:~p/~p~s~n",
+      "~sUndefined ~s ~p:~p/~p~s~n",
       [format_location(Anno, brief, Opts),
+       TypeS,
        Module,
        Name,
        Arity,
