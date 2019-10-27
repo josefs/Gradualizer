@@ -169,18 +169,6 @@ format_type_error({type_error, call_intersect, Anno, FunTy, Name}, Opts) ->
        pp_expr(Name, Opts),
        format_location(Anno, verbose, Opts),
        pp_intersection_type(FunTy, Opts)]);
-format_type_error({type_error, mfa, Anno, M, F, A, ResTy, FunTy}, Opts) ->
-    io_lib:format(
-      "~sThe mfa ~p:~p/~p~s is expected to have type : ~n~s~n"
-      "but has type : ~n"
-      "~s~n",
-      [format_location(Anno, brief, Opts),
-       M,
-       F,
-       A,
-       format_location(Anno, verbose, Opts),
-       pp_type(ResTy, Opts),
-       pp_intersection_type(FunTy, Opts)]);
 format_type_error({type_error, expected_fun_type, Anno, Func, FunTy}, Opts) ->
     Name = pp_expr(Func, Opts),
     io_lib:format(
