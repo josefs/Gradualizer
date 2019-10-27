@@ -1393,24 +1393,6 @@ expect_tuple_union([], AccTy, AccCs, any, N, _Env) ->
 expect_tuple_union([], AccTy, AccCs, _NoAny, _N, _Env) ->
     {AccTy, AccCs}.
 
--spec purge_binary(type()) -> type().
-purge_binary(ResTy) ->
-    case ResTy of
-        {type, _, binary, [{integer, _, 0}, {integer, _, _N}]} ->
-            %% The result is a multiple of N bits.
-            %% Expr must be a multiple of N bits too.
-            ResTy;
-        {type, _, binary, [{integer, _, M}, {integer, _, _N}]}
-          when M > 0 ->
-            %% The result is a binary with a minimum size of M. This
-            %% requires that the generators are non-empty. We don't
-            %% check that. At least, we can check that Gen is a
-            %% bitstring.
-            %% TODO: properly check these values
-            {type, erl_anno:new(0), binary,
-             [{integer, erl_anno:new(0), 0},
-              {integer, erl_anno:new(0), 1}]}
-    end.
 
 -spec expect_binary_type(type(), env()) -> R when
       R :: any
@@ -3415,8 +3397,28 @@ type_check_comprehension_in(Env, ResTy, OrigExpr, bc, Expr, _P, []) ->
             {_Ty, _VB, Cs} = type_check_expr(Env, Expr),
             {#{}, Cs};
         {elem_ty, ElemTy, Cs1} ->
-            %% TODO: Don't purge that binary like that
-            {_VB, Cs2} = type_check_expr_in(Env, purge_binary(ElemTy), Expr),
+            ExprTy = case ElemTy of
+                         {type, _, binary, [{integer, _, 0}, {integer, _, _N}]} ->
+                             %% The result is a multiple of N bits.
+                             %% Expr must be a multiple of N bits too.
+                             ElemTy;
+                         {type, _, binary, [{integer, _, M}, {integer, _, _N}]}
+                           when M > 0 ->
+                             %% The result is a binary with a minimum size of M. This
+                             %% requires that the generators are non-empty. We don't
+                             %% check that. At least, we can check that Gen is a
+                             %% bitstring.
+                             %% TODO: Actually typecheck this case
+                             {type, erl_anno:new(0), binary,
+                              [{integer, erl_anno:new(0), 0},
+                               {integer, erl_anno:new(0), 1}]};
+                         _ ->
+                             Ty = {type, erl_anno:new(0), binary,
+                                   [{integer, erl_anno:new(0), 0},
+                                    {integer, erl_anno:new(0), 1}]},
+                             throw({type_error, OrigExpr, Ty, ElemTy})
+                     end,
+            {_VB, Cs2} = type_check_expr_in(Env, ExprTy, Expr),
             {#{}, constraints:combine(Cs1, Cs2)};
         {elem_tys, ElemTys, Cs1} ->
             {VB, Cs2} = type_check_union_in(Env, ElemTys, Expr),
