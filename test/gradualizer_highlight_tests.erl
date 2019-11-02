@@ -1,4 +1,4 @@
--module(gradualizer_hilite_tests).
+-module(gradualizer_highlight_tests).
 
 -include_lib("eunit/include/eunit.hrl").
 
@@ -13,7 +13,7 @@ prettyprint_and_highlight_test() ->
                                  [{var,1,'X'}],
                                  [],
                                  [Expr]}]}],
-    Pretty = gradualizer_hilite:prettyprint_and_highlight(Expr, Forms, _Color = false),
+    Pretty = gradualizer_highlight:prettyprint_and_highlight(Expr, Forms, _Color = false),
     ?assertEqual("-spec f(integer()) -> ok.\n"
                  "f(X) -> X andalso not X.\n"
                  "        ^^^^^^^^^^^^^^^\n",

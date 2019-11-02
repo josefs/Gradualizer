@@ -415,11 +415,11 @@ highlight_in_context(AstNode, Opts) ->
      case proplists:get_value(source_file, Opts, undefined) of
          undefined ->
              Forms = proplists:get_value(forms, Opts), % must be present here
-             gradualizer_hilite:prettyprint_and_highlight(AstNode, Forms, Color);
+             gradualizer_highlight:prettyprint_and_highlight(AstNode, Forms, Color);
          SourceFile ->
              {ok, SourceBin} = file:read_file(SourceFile),
              Source = binary_to_list(SourceBin),
-             gradualizer_hilite:highlight_in_source(AstNode, Source, Color)
+             gradualizer_highlight:highlight_in_source(AstNode, Source, Color)
      end,
      $\n]. % blank line after
 
