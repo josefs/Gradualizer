@@ -15,6 +15,9 @@
 -compile([{nowarn_deprecated_function,{erlang,get_stacktrace,0}}]).
 -endif.
 
+%% Performance hack: Unions larger than this value are replaced by any() in normalization.
+-define(union_size_limit, 20).
+
 -define(verbose(Env, Fmt, Args),
         case Env#env.verbose of
             true -> io:format(Fmt, Args);
@@ -576,13 +579,13 @@ glb_ty(_Ty1, _Ty2, _A, _TEnv) -> {type(none), constraints:empty()}.
 %% * Expand user-defined and remote types on head level (except opaque types)
 %% * Replace built-in type synonyms
 %% * Flatten unions and merge overlapping types (e.g. ranges) in unions
-
 -spec normalize(type(), TEnv :: #tenv{}) -> type().
 normalize({type, _, union, Tys}, TEnv) ->
     Types = flatten_unions(Tys, TEnv),
     case merge_union_types(Types, TEnv) of
         []  -> type(none);
         [T] -> T;
+        Ts when length(Ts) > ?union_size_limit -> type(any); % performance hack
         Ts  -> type(union, Ts)
     end;
 normalize({user_type, P, Name, Args} = Type, TEnv) ->
