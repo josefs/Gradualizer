@@ -9,6 +9,10 @@ help_test() ->
     ?assertEqual(help, gradualizer_cli:handle_args(["--help"])),
     ?assertEqual(help, gradualizer_cli:handle_args(["--infer", "-h", "other.junk"])).
 
+help_output_no_halt_test() ->
+    %% This gives code coverage to the printing of the help text.
+    ?assertEqual(ok, gradualizer_cli:main(["-h"])).
+
 version_test() ->
     ?assertEqual(version, gradualizer_cli:handle_args(["--version"])).
 
@@ -117,3 +121,17 @@ specs_override_2_dirs_test() ->
     ?assertEqual(["d2", "--", "file.erl"], Files).
 specs_override_fail_test() ->
     ?assertMatch({error, _}, gradualizer_cli:handle_args(["--specs_override_dir"])).
+
+color_test() ->
+    {ok, _Files, Opts1} = gradualizer_cli:handle_args(["--color", "auto", "file.erl"]),
+    ?assertEqual(auto, proplists:get_value(color, Opts1)),
+    {ok, _Files, Opts2} = gradualizer_cli:handle_args(["--color", "file.erl"]),
+    ?assertEqual(always, proplists:get_value(color, Opts2)),
+    {ok, _Files, Opts3} = gradualizer_cli:handle_args(["--no_color", "file.erl"]),
+    ?assertEqual(never, proplists:get_value(color, Opts3)).
+
+fancy_test() ->
+    {ok, _Files, Opts1} = gradualizer_cli:handle_args(["--fancy", "file.erl"]),
+    ?assertEqual(true, proplists:get_value(fancy, Opts1)),
+    {ok, _Files, Opts2} = gradualizer_cli:handle_args(["--no_fancy", "file.erl"]),
+    ?assertEqual(false, proplists:get_value(fancy, Opts2)).

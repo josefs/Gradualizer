@@ -170,10 +170,10 @@ handle_fmt_location([FmtTypeStr | Args], Opts) ->
 
 %% Handle Args after --color.
 -spec handle_color([string()], gradualizer:options()) -> {[string()], gradualizer:options()}.
-handle_color([A|Args], Opts) when A == always; A == never; A == auto ->
-    parse_opts(Args, [{color, A} | Opts]);
-handle_color(Args, Opts) ->
-    parse_opts(Args, [{color, always} | Opts]).
+handle_color(["always"|Args], Opts) -> parse_opts(Args, [{color, always} | Opts]);
+handle_color(["never" |Args], Opts) -> parse_opts(Args, [{color, never}  | Opts]);
+handle_color(["auto"  |Args], Opts) -> parse_opts(Args, [{color, auto}   | Opts]);
+handle_color(Args,            Opts) -> parse_opts(Args, [{color, always} | Opts]).
 
 no_start_dash("-" ++ _) ->
     false;
