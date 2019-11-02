@@ -4,6 +4,8 @@
 -include("typelib.hrl").
 
 -define(FMT_LOCATION_DEFAULT, verbose).
+-define(color_type, "\e[35m"). % 35=magenta
+-define(color_end, "\e[0m").
 
 -spec format_location(any(), brief | verbose, any()) -> io_lib:chars().
 format_location(Expr, FmtType, Opts) ->
@@ -481,9 +483,11 @@ pp_intersection_type([Ty|Tys], Opts) ->
     pp_type(Ty, Opts) ++ ["\n" || Tys /= []] ++ pp_intersection_type(Tys, Opts).
 
 pp_type(Ty, Opts) ->
-    case proplists:get_value(fmt_type_fun, Opts) of
-        Fun when is_function(Fun) ->
-            Fun(Ty);
-        _ ->
-            typelib:pp_type(Ty)
+    PP = case proplists:get_value(fmt_type_fun, Opts) of
+             Fun when is_function(Fun) -> Fun(Ty);
+             _                         -> typelib:pp_type(Ty)
+         end,
+    case use_color(Opts) of
+        true  -> [?color_type, PP, ?color_end];
+        false -> PP
     end.
