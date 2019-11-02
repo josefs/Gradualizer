@@ -1,4 +1,4 @@
--module(gradualizer_hilite).
+-module(gradualizer_highlight).
 
 -export([prettyprint_and_highlight/3,
          highlight_in_source/3]).
@@ -25,14 +25,23 @@
 %% To highlight a node in an AST without having the original source code:
 %% Pretty-print the AST and parse again. Then, find the corresponding node
 %% in the new AST. Find its location. Find its length by pretty-printing,
-%% tokenizing and the checking the location and length of the last token.
+%% tokenizing and then checking the location and length of the last token.
 %% Then print it all in a fancy way with the node highlighted.
 -spec prettyprint_and_highlight(AstNode    :: erl_parse_tree(),
                                 AstContext :: [erl_parse_tree()],
                                 Color      :: boolean()) -> iolist().
 prettyprint_and_highlight(AstNode, AstContext, Color) ->
-    AstCtx = filter_context(AstNode, AstContext),
-    {Pretty, NewNode, _NewCtx} = recreate_source(AstNode, AstCtx),
+    TrimmedCtx = trim_context(AstNode, AstContext),
+    {Pretty, NewNode, _NewCtx} =
+        case recreate_source(AstNode, TrimmedCtx) of
+            not_found when TrimmedCtx /= AstContext ->
+                %% Trimming may have discarded the containing form.
+                %% This can happen if line numbers in the AST are
+                %% not in order. Try without the full context.
+                recreate_source(AstNode, AstContext);
+            {_,_,_} = Found ->
+                Found
+        end,
     highlight_in_source(NewNode, Pretty, Color).
 
 %% Recreates the source code of abstract forms and a node within it by
@@ -43,14 +52,17 @@ prettyprint_and_highlight(AstNode, AstContext, Color) ->
 recreate_source(AstNode, AstCtx) ->
     Pretty = prettyprint_forms(AstCtx),
     NewCtx = parse_into_list_of_forms(Pretty),
-    NewNode = case find_in_asts(AstNode, AstCtx, NewCtx, not_found) of
-                  {found, FoundNode, _NextNeighbour} -> FoundNode;
-                  {found, FoundNode}                 -> FoundNode
-              end,
-    {Pretty, NewNode, NewCtx}.    
+    case find_in_asts(AstNode, AstCtx, NewCtx) of
+        {found, NewNode} ->
+            {Pretty, NewNode, NewCtx};
+        not_found ->
+            %% Could be that the line numbers in the original AST are not
+            %% in ascending order.
+            not_found
+    end.
 
 %% Highlights a node in the AST in a piece of source code. The node must
-%% annotated with line and column information for this to work. Returns
+%% be annotated with line and column information for this to work. Returns
 %% an inlist().
 highlight_in_source(AstNode, Source, Color) ->
     {Start, End} = find_start_and_end_location_in_source(AstNode, Source),
@@ -58,8 +70,7 @@ highlight_in_source(AstNode, Source, Color) ->
 
 %% Finds the start and end location of an abstract node in source code.
 %% This is done by pretty-printing, tokenizing, counting the tokens and
-%% then performing finding the corresponding tokens in the tokenized
-%% source code.
+%% then finding the corresponding tokens in the tokenized source code.
 -spec find_start_and_end_location_in_source(Node :: erl_parse_tree(), Source :: string()) ->
                                    {Start :: erl_anno:location(), End :: erl_anno:location()}.
 find_start_and_end_location_in_source(Node, Source) ->
@@ -94,12 +105,12 @@ num_tokens(Ast) ->
 
 %% Find the form containing the searched node and sometimes a node before
 %% as extra context.
-filter_context(Node, Forms) ->
+trim_context(Node, Forms) ->
     case erl_anno:line(element(2, Node)) of
         0 -> Forms; % generated code or something...
         Line ->
             Forms1 = lists:reverse(Forms),
-            %% The containing forms and the preceding forms reversed
+            %% The containing form and the preceding forms reversed
             FormAndPreforms =
                 lists:dropwhile(fun (Form) ->
                                         L = erl_anno:line(element(2, Form)),
@@ -107,12 +118,11 @@ filter_context(Node, Forms) ->
                                 end, Forms1),
             case FormAndPreforms of
                 [] ->
-                    %% Not found. Line numbers are probably not correct, due to
-                    %% include files or something else
+                    %% Line numbers seem to be wrong
                     Forms;
                 [FoundForm|PreForms1] ->
-                    %% Include any preceding forms starting within 2 lines above our
-                    %% searched form
+                    %% Include any preceding forms starting within 2 lines
+                    %% above our searched form
                     PreForms2 =
                         lists:takewhile(fun (Form) ->
                                                 L = erl_anno:line(element(2, Form)),
@@ -133,12 +143,6 @@ parse_into_list_of_forms(Pretty) ->
         Form                      -> [Form]
     end.
 
-%% Step the location {Line, Column} forward as if typing more chars
-%% Not used. `erl_scan:end_location/1' is used on the last token instead.
-%step_location("", Loc) -> Loc;
-%step_location("\n" ++ Rest, {L,_}) -> step_location(Rest, {L + 1, 1});
-%step_location([_Ch | Rest], {L,C}) -> step_location(Rest, {L, C + 1}).
-
 %% Highlights the text between two locations (line and column) in a text.
 highlight_text(Pretty, StartLoc, EndLoc, Color) ->
     Lines = re:split(Pretty, "\\n", [{return, list}]),
@@ -150,7 +154,10 @@ highlight_text(Pretty, StartLoc, EndLoc, Color) ->
     HiLines1 = lists:dropwhile(fun ("") -> true; (_) -> false end, HiLines),
     [[Line, "\n"] || Line <- HiLines1].
 
-%% Highlights one line between 
+%% Highlights a line between two locations by returning a list of lines:
+%% If the line is highlighted, one highliged line and a marker line is
+%% returned. If a line is too far from the highlighted area, no lines are
+%% returned. Otherwise, a list containing the unchanged line is returned.
 -spec highlight_line(Line :: string(), LineNo :: erl_anno:line(),
                      Start :: erl_anno:location(), End :: erl_anno:location(),
                      Color :: boolean()) -> [string()].
@@ -162,16 +169,13 @@ highlight_line(Line, N, {L1, _}, {L2, _}, _Color) when N < L1; N > L2 ->
 highlight_line(Line, N, {N, C1}, {N, C2}, Color) ->
     %% Only this line highlighted, from C1 to C2
     color_and_mark_line(Line, C1, C2, Color);
-highlight_line(Line, N, {L1, C1}, {L2, _C2}, Color) when N == L1,
-                                                          N < L2 ->
+highlight_line(Line, N, {L1, C1}, {L2, _C2}, Color) when L1 == N, N < L2 ->
     %% First line
     color_and_mark_line(Line, C1, length(Line) + 1, Color);
-highlight_line(Line, N, {L1, _C1}, {L2, C2}, Color) when N > L1,
-                                                         N == L2 ->
+highlight_line(Line, N, {L1, _C1}, {L2, C2}, Color) when L1 < N, N == L2 ->
     %% Last line
     color_and_mark_line(Line, step_spaces(Line, 1), C2, Color);
-highlight_line(Line, N, {L1, _}, {L2, __}, Color) when N > L1,
-                                                       N < L2 ->
+highlight_line(Line, N, {L1, _}, {L2, __}, Color) when L1 < N, N < L2 ->
     %% Internal line
     color_and_mark_line(Line, step_spaces(Line, 1), length(Line) + 1, Color).
 
@@ -199,35 +203,26 @@ color_and_mark_line(Line, C1, C2, Color) ->
     [Pre ++ ColorText ++ Mid ++ ColorEnd ++ Post,
      blank(Pre) ++ ColorMarker ++ lists:duplicate(C2 - C1, ?marker_char) ++ ColorEnd].
 
-%% Finds a node in an AST and return its corresponding node in another AST,
-%% along with its next neighbour in the new AST. The AST is searched in
-%% depth first order.
--spec find_in_asts(OldNode, OldAst, NewAst, State) -> {found, NewNode, NewNeighbour} |
-                                                      {found, NewNode} |
-                                                      not_found
+%% Finds a node in an AST and return its corresponding node in another AST.
+%% The AST is searched in depth first order.
+-spec find_in_asts(OldNode, OldAst, NewAst) -> {found, NewNode} | not_found
         when OldNode      :: erl_parse_tree(),
              OldAst       :: erl_parse_tree() | [erl_parse_tree()],
              NewAst       :: erl_parse_tree() | [erl_parse_tree()],
-             State        :: not_found | {found, NewNode},
-             NewNode      :: erl_parse_tree(),
-             NewNeighbour :: erl_parse_tree().
-find_in_asts(_OldNode, [], [], State) ->
-    State;
-find_in_asts(OldNode, [X|Xs], [Y|Ys], not_found) ->
-	case find_in_asts(OldNode, X, Y, not_found) of
-		{found, _, _} = Found -> Found;
-	    NewState              -> find_in_asts(OldNode, Xs, Ys, NewState)
+             NewNode      :: erl_parse_tree().
+find_in_asts(_OldNode, [], []) ->
+    not_found;
+find_in_asts(OldNode, [X|Xs], [Y|Ys]) ->
+	case find_in_asts(OldNode, X, Y) of
+		{found, _} = Found -> Found;
+	    not_found          -> find_in_asts(OldNode, Xs, Ys)
 	end;
-find_in_asts(_OldNode, [_X|_Xs], [Y|_Ys], {found, NewNode}) ->
-    {found, NewNode, Y}; % Found the neighour!
-find_in_asts(OldNode, OldNode, NewNode, not_found) ->
+find_in_asts(OldNode, OldNode, NewNode) ->
     {found, NewNode}; % Found the node!
-find_in_asts(_OldNode, _OldNeighbour, NewNeighbour, {found, NewNode}) ->
-    {found, NewNode, NewNeighbour}; % Found the neighbour!
-find_in_asts(OldNode, OldAst, NewAst, State) when is_tuple(OldAst),
-                                                  is_tuple(NewAst) ->
+find_in_asts(OldNode, OldAst, NewAst) when is_tuple(OldAst),
+                                           is_tuple(NewAst) ->
     [_TagX, _AnnoX | Xs] = tuple_to_list(OldAst),
     [_TagY, _AnnoY | Ys] = tuple_to_list(NewAst),
-    find_in_asts(OldNode, Xs, Ys, State);
-find_in_asts(_OldNode, _OldAst, _NewAst, not_found) ->
+    find_in_asts(OldNode, Xs, Ys);
+find_in_asts(_OldNode, _OldAst, _NewAst) ->
     not_found. % mismatch
