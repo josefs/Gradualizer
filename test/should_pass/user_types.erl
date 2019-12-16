@@ -3,8 +3,10 @@
 -export([f/1]).
 
 %% these exported types are used in remote_types module
--export_type([my_tuple/0, my_list/0, my_union/0, my_opaque/0]).
+-export_type([my_tuple/0, my_list/0, my_union/0, my_opaque/0, my_empty_record/0]).
 
+-record(r, {}).
+-type my_empty_record() :: #r{}.
 -type my_atom() :: atom().
 -type my_tuple() :: {my_atom(), integer()}.
 -type my_list() :: list(my_atom()).
