@@ -2878,7 +2878,7 @@ update_map_type({type, P, map, Assocs}, AssocTys) ->
     UpdatedAssocs = update_assocs(AssocTys,
                                   lists:map(fun typelib:remove_pos/1, Assocs)),
     {type, P, map, UpdatedAssocs};
-update_map_type({var, _, _TyVar}, _AssocTys) ->
+update_map_type({var, _, _Var}, _AssocTys) ->
     type(any).
 
 %% Override existing key's value types and append those key types
