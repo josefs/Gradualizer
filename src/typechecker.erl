@@ -2181,16 +2181,16 @@ do_type_check_expr_in(Env, ResTy, {tuple, _, TS} = Tup) ->
     end;
 
 %% Maps
-do_type_check_expr_in(Env, ResTy, {map, _, Assocs} = Map) ->
+do_type_check_expr_in(Env, ResTy, {map, _, Assocs} = MapCreation) ->
     {AssocTys, VBs, Cs2} = type_check_assocs(Env, Assocs),
-    _MapTy = update_map_type(type(map, any), AssocTys),
-    case subtype(type(map, any), ResTy, Env#env.tenv) of
+    MapTy = update_map_type(type(map, []), AssocTys),
+    case subtype(MapTy, ResTy, Env#env.tenv) of
         {true, Cs1} ->
             {VBs, constraints:combine(Cs1, Cs2)};
         false ->
-            throw({type_error, Map, type(map,any), ResTy})
+            throw({type_error, MapCreation, MapTy, ResTy})
     end;
-do_type_check_expr_in(Env, ResTy, {map, _, Expr, Assocs} = Map) ->
+do_type_check_expr_in(Env, ResTy, {map, _, Expr, Assocs} = MapUpdate) ->
     {Ty, VBExpr, Cs1} = type_check_expr(Env, Expr),
     {AssocTys, VBAssocs, Cs2} = type_check_assocs(Env, Assocs),
     UpdatedTy = update_map_type(Ty, AssocTys),
@@ -2199,7 +2199,7 @@ do_type_check_expr_in(Env, ResTy, {map, _, Expr, Assocs} = Map) ->
             {union_var_binds(VBExpr, VBAssocs, Env#env.tenv),
              constraints:combine([Cs1, Cs2, Cs3])};
         false ->
-            throw({type_error, Map, UpdatedTy, ResTy})
+            throw({type_error, MapUpdate, UpdatedTy, ResTy})
     end;
 
 %% Records
