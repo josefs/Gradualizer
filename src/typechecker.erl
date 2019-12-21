@@ -51,6 +51,9 @@
 -define(type(T, A), {type, _, T, A}).
 -define(top(), {remote_type, _, [{atom,_,gradualizer}
 				,{atom,_,top},[]]}).
+-define(record_field(Name), {record_field, _, {atom, _, Name}, _}).
+-define(typed_record_field(Name), {typed_record_field, ?record_field(Name), _}).
+-define(typed_record_field(Name, Type), {typed_record_field, ?record_field(Name), Type}).
 
 %% Data collected from epp parse tree
 -record(parsedata, {
@@ -238,6 +241,12 @@ compat_ty({type, P1, record, [{atom, _, Name}]},
     Fields2 = get_maybe_remote_record_fields(Name, P2, TEnv),
     compat_record_fields(Fields1, Fields2, A, TEnv);
 
+%% Records that have been refined on one side or the other
+compat_ty({type, Anno1, record, [{atom, _, Name}|Fields1]},
+          {type, Anno2, record, [{atom, _, Name}|Fields2]}, A, TEnv) ->
+    AllFields1 = case Fields1 of [] -> get_record_fields_types(Name, Anno1, TEnv); _ -> Fields1 end,
+    AllFields2 = case Fields2 of [] -> get_record_fields_types(Name, Anno2, TEnv); _ -> Fields2 end,
+    compat_record_tys(AllFields1, AllFields2, A, TEnv);
 compat_ty({type, _, record, _}, {type, _, tuple, any}, A, _TEnv) ->
     ret(A);
 
@@ -296,6 +305,17 @@ compat_tys([Ty1|Tys1], [Ty2|Tys2], A, TEnv) ->
     {Aps, Css} = compat_tys(Tys1, Tys2, Ap, TEnv),
     {Aps, constraints:combine(Cs, Css)};
 compat_tys(_Tys1, _Tys2, _, _) ->
+    throw(nomatch).
+
+
+compat_record_tys([], [], A, _TEnv) ->
+    ret(A);
+compat_record_tys([Field1|Fields1], [Field2|Fields2], A, TEnv) ->
+    {A1, Cs1} = compat(Field1, Field2, A, TEnv),
+    {A2, Cs2} = compat_record_tys(Fields1, Fields2, A1, TEnv),
+    {A2, constraints:combine(Cs1, Cs2)};
+compat_record_tys(_, _, _, _) ->
+    %% Mismatching number of fields
     throw(nomatch).
 
 %% Two records are compatible if they have the same name (defined in different
@@ -596,6 +616,9 @@ glb_ty(_Ty1, _Ty2, _A, _TEnv) -> {type(none), constraints:empty()}.
 %% * Replace built-in type synonyms
 %% * Flatten unions and merge overlapping types (e.g. ranges) in unions
 -spec normalize(type(), TEnv :: #tenv{}) -> type().
+normalize({type, _, record, [{atom, _, Name}|Fields]}, TEnv) when length(Fields) > 0 ->
+    NormFields = [normalize(Field, TEnv) || Field <- Fields],
+    type_record(Name, NormFields);
 normalize({type, _, union, Tys}, TEnv) ->
     Types = flatten_unions(Tys, TEnv),
     case merge_union_types(Types, TEnv) of
@@ -1115,33 +1138,75 @@ expect_fun_type_union(Env, [Ty|Tys]) ->
             [TyOut | expect_fun_type_union(Env, Tys)]
     end.
 
-expect_record_type(Record, {type, _, record, [{atom, _, Name}]}, _TEnv) ->
-    if Record == Name ->
-         {ok, constraints:empty()};
-       true ->
-         type_error
+-spec expect_record_type(type(), atom(), #tenv{}) -> Any | FieldsTy | FieldsTys | TypeError when
+    Any :: any,
+    FieldsTy :: {fields_ty, [typed_record_field()], constraints:constraints()},
+    FieldsTys :: {fields_tys, [[typed_record_field()]], constraints:constraints()},
+    TypeError :: {type_error, type()}.
+expect_record_type({user_type, _, record, []}, _Record, _TEnv) ->
+    any;
+expect_record_type({type, _, record, [{atom, _, Name}|RefinedTypes]}, Record, #tenv{records = REnv}) when Name =:= Record ->
+    case REnv of
+        #{Record := Fields} ->
+            Tys =
+                case RefinedTypes of
+                    [] -> Fields;
+                    _ ->
+                        [ {typed_record_field, RecordField, RefinedType}
+                        || {{typed_record_field, RecordField, _}, RefinedType} <- lists:zip(Fields, RefinedTypes)]
+                end,
+            {fields_ty, Tys, constraints:empty()};
+        _NotFound ->
+            {type_error, Record}
     end;
-expect_record_type(_Record, {type, _, tuple, any}, _TEnv) ->
-    {ok, constraints:empty()};
-expect_record_type(_Record, ?top(), _TEnv) ->
-    {ok, constraints:empty()};
-expect_record_type(Record, {type, _, union, Tys}, TEnv) ->
-    expect_record_union(Record, Tys, TEnv);
-expect_record_type(Record, {var, _, Var}, _TEnv) ->
-    {ok, constraints:add_var(Var,
-           constraints:upper(Var, type_record(Record)))};
-expect_record_type(_, _, _) ->
-    type_error.
+expect_record_type(?top() = _TermTy, _Record, _TEnv) ->
+    any;
+expect_record_type(Union = {type, _, union, UnionTys}, Record, TEnv) ->
+    {Tyss, Cs} =
+        expect_record_union(UnionTys, [], constraints:empty(), no_any, Record, TEnv),
+    case Tyss of
+        Record ->
+            %% expect_record_union failed in every cases
+            {type_error, Union};
+        [] ->
+            {type_error, Union};
+        [Tys] ->
+            {fields_ty, Tys, Cs};
+        _ ->
+            {fields_tys, Tyss, Cs}
+    end;
+expect_record_type({var, _, Var}, Record, #tenv{records = REnv}) ->
+%%    Not sure how to make this work
+%%    TyVar = new_type_var(),
+%%    {fields_ty
+%%        ,{var, erl_anno:new(0), TyVar}
+%%        ,constraints:add_var(Var,
+%%            constraints:upper(Var, type_record(Record)))
+%%    };
+    case REnv of
+        #{Record := Fields} ->
+            {fields_ty, Fields, constraints:empty()};
+        _NotFound ->
+            {type_error, Record}
+    end;
+expect_record_type(_, Ty, _) ->
+    {type_error, Ty}.
 
-expect_record_union(Record, [Ty | Tys], TEnv) ->
-    case expect_record_type(Record, Ty, TEnv) of
-      type_error ->
-        expect_record_union(Record, Tys, TEnv);
-      Res ->
-        Res
+expect_record_union([Ty | Tys], AccTy, AccCs, Any, Record, TEnv) ->
+    case expect_record_type(Ty, Record, TEnv) of
+        {type_error, _} ->
+            expect_record_union(Tys, AccTy, AccCs, Any, Record, TEnv);
+        any ->
+            expect_record_union(Tys, AccTy, AccCs, any, Record, TEnv);
+        {fields_ty, TTy, Cs} ->
+            expect_record_union(Tys, [TTy | AccTy], constraints:combine(Cs, AccCs), Any, Record, TEnv);
+        {fields_tys, TTys, Cs} ->
+            expect_record_union(Tys, TTys ++ AccTy, constraints:combine(Cs, AccCs), Any, Record, TEnv)
     end;
-expect_record_union(_Record, [], _TEnv) ->
-    type_error.
+expect_record_union([], AccTy, AccCs, any, _Record, _TEnv) ->
+    {[ type(any) | AccTy], AccCs};
+expect_record_union([], AccTy, AccCs, _NoAny, _Record, _TEnv) ->
+    {AccTy, AccCs}.
 
 -spec new_type_var() -> constraints:var().
 new_type_var() ->
@@ -2087,49 +2152,84 @@ do_type_check_expr_in(Env, ResTy, {map, _, Expr, Assocs} = MapUpdate) ->
 
 %% Records
 do_type_check_expr_in(Env, ResTy, {record, Anno, Name, Fields} = Record) ->
-    Rec = get_record_fields(Name, Anno, Env#env.tenv),
-    case expect_record_type(Name, ResTy, Env#env.tenv) of
-      type_error ->
+    case expect_record_type(ResTy, Name, Env#env.tenv) of
+        {fields_ty, Rec, Cs1} ->
+            {VarBinds, Cs2} = type_check_fields(Env, Rec, Fields),
+            {VarBinds, constraints:combine(Cs1, Cs2)};
+        {fields_tys, Tyss, Cs1} ->
+            todo;
+        any ->
+            Rec = get_record_fields(Name, Anno, Env#env.tenv),
+            type_check_fields(Env, Rec, Fields);
+        {type_error, _} ->
             throw({type_error,
                    Record,
                    type(record, [{atom, erl_anno:new(0), Name}]),
-                   ResTy});
-      {ok, Cs1} ->
-            {VarBinds, Cs2} = type_check_fields(Env, Rec, Fields),
-            {VarBinds, constraints:combine(Cs1, Cs2)}
+                   ResTy})
     end;
 do_type_check_expr_in(Env, ResTy, {record, Anno, Exp, Name, Fields} = Record) ->
-    RecordTy = {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Name}]},
-    case expect_record_type(Name, ResTy, Env#env.tenv) of
-      type_error ->
-        throw({type_error,
-               Record,
-               type(record, [{atom, erl_anno:new(0), Name}]),
-               ResTy});
-      {ok, Cs1} ->
-            Rec = get_record_fields(Name, Anno, Env#env.tenv),
+    case expect_record_type(ResTy, Name, Env#env.tenv) of
+        {fields_ty, Rec, Cs1} ->
             {VarBindsList, Css}
                 = lists:unzip(
-                    lists:map(fun ({record_field, _, FieldWithAnno, Expr}) ->
-                                      FieldTy = get_rec_field_type(FieldWithAnno, Rec),
-                                      type_check_expr_in(Env, FieldTy, Expr)
-                              end
-                             ,Fields)
-                   ),
+                lists:map(fun ({record_field, _, FieldWithAnno, Expr}) ->
+                    FieldTy = get_rec_field_type(FieldWithAnno, Rec),
+                    type_check_expr_in(Env, FieldTy, Expr)
+                          end
+                    ,Fields)
+            ),
+            RecordTy = type_record(Name, [Type || {_, _, Type} <- Rec]),
             {VarBinds, Cs2} = type_check_expr_in(Env, RecordTy, Exp),
             {union_var_binds([VarBinds|VarBindsList], Env#env.tenv)
-            ,constraints:combine([Cs1, Cs2|Css])}
+                ,constraints:combine([Cs1, Cs2|Css])};
+        {fields_tys, Tyss, Cs1} ->
+            case type_check_record_union_in(Env, Tyss, Fields) of
+                none ->
+                    {Ty, _VB, _Cs} = type_check_expr(Env#env{infer = true}, Record),
+                    throw({type_error, Record, Ty, ResTy});
+                {VBs, Cs2} ->
+                    {union_var_binds(VBs, Env#env.tenv), constraints:combine(Cs1, Cs2)}
+            end;
+        any ->
+            Rec = get_record_fields(Name, Anno, Env#env.tenv),
+            type_check_fields(Env, Rec, Fields);
+        {type_error, _} ->
+            throw({type_error,
+                   Record,
+                   type(record, [{atom, erl_anno:new(0), Name}]),
+                   ResTy})
     end;
 do_type_check_expr_in(Env, ResTy, {record_field, Anno, Expr, Name, FieldWithAnno} = RecordField) ->
-    Rec = get_record_fields(Name, Anno, Env#env.tenv),
-    FieldTy = get_rec_field_type(FieldWithAnno, Rec),
-    case subtype(FieldTy, ResTy, Env#env.tenv) of
+    RecFields = get_record_fields(Name, Anno, Env#env.tenv),
+    {FieldIndex, FieldTy} = get_rec_field_index_and_type(FieldWithAnno, RecFields, 2),
+    {RecTy, RefinedFieldTy} =
+        case Expr of
+            {var, P, Var} ->
+                case Env#env.venv of
+                    #{Var := VarType} ->
+                        case VarType of
+                            {type, _, record, [{atom, _, Name}]} ->
+                                {VarType, FieldTy};
+                            {type, _, record, [{atom, _, Name}|RefinedFields]} ->
+                                {VarType, lists:nth(FieldIndex-1, RefinedFields)};
+                            {var, _, _} ->
+                                {type_record(Name), FieldTy};
+                            ?type(any) ->
+                                {type_record(Name), FieldTy};
+                            _ ->
+                                throw({type_error, mismatch, type_record(Name), Expr})
+                        end;
+                    _ ->
+                        throw({unknown_variable, P, Var})
+                end;
+            _ -> {type_record(Name), FieldTy}
+        end,
+    case subtype(RefinedFieldTy, ResTy, Env#env.tenv) of
         {true, Cs1} ->
-            RecTy = {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Name}]},
             {VarBinds, Cs2} = type_check_expr_in(Env, RecTy, Expr),
             {VarBinds, constraints:combine([Cs1,Cs2])};
         false ->
-            throw({type_error, RecordField, FieldTy, ResTy})
+            throw({type_error, RecordField, RefinedFieldTy, ResTy})
     end;
 do_type_check_expr_in(Env, ResTy, {record_index, Anno, Name, FieldWithAnno} = RecIndex) ->
     RecFields = get_record_fields(Name, Anno, Env#env.tenv),
@@ -2929,6 +3029,16 @@ type_check_tuple_union_in(Env, [Tys|Tyss], Elems) ->
 type_check_tuple_union_in(_Env, [], _Elems) ->
     none.
 
+type_check_record_union_in(Env, [Tys|Tyss], Fields) ->
+    try
+        type_check_fields(Env, Tys, Fields)
+    catch
+        E when element(1,E) == type_error ->
+            type_check_record_union_in(Env, Tyss, Fields)
+    end;
+type_check_record_union_in(_Env, [], _Fields) ->
+    none.
+
 type_check_cons_in(Env, Ty = {type, _, List, []}, H, T)
   when List == list orelse List == nonempty_list ->
     {_Ty, VB1, Cs1} = type_check_expr(Env, H),
@@ -3208,6 +3318,13 @@ refine(OrigTy, Ty, TEnv) ->
         RefTy  -> RefTy
     end.
 
+get_record_fields_types(Name, Anno, TEnv) ->
+    RecordFields = get_maybe_remote_record_fields(Name, Anno, TEnv),
+    [Type || ?typed_record_field(_, Type) <- RecordFields].
+
+expand_record(Name, Anno, TEnv) ->
+    type_record(Name, get_record_fields_types(Name, Anno, TEnv)).
+
 %% May throw no_refinement.
 refine_ty(_Ty, ?type(none), _TEnv) ->
     %% PatTy none() means the pattern can't be used for refinement,
@@ -3215,6 +3332,19 @@ refine_ty(_Ty, ?type(none), _TEnv) ->
     throw(no_refinement);
 refine_ty(?type(T, A), ?type(T, A), _) ->
     type(none);
+refine_ty(?type(record, [{atom, _, Name}]), ?type(record, [{atom, _, Name}]), _) ->
+    type(none);
+refine_ty(?type(record, [{atom, Anno, Name}]), Refined = ?type(record, [{atom, _, Name} | _]), TEnv) ->
+    refine_ty(expand_record(Name, Anno, TEnv), Refined, TEnv);
+refine_ty(?type(record, [{atom, _, Name} | _]), ?type(record, [{atom, _, Name}]), _TEnv) ->
+    type(none);
+refine_ty(?type(record, [Name|Tys1]), ?type(record, [Name|Tys2]), TEnv)
+  when length(Tys1) > 0, length(Tys1) == length(Tys2) ->
+    % Record without just the name
+    RefTys = [refine(Ty1, Ty2, TEnv) || {Ty1, Ty2} <- lists:zip(Tys1, Tys2)],
+    RecordsElems = pick_one_refinement_each(Tys1, RefTys),
+    Records = [type(record, [Name|RecordElems]) || RecordElems <- RecordsElems],
+    normalize(type(union, Records), TEnv);
 refine_ty(?type(union, UnionTys), Ty, TEnv) ->
     RefTys = lists:foldr(fun (UnionTy, Acc) ->
                              try refine(UnionTy, Ty, TEnv) of
@@ -3702,12 +3832,23 @@ add_type_pat({bin, _P, BinElements} = Bin, Ty, TEnv, VEnv) ->
                     BinElements),
     {type(none), BinTy, NewVEnv, Cs};
 add_type_pat({record, P, Record, Fields}, Ty, TEnv, VEnv) ->
-    case expect_record_type(Record, Ty, TEnv) of
-        type_error -> throw({type_error, record_pattern, P, Record, Ty});
-        {ok, Cs1} ->
-            {VEnv2, Cs2} = add_type_pat_fields(Fields, Record, TEnv, VEnv),
-            RecTy = {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Record}]},
-            {type(none), RecTy, VEnv2, constraints:combine(Cs1, Cs2)}
+    case expect_record_type(Ty, Record, TEnv) of
+        any ->
+            %% FIXME: If record() is used and we try to bind, every field types
+            %% - should be any(). add_any_types_pat won't work, will need a
+            %% - add_any_type_pat_fields
+            {type(none)
+                ,Ty
+                ,union_var_binds([add_any_types_pat(Field, VEnv) || Field <- Fields], TEnv)
+                ,constraints:empty()};
+        {fields_ty, Tys, Cs} ->
+            {PatTys, UBounds, VEnv1, Cs1} = add_type_pat_fields(Fields, Tys, TEnv, VEnv),
+            {type_record(Record, PatTys)
+                ,type_record(Record, UBounds)
+                ,VEnv1
+                ,constraints:combine(Cs, Cs1)};
+        {type_error, _Type} ->
+            throw({type_error, record_pattern, P, Record, Ty})
     end;
 add_type_pat({map, _, _} = MapPat, {var, _, Var} = TyVar, _TEnv, VEnv) ->
     %% FIXME this is a quite rudimentary implementation
@@ -3792,23 +3933,41 @@ add_type_pat_literal(Pat, Ty, TEnv, VEnv) ->
             end
     end.
 
-add_type_pat_fields([], _, _TEnv, VEnv) ->
-    ret(VEnv);
-add_type_pat_fields([{record_field, Anno, {atom, _, _} = FieldWithAnno, Pat}|Fields],
-                    Record, TEnv, VEnv) ->
-    Rec = get_record_fields(Record, Anno, TEnv),
-    FieldTy = get_rec_field_type(FieldWithAnno, Rec),
-    {_TyPat, _UBound, VEnv2, Cs1} =
-        add_type_pat(Pat, normalize(FieldTy, TEnv), TEnv, VEnv),
-    {VEnv3, Cs2} = add_type_pat_fields(Fields, Record, TEnv, VEnv2),
-    {VEnv3, constraints:combine(Cs1, Cs2)};
-add_type_pat_fields([{record_field, _, {var, _, '_'}, _Pat}|Fields],
-                    Record, TEnv, VEnv) ->
-    %% TODO check Pat against type of unassigned fields
-    {VEnv2, Cs1} = {VEnv, constraints:empty()},
+find_field_or_create([], Name, Default) -> {record_field, erl_anno:new(0), {atom, erl_anno:new(0), Name}, Default};
+find_field_or_create([Field = ?record_field(Name)|_], Name, _Default) -> Field;
+find_field_or_create([_|Fields], Name, Default) -> find_field_or_create(Fields, Name, Default).
 
-    {VEnv3, Cs2} = add_type_pat_fields(Fields, Record, TEnv, VEnv2),
-    {VEnv3, constraints:combine(Cs1, Cs2)}.
+find_field_default([]) -> {var, erl_anno:new(0), '_'};
+find_field_default([{record_field, _, {var, _, '_'}, Exp}|_]) -> Exp;
+find_field_default([_|Fields]) -> find_field_default(Fields).
+
+add_type_pat_fields([], _, _TEnv, VEnv) ->
+    {[], [], VEnv, constraints:empty()};
+add_type_pat_fields(Fields, Tys, TEnv, VEnv) ->
+    %% Add every missing fields
+    %% If an underscore field is present: use that expression as the default expression
+    %% Otherwise, give an empty assignment of the field to underscore
+    Default = find_field_default(Fields),
+    AllFields = [ find_field_or_create(Fields, Name, Default) || ?typed_record_field(Name) <- Tys],
+    add_type_pat_fields(AllFields, Tys, TEnv, VEnv, [], [], []).
+
+add_type_pat_fields([], _, _TEnv, VEnv, PatTysAcc, UBoundsAcc, CsAcc) ->
+    {lists:reverse(PatTysAcc), lists:reverse(UBoundsAcc),
+     VEnv, constraints:combine(CsAcc)};
+add_type_pat_fields([{record_field, _, {atom, _, _} = FieldWithAnno, Pat}|Fields],
+                    Record, TEnv, VEnv, PatTysAcc, UBoundsAcc, CsAcc) ->
+    Ty = get_rec_field_type(FieldWithAnno, Record),
+    NormTy = normalize(Ty, TEnv),
+    {PatTyNorm, UBoundNorm, VEnv2, Cs1} =
+        ?throw_orig_type(add_type_pat(Pat, NormTy, TEnv, VEnv),
+                         Ty, NormTy),
+    %% De-normalize the returned types if they are the type checked against.
+    PatTy  = case PatTyNorm  of NormTy -> Ty;
+                 _      -> PatTyNorm end,
+    UBound = case UBoundNorm of NormTy -> Ty;
+                 _      -> UBoundNorm end,
+    add_type_pat_fields(Fields, Record, TEnv, VEnv2,
+                        [PatTy|PatTysAcc], [UBound|UBoundsAcc], [Cs1|CsAcc]).
 
 %% Given a pattern for a key, finds the matching association in the map type and
 %% returns the value type. Returns 'error' if the key is not valid in the map.
@@ -4053,7 +4212,10 @@ type_var(Name) ->
     {var, erl_anno:new(0), Name}.
 
 type_record(Name) ->
-    {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Name}]}.
+    type_record(Name, []).
+
+type_record(Name, Fields) ->
+    {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Name} | Fields]}.
 
 type_fun(Arity) ->
     Args = [{type, erl_anno:new(0), any, []} || _ <- lists:seq(1, Arity)],
