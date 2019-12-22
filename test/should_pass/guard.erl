@@ -64,7 +64,3 @@ function(_) -> not_function.
 -spec record(term()) -> #r{} | not_r.
 record(R) when is_record(R, r) -> R;
 record(_) -> not_r.
-
--spec complex(term()) -> binary() | integer() | not_binary_or_integer.
-complex(X) when is_binary(X) orelse is_integer(X) -> X;
-complex(_) -> not_binary_or_integer.
