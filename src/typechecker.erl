@@ -331,6 +331,7 @@ all_type(Tys, Ty, A, TEnv) ->
 all_type([], _Ty, A, Css, _TEnv) ->
     {A, constraints:combine(Css)};
 all_type([Ty1|Tys], Ty, AIn, Css, TEnv) ->
+    %% TODO: call compat/4 instead of compat_ty/4 here?
     {AOut, Cs} = compat_ty(Ty1, Ty, AIn, TEnv),
     all_type(Tys, Ty, AOut, [Cs|Css], TEnv).
 
