@@ -2184,6 +2184,10 @@ do_type_check_expr_in(Env, ResTy, {tuple, _, TS} = Tup) ->
 %% Maps
 do_type_check_expr_in(Env, ResTy, {map, _, Assocs} = MapCreation) ->
     {AssocTys, VBs, Cs2} = type_check_assocs(Env, Assocs),
+    %% We know that the exact type can be fully determined from `MapCreation' expression.
+    %% We start from an empty map (`type(map, [])') and use `AssocTys' to build the complete type.
+    %% The inferred type will have only non-optional associations (as the fields are already there
+    %% when we build the map).
     MapTy = update_map_type(type(map, []), AssocTys),
     case subtype(MapTy, ResTy, Env#env.tenv) of
         {true, Cs1} ->
@@ -2876,6 +2880,9 @@ update_map_type({type, _, Ty, Arg}, AssocTys)
          ++ [type(map_field_assoc, [type(any), type(any)])]
         );
 update_map_type({type, P, map, Assocs}, AssocTys) ->
+    %% `AssocTys' come from a map creation or map update expr - after the expr is evaluated the map
+    %% will contain the associations. Therefore in the resulting map type they
+    %% cannot be optional - we rewrite optional assocs to non-optional ones.
     UpdatedAssocs = update_assocs(AssocTys,
                                   lists:map(fun typelib:remove_pos/1, Assocs)),
     {type, P, map, UpdatedAssocs}.
