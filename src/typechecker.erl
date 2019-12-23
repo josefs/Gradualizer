@@ -2866,19 +2866,16 @@ update_map_type({ann_type, _, [_, Ty]}, AssocTys) ->
     %% FIXME we really should get rid of `ann_type's right in the
     %% begining or during normalization.
     update_map_type(Ty, AssocTys);
-update_map_type({type, _, Ty, Arg}, AssocTys)
+update_map_type({type, P, Ty, Arg}, AssocTys)
     when Ty == map, Arg == any;
-	 Ty == any, Arg == []
-	 ->
-    type(map, [{type, P, map_field_exact, [Key, ValueType]}
-	       || {type, P, _Assoc, [Key, ValueType]} <- AssocTys ]
-         %% the original type could have any keys
-         %% so we also need to include and optional any() => any()
-         %% in the updated map type
-         %% (map key types can be overlapping, precedence is left to right,
-         %%  so let's append it as the last entry)
-         ++ [type(map_field_assoc, [type(any), type(any)])]
-        );
+	 Ty == any, Arg == [] ->
+    %% The original type could have any keys
+    %% so we also need to include an optional any() => any() association
+    %% in the updated map type.
+    %% Map key types can be overlapping, precedence is left to right,
+    %% so let's append it as the last entry.
+    UpdatedAssocs = update_assocs(AssocTys, []) ++ [type(map_field_assoc, [type(any), type(any)])],
+    {type, P, map, UpdatedAssocs};
 update_map_type({type, P, map, Assocs}, AssocTys) ->
     %% `AssocTys' come from a map creation or map update expr - after the expr is evaluated the map
     %% will contain the associations. Therefore in the resulting map type they
