@@ -69,3 +69,7 @@ record(_) -> not_r.
 multiple(I) when is_integer(I) -> I;
 multiple(F) when is_float(F) -> F;
 multiple(_) -> not_number.
+
+-spec multiple2(term()) -> integer() | float() | not_number.
+multiple2(N) when is_integer(N) orelse is_float(N) -> N;
+multiple2(_) -> not_number.
