@@ -64,3 +64,8 @@ function(_) -> not_function.
 -spec record(term()) -> #r{} | not_r.
 record(R) when is_record(R, r) -> R;
 record(_) -> not_r.
+
+-spec multiple(term()) -> integer() | float() | not_number.
+multiple(I) when is_integer(I) -> I;
+multiple(F) when is_float(F) -> F;
+multiple(_) -> not_number.
