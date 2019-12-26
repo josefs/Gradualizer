@@ -3474,6 +3474,8 @@ check_guard(_Env, {call, P, {atom, _, Fun}, Vars}) ->
     check_guard_call(P, Fun, Vars);
 check_guard(_Env, {call, P, {remote,_,_,{atom, _, Fun}}, Vars}) ->
     check_guard_call(P, Fun, Vars);
+check_guard(Env, {op, _OrElseAnno, 'orelse', Call1, Call2}) ->
+    union_var_binds([check_guard(Env, Call1), check_guard(Env, Call2)], Env#env.tenv);
 check_guard(Env, Guard) ->
     {_Ty, VB, _Cs} = type_check_expr(Env, Guard), % Do we need to thread the Env?
     VB.
