@@ -275,8 +275,8 @@ compat_ty({type, _, AssocTag2, [Key2, Val2]},
              AssocTag2 == map_field_exact, AssocTag1 == map_field_exact;
              AssocTag2 == map_field_assoc, AssocTag1 == map_field_exact ->
     %% For M1 <: M2, mandatory fields in M2 must be mandatory fields in M1
-    {A1, Cs1} = compat_ty(Key1, Key2, A, TEnv),
-    {A2, Cs2} = compat_ty(Val1, Val2, A1, TEnv),
+    {A1, Cs1} = compat(Key1, Key2, A, TEnv),
+    {A2, Cs2} = compat(Val1, Val2, A1, TEnv),
     {A2, constraints:combine(Cs1, Cs2)};
 
 compat_ty(_Ty1, _Ty2, _, _) ->
@@ -331,6 +331,7 @@ all_type(Tys, Ty, A, TEnv) ->
 all_type([], _Ty, A, Css, _TEnv) ->
     {A, constraints:combine(Css)};
 all_type([Ty1|Tys], Ty, AIn, Css, TEnv) ->
+    %% TODO: call compat/4 instead of compat_ty/4 here?
     {AOut, Cs} = compat_ty(Ty1, Ty, AIn, TEnv),
     all_type(Tys, Ty, AOut, [Cs|Css], TEnv).
 
@@ -2181,16 +2182,20 @@ do_type_check_expr_in(Env, ResTy, {tuple, _, TS} = Tup) ->
     end;
 
 %% Maps
-do_type_check_expr_in(Env, ResTy, {map, _, Assocs} = Map) ->
+do_type_check_expr_in(Env, ResTy, {map, _, Assocs} = MapCreation) ->
     {AssocTys, VBs, Cs2} = type_check_assocs(Env, Assocs),
-    _MapTy = update_map_type(type(map, any), AssocTys),
-    case subtype(type(map, any), ResTy, Env#env.tenv) of
+    %% We know that the exact type can be fully determined from `MapCreation' expression.
+    %% We start from an empty map (`type(map, [])') and use `AssocTys' to build the complete type.
+    %% The inferred type will have only non-optional associations (as the fields are already there
+    %% when we build the map).
+    MapTy = update_map_type(type(map, []), AssocTys),
+    case subtype(MapTy, ResTy, Env#env.tenv) of
         {true, Cs1} ->
             {VBs, constraints:combine(Cs1, Cs2)};
         false ->
-            throw({type_error, Map, type(map,any), ResTy})
+            throw({type_error, MapCreation, MapTy, ResTy})
     end;
-do_type_check_expr_in(Env, ResTy, {map, _, Expr, Assocs} = Map) ->
+do_type_check_expr_in(Env, ResTy, {map, _, Expr, Assocs} = MapUpdate) ->
     {Ty, VBExpr, Cs1} = type_check_expr(Env, Expr),
     {AssocTys, VBAssocs, Cs2} = type_check_assocs(Env, Assocs),
     UpdatedTy = update_map_type(Ty, AssocTys),
@@ -2199,7 +2204,7 @@ do_type_check_expr_in(Env, ResTy, {map, _, Expr, Assocs} = Map) ->
             {union_var_binds(VBExpr, VBAssocs, Env#env.tenv),
              constraints:combine([Cs1, Cs2, Cs3])};
         false ->
-            throw({type_error, Map, UpdatedTy, ResTy})
+            throw({type_error, MapUpdate, UpdatedTy, ResTy})
     end;
 
 %% Records
@@ -2861,20 +2866,20 @@ update_map_type({ann_type, _, [_, Ty]}, AssocTys) ->
     %% FIXME we really should get rid of `ann_type's right in the
     %% begining or during normalization.
     update_map_type(Ty, AssocTys);
-update_map_type({type, _, Ty, Arg}, AssocTys)
+update_map_type({type, P, Ty, Arg}, AssocTys)
     when Ty == map, Arg == any;
-	 Ty == any, Arg == []
-	 ->
-    type(map, [{type, P, map_field_exact, [Key, ValueType]}
-	       || {type, P, _Assoc, [Key, ValueType]} <- AssocTys ]
-         %% the original type could have any keys
-         %% so we also need to include and optional any() => any()
-         %% in the updated map type
-         %% (map key types can be overlapping, precedence is left to right,
-         %%  so let's append it as the last entry)
-         ++ [type(map_field_assoc, [type(any), type(any)])]
-        );
+	 Ty == any, Arg == [] ->
+    %% The original type could have any keys
+    %% so we also need to include an optional any() => any() association
+    %% in the updated map type.
+    %% Map key types can be overlapping, precedence is left to right,
+    %% so let's append it as the last entry.
+    UpdatedAssocs = update_assocs(AssocTys, []) ++ [type(map_field_assoc, [type(any), type(any)])],
+    {type, P, map, UpdatedAssocs};
 update_map_type({type, P, map, Assocs}, AssocTys) ->
+    %% `AssocTys' come from a map creation or map update expr - after the expr is evaluated the map
+    %% will contain the associations. Therefore in the resulting map type they
+    %% cannot be optional - we rewrite optional assocs to non-optional ones.
     UpdatedAssocs = update_assocs(AssocTys,
                                   lists:map(fun typelib:remove_pos/1, Assocs)),
     {type, P, map, UpdatedAssocs};
