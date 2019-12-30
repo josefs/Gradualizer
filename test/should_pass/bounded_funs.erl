@@ -2,7 +2,7 @@
 
 -export([calls/0, funs/0]).
 
--spec calls() -> term().
+-spec calls() -> gradualizer:top().
 calls() ->
     V1 = g(myatom),
     V2 = ets:lookup_element(myatom, asd, 2),

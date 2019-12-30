@@ -19,9 +19,9 @@ subtype_test_() ->
       fun setup_app/0,
       fun cleanup_app/1,
       [
-       %% Term and none
-       ?_assert(subtype(?t( sets:set()        ), ?t( term()           ))),
-       ?_assert(subtype(?t( none()            ), ?t( sets:set()       )))
+       %% Top and none
+       ?_assert(subtype(?t( sets:set()        ), ?t( gradualizer:top() ))),
+       ?_assert(subtype(?t( none()            ), ?t( sets:set()        )))
       ]},
 
      %% Integer
@@ -112,9 +112,9 @@ subtype_test_() ->
 
 not_subtype_test_() ->
     [
-     %% Term and none
-     ?_assert(subtype(?t( integer()         ), ?t( term()           ))),
-     ?_assert(subtype(?t( none()            ), ?t( integer()        ))),
+     %% Top and none
+     ?_assert(subtype(?t( integer()         ), ?t( gradualizer:top() ))),
+     ?_assert(subtype(?t( none()            ), ?t( integer()         ))),
 
      %% Numeric
      ?_assertNot(subtype(?t( 1              ), ?t( 2                ))),
@@ -164,13 +164,13 @@ not_subtype_test_() ->
 
 glb_test_() ->
 
-    Ts = [ ?t(any()), ?t(none()), ?t(term()), ?t(tuple()), ?t(atom) ],
+    Ts = [ ?t(any()), ?t(none()), ?t(gradualizer:top()), ?t(tuple()), ?t(atom) ],
 
     [
      %% any()
-     [ ?glb( ?t(any()),  T, ?t(any()) )  || T <- Ts ],
-     [ ?glb( ?t(term()), T, T)           || T <- Ts ],
-     [ ?glb( ?t(none()), T, ?t(none()) ) || T <- Ts, T /= ?t(any()) ],
+     [ ?glb( ?t(any()),  T, ?t(any()) )   || T <- Ts ],
+     [ ?glb( ?t(gradualizer:top()), T, T) || T <- Ts ],
+     [ ?glb( ?t(none()), T, ?t(none()) )  || T <- Ts, T /= ?t(any()) ],
 
      %% Integer types
      ?glb( ?t(-5..10), ?t(2..3 | 5..15), ?t(2..3 | 5..10) ),
@@ -182,7 +182,7 @@ glb_test_() ->
      ?glb( ?t(b),     ?t(a | b),  ?t(b) ),
 
      %% Lists
-     [ ?glb( ?t(maybe_improper_list(term(), term())), T, deep_normalize(T) ) ||
+     [ ?glb( ?t(maybe_improper_list(gradualizer:top(), gradualizer:top())), T, deep_normalize(T) ) ||
         T <- [ ?t([]), ?t([integer()]), ?t(list()),
                ?t([atom, ...]),
                ?t(maybe_improper_list(tuple(), _)),
@@ -447,11 +447,11 @@ type_check_call_test_() ->
                                    "f() -> g().",
                                    "-spec g() -> number()."])),
      %% Passing an incompatible type to a spec'ed function
-     ?_assertNot(type_check_forms(["-spec int_term() -> term().",
-                                   "int_term() -> 5.",
+     ?_assertNot(type_check_forms(["-spec int_top() -> gradualier:top().",
+                                   "int_top() -> 5.",
                                    "-spec int_arg(integer()) -> integer().",
                                    "int_arg(I) -> I + 1.",
-                                   "f() -> int_arg(int_term())."]))
+                                   "f() -> int_arg(int_top())."]))
     ].
 
 type_check_fun_test_() ->
@@ -484,46 +484,46 @@ type_check_fun_test_() ->
 
 type_check_clause_test_() ->
     [%% Basic `if' test, X can be any term as guards don't have to return boolean().
-     ?_assert(type_check_forms(["-spec f(term()) -> boolean().",
+     ?_assert(type_check_forms(["-spec f(gradualizer:top()) -> boolean().",
                                 "f(X) ->",
                                 "    if X -> false;",
                                 "       false -> true",
                                 "    end."])),
      %% Each clause must return a subtype of ResType (atom())
-     ?_assertNot(type_check_forms(["-spec f(term()) -> atom().",
+     ?_assertNot(type_check_forms(["-spec f(gradualizer:top()) -> atom().",
                                    "f(X) ->",
                                    "    if X -> 1;",
                                    "       false -> a",
                                    "    end."])),
 
     %% The try block has to return ResTy atom()
-     ?_assertNot(type_check_forms(["-spec f(term()) -> atom().",
+     ?_assertNot(type_check_forms(["-spec f(gradualizer:top()) -> atom().",
                                    "f(X) ->",
                                    "    try 1",
                                    "    catch _ -> error",
                                    "    end."])),
      %% The try clause has to return ResTy atom(),
      %% but it returns the return type of g() via pattern matching
-     ?_assertNot(type_check_forms(["-spec f(term()) -> atom().",
+     ?_assertNot(type_check_forms(["-spec f(gradualizer:top()) -> atom().",
                                    "f(X) ->",
                                    "    try g() of G -> G",
                                    "    catch _ -> error",
                                    "    end.",
                                    "-spec g() -> float()."])),
      %% The catch clause has to return ResTy integer()
-     ?_assertNot(type_check_forms(["-spec f(term()) -> integer().",
+     ?_assertNot(type_check_forms(["-spec f(gradualizer:top()) -> integer().",
                                    "f(X) ->",
                                    "    try 1",
                                    "    catch _ -> error",
                                    "    end."])),
      %% The return type of the after clause is ignored
-     ?_assert(type_check_forms(["-spec f(term()) -> integer().",
+     ?_assert(type_check_forms(["-spec f(gradualizer:top()) -> integer().",
                                 "f(X) ->",
                                 "    try throw(error)",
                                 "    after error",
                                 "    end."])),
      %% Correct try without an after block
-     ?_assert(type_check_forms(["-spec f(term()) -> atom().",
+     ?_assert(type_check_forms(["-spec f(gradualizer:top()) -> atom().",
                                 "f(X) ->",
                                 "    try ok",
                                 "    catch _ -> error",
@@ -549,15 +549,15 @@ add_type_pat_test_() ->
 %% Gradualizer should not crash but return error nicely
 illegal_forms_test_() ->
     [%% undefined records
-     ?_assertNot(type_check_forms(["-spec f() -> term().",
+     ?_assertNot(type_check_forms(["-spec f() -> gradualizer:top().",
                                    "f() -> #r{f = 1}."])),
      ?_assertNot(type_check_forms(["-record(r, {f1}).",
-                                   "-spec f() -> term().",
+                                   "-spec f() -> gradualizer:top().",
                                    "f() -> #r{f2 = 1}."])),
      %% invalid record_info
      ?_assertNot(type_check_forms(["f() -> record_info(foo, bar)."])),
      %% illegal pattern
-     ?_assertNot(type_check_forms(["-spec f(term()) -> term().",
+     ?_assertNot(type_check_forms(["-spec f(gradualizer:top()) -> gradualizer:top().",
                                    "f(1 + A) -> ok."]))
     ].
 

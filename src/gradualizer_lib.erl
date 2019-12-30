@@ -113,6 +113,8 @@ pick_value(?type(list)) ->
     [];
 pick_value(?type(list,_)) ->
     [];
+pick_value(?type(nil)) ->
+    [];
 pick_value(?type(range, [{_TagLo, _, neg_inf}, {_TagHi, _, Hi}])) ->
     Hi;
 pick_value(?type(range, [{_TagLo, _, Lo}, {_TagHi, _, _Hi}])) ->

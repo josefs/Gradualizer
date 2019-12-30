@@ -41,6 +41,8 @@
 %% Pattern macros
 -define(type(T), {type, _, T, []}).
 -define(type(T, A), {type, _, T, A}).
+-define(top(), {remote_type, _, [{atom,_,gradualizer}
+				,{atom,_,top},[]]}).
 
 %% Data collected from epp parse tree
 -record(parsedata, {
@@ -136,14 +138,20 @@ compat(T1, T2, A, TEnv) ->
             compat_ty(Ty1, Ty2, sets:add_element({Ty1, Ty2}, A), TEnv)
     end.
 
-%% any() is used as the unknown type in the gradual type system
+%% any() and term() are used as the unknown type in the gradual type system
 compat_ty({type, _, any, []}, _, A, _TEnv) ->
     ret(A);
 compat_ty(_, {type, _, any ,[]}, A, _TEnv) ->
     ret(A);
-%% Term is the top of the subtyping relation
-compat_ty(_, {type, _, term, []}, A, _TEnv) ->
+compat_ty({type, _, term, []}, _, A, _TEnv) ->
     ret(A);
+compat_ty(_, {type, _, term ,[]}, A, _TEnv) ->
+    ret(A);
+% gradualizer:top() is the top of the subtyping hierarchy
+compat_ty(_, {remote_type, _, [{atom, _, gradualizer}
+			      ,{atom, _, top}, []]}, A, _TEnv) ->
+    ret(A);
+
 %% None is the bottom of the subtyping relation
 compat_ty({type, _, none, []}, _, A, _TEnv) ->
     ret(A);
@@ -373,7 +381,7 @@ glb(Ts, TEnv) ->
 			{Ty, Cs2} = glb(T, TyAcc, TEnv),
 			{Ty, constraints:combine(Cs1, Cs2)}
 		end,
-                {type(term), constraints:empty()},
+                {top(), constraints:empty()},
                 Ts).
 
 glb(T1, T2, A, TEnv) ->
@@ -397,16 +405,22 @@ glb(T1, T2, A, TEnv) ->
             end
     end.
 
-%% If either type is any() we don't know anything
+%% If either type is any()/term() we don't know anything
 glb_ty({type, _, any, []} = Ty1, _Ty2, _A, _TEnv) ->
     ret(Ty1);
 glb_ty(_Ty1, {type, _, any, []} = Ty2, _A, _TEnv) ->
     ret(Ty2);
-
-%% term() is the top of the hierarchy
-glb_ty({type, _, term, []}, Ty2, _A, _TEnv) ->
+glb_ty({type, _, term, []} = Ty1, _Ty2, _A, _TEnv) ->
+    ret(Ty1);
+glb_ty(_Ty1, {type, _, term, []} = Ty2, _A, _TEnv) ->
     ret(Ty2);
-glb_ty(Ty1, {type, _, term, []}, _A, _TEnv) ->
+
+%% gradualizer:top() is the top of the hierarchy
+glb_ty({remote_type, _, [{atom,_,gradualizer}
+			,{atom,_,top}, []]}, Ty2, _A, _TEnv) ->
+    ret(Ty2);
+glb_ty(Ty1, {remote_type, _, [{atom,_,gradualizer}
+			     ,{atom,_,top}, []]}, _A, _TEnv) ->
     ret(Ty1);
 
 %% none() is the bottom of the hierarchy
@@ -612,6 +626,10 @@ normalize({user_type, P, Name, Args} = Type, TEnv) ->
                     throw({undef, user_type, P, {Name, length(Args)}})
             end
     end;
+normalize(T = {remote_type, P, [{atom, _, gradualizer}, {atom, _, top}, []]}
+	 ,TEnv) ->
+% Don't normalize gradualizer:top().
+    T;
 normalize({remote_type, P, [{atom, _, M}, {atom, _, N}, Args]}, TEnv) ->
     case gradualizer_db:get_exported_type(M, N, Args) of
         {ok, T} ->
@@ -727,11 +745,12 @@ flatten_type(Ty, _TEnv) ->
 %% (TODO) Removes all types that are subtypes of other types in the same union.
 %% Retuns a list of disjoint types.
 merge_union_types(Types, _TEnv) ->
-    case lists:any(fun ({type, _, term, []}) -> true; (_) -> false end,
+    case lists:any(fun (?top()) -> true;
+		       (_) -> false end,
                    Types) of
         true ->
-            %% term() is among the types.
-            [type(term)];
+            %% gradualizer:top() is among the types.
+            [top()];
         false ->
             {IntegerTypes1, OtherTypes1} =
                 lists:partition(fun is_int_type/1, Types),
@@ -983,7 +1002,7 @@ expect_list_type({type, _, T, []}, _, _)
 expect_list_type({type, _, T, [ElemTy]}, _, _)
   when T == 'list' orelse T == 'nonempty_list' ->
     {elem_ty, ElemTy, constraints:empty()};
-expect_list_type(?type(term) = TermTy, _EmptyOrNot, _) ->
+expect_list_type(?top() = TermTy, _EmptyOrNot, _) ->
     {elem_ty, TermTy, constraints:empty()};
 expect_list_type({type, _, maybe_improper_list, [ElemTy, _]}, _, _) ->
     {elem_ty, ElemTy, constraints:empty()};
@@ -1064,7 +1083,7 @@ expect_tuple_type({type, _, tuple, any}, _N) ->
     any;
 expect_tuple_type({type, _, tuple, Tys}, N) when length(Tys) == N ->
     {elem_ty, Tys, constraints:empty()};
-expect_tuple_type(?type(term) = TermTy, N) ->
+expect_tuple_type(?top() = TermTy, N) ->
     {elem_ty, lists:duplicate(N, TermTy), constraints:empty()};
 expect_tuple_type({ann_type, _, [_, Ty]}, N) ->
     expect_tuple_type(Ty, N);
@@ -1202,7 +1221,10 @@ expect_fun_type1(_Env, {var, _, Var}) ->
 expect_fun_type1(_Env, {type, _, any, []}) ->
     any;
 expect_fun_type1(_Env, {type, _, term, []}) ->
-    {fun_ty_any_args, type(term), constraints:empty()};
+    any;
+expect_fun_type1(_Env, {remote_type, _, [{atom,_,gradualizer}
+					,{atom,_,top}, []]}) ->
+    {fun_ty_any_args, top(), constraints:empty()};
 expect_fun_type1(_Env, _Ty) ->
     type_error.
 
@@ -1241,7 +1263,7 @@ expect_record_type(Record, {type, _, record, [{atom, _, Name}]}, _TEnv) ->
     end;
 expect_record_type(_Record, {type, _, tuple, any}, _TEnv) ->
     {ok, constraints:empty()};
-expect_record_type(_Record, ?type(term), _TEnv) ->
+expect_record_type(_Record, ?top(), _TEnv) ->
     {ok, constraints:empty()};
 expect_record_type(Record, {type, _, union, Tys}, TEnv) ->
     expect_record_union(Record, Tys, TEnv);
@@ -1294,8 +1316,8 @@ bounded_type_subst(TEnv, BTy = {type, P, bounded_fun, [_, Bounds]}) ->
 solve_bounds(TEnv, Cs) ->
     Defs = [ {X, T} || {type, _, constraint, [{atom, _, is_subtype}, [{var, _, X}, T]]} <- Cs ],
     Env  = lists:foldl(fun
-                           ({_, ?type(term)}, E) ->
-                               E; %% Don't unfold X :: term()
+                           ({_, ?top()}, E) ->
+                               E; %% Don't unfold X :: gradualizer:top()
                            ({X, T}, E) ->
                                maps:update_with(X,
                                                 fun(Ts) -> [T | Ts] end,
@@ -1318,9 +1340,9 @@ solve_bounds(TEnv, Defs, [{acyclic, X} | SCCs], Acc) ->
 				  {Ty, Cs} = glb(S, T, TEnv),
 				  {Ty, constraints:combine(Cs, Css)}
 			  end,
-			  {type(term), constraints:empty()}, Tys1);
+			  {top(), constraints:empty()}, Tys1);
 	  _NoBoundsForX ->
-	      {type(any), constraints:empty()} %% or should we return term()?
+	      {type(any), constraints:empty()} %% or should we return top()?
       end,
     solve_bounds(TEnv, maps:remove(X, Defs), SCCs, Acc#{ X => Ty1 });
 solve_bounds(_, _, [{cyclic, Xs} | _], _) ->
@@ -2434,7 +2456,7 @@ do_type_check_expr_in(Env, ResTy, {block, _, Block}) ->
 do_type_check_expr_in(Env, ResTy, {'catch', _, Arg}) ->
     % TODO: Should we require ResTy to also include the possibility of
     % exceptions? But exceptions can be of any type! That would mean
-    % that we require ResTy to be any(), or perhaps also term().
+    % that we require ResTy to be any(), or perhaps also top().
     % But that would make exceptions and types almost incompatible!
     type_check_expr_in(Env, ResTy, Arg);
 do_type_check_expr_in(Env, ResTy, {'try', _, Block, CaseCs, CatchCs, AfterBlock}) ->
@@ -2541,7 +2563,7 @@ arith_op_arg_types(Op, Ty = {type, _, pos_integer, []}) ->
 arith_op_arg_types('-', ?type(non_neg_integer)) ->
     {type(pos_integer), {integer, erl_anno:new(0), 1}, constraints:empty()};
 
-%% non_neg_integer() are closed under everything except '-' and '/'
+%% non_neg_integer() are closed under top except '-' and '/'
 arith_op_arg_types(Op, Ty = {type, _, non_neg_integer, []}) ->
     case lists:member(Op, ['+', '*', 'div', 'rem', 'band', 'bor', 'bxor']) of
         %% Shift amounts can be negative
@@ -2667,8 +2689,9 @@ type_check_list_op_in(Env, ResTy, {op, P, Op, Arg1, Arg2} = Expr) ->
         %% '--' always produces a proper list, but '++' gives you an improper
         %% list if the second argument is improper.
         case Op of
-            '--' -> type(list, [type(term)]);
-            '++' -> type(maybe_improper_list, [type(term), type(term)])
+            '--' -> type(list, [top()]);
+            '++' -> type(maybe_improper_list, [top()
+					      ,top()])
         end,
     {ResTy1, Cs} = glb(Target, ResTy, Env#env.tenv),
     case ResTy1 of
@@ -2710,10 +2733,10 @@ list_op_arg_types('++', Ty) ->
             {Arg1, Ty}
     end;
 list_op_arg_types('--', Ty) ->
-    case list_view(Ty) of   %% Could go with [A] -- [term()] :: [A], but would miss legitimate errors
+    case list_view(Ty) of   %% Could go with [A] -- [top()] :: [A], but would miss legitimate errors
         false            -> false;
         {any, Elem, _}   -> {type(list, [Elem]), type(list, [Elem])};
-        {empty, _, _}    -> {type(nil), type(list, [type(term)])};
+        {empty, _, _}    -> {type(nil), type(list, [top()])};
         {nonempty, _, _} -> false
     end.
 
@@ -3628,11 +3651,12 @@ add_type_pat({map, _, _} = MapPat, {var, _, Var} = TyVar, _TEnv, VEnv) ->
     Cs = constraints:add_var(
            Var, constraints:upper(Var, type(map, any))),
     {type(none), TyVar, add_any_types_pat(MapPat, VEnv), Cs};
-add_type_pat({map, _, _} = MapPat, ?type(term), TEnv, VEnv) ->
+add_type_pat({map, _, _} = MapPat, ?top(), TEnv, VEnv) ->
     %% TODO instead of implemented an expect_map_type properly
     %% just handle the one missing case here
-    %% expect_map_type(term()) would return #{term() => term()}
-    AllMapsTy = type(map, [type(map_field_assoc, [type(term), type(term)])]),
+    %% expect_map_type(top()) would return #{top() => top()}
+    AllMapsTy = type(map, [type(map_field_assoc, [top()
+						 ,top()])]),
     add_type_pat(MapPat, AllMapsTy, TEnv, VEnv);
 add_type_pat({map, _P, PatAssocs}, {type, _, map, MapTyAssocs} = MapTy, TEnv, VEnv) ->
     %% Check each Key := Value and binds vars in Value.
@@ -3881,7 +3905,13 @@ type_of_bin_element({bin_element, _P, Expr, _Size, Specifiers}) ->
 type(Name, Args) ->
     {type, erl_anno:new(0), Name, Args}.
 
+type(top) ->
+    top();
 type(Name) -> type(Name, []).
+
+top() ->
+    {remote_type, erl_anno:new(0), [{atom, erl_anno:new(0), gradualizer}
+				   ,{atom, erl_anno:new(0), top},[]]}.
 
 type_var(Name) ->
     {var, erl_anno:new(0), Name}.
@@ -4124,7 +4154,7 @@ line_no(Expr) ->
     erl_anno:line(element(2, Expr)).
 
 -spec gen_partition(pos_integer(), list(tuple()),
-                    fun((tuple()) -> {pos_integer(), term()} | false)) ->
+                    fun((tuple()) -> {pos_integer(), gradualizer:top()} | false)) ->
                            tuple().
 
 gen_partition(N,List, Fun) ->
