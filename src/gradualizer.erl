@@ -39,9 +39,12 @@
          type_check_forms/2
         ]).
 
--export_type([options/0]).
+-export_type([options/0, top/0]).
 
 -type options() :: proplists:proplist().
+
+%% This type is the top of the subtyping lattice.
+-type top() :: any().
 
 %% API functions
 

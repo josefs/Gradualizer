@@ -17,7 +17,7 @@ map_union(#{b := B}) -> B.
 -spec any_map(map()) -> ok.
 any_map(#{apa := _}) -> ok.
 
--spec map_term(term()) -> any().
+-spec map_term(gradualizer:top()) -> any().
 map_term(#{}) ->
     ok.
 
