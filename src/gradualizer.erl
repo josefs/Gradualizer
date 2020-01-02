@@ -44,7 +44,7 @@
 -type options() :: proplists:proplist().
 
 %% This type is the top of the subtyping lattice.
--type top() :: any().
+-opaque top() :: any().
 
 %% API functions
 
