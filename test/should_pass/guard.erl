@@ -74,3 +74,7 @@ multiple(_) -> not_number.
 -spec multiple2(term()) -> integer() | float() | not_number.
 multiple2(N) when is_integer(N) orelse is_float(N) -> N;
 multiple2(_) -> not_number.
+
+-spec multiple3(term()) -> integer() | float() | not_number.
+multiple3(N) when is_integer(N); is_float(N) -> N;
+multiple3(_) -> not_number.
