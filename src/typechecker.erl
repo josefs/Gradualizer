@@ -3483,6 +3483,10 @@ check_guard(Env, {op, _OrElseAnno, 'orelse', Call1, Call2}) ->
         NTy
     end,
     union_var_binds_help([G1, G2], Lub);
+check_guard(Env, {op, _AndAlsoAnno, 'andalso', Call1, Call2}) ->
+    G1 = check_guard(Env, Call1),
+    G2 = check_guard(Env, Call2),
+    union_var_binds([G1, G2], Env#env.tenv);
 check_guard(Env, Guard) ->
     {_Ty, VB, _Cs} = type_check_expr(Env, Guard), % Do we need to thread the Env?
     VB.
