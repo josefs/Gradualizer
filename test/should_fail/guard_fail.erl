@@ -27,4 +27,6 @@ wrong_union(_) -> not_number.
 wrong_union2(N) when is_integer(N) orelse is_atom(N) -> N;
 wrong_union2(_) -> not_number.
 
-
+-spec wrong_andalso(term()) -> number() | not_integer.
+wrong_andalso(N) when is_integer(N) andalso is_number(N) -> N;
+wrong_andalso(_) -> not_integer.

@@ -71,10 +71,18 @@ multiple(I) when is_integer(I) -> I;
 multiple(F) when is_float(F) -> F;
 multiple(_) -> not_number.
 
--spec multiple2(term()) -> integer() | float() | not_number.
-multiple2(N) when is_integer(N) orelse is_float(N) -> N;
-multiple2(_) -> not_number.
+-spec orelse1(term()) -> integer() | float() | not_number.
+orelse1(N) when is_integer(N) orelse is_float(N) -> N;
+orelse1(_) -> not_number.
 
--spec multiple3(term()) -> integer() | float() | not_number.
-multiple3(N) when is_integer(N); is_float(N) -> N;
-multiple3(_) -> not_number.
+-spec orelse2(term()) -> integer() | float() | not_number.
+orelse2(N) when is_integer(N); is_float(N) -> N;
+orelse2(_) -> not_number.
+
+-spec andalso1(term()) -> integer() | not_integer.
+andalso1(N) when is_integer(N) andalso is_number(N) -> N;
+andalso1(_) -> not_integer.
+
+-spec andalso2(term()) -> integer() | not_integer.
+andalso2(N) when is_integer(N), is_number(N) -> N;
+andalso2(_) -> not_integer.
