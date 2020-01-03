@@ -3475,21 +3475,42 @@ check_guard(_Env, {call, P, {atom, _, Fun}, Vars}) ->
 check_guard(_Env, {call, P, {remote,_,_,{atom, _, Fun}}, Vars}) ->
     check_guard_call(P, Fun, Vars);
 check_guard(Env, {op, _OrElseAnno, 'orelse', Call1, Call2}) ->
-    union_var_binds([check_guard(Env, Call1), check_guard(Env, Call2)], Env#env.tenv);
+    G1 = check_guard(Env, Call1),
+    G2 = check_guard(Env, Call2),
+    Lub = fun(_K, Ty1, Ty2) ->
+        UTy = {type, erl_anno:new(0), union, [Ty1, Ty2]},
+        NTy = normalize(UTy, Env#env.tenv),
+        NTy
+    end,
+    union_var_binds_help([G1, G2], Lub);
 check_guard(Env, Guard) ->
     {_Ty, VB, _Cs} = type_check_expr(Env, Guard), % Do we need to thread the Env?
     VB.
 
+%% The difference guards use glb
+-spec check_guards_sequence(#env{}, list()) -> map().
+check_guards_sequence(Env, GuardSeq) ->
+    RefTys = union_var_binds(
+        lists:map(fun (Guard) ->
+            check_guard(Env, Guard)
+                  end, GuardSeq),
+        Env#env.tenv),
+    maps:merge(Env#env.venv, RefTys).
+
 %% TODO: implement proper checking of guards.
--spec check_guards(#env{}, term()) -> map().
+-spec check_guards(#env{}, list()) -> map().
+check_guards(Env, []) -> #{};
 check_guards(Env, Guards) ->
-    union_var_binds(
-      lists:map(fun (GuardSeq) ->
-                        union_var_binds(
-                          lists:map(fun (Guard) ->
-                              check_guard(Env, Guard)
-                                    end, GuardSeq), Env#env.tenv)
-                end, Guards), Env#env.tenv).
+    Lub = fun(_K, Ty1, Ty2) ->
+        UTy = {type, erl_anno:new(0), union, [Ty1, Ty2]},
+        NTy = normalize(UTy, Env#env.tenv),
+        NTy
+    end,
+    Tys = lists:map(fun (GuardSeq) ->
+        check_guards_sequence(Env, GuardSeq)
+    end, Guards),
+    Ty = union_var_binds_help(Tys, Lub),
+    Ty.
 
 type_check_function(Env, {function,_, Name, NArgs, Clauses}) ->
     ?verbose(Env, "Checking function ~p/~p~n", [Name, NArgs]),
