@@ -25,3 +25,15 @@ pat_match2(T) ->
         Test = #test{} -> Test;
         _ -> not_test
     end.
+
+-spec any(any()) -> #test{} | not_test.
+any(#test{} = Test) -> Test;
+any(_) -> not_test.
+
+-spec any(any()) -> #test{field :: 42} | not_test.
+any(#test{} = Test) -> Test;
+any(_) -> not_test.
+
+-spec test42(#test{field :: 42} | bananas) -> #test{field :: 42} | not_test.
+test42(#test{} = Test) -> Test;
+test42(_) -> not_test.
