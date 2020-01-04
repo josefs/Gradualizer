@@ -3441,34 +3441,34 @@ no_guards({clause, _, _, Guards, _}) ->
     Guards == [].
 
 
--spec check_guard_call(erlang:anno(), atom(), list()) -> map().
-check_guard_call(P, is_atom, [{var, _, Var}]) -> #{Var => {type, P, atom, []}};
-check_guard_call(P, is_binary, [{var, _, Var}]) -> #{Var => {type, P, binary, []}};
-check_guard_call(P, is_bitstring, [{var, _, Var}]) -> #{Var => {type, P, bitstring, []}};
-check_guard_call(P, is_boolean, [{var, _, Var}]) -> #{Var => {type, P, boolean, []}};
-check_guard_call(P, is_float, [{var, _, Var}]) -> #{Var => {type, P, float, []}};
-check_guard_call(P, is_function, [{var, _, Var}]) -> #{Var => {type, P, 'fun', []}};
-check_guard_call(P, is_function, [{var, _, Var}, _]) -> #{Var => {type, P, 'fun', []}};
-check_guard_call(P, is_integer, [{var, _, Var}]) -> #{Var => {type, P, integer, []}};
-check_guard_call(P, is_list, [{var, _, Var}]) -> #{Var => {type, P, list, []}};
-check_guard_call(P, is_map, [{var, _, Var}]) -> #{Var => {type, P, map, []}};
-check_guard_call(P, is_number, [{var, _, Var}]) -> #{Var => {type, P, number, []}};
-check_guard_call(P, is_pid, [{var, _, Var}]) -> #{Var => {type, P, pid, []}};
-check_guard_call(P, is_port, [{var, _, Var}]) -> #{Var => {type, P, port, []}};
-check_guard_call(P, is_record, [{var, _, Var}, {atom, _, Record}]) ->
-    #{Var => {type, P, record, [{atom, P, Record}]}};
-check_guard_call(P, is_record, [{var, _, Var}, {atom, _, Record}, _]) ->
-    #{Var => {type, P, record, [{atom, P, Record}]}};
-check_guard_call(P, is_reference, [{var, _, Var}]) -> #{Var => {type, P, reference, []}};
-check_guard_call(P, is_tuple, [{var, _, Var}]) -> #{Var => {type, P, tuple, []}};
-check_guard_call(_P, _Fun, _Vars) ->
+-spec check_guard_call(atom(), list()) -> map().
+check_guard_call(is_atom, [{var, _, Var}]) -> #{Var => {type, erl_anno:new(0), atom, []}};
+check_guard_call(is_binary, [{var, _, Var}]) -> #{Var => {type, erl_anno:new(0), binary, []}};
+check_guard_call(is_bitstring, [{var, _, Var}]) -> #{Var => {type, erl_anno:new(0), bitstring, []}};
+check_guard_call(is_boolean, [{var, _, Var}]) -> #{Var => {type, erl_anno:new(0), boolean, []}};
+check_guard_call(is_float, [{var, _, Var}]) -> #{Var => {type, erl_anno:new(0), float, []}};
+check_guard_call(is_function, [{var, _, Var}]) -> #{Var => {type, erl_anno:new(0), 'fun', []}};
+check_guard_call(is_function, [{var, _, Var}, _]) -> #{Var => {type, erl_anno:new(0), 'fun', []}};
+check_guard_call(is_integer, [{var, _, Var}]) -> #{Var => {type, erl_anno:new(0), integer, []}};
+check_guard_call(is_list, [{var, _, Var}]) -> #{Var => {type, erl_anno:new(0), list, []}};
+check_guard_call(is_map, [{var, _, Var}]) -> #{Var => {type, erl_anno:new(0), map, []}};
+check_guard_call(is_number, [{var, _, Var}]) -> #{Var => {type, erl_anno:new(0), number, []}};
+check_guard_call(is_pid, [{var, _, Var}]) -> #{Var => {type, erl_anno:new(0), pid, []}};
+check_guard_call(is_port, [{var, _, Var}]) -> #{Var => {type, erl_anno:new(0), port, []}};
+check_guard_call(is_record, [{var, _, Var}, {atom, _, Record}]) ->
+    #{Var => {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Record}]}};
+check_guard_call(is_record, [{var, _, Var}, {atom, _, Record}, _]) ->
+    #{Var => {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Record}]}};
+check_guard_call(is_reference, [{var, _, Var}]) -> #{Var => {type, erl_anno:new(0), reference, []}};
+check_guard_call(is_tuple, [{var, _, Var}]) -> #{Var => {type, erl_anno:new(0), tuple, []}};
+check_guard_call(_Fun, _Vars) ->
     #{}.
 
 -spec check_guard(#env{}, term()) -> map().
-check_guard(_Env, {call, P, {atom, _, Fun}, Vars}) ->
-    check_guard_call(P, Fun, Vars);
-check_guard(_Env, {call, P, {remote,_,_,{atom, _, Fun}}, Vars}) ->
-    check_guard_call(P, Fun, Vars);
+check_guard(_Env, {call, _, {atom, _, Fun}, Vars}) ->
+    check_guard_call(Fun, Vars);
+check_guard(_Env, {call, _, {remote,_,_,{atom, _, Fun}}, Vars}) ->
+    check_guard_call(Fun, Vars);
 check_guard(Env, {op, _OrElseAnno, 'orelse', Call1, Call2}) ->
     G1 = check_guard(Env, Call1),
     G2 = check_guard(Env, Call2),
