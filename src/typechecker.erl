@@ -3647,7 +3647,7 @@ add_type_pat({record, P, Record, Fields}, Ty, TEnv, VEnv) ->
         type_error -> throw({type_error, record_pattern, P, Record, Ty});
         {ok, Cs1} ->
             {VEnv2, Cs2} = add_type_pat_fields(Fields, Record, TEnv, VEnv),
-            RecTy = {type, P, record, [{atom, P, Record}]},
+            RecTy = {type, erl_anno:new(0), record, [{atom, P, Record}]},
             {type(none), RecTy, VEnv2, constraints:combine(Cs1, Cs2)}
     end;
 add_type_pat({map, _, _} = MapPat, {var, _, Var} = TyVar, _TEnv, VEnv) ->
