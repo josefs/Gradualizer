@@ -3486,7 +3486,7 @@ check_guard(Env, Guard) ->
     {_Ty, VB, _Cs} = type_check_expr(Env, Guard), % Do we need to thread the Env?
     VB.
 
-%% The difference guards use glb
+%% The different guards use glb
 -spec check_guards_sequence(#env{}, list()) -> map().
 check_guards_sequence(Env, GuardSeq) ->
     RefTys = union_var_binds(
