@@ -26,7 +26,3 @@ wrong_union(_) -> not_number.
 -spec wrong_union2(integer() | float() | atom()) -> integer() | float() | not_number.
 wrong_union2(N) when is_integer(N) orelse is_atom(N) -> N;
 wrong_union2(_) -> not_number.
-
--spec wrong_andalso(integer() | atom()) -> atom() | not_integer.
-wrong_andalso(N) when is_integer(N) andalso is_atom(N) -> N;
-wrong_andalso(_) -> not_integer.
