@@ -3469,12 +3469,7 @@ check_guard(_Env, {call, _, {remote,_,_,{atom, _, Fun}}, Vars}) ->
 check_guard(Env, {op, _OrElseAnno, 'orelse', Call1, Call2}) ->
     G1 = check_guard(Env, Call1),
     G2 = check_guard(Env, Call2),
-    Lub = fun(_K, Ty1, Ty2) ->
-        UTy = {type, erl_anno:new(0), union, [Ty1, Ty2]},
-        NTy = normalize(UTy, Env#env.tenv),
-        NTy
-    end,
-    union_var_binds_help([G1, G2], Lub);
+    union_var_binds_lub([G1, G2], Env#env.tenv);
 check_guard(Env, {op, _AndAlsoAnno, 'andalso', Call1, Call2}) ->
     G1 = check_guard(Env, Call1),
     G2 = check_guard(Env, Call2),
@@ -3497,15 +3492,10 @@ check_guards_sequence(Env, GuardSeq) ->
 -spec check_guards(#env{}, list()) -> map().
 check_guards(Env, []) -> #{};
 check_guards(Env, Guards) ->
-    Lub = fun(_K, Ty1, Ty2) ->
-        UTy = {type, erl_anno:new(0), union, [Ty1, Ty2]},
-        NTy = normalize(UTy, Env#env.tenv),
-        NTy
-    end,
     Tys = lists:map(fun (GuardSeq) ->
         check_guards_sequence(Env, GuardSeq)
     end, Guards),
-    Ty = union_var_binds_help(Tys, Lub),
+    Ty = union_var_binds_lub(Tys, Env#env.tenv),
     Ty.
 
 type_check_function(Env, {function,_, Name, NArgs, Clauses}) ->
@@ -4000,6 +3990,17 @@ is_power_of_two(1) -> true;
 is_power_of_two(N) when N rem 2 == 0 ->
     is_power_of_two(N div 2);
 is_power_of_two(_) -> false.
+
+-spec union_var_binds_lub(list(), #tenv{}) -> map().
+union_var_binds_lub([], _) ->
+    #{};
+union_var_binds_lub(VarBindsList, TEnv) ->
+    Lub = fun(_K, Ty1, Ty2) ->
+        UTy = type(union, [Ty1, Ty2]),
+        NTy = normalize(UTy, TEnv),
+        NTy
+          end,
+    union_var_binds_help(VarBindsList, Lub).
 
 union_var_binds(VB1, VB2, TEnv) ->
     union_var_binds([VB1, VB2], TEnv).
