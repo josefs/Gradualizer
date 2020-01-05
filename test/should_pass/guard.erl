@@ -95,7 +95,40 @@ andalso1(_) -> not_integer.
 andalso2(N) when is_integer(N), is_number(N) -> N;
 andalso2(_) -> not_integer.
 
--spec good_orelse(integer() | atom(), integer() | atom()) -> integer().
-good_orelse(X, Y) when is_integer(X) andalso is_integer(Y) -> X + Y;
-good_orelse(_, _) -> 42.
+-spec good_andalso(integer() | atom(), integer() | atom()) -> integer().
+good_andalso(X, Y) when is_integer(X) andalso is_integer(Y) -> X + Y;
+good_andalso(_, _) -> 42.
 
+-spec all(All) -> All when
+    All :: atom()
+        | binary()
+        | bitstring()
+        | boolean()
+        | float()
+        | function()
+        | integer()
+        | list()
+        | map()
+        | number()
+        | pid()
+        | port()
+        | #r{}
+        | reference()
+        | tuple().
+all(X) when is_atom(X) -> X;
+all(X) when is_binary(X) -> X;
+all(X) when is_bitstring(X) -> X;
+all(X) when is_boolean(X) -> X;
+all(X) when is_float(X) -> X;
+all(X) when is_function(X) -> X;
+all(X) when is_function(X, 1) -> X;
+all(X) when is_integer(X) -> X;
+all(X) when is_list(X) -> X;
+all(X) when is_map(X) -> X;
+all(X) when is_number(X) -> X;
+all(X) when is_pid(X) -> X;
+all(X) when is_port(X) -> X;
+all(X) when is_record(X, r) -> X;
+all(X) when is_record(X, r, 1) -> X;
+all(X) when is_reference(X) -> X;
+all(X) when is_tuple(X) -> X.
