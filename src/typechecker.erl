@@ -3442,27 +3442,24 @@ no_guards({clause, _, _, Guards, _}) ->
 
 
 -spec check_guard_call(atom(), list()) -> map().
-check_guard_call(is_atom, [{var, _, Var}]) -> #{Var => {type, erl_anno:new(0), atom, []}};
-check_guard_call(is_binary, [{var, _, Var}]) -> #{Var => {type, erl_anno:new(0), binary, []}};
-check_guard_call(is_bitstring, [{var, _, Var}]) -> #{Var => {type, erl_anno:new(0), bitstring, []}};
-check_guard_call(is_boolean, [{var, _, Var}]) -> #{Var => {type, erl_anno:new(0), boolean, []}};
-check_guard_call(is_float, [{var, _, Var}]) -> #{Var => {type, erl_anno:new(0), float, []}};
-check_guard_call(is_function, [{var, _, Var}]) -> #{Var => {type, erl_anno:new(0), 'fun', []}};
-check_guard_call(is_function, [{var, _, Var}, _]) -> #{Var => {type, erl_anno:new(0), 'fun', []}};
-check_guard_call(is_integer, [{var, _, Var}]) -> #{Var => {type, erl_anno:new(0), integer, []}};
-check_guard_call(is_list, [{var, _, Var}]) -> #{Var => {type, erl_anno:new(0), list, []}};
-check_guard_call(is_map, [{var, _, Var}]) -> #{Var => {type, erl_anno:new(0), map, []}};
-check_guard_call(is_number, [{var, _, Var}]) -> #{Var => {type, erl_anno:new(0), number, []}};
-check_guard_call(is_pid, [{var, _, Var}]) -> #{Var => {type, erl_anno:new(0), pid, []}};
-check_guard_call(is_port, [{var, _, Var}]) -> #{Var => {type, erl_anno:new(0), port, []}};
-check_guard_call(is_record, [{var, _, Var}, {atom, _, Record}]) ->
-    #{Var => {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Record}]}};
-check_guard_call(is_record, [{var, _, Var}, {atom, _, Record}, _]) ->
-    #{Var => {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Record}]}};
-check_guard_call(is_reference, [{var, _, Var}]) -> #{Var => {type, erl_anno:new(0), reference, []}};
-check_guard_call(is_tuple, [{var, _, Var}]) -> #{Var => {type, erl_anno:new(0), tuple, []}};
-check_guard_call(_Fun, _Vars) ->
-    #{}.
+check_guard_call(is_atom, [{var, _, Var}]) -> #{Var => type(atom)};
+check_guard_call(is_binary, [{var, _, Var}]) -> #{Var => type(binary)};
+check_guard_call(is_bitstring, [{var, _, Var}]) -> #{Var => type(bitstring)};
+check_guard_call(is_boolean, [{var, _, Var}]) -> #{Var => type(boolean)};
+check_guard_call(is_float, [{var, _, Var}]) -> #{Var => type(float)};
+check_guard_call(is_function, [{var, _, Var}]) -> #{Var => type('fun')};
+check_guard_call(is_function, [{var, _, Var}, _]) -> #{Var => type('fun')};
+check_guard_call(is_integer, [{var, _, Var}]) -> #{Var => type(integer)};
+check_guard_call(is_list, [{var, _, Var}]) -> #{Var => type(list)};
+check_guard_call(is_map, [{var, _, Var}]) -> #{Var => type(map)};
+check_guard_call(is_number, [{var, _, Var}]) -> #{Var => type(number)};
+check_guard_call(is_pid, [{var, _, Var}]) -> #{Var => type(pid)};
+check_guard_call(is_port, [{var, _, Var}]) -> #{Var => type(port)};
+check_guard_call(is_record, [{var, _, Var}, {atom, _, Record}]) -> #{Var => type_record(Record)};
+check_guard_call(is_record, [{var, _, Var}, {atom, _, Record}, _]) -> #{Var => type_record(Record)};
+check_guard_call(is_reference, [{var, _, Var}]) -> #{Var => type(reference)};
+check_guard_call(is_tuple, [{var, _, Var}]) -> #{Var => type(tuple)};
+check_guard_call(_Fun, _Vars) -> #{}.
 
 -spec check_guard(#env{}, term()) -> map().
 check_guard(_Env, {call, _, {atom, _, Fun}, Vars}) ->
@@ -3988,6 +3985,9 @@ top() ->
 
 type_var(Name) ->
     {var, erl_anno:new(0), Name}.
+
+type_record(Name) ->
+    {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Name}]}.
 
 return(X) ->
     { X, #{}, constraints:empty() }.
