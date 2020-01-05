@@ -1401,14 +1401,11 @@ do_type_check_expr(Env, {var, P, Var}) ->
             throw({unknown_variable, P, Var})
     end;
 do_type_check_expr(Env, {match, _, Pat, Expr}) ->
-    io:format(user, "DEBUG: do_type_check_expr, start~n", []),
     {Ty, VarBinds, Cs} = type_check_expr(Env, Expr),
     NormTy = normalize(Ty, Env#env.tenv),
-    io:format(user, "DEBUG: do_type_check_expr, before~n", []),
     {_PatTy, UBoundNorm, Env2, Cs2} =
             ?throw_orig_type(add_type_pat(Pat, NormTy, Env#env.tenv, VarBinds),
                              Ty, NormTy),
-    io:format(user, "DEBUG: do_type_check_expr, UBoundNorm = ~p~n", [UBoundNorm]),
     UBound = case UBoundNorm of NormTy -> Ty;
                                 _Other -> UBoundNorm end,
     {UBound, Env2, constraints:combine(Cs,Cs2)};
@@ -3261,10 +3258,8 @@ check_clause(Env, ArgsTy, ResTy, C = {clause, P, Args, Guards, Block}) ->
     ?verbose(Env, "~sChecking clause :: ~s~n", [gradualizer_fmt:format_location(C, brief), typelib:pp_type(ResTy)]),
     case {length(ArgsTy), length(Args)} of
         {L, L} ->
-            io:format(user, "DEBUG: check_clause, begin~n", []),
             {PatTys, _UBounds, VEnv2, Cs1} =
                 add_types_pats(Args, ArgsTy, Env#env.tenv, Env#env.venv),
-            io:format(user, "DEBUG: check_clause, PatTys = ~p~n", [PatTys]),
             EnvNew      = Env#env{ venv =  VEnv2 },
             VarBinds1   = check_guards(EnvNew, Guards),
             EnvNewest   = EnvNew#env{ venv = add_var_binds(EnvNew#env.venv, VarBinds1, Env#env.tenv) },
@@ -3486,14 +3481,10 @@ add_types_pats([], [], _TEnv, VEnv, PatTysAcc, UBoundsAcc, CsAcc) ->
     {lists:reverse(PatTysAcc), lists:reverse(UBoundsAcc),
      VEnv, constraints:combine(CsAcc)};
 add_types_pats([Pat | Pats], [Ty | Tys], TEnv, VEnv, PatTysAcc, UBoundsAcc, CsAcc) ->
-    io:format(user, "DEBUG: add_type_pats, begin~n", []),
     NormTy = normalize(Ty, TEnv),
-%%    io:format(user, "DEBUG: add_type_pats, NormTy = ~p~n", [NormTy]),
     {PatTyNorm, UBoundNorm, VEnv2, Cs1} =
         ?throw_orig_type(add_type_pat(Pat, NormTy, TEnv, VEnv),
                          Ty, NormTy),
-    io:format(user, "DEBUG: add_type_pats, PatTyNorm = ~p~n", [PatTyNorm]),
-    io:format(user, "DEBUG: add_type_pats, UBoundNorm = ~p~n", [UBoundNorm]),
     %% De-normalize the returned types if they are the type checked against.
     PatTy  = case PatTyNorm  of NormTy -> Ty;
                                 _      -> PatTyNorm end,
@@ -3722,10 +3713,6 @@ add_type_pat(Pat, Ty, _TEnv, _VEnv) ->
     throw({type_error, pattern, element(2, Pat), Pat, Ty}).
 
 add_type_pat_var(Pat, Var, PatVar, Ty, TEnv, VEnv) ->
-    io:format(user, "DEBUG: add_type_pat_var, Pat = ~p~n", [Pat]),
-    io:format(user, "DEBUG: add_type_pat_var, Var = ~p~n", [Var]),
-    io:format(user, "DEBUG: add_type_pat_var, PatVar = ~p~n", [PatVar]),
-    io:format(user, "DEBUG: add_type_pat_var, Ty = ~p~n", [Ty]),
     %% Refine using Pat1 first to be able to bind Pat2 to a refined type.
     {PatTy1, Ty1, VEnv1, Cs2} = add_type_pat(Pat, Ty, TEnv, VEnv),
     {PatTy2, Ty2, VEnv2, Cs1} = add_type_pat(PatVar, Ty1, TEnv, VEnv1),
