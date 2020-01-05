@@ -94,3 +94,8 @@ andalso1(_) -> not_integer.
 -spec andalso2(integer() | atom()) -> integer() | not_integer.
 andalso2(N) when is_integer(N), is_number(N) -> N;
 andalso2(_) -> not_integer.
+
+-spec good_orelse(integer() | atom(), integer() | atom()) -> integer().
+good_orelse(X, Y) when is_integer(X) andalso is_integer(Y) -> X + Y;
+good_orelse(_, _) -> 42.
+

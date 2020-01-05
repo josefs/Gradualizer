@@ -26,3 +26,8 @@ wrong_union(_) -> not_number.
 -spec wrong_union2(integer() | float() | atom()) -> integer() | float() | not_number.
 wrong_union2(N) when is_integer(N) orelse is_atom(N) -> N;
 wrong_union2(_) -> not_number.
+
+-spec wrong_orelse(integer() | atom(), integer() | atom()) -> integer().
+wrong_orelse(X, Y) when is_integer(X) orelse is_integer(Y) -> X + Y;
+wrong_orelse(_, _) -> 42.
+
