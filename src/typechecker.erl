@@ -3492,11 +3492,11 @@ check_guards_sequence(Env, GuardSeq) ->
 -spec check_guards(#env{}, list()) -> map().
 check_guards(Env, []) -> #{};
 check_guards(Env, Guards) ->
-    Tys = lists:map(fun (GuardSeq) ->
+    VarBinds = lists:map(fun (GuardSeq) ->
         check_guards_sequence(Env, GuardSeq)
     end, Guards),
-    Ty = union_var_binds_lub(Tys, Env#env.tenv),
-    Ty.
+    VB = union_var_binds_lub(VarBinds, Env#env.tenv),
+    VB.
 
 type_check_function(Env, {function,_, Name, NArgs, Clauses}) ->
     ?verbose(Env, "Checking function ~p/~p~n", [Name, NArgs]),
