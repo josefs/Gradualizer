@@ -58,7 +58,7 @@ tuple(_) -> not_tuple.
 function(F) when is_function(F) -> F;
 function(_) -> not_function.
 
--spec function2(function() | atom()) -> function() | not_function.
+-spec function2(fun((any()) -> any()) | atom()) -> fun((any()) -> any()) | not_function.
 function2(F) when is_function(F, 1) -> F;
 function2(_) -> not_function.
 
