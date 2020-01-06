@@ -79,6 +79,10 @@ multiple(I) when is_integer(I) -> I;
 multiple(F) when is_float(F) -> F;
 multiple(_) -> not_number.
 
+-spec or_test(integer() | float() | atom()) -> integer() | float() | not_number.
+or_test(N) when is_integer(N) or is_float(N) -> N;
+or_test(_) -> not_number.
+
 -spec orelse1(integer() | float() | atom()) -> integer() | float() | not_number.
 orelse1(N) when is_integer(N) orelse is_float(N) -> N;
 orelse1(_) -> not_number.
@@ -86,6 +90,10 @@ orelse1(_) -> not_number.
 -spec orelse2(integer() | float() | atom()) -> integer() | float() | not_number.
 orelse2(N) when is_integer(N); is_float(N) -> N;
 orelse2(_) -> not_number.
+
+-spec and_test(integer() | atom()) -> integer() | not_integer.
+and_test(N) when is_integer(N) and is_number(N) -> N;
+and_test(_) -> not_integer.
 
 -spec andalso1(integer() | atom()) -> integer() | not_integer.
 andalso1(N) when is_integer(N) andalso is_number(N) -> N;
