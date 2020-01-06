@@ -27,3 +27,16 @@ pat_match2(T) ->
         Test = #test{} -> Test;
         _ -> not_test
     end.
+
+-record(r1, {
+    f :: integer()
+}).
+
+-record(r2, {
+    f :: atom()
+}).
+
+-spec pass(#r1{} | #r2{}) -> integer().
+good(R = #r1{f = F}) -> R.f + F;
+good(_) -> 0.
+

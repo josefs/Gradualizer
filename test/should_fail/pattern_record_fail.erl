@@ -17,3 +17,8 @@ bad_match1(_) -> not_r1.
 -spec bad_match2(#r1{} | #r2{}) -> #r1{} | not_r1.
 bad_match2(R = #r2{}) -> R;
 bad_match2(_) -> not_r1.
+
+-spec fail(#r1{} | #r2{}) -> integer().
+fail(R = #r2{f = F}) -> R.f + F;
+fail(_) -> 0.
+
