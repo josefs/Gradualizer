@@ -37,6 +37,13 @@ pat_match2(T) ->
 }).
 
 -spec pass(#r1{} | #r2{}) -> integer().
-good(R = #r1{f = F}) -> R.f + F;
+good(R = #r1{f = F}) -> R#r1.f + F;
 good(_) -> 0.
 
+-record(r3, {
+    r :: #r1{} | #r2{}
+}).
+
+-spec multiple(#r3{} | #r2{}) -> integer().
+multiple(#r3{r = R = #r1{}}) -> R#r1.f;
+multiple(_) -> 0.
