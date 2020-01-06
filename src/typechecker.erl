@@ -3470,7 +3470,15 @@ check_guard(Env, {op, _OrElseAnno, 'orelse', Call1, Call2}) ->
     G1 = check_guard(Env, Call1),
     G2 = check_guard(Env, Call2),
     union_var_binds_symmetrical([G1, G2], Env#env.tenv);
+check_guard(Env, {op, _OrAnno, 'or', Call1, Call2}) ->
+    G1 = check_guard(Env, Call1),
+    G2 = check_guard(Env, Call2),
+    union_var_binds_symmetrical([G1, G2], Env#env.tenv);
 check_guard(Env, {op, _AndAlsoAnno, 'andalso', Call1, Call2}) ->
+    G1 = check_guard(Env, Call1),
+    G2 = check_guard(Env, Call2),
+    union_var_binds([G1, G2], Env#env.tenv);
+check_guard(Env, {op, _AndAnno, 'and', Call1, Call2}) ->
     G1 = check_guard(Env, Call1),
     G2 = check_guard(Env, Call2),
     union_var_binds([G1, G2], Env#env.tenv);
