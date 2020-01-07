@@ -3461,29 +3461,29 @@ check_guard_call(is_reference, [{var, _, Var}]) -> #{Var => type(reference)};
 check_guard_call(is_tuple, [{var, _, Var}]) -> #{Var => type(tuple)};
 check_guard_call(_Fun, _Vars) -> #{}.
 
--spec check_guard(#env{}, term()) -> map().
-check_guard(_Env, {call, _, {atom, _, Fun}, Vars}) ->
+-spec check_guard_expression(#env{}, term()) -> map().
+check_guard_expression(_Env, {call, _, {atom, _, Fun}, Vars}) ->
     check_guard_call(Fun, Vars);
-check_guard(_Env, {call, _, {remote,_, {atom, _, erlang},{atom, _, Fun}}, Vars}) ->
+check_guard_expression(_Env, {call, _, {remote,_, {atom, _, erlang},{atom, _, Fun}}, Vars}) ->
     check_guard_call(Fun, Vars);
-check_guard(Env, {op, _OrElseAnno, Op, Call1, Call2}) when Op == 'orelse'; Op == 'or' ->
-    G1 = check_guard(Env, Call1),
-    G2 = check_guard(Env, Call2),
+check_guard_expression(Env, {op, _OrElseAnno, Op, Call1, Call2}) when Op == 'orelse'; Op == 'or' ->
+    G1 = check_guard_expression(Env, Call1),
+    G2 = check_guard_expression(Env, Call2),
     union_var_binds_symmetrical([G1, G2], Env#env.tenv);
-check_guard(Env, {op, _AndAlsoAnno, Op, Call1, Call2}) when Op == 'andalso'; Op == 'and' ->
-    G1 = check_guard(Env, Call1),
-    G2 = check_guard(Env, Call2),
+check_guard_expression(Env, {op, _AndAlsoAnno, Op, Call1, Call2}) when Op == 'andalso'; Op == 'and' ->
+    G1 = check_guard_expression(Env, Call1),
+    G2 = check_guard_expression(Env, Call2),
     union_var_binds([G1, G2], Env#env.tenv);
-check_guard(Env, Guard) ->
+check_guard_expression(Env, Guard) ->
     {_Ty, VB, _Cs} = type_check_expr(Env, Guard), % Do we need to thread the Env?
     VB.
 
 %% The different guards use glb
--spec check_guards_sequence(#env{}, list()) -> map().
-check_guards_sequence(Env, GuardSeq) ->
+-spec check_guard(#env{}, list()) -> map().
+check_guard(Env, GuardSeq) ->
     RefTys = union_var_binds(
         lists:map(fun (Guard) ->
-            check_guard(Env, Guard)
+            check_guard_expression(Env, Guard)
                   end, GuardSeq),
         Env#env.tenv),
     maps:merge(Env#env.venv, RefTys).
@@ -3492,8 +3492,8 @@ check_guards_sequence(Env, GuardSeq) ->
 -spec check_guards(#env{}, list()) -> map().
 check_guards(Env, []) -> #{};
 check_guards(Env, Guards) ->
-    VarBinds = lists:map(fun (GuardSeq) ->
-        check_guards_sequence(Env, GuardSeq)
+    VarBinds = lists:map(fun (Guard) ->
+        check_guard(Env, Guard)
     end, Guards),
     VB = union_var_binds_symmetrical(VarBinds, Env#env.tenv),
     VB.
