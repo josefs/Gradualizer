@@ -104,10 +104,6 @@ remove_pos({type, _, 'fun', [{type, _, any}, RetTy]}) ->
     %% the only place where `{type, _, any}` can occure
     {type, erl_anno:new(0), 'fun', [{type, erl_anno:new(0), any}
                                    ,remove_pos(RetTy)]};
-remove_pos({type, _, 'fun', [{type, _, product, Args}, RetTy]}) ->
-    {type, erl_anno:new(0), 'fun', [
-        {type, erl_anno:new(0), product, [remove_pos(Arg) || Arg <- Args]}
-        , remove_pos(RetTy)]};
 remove_pos({type, _, Type, Params}) when is_list(Params) ->
     {type, erl_anno:new(0), Type, lists:map(fun remove_pos/1, Params)};
 remove_pos({type, _, Type, any}) when Type == tuple; Type == map ->
