@@ -603,6 +603,8 @@ normalize({type, _, union, Tys}, TEnv) ->
         Ts when length(Ts) > ?union_size_limit -> type(any); % performance hack
         Ts  -> type(union, Ts)
     end;
+normalize({ann_type, _Ann, [_Var, Type]}, TEnv) ->
+    normalize(Type, TEnv);
 normalize({user_type, P, Name, Args} = Type, TEnv) ->
     case typelib:get_module_from_annotation(P) of
         {ok, Module} ->
