@@ -3979,8 +3979,6 @@ type_var(Name) ->
 type_record(Name) ->
     {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Name}]}.
 
-type_fun(0) ->
-    {type, erl_anno:new(0), 'fun', [{type, erl_anno:new(0), product, []}, {type, erl_anno:new(0), any, []}]};
 type_fun(Arity) ->
     Args = [{type, erl_anno:new(0), any, []} || _ <- lists:seq(1, Arity)],
     {type, erl_anno:new(0), 'fun', [{type, erl_anno:new(0), product, Args}, {type, erl_anno:new(0), any, []}]}.
