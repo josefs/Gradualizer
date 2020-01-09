@@ -18,3 +18,15 @@ prettyprint_and_highlight_test() ->
                  "f(X) -> X andalso not X.\n"
                  "        ^^^^^^^^^^^^^^^\n",
                  lists:flatten(Pretty)).
+
+prettyprint_and_highlight_fun_test() ->
+    Expr = {atom, 1, foo},
+    Forms = [{function, 1, f, 0,
+              [{clause, 1, [], [],
+                [{'fun', 1, {clauses, [{clause, 1, [], [],
+                                        [Expr]}]}}]}]}],
+    Pretty = gradualizer_highlight:prettyprint_and_highlight(Expr, Forms, _Color = false),
+    io:format(user, "~n~s~n", [Pretty]),
+    ?assertEqual("f() -> fun () -> foo end.\n"
+                 "                 ^^^\n",
+                 lists:flatten(Pretty)).

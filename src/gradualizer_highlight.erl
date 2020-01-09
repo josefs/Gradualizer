@@ -221,8 +221,15 @@ find_in_asts(OldNode, OldNode, NewNode) ->
     {found, NewNode}; % Found the node!
 find_in_asts(OldNode, OldAst, NewAst) when is_tuple(OldAst),
                                            is_tuple(NewAst) ->
-    [_TagX, _AnnoX | Xs] = tuple_to_list(OldAst),
-    [_TagY, _AnnoY | Ys] = tuple_to_list(NewAst),
-    find_in_asts(OldNode, Xs, Ys);
+    find_in_asts(OldNode, get_ast_children(OldAst), get_ast_children(NewAst));
 find_in_asts(_OldNode, _OldAst, _NewAst) ->
     not_found. % mismatch
+
+%% Returns the children of an AST node
+%%-spec get_ast_children(erl_parse_tree()) -> erl_parse_tree() | [erl_parse_tree()].
+get_ast_children({clauses, Clauses}) ->
+    %% This one doesn't have an annotation
+    Clauses;
+get_ast_children(Node) ->
+    [_Tag, _Anno | Children] = tuple_to_list(Node),
+    Children.
