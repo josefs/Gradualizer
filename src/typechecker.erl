@@ -595,6 +595,8 @@ glb_ty(_Ty1, _Ty2, _A, _TEnv) -> {type(none), constraints:empty()}.
 %% * Replace built-in type synonyms
 %% * Flatten unions and merge overlapping types (e.g. ranges) in unions
 -spec normalize(type(), TEnv :: #tenv{}) -> type().
+normalize({type, _, term, []}, TEnv) ->
+    type(any);
 normalize({type, _, union, Tys}, TEnv) ->
     Types = flatten_unions(Tys, TEnv),
     case merge_union_types(Types, TEnv) of
@@ -1794,7 +1796,7 @@ get_unassigned_fields(Fields, All) ->
 
 type_check_logic_op(Env, Op, P, Arg1, Arg2) ->
     % Bindings from the first argument are only passed along for
-    % 'andalso' and 'orelse', not 'and' or 'or'.
+    % 'andalso' and 'orelse', not 'and', 'or' or 'xor'.
     UnionVarBindsSecondArg =
         fun (VB1, VB2) ->
                 if (Op == 'and') or (Op == 'or') or (Op == 'xor') ->
