@@ -1794,7 +1794,7 @@ get_unassigned_fields(Fields, All) ->
 
 type_check_logic_op(Env, Op, P, Arg1, Arg2) ->
     % Bindings from the first argument are only passed along for
-    % 'andalso' and 'orelse', not 'and' or 'or'.
+    % 'andalso' and 'orelse', not 'and', 'or' or 'xor'.
     UnionVarBindsSecondArg =
         fun (VB1, VB2) ->
                 if (Op == 'and') or (Op == 'or') or (Op == 'xor') ->
