@@ -10,7 +10,7 @@ f(#{bepa := Bepa}) ->
 -spec badkey(#{apa => atom()}) -> ok.
 badkey(#{bepa := _Bepa}) -> ok.
 
--spec map_term(term()) -> any().
+-spec map_term(gradualizer:top()) -> any().
 map_term(#{k := V}) ->
     %% at this point V :: term()
     atom_to_list(V).
