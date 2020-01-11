@@ -359,12 +359,11 @@ format_type_error(type_error, _) ->
 			typelib:extended_type(),
 			proplists:proplist()) -> io_lib:chars().
 format_expr_type_error(Expression, ActualType, ExpectedType, Opts) ->
-    Fancy = use_highlight_in_context(Opts),
-    {InlineExpr, FancyExpr} = if Fancy ->
-                                     {"", highlight_in_context(Expression, Opts)};
-                                 not Fancy ->
-                                     {" " ++ pp_expr(Expression, Opts), ""}
-                              end,
+    FancyExpr = try_highlight_in_context(Expression, Opts),
+    InlineExpr = case FancyExpr of
+                     "" -> " " ++ pp_expr(Expression, Opts);
+                     _  -> ""
+                 end,
     io_lib:format(
       "~sThe ~s~ts~s is expected "
       "to have type ~ts but it has type ~ts~n~ts",
@@ -375,6 +374,22 @@ format_expr_type_error(Expression, ActualType, ExpectedType, Opts) ->
        pp_type(ExpectedType, Opts),
        pp_type(ActualType, Opts),
        FancyExpr]).
+
+%% Returns the expression highlighted in its context, if possible.  Otherwise,
+%% the empty string is returned.
+try_highlight_in_context(Expression, Opts) ->
+    case use_highlight_in_context(Opts) of
+        true ->
+            try
+                highlight_in_context(Expression, Opts)
+            catch error:_ ->
+                    %% Log a warning here using logger, to allow debugging the
+                    %% highlighter?
+                    ""
+            end;
+        false ->
+            ""
+    end.
 
 use_highlight_in_context(Opts) ->
     case {proplists:get_value(fancy, Opts, true),
@@ -404,6 +419,9 @@ highlight_in_context(AstNode, Opts) ->
      end,
      $\n]. % blank line after
 
+%% Determines if colors (escape sequences) should be used in the output.  If the
+%% option for colors is 'auto' (the default), io:columns/0 is used to detect if
+%% standard output is a TTY or not.
 -spec use_color(gradualizer:options()) -> boolean().
 use_color(Opts) ->
     case proplists:get_value(color, Opts, auto) of
