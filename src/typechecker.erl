@@ -657,6 +657,8 @@ normalize(Type, _TEnv) ->
 -spec expand_builtin_aliases(type()) -> type().
 expand_builtin_aliases({var, Ann, '_'}) ->
     {type, Ann, any, []};
+expand_builtin_aliases({type, Ann, term, []}) ->
+    {type, Ann, any, []};
 expand_builtin_aliases({type, Ann, binary, []}) ->
     {type, Ann, binary, [{integer, Ann, 0}, {integer, Ann, 8}]};
 expand_builtin_aliases({type, Ann, bitstring, []}) ->
