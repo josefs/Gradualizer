@@ -34,6 +34,14 @@
                 erlang:raise(throw, setelement(size(TypeError), TypeError, ORIGTYPE), ST)
         end).
 
+%% Checks that the location annotation of a type is set to zero and raises an
+%% error if it isn't.
+-define(assert_normalized_anno(Tuple),
+        case erl_anno:location(element(2, Tuple)) of
+            0 -> ok;
+            _ -> error({position_not_removed, Tuple})
+        end).
+
 -export_type([typed_record_field/0]).
 
 -type type() :: gradualizer_type:abstract_type().
@@ -129,8 +137,10 @@ any_subtype([Ty1|Tys], Ty, TEnv) ->
 %% The function compat_ty is just a convenience function to be able to
 %% pattern match on types in a nice way.
 compat(T1, T2, A, TEnv) ->
-    Ty1 = typelib:remove_pos(normalize(T1, TEnv)),
-    Ty2 = typelib:remove_pos(normalize(T2, TEnv)),
+    ?assert_normalized_anno(T1),
+    ?assert_normalized_anno(T2),
+    Ty1 = normalize(T1, TEnv),
+    Ty2 = normalize(T2, TEnv),
     case sets:is_element({Ty1, Ty2}, A) of
         true ->
             ret(A);
@@ -164,14 +174,6 @@ compat_ty({var, _, Var}, Ty, A, _TEnv) ->
     {A, constraints:upper(Var, Ty)};
 compat_ty(Ty, {var, _, Var}, A, _TEnv) ->
     {A, constraints:lower(Var, Ty)};
-compat_ty({ann_type, _, [{var, _, Var}, Ty1]}, Ty2, A, TEnv) ->
-    {A1, Cs} = compat(Ty1, Ty2, A, TEnv),
-    {A1, constraints:combine(Cs, constraints:upper(Var, Ty1))};
-compat_ty(Ty1, {ann_type, _, [{var, _, Var}, Ty2]}, A, TEnv) ->
-    {A1, Cs} = compat(Ty1, Ty2, A, TEnv),
-    {A1, constraints:combine(Cs, constraints:upper(Var, Ty2))};
-
-
 
 % TODO: There are several kinds of fun types.
 % Add support for them all eventually
@@ -343,13 +345,20 @@ all_type([Ty1|Tys], Ty, AIn, Css, TEnv) ->
     {AOut, Cs} = compat_ty(Ty1, Ty, AIn, TEnv),
     all_type(Tys, Ty, AOut, [Cs|Css], TEnv).
 
+%% Looks up the fields of a record by name and, if present, by the module where
+%% it belongs if a filename is included in the Anno.
+-spec get_maybe_remote_record_fields(RecName :: atom(),
+                                     Anno    :: erl_anno:anno(),
+                                     TEnv    :: #tenv{}) ->
+                                            [{typed_record_field, _, type()}].
 get_maybe_remote_record_fields(RecName, Anno, TEnv) ->
     case typelib:get_module_from_annotation(Anno) of
         {ok, Module} ->
             %% A record type in another module, from an expanded remote type
             case gradualizer_db:get_record_type(Module, RecName) of
                 {ok, TypedRecordFields} ->
-                    TypedRecordFields;
+                    [{typed_record_field, Field, typelib:remove_pos(Type)}
+                     || {typed_record_field, Field, Type} <- TypedRecordFields];
                 not_found ->
                     throw({undef, record, Anno, {Module, RecName}})
             end;
@@ -358,6 +367,12 @@ get_maybe_remote_record_fields(RecName, Anno, TEnv) ->
             get_record_fields(RecName, Anno, TEnv)
     end.
 
+%% Looks up a record in the supplied type environment and returns its typed
+%% fields.
+-spec get_record_fields(RecName :: atom(),
+                        Anno    :: erl_anno:anno(),
+                        TEnv    :: #tenv{}) ->
+                               [{typed_record_field, _, _}].
 get_record_fields(RecName, Anno, #tenv{records = REnv}) ->
     case REnv of
         #{RecName := Fields} ->
@@ -435,10 +450,6 @@ glb_ty(Ty, Ty, _A, _TEnv) ->
     ret(Ty);
 
 %% Type variables. TODO: can we get here with constrained type variables?
-glb_ty({ann_type, _, [{var, _, _}, Ty1]}, Ty2, A, TEnv) ->
-    glb(Ty1, Ty2, A, TEnv);
-glb_ty(Ty1, {ann_type, _, [{var, _, _}, Ty2]}, A, TEnv) ->
-    glb(Ty1, Ty2, A, TEnv);
 glb_ty(Var = {var, _, _}, Ty2, _A, _TEnv) ->
     V = new_type_var(),
     {{var, erl_anno:new(0), V}
@@ -603,15 +614,13 @@ normalize({type, _, union, Tys}, TEnv) ->
         Ts when length(Ts) > ?union_size_limit -> type(any); % performance hack
         Ts  -> type(union, Ts)
     end;
-normalize({ann_type, _Ann, [_Var, Type]}, TEnv) ->
-    normalize(Type, TEnv);
 normalize({user_type, P, Name, Args} = Type, TEnv) ->
     case typelib:get_module_from_annotation(P) of
         {ok, Module} ->
             %% Local type in another module, from an expanded remote type
             case gradualizer_db:get_type(Module, Name, Args) of
                 {ok, T} ->
-                    normalize(T, TEnv);
+                    normalize(typelib:remove_pos(T), TEnv);
                 opaque ->
                     Type;
                 not_found ->
@@ -636,7 +645,7 @@ normalize(T = {remote_type, P, [{atom, _, gradualizer}, {atom, _, top}, []]}
 normalize({remote_type, P, [{atom, _, M}, {atom, _, N}, Args]}, TEnv) ->
     case gradualizer_db:get_exported_type(M, N, Args) of
         {ok, T} ->
-            normalize(T, TEnv);
+            normalize(typelib:remove_pos(T), TEnv);
         opaque ->
             typelib:annotate_user_types(M, {user_type, P, N, Args});
         not_exported ->
@@ -741,8 +750,6 @@ flatten_type({type, _, none, []}, _) ->
     [];
 flatten_type({type, _, union, Tys}, TEnv) ->
     flatten_unions(Tys, TEnv);
-flatten_type({ann_type, _, [_, Ty]}, TEnv) ->
-    flatten_type(normalize(Ty, TEnv), TEnv);
 flatten_type(Ty, _TEnv) ->
     [Ty].
 
@@ -1015,8 +1022,6 @@ expect_list_type({type, _, nil, []}, allow_nil_type, _) ->
     any;
 expect_list_type({type, _, string, []}, _, _) ->
     {elem_ty, type(char), constraints:empty()};
-expect_list_type({ann_type, _, [_, Ty]}, N, TEnv) ->
-    expect_list_type(Ty, N, TEnv);
 expect_list_type(Union = {type, _, union, UnionTys}, N, TEnv) ->
     {Tys, Cs} = expect_list_union(UnionTys, [], constraints:empty(), no_any, N, TEnv),
     case Tys of
@@ -1090,8 +1095,6 @@ expect_tuple_type({type, _, tuple, Tys}, N) when length(Tys) == N ->
     {elem_ty, Tys, constraints:empty()};
 expect_tuple_type(?top() = TermTy, N) ->
     {elem_ty, lists:duplicate(N, TermTy), constraints:empty()};
-expect_tuple_type({ann_type, _, [_, Ty]}, N) ->
-    expect_tuple_type(Ty, N);
 expect_tuple_type(Union = {type, _, union, UnionTys}, N) ->
     {Tyss, Cs} =
         expect_tuple_union(UnionTys, [], constraints:empty(), no_any, N),
@@ -1214,8 +1217,6 @@ expect_fun_type1(Env, {type, _, union, UnionTys}) ->
         Tys ->
             {fun_ty_union, Tys, constraints:empty()}
     end;
-expect_fun_type1(Env, {ann_type, _, [_, Ty]}) ->
-    expect_fun_type1(Env, Ty);
 expect_fun_type1(_Env, {var, _, Var}) ->
     ResTy = new_type_var(),
     {fun_ty_any_args, {var, erl_anno:new(0), ResTy}
@@ -1275,8 +1276,6 @@ expect_record_type(Record, {type, _, union, Tys}, TEnv) ->
 expect_record_type(Record, {var, _, Var}, _TEnv) ->
     {ok, constraints:add_var(Var,
            constraints:upper(Var, {record, erl_anno:new(0), Record}))};
-expect_record_type(Record, {ann_type, _, [_, Ty]}, TEnv) ->
-    expect_record_type(Record, Ty, TEnv);
 expect_record_type(_, _, _) ->
     type_error.
 
@@ -1429,10 +1428,10 @@ do_type_check_expr(Env, {tuple, P, TS}) ->
                           (_) -> false
                        end, Tys) of
             true ->
-                {type, P, any, []};
+                type(any);
             false ->
                 %% at least one element in the tuple has a type inferred from a spec
-                {type, P, tuple, Tys}
+                type(tuple, Tys)
         end,
     { InferredTy, union_var_binds(VarBindsList, Env#env.tenv), constraints:combine(Css) };
 do_type_check_expr(Env, {cons, _, Head, Tail}) ->
@@ -1492,7 +1491,7 @@ do_type_check_expr(Env, {bin, _, BinElements} = BinExpr) ->
 do_type_check_expr(Env, {call, _, {atom, _, TypeOp}, [Expr, {string, _, TypeStr} = TypeLit]})
   when TypeOp == '::'; TypeOp == ':::' ->
     %% Magic functions used as type annotation/assertion.
-    try typelib:parse_type(TypeStr) of
+    try typelib:remove_pos(typelib:parse_type(TypeStr)) of
         Type when TypeOp == '::' ->
             {VarBinds, Cs} = type_check_expr_in(Env, Type, Expr),
             {Type, VarBinds, Cs};
@@ -1549,14 +1548,12 @@ do_type_check_expr(#env{infer = true}, {string, _, Chars}) ->
     return(ActualyTy);
 do_type_check_expr(#env{infer = true}, {nil, _}) ->
     return(type(nil));
-do_type_check_expr(#env{infer = true}, {atom, _, _} = Atom) ->
-    return(Atom);
-do_type_check_expr(#env{infer = true}, {integer, _, _N} = Integer) ->
-    return(Integer);
+do_type_check_expr(#env{infer = true}, {Tag, _, Value}) when Tag =:= atom;
+                                                             Tag =:= integer;
+                                                             Tag =:= char ->
+    return({Tag, erl_anno:new(0), Value});
 do_type_check_expr(#env{infer = true}, {float, _, _F}) ->
     return(type(float));
-do_type_check_expr(#env{infer = true}, {char, _, _C} = Char) ->
-    return(Char);
 
 %% Maps
 do_type_check_expr(Env, {map, _, Assocs}) ->
@@ -1613,7 +1610,9 @@ do_type_check_expr(Env, {'fun', P, {function, M, F, A}}) ->
         {{atom, _, Module}, {atom, _, Function}, {integer, _, Arity}} ->
             case gradualizer_db:get_spec(Module, Function, Arity) of
                 {ok, BoundedFunTypeList} ->
-                    Ty = bounded_type_list_to_type(Env#env.tenv, BoundedFunTypeList),
+                    BoundedFunTypeListNoPos = lists:map(fun typelib:remove_pos/1,
+                                                        BoundedFunTypeList),
+                    Ty = bounded_type_list_to_type(Env#env.tenv, BoundedFunTypeListNoPos),
                     {Ty, #{}, constraints:empty()};
                 not_found ->
                     throw({call_undef, P, M, F, A})
@@ -1676,7 +1675,7 @@ do_type_check_expr(Env, {op, _, 'bnot', Arg}) ->
     end;
 do_type_check_expr(Env, {op, P, '+', Arg}) ->
     {Ty, VB, Cs1} = type_check_expr(Env, Arg),
-    case subtype(Ty, {type, P, number ,[]}, Env#env.tenv) of
+    case subtype(Ty, type(number), Env#env.tenv) of
         {true, Cs2} ->
             {Ty, VB, constraints:combine(Cs1, Cs2)};
         false ->
@@ -1684,7 +1683,7 @@ do_type_check_expr(Env, {op, P, '+', Arg}) ->
     end;
 do_type_check_expr(Env, {op, P, '-', Arg}) ->
     {Ty, VB, Cs1} = type_check_expr(Env, Arg),
-    case subtype(Ty, {type, P, number ,[]}, Env#env.tenv) of
+    case subtype(Ty, type(number), Env#env.tenv) of
         {true, Cs2} ->
             NormTy = normalize(Ty, Env#env.tenv),
             {negate_num_type(NormTy), VB, constraints:combine(Cs1, Cs2)};
@@ -1806,7 +1805,7 @@ type_check_logic_op(Env, Op, P, Arg1, Arg2) ->
                 end
         end,
     {Ty1, VB1, Cs1} = type_check_expr(Env, Arg1),
-    case subtype(Ty1, {type, P, bool, []}, Env#env.tenv) of
+    case subtype(Ty1, type(boolean), Env#env.tenv) of
         false ->
             throw({type_error, Arg1, Ty1, type(boolean)});
         {true, Cs2} ->
@@ -2113,12 +2112,15 @@ do_type_check_expr_in(Env, Ty, {match, _, Pat, Expr}) ->
     {_PatTy, _UBound, NewVEnv, Cs2} =
         add_type_pat(Pat, Ty, Env#env.tenv, Env#env.venv),
     {union_var_binds(VarBinds, NewVEnv, Env#env.tenv), constraints:combine(Cs, Cs2)};
-do_type_check_expr_in(Env, Ty, I = {integer, _, _}) ->
-    case subtype(I, Ty, Env#env.tenv) of
+do_type_check_expr_in(Env, Ty, Singleton = {Tag, _, Value}) when Tag =:= integer;
+                                                                 Tag =:= char;
+                                                                 Tag =:= atom ->
+    ActualTy = {Tag, erl_anno:new(0), Value},
+    case subtype(ActualTy, Ty, Env#env.tenv) of
         {true, Cs} ->
             {#{}, Cs};
         false ->
-            throw({type_error, I, I, Ty})
+            throw({type_error, Singleton, ActualTy, Ty})
     end;
 do_type_check_expr_in(Env, Ty, {float, _, _} = Float) ->
     ExpectedType = type(float),
@@ -2127,20 +2129,6 @@ do_type_check_expr_in(Env, Ty, {float, _, _} = Float) ->
             {#{}, Cs};
         false ->
             throw({type_error, Float, ExpectedType, Ty})
-    end;
-do_type_check_expr_in(Env, Ty, Atom = {atom, _, _}) ->
-    case subtype(Atom, Ty, Env#env.tenv) of
-        {true, Cs} ->
-            {#{}, Cs};
-        false ->
-            throw({type_error, Atom, Atom, Ty})
-    end;
-do_type_check_expr_in(Env, Ty, Char = {char, _, _}) ->
-    case subtype(Char, Ty, Env#env.tenv) of
-        {true, Cs} ->
-           {#{}, Cs};
-       false ->
-           throw({type_error, Char, Char, Ty})
     end;
 do_type_check_expr_in(Env, Ty, Cons = {cons, _, H, T}) ->
     case expect_list_type(Ty, dont_allow_nil_type, Env#env.tenv) of
@@ -2301,7 +2289,7 @@ do_type_check_expr_in(Env, ResTy,
                       {call, _, {atom, _, TypeOp},
                              [Expr, {string, _, TypeStr} = TypeLit]} = TyAnno)
   when TypeOp == '::'; TypeOp == ':::' ->
-    try typelib:parse_type(TypeStr) of
+    try typelib:remove_pos(typelib:parse_type(TypeStr)) of
         Type ->
             case subtype(Type, ResTy, Env#env.tenv) of
                 {true, Cs1} when TypeOp == '::' ->
@@ -2386,8 +2374,10 @@ do_type_check_expr_in(Env, ResTy, Expr = {'fun', P, {function, M, F, A}}) ->
         {{atom, _, Module}, {atom, _, Function}, {integer, _,Arity}} ->
             case gradualizer_db:get_spec(Module, Function, Arity) of
                 {ok, BoundedFunTypeList} ->
+                    BoundedFunTypeListNoPos = lists:map(fun typelib:remove_pos/1,
+                                                        BoundedFunTypeList),
                     FunTypeList =
-                        unfold_bounded_type_list(Env#env.tenv, BoundedFunTypeList),
+                        unfold_bounded_type_list(Env#env.tenv, BoundedFunTypeListNoPos),
                     case any_subtype(FunTypeList, ResTy, Env#env.tenv) of
                         {true, Cs} -> {#{}, Cs};
                         false -> throw({type_error, Expr, FunTypeList, ResTy})
@@ -2771,9 +2761,10 @@ type_check_unary_op_in(Env, ResTy, Op, P, Arg) ->
 %% Which type should we check the argument against if we want the given type
 %% out? We already know that Ty is a subtype of the return type of the operator.
 unary_op_arg_type('+', Ty) -> Ty;
-unary_op_arg_type(Op, {type, P, union, Tys}) ->
-    {type, P, union, [ unary_op_arg_type(Op, Ty) || Ty <- Tys ]};
-unary_op_arg_type('not', {atom, P, B}) -> {atom, P, not B}; %% boolean() = false | true
+unary_op_arg_type(Op, {type, _, union, Tys}) ->
+    type(union, [ unary_op_arg_type(Op, Ty) || Ty <- Tys ]);
+unary_op_arg_type('not', {atom, _, B}) ->
+    {atom, erl_anno:new(0), not B}; %% boolean() = false | true
 unary_op_arg_type(Op, Ty) when ?is_int_type(Ty), Op == '-' orelse Op == 'bnot' ->
     {Lo, Hi} = int_type_to_range(Ty),
     Neg = fun(pos_inf)             -> neg_inf;
@@ -2884,16 +2875,12 @@ type_check_assocs(Env, [{Assoc, P, Key, Val}| Assocs])
     {KeyTy, _KeyVB, Cs1} = type_check_expr(Env#env{infer = true}, Key),
     {ValTy, _ValVB, Cs2} = type_check_expr(Env#env{infer = true}, Val),
     {AssocTys, VB, Cs}   = type_check_assocs(Env, Assocs),
-    {[{type, P, Assoc, [KeyTy, ValTy]} | AssocTys], VB
+    {[type(Assoc, [KeyTy, ValTy]) | AssocTys], VB
     ,constraints:combine([Cs, Cs1, Cs2])};
 type_check_assocs(_Env, []) ->
     {[], #{}, constraints:empty()}.
 
-update_map_type({ann_type, _, [_, Ty]}, AssocTys) ->
-    %% FIXME we really should get rid of `ann_type's right in the
-    %% begining or during normalization.
-    update_map_type(Ty, AssocTys);
-update_map_type({type, P, Ty, Arg}, AssocTys)
+update_map_type({type, _, Ty, Arg}, AssocTys)
     when Ty == map, Arg == any;
 	 Ty == any, Arg == [] ->
     %% The original type could have any keys
@@ -2902,22 +2889,22 @@ update_map_type({type, P, Ty, Arg}, AssocTys)
     %% Map key types can be overlapping, precedence is left to right,
     %% so let's append it as the last entry.
     UpdatedAssocs = update_assocs(AssocTys, []) ++ [type(map_field_assoc, [type(any), type(any)])],
-    {type, P, map, UpdatedAssocs};
-update_map_type({type, P, map, Assocs}, AssocTys) ->
+    type(map, UpdatedAssocs);
+update_map_type({type, _, map, Assocs}, AssocTys) ->
     %% `AssocTys' come from a map creation or map update expr - after the expr is evaluated the map
     %% will contain the associations. Therefore in the resulting map type they
     %% cannot be optional - we rewrite optional assocs to non-optional ones.
     UpdatedAssocs = update_assocs(AssocTys,
                                   lists:map(fun typelib:remove_pos/1, Assocs)),
-    {type, P, map, UpdatedAssocs};
+    type(map, UpdatedAssocs);
 update_map_type({var, _, _Var}, _AssocTys) ->
     type(any).
 
 %% Override existing key's value types and append those key types
 %% which are not updated
-update_assocs([{type, P, _Assoc, [Key, ValueType]} | AssocTys],
+update_assocs([{type, _, _Assoc, [Key, ValueType]} | AssocTys],
 	      Assocs) ->
-    [{type, P, map_field_exact, [Key, ValueType]}|
+    [type(map_field_exact, [Key, ValueType]) |
      case take_assoc(typelib:remove_pos(Key), Assocs, []) of
          {value, _, RestAssocs} ->
              update_assocs(AssocTys, RestAssocs);
@@ -2943,7 +2930,8 @@ type_check_fun(_Env, {remote, P, {atom,_,Module}, {atom,_,Fun}}, Arity) ->
     % Module:function call
     case gradualizer_db:get_spec(Module, Fun, Arity) of
         {ok, Types} ->
-            Types1 = [ typelib:annotate_user_types(Module, T) || T <- Types ],
+            Types1 = [typelib:annotate_user_types(Module, typelib:remove_pos(T))
+                      || T <- Types],
             {Types1, #{}, constraints:empty()};
         not_found   -> throw({call_undef, P, Module, Fun, Arity})
     end;
@@ -3087,9 +3075,7 @@ type_check_cons_in(Env, Ty = {type, _, List, [ElemTy]}, H, T)
     {VB2, Cs2} = type_check_expr_in(Env, Ty,     T),
     {union_var_binds(VB1, VB2, Env#env.tenv), constraints:combine(Cs1, Cs2)};
 type_check_cons_in(Env, {type, _, union, Tys}, H, T) ->
-    type_check_cons_union(Env, Tys, H, T);
-type_check_cons_in(Env, {ann_type, _, [_, Ty]}, H, T) ->
-    type_check_cons_in(Env, Ty, H, T).
+    type_check_cons_union(Env, Tys, H, T).
 
 type_check_cons_union(_Env, [], _H, _T) ->
     throw({type_error, cons_union});
@@ -3112,7 +3098,7 @@ get_bounded_fun_type_list(Name, Arity, Env, P) ->
             case erl_internal:bif(Name, Arity) of
                 true ->
                     {ok, Types} = gradualizer_db:get_spec(erlang, Name, Arity),
-                    Types;
+                    lists:map(fun typelib:remove_pos/1, Types);
                 false ->
                     case get_imported_bounded_fun_type_list(Name, Arity, Env, P) of
                         {ok, Types} ->
@@ -3128,7 +3114,8 @@ get_imported_bounded_fun_type_list(Name, Arity, Env, P) ->
         {ok, Module} ->
             case gradualizer_db:get_spec(Module, Name, Arity) of
                 {ok, BoundedFunTypeList} ->
-                    {ok, BoundedFunTypeList};
+                    {ok, lists:map(fun typelib:remove_pos/1,
+                                   BoundedFunTypeList)};
                 not_found ->
                     throw({call_undef, P, Module, Name, Arity})
             end;
@@ -3340,10 +3327,6 @@ refine_ty(?type(tuple, Tys1), ?type(tuple, Tys2), TEnv)
     TuplesElems = pick_one_refinement_each(Tys1, RefTys),
     Tuples = [type(tuple, TupleElems) || TupleElems <- TuplesElems],
     normalize(type(union, Tuples), TEnv);
-refine_ty({ann_type, _, [_, Ty1]}, Ty2, TEnv) ->
-    refine_ty(Ty1, Ty2, TEnv);
-refine_ty(Ty1, {ann_type, _, [_, Ty2]}, TEnv) ->
-    refine_ty(Ty1, Ty2, TEnv);
 refine_ty({atom, _, A}, {atom, _, A}, _) ->
     type(none);
 refine_ty(?type(list, A), ?type(nil), _TEnv) ->
@@ -3434,8 +3417,6 @@ refinable(?type(union,Tys)) when is_list(Tys) ->
     lists:all(fun refinable/1, Tys);
 refinable(?type(tuple, Tys)) when is_list(Tys) ->
     lists:all(fun refinable/1, Tys);
-refinable({ann_type, _, [_, Ty]}) ->
-    refinable(Ty);
 refinable(_) ->
     false.
 
@@ -3597,17 +3578,12 @@ add_type_pat(Pat, ?type(union, UnionTys)=UnionTy, TEnv, VEnv) ->
              union_var_binds(VEnvs, TEnv),
              constraints:combine([Cs|Css])}
     end;
-add_type_pat(Lit = {integer, P, _}, Ty, TEnv, VEnv) ->
-    case subtype(Lit, Ty, TEnv) of
+add_type_pat(Lit = {Tag, P, Val}, Ty, TEnv, VEnv) when Tag =:= integer;
+                                                       Tag =:= char ->
+    LitTy = {integer, erl_anno:new(0), Val},
+    case subtype(LitTy, Ty, TEnv) of
         {true, Cs} ->
-            {Lit, Lit, VEnv, Cs};
-        false ->
-            throw({type_error, pattern, P, Lit, Ty})
-    end;
-add_type_pat(Lit = {char, P, Val}, Ty, TEnv, VEnv) ->
-    case subtype({integer, P, Val}, Ty, TEnv) of
-        {true, Cs} ->
-            {Lit, Lit, VEnv, Cs};
+            {LitTy, LitTy, VEnv, Cs};
         false ->
             throw({type_error, pattern, P, Lit, Ty})
     end;
@@ -3634,10 +3610,11 @@ add_type_pat(Tuple = {tuple, P, Pats}, Ty, TEnv, VEnv) ->
         {type_error, _Type} ->
             throw({type_error, pattern, P, Tuple, Ty})
     end;
-add_type_pat(Atom = {atom, P, _}, Ty, TEnv, VEnv) ->
-    case subtype(Atom, Ty, TEnv) of
+add_type_pat(Atom = {atom, P, Val}, Ty, TEnv, VEnv) ->
+    LitTy = {atom, erl_anno:new(0), Val},
+    case subtype(LitTy, Ty, TEnv) of
         {true, Cs} ->
-            {Atom, Atom, VEnv, Cs};
+            {LitTy, LitTy, VEnv, Cs};
         false ->
             throw({type_error, pattern, P, Atom, Ty})
     end;
@@ -3757,9 +3734,6 @@ add_type_pat(OpPat = {op, _Anno, _Op, _Pat1, _Pat2}, Ty, TEnv, VEnv) ->
     add_type_pat_literal(OpPat, Ty, TEnv, VEnv);
 add_type_pat(OpPat = {op, _Anno, _Op, _Pat}, Ty, TEnv, VEnv) ->
     add_type_pat_literal(OpPat, Ty, TEnv, VEnv);
-add_type_pat(Pat, {ann_type, _, [_, Ty]}, TEnv, VEnv) ->
-    add_type_pat(Pat, Ty, TEnv, VEnv);
-
 add_type_pat(Pat, Ty, _TEnv, _VEnv) ->
     throw({type_error, pattern, element(2, Pat), Pat, Ty}).
 
@@ -4084,7 +4058,8 @@ get_rec_field_index_and_type(FieldWithAnno, [], _) ->
 get_record_info_type({call, Anno, {atom, _, record_info},
                             [{atom, _, fields}, {atom, _, RecName}]}, TEnv) ->
     Fields = get_record_fields(RecName, Anno, TEnv),
-    Names = [Name || {typed_record_field, {record_field, _, Name, _}, _Ty} <- Fields],
+    Names = [typelib:remove_pos(Name)
+             || {typed_record_field, {record_field, _, Name, _}, _Ty} <- Fields],
     type(list, [type(union, Names)]);
 get_record_info_type({call, Anno, {atom, _, record_info},
                             [{atom, _, size}, {atom, _, RecName}]}, TEnv) ->
@@ -4167,12 +4142,14 @@ create_tenv(Module, TypeDefs, RecordDefs) ->
         maps:from_list([begin
                             Id       = {Name, length(Vars)},
                             Params   = [VarName || {var, _, VarName} <- Vars],
-                            {Id, {Params, Body}}
+                            {Id, {Params, typelib:remove_pos(Body)}}
                         end || {Name, Body, Vars} <- TypeDefs]),
     RecordMap =
-        maps:from_list([{Name, lists:map(fun absform:normalize_record_field/1,
-                                         Fields)}
-                            || {Name, Fields} <- RecordDefs]),
+        maps:from_list([{Name, [{typed_record_field, Field, typelib:remove_pos(Type)}
+                                || {typed_record_field, Field, Type}
+                                       <- lists:map(fun absform:normalize_record_field/1,
+                                                    Fields)]}
+                         || {Name, Fields} <- RecordDefs]),
     #tenv{module  = Module,
           types   = TypeMap,
           records = RecordMap
@@ -4187,7 +4164,8 @@ create_fenv(Specs, Funs) ->
       [ {{Name, NArgs}, type(any)}
         || {function,_, Name, NArgs, _Clauses} <- Funs
       ] ++
-      [ {{Name, NArgs}, absform:normalize_function_type_list(Types)}
+      [ {{Name, NArgs}, lists:map(fun typelib:remove_pos/1,
+                                  absform:normalize_function_type_list(Types))}
         || {{Name, NArgs}, Types} <- Specs
       ]
      ).

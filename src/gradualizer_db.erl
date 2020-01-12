@@ -26,6 +26,11 @@
 
 %% Types for the Erlang Abstract Format
 -type type() :: gradualizer_type:abstract_type().
+-type typed_record_field() :: {typed_record_field,
+                               {record_field, erl_anno:anno(),
+                                Name :: atom(),
+                                Default :: erl_parse:abstract_expr()},
+                               type()}.
 
 %% Compiled regular expression
 -type regexp() :: {re_pattern, _, _, _, _}.
@@ -78,7 +83,7 @@ get_opaque_type(M, T, A) ->
 
 %% @doc Fetches a record type defined in the module.
 -spec get_record_type(Module :: module(),
-                      Name :: atom()) -> {ok, [type()]} | not_found.
+                      Name :: atom()) -> {ok, [typed_record_field()]} | not_found.
 get_record_type(Module, Name) ->
     call({get_record_type, Module, Name}).
 
