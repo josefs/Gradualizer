@@ -84,6 +84,7 @@ parse_type(Src) ->
 %% Removes all annotations from type, except filename in two cases: Filename is
 %% kept for user-defined types and record types. Filename is used to
 %% disambiguate between types with the same name from different modules.
+%% Annotated types as in Name :: Type are also removed.
 -spec remove_pos(type()) -> type().
 remove_pos({Type, _, Value})
   when Type == atom; Type == integer; Type == char; Type == var ->
@@ -115,7 +116,8 @@ remove_pos({remote_type, _, [Mod, Name, Params]}) ->
     Params1 = lists:map(fun remove_pos/1, Params),
     {remote_type, erl_anno:new(0), [Mod, Name, Params1]};
 remove_pos({ann_type, _, [Var, Type]}) ->
-    {ann_type, erl_anno:new(0), [Var, remove_pos(Type)]};
+    %% Also remove annotated types one the form Name :: Type
+    remove_pos(Type);
 remove_pos({op, _, Op, Type}) ->
     {op, erl_anno:new(0), Op, remove_pos(Type)};
 remove_pos({op, _, Op, Type1, Type2}) ->
