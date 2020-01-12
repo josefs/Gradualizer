@@ -638,9 +638,9 @@ normalize({user_type, P, Name, Args} = Type, TEnv) ->
                     throw({undef, user_type, P, {Name, length(Args)}})
             end
     end;
-normalize(T = {remote_type, P, [{atom, _, gradualizer}, {atom, _, top}, []]}
-	 ,TEnv) ->
-% Don't normalize gradualizer:top().
+normalize(T = {remote_type, _, [{atom, _, gradualizer}, {atom, _, top}, []]}
+	 , _TEnv) ->
+    %% Don't normalize gradualizer:top().
     T;
 normalize({remote_type, P, [{atom, _, M}, {atom, _, N}, Args]}, TEnv) ->
     case gradualizer_db:get_exported_type(M, N, Args) of
@@ -1419,7 +1419,7 @@ do_type_check_expr(Env, {'case', _, Expr, Clauses}) ->
     VEnv = add_var_binds(Env#env.venv, VarBinds, Env#env.tenv),
     {Ty, VB, Cs2} = infer_clauses(Env#env{ venv = VEnv}, Clauses),
     {Ty, union_var_binds(VarBinds, VB, Env#env.tenv), constraints:combine(Cs1, Cs2)};
-do_type_check_expr(Env, {tuple, P, TS}) ->
+do_type_check_expr(Env, {tuple, _, TS}) ->
     { Tys, VarBindsList, Css} = lists:unzip3([ type_check_expr(Env, Expr)
                                               || Expr <- TS ]),
     InferredTy =
@@ -1690,10 +1690,10 @@ do_type_check_expr(Env, {op, P, '-', Arg}) ->
         false ->
             throw({type_error, non_number_argument_to_minus, P, Ty})
     end;
-do_type_check_expr(Env, {op, P, BoolOp, Arg1, Arg2}) when
+do_type_check_expr(Env, {op, _P, BoolOp, Arg1, Arg2}) when
       (BoolOp == 'andalso') or (BoolOp == 'and') or
       (BoolOp == 'orelse')  or (BoolOp == 'or') or (BoolOp == 'xor') ->
-    type_check_logic_op(Env, BoolOp, P, Arg1, Arg2);
+    type_check_logic_op(Env, BoolOp, Arg1, Arg2);
 do_type_check_expr(Env, {op, P, RelOp, Arg1, Arg2}) when
       (RelOp == '=:=') or (RelOp == '==') or
       (RelOp == '=/=') or (RelOp == '/=') or
@@ -1793,7 +1793,7 @@ get_unassigned_fields(Fields, All) ->
                 {record_field, _, {atom, _, Field}, _}, _} <- All] --
         [ Field || {record_field, _, {atom, _, Field}, _} <- Fields].
 
-type_check_logic_op(Env, Op, P, Arg1, Arg2) ->
+type_check_logic_op(Env, Op, Arg1, Arg2) ->
     % Bindings from the first argument are only passed along for
     % 'andalso' and 'orelse', not 'and', 'or' or 'xor'.
     UnionVarBindsSecondArg =
@@ -2870,7 +2870,7 @@ type_check_comprehension_in(Env, ResTy, OrigExpr, Compr, Expr, P, [Pred | Quals]
     {VB2, Cs2} = type_check_comprehension_in(Env, ResTy, OrigExpr, Compr, Expr, P, Quals),
     {union_var_binds(VB1, VB2, Env#env.tenv), constraints:combine(Cs1, Cs2)}.
 
-type_check_assocs(Env, [{Assoc, P, Key, Val}| Assocs])
+type_check_assocs(Env, [{Assoc, _P, Key, Val}| Assocs])
   when Assoc == map_field_assoc orelse Assoc == map_field_exact ->
     {KeyTy, _KeyVB, Cs1} = type_check_expr(Env#env{infer = true}, Key),
     {ValTy, _ValVB, Cs2} = type_check_expr(Env#env{infer = true}, Val),
@@ -3473,7 +3473,7 @@ check_guard(Env, GuardSeq) ->
 
 %% TODO: implement proper checking of guards.
 -spec check_guards(#env{}, list()) -> map().
-check_guards(Env, []) -> #{};
+check_guards(_Env, []) -> #{};
 check_guards(Env, Guards) ->
     VarBinds = lists:map(fun (Guard) ->
         check_guard(Env, Guard)
@@ -3708,10 +3708,10 @@ add_type_pat({map, _P, PatAssocs}, {type, _, map, MapTyAssocs} = MapTy, TEnv, VE
                     {VEnv, []},
                     PatAssocs),
     {type(none), MapTy, NewVEnv, constraints:combine(Css)};
-add_type_pat({match, _, {var, _, Var}=PatVar, Pat}, Ty, TEnv, VEnv) ->
-    add_type_pat_var(Pat, Var, PatVar, Ty, TEnv, VEnv);
-add_type_pat({match, _, Pat, {var, _, Var}=PatVar}, Ty, TEnv, VEnv) ->
-    add_type_pat_var(Pat, Var, PatVar, Ty, TEnv, VEnv);
+add_type_pat({match, _, {var, _, _Var} = PatVar, Pat}, Ty, TEnv, VEnv) ->
+    add_type_pat_var(Pat, PatVar, Ty, TEnv, VEnv);
+add_type_pat({match, _, Pat, {var, _, _Var} = PatVar}, Ty, TEnv, VEnv) ->
+    add_type_pat_var(Pat, PatVar, Ty, TEnv, VEnv);
 add_type_pat({match, _, Pat1, Pat2}, Ty, TEnv, VEnv) ->
     %% Use the refined type of Pat2 to bind vars in Pat1.
     {PatTy1, Ty1, VEnv1, Cs1} = add_type_pat(Pat2, Ty, TEnv, VEnv),
@@ -3737,7 +3737,7 @@ add_type_pat(OpPat = {op, _Anno, _Op, _Pat}, Ty, TEnv, VEnv) ->
 add_type_pat(Pat, Ty, _TEnv, _VEnv) ->
     throw({type_error, pattern, element(2, Pat), Pat, Ty}).
 
-add_type_pat_var(Pat, Var, PatVar, Ty, TEnv, VEnv) ->
+add_type_pat_var(Pat, PatVar, Ty, TEnv, VEnv) ->
     %% Refine using Pat1 first to be able to bind Pat2 to a refined type.
     {PatTy1, Ty1, VEnv1, Cs2} = add_type_pat(Pat, Ty, TEnv, VEnv),
     {PatTy2, Ty2, VEnv2, Cs1} = add_type_pat(PatVar, Ty1, TEnv, VEnv1),
@@ -3972,7 +3972,7 @@ is_power_of_two(N) when N rem 2 == 0 ->
 is_power_of_two(_) -> false.
 
 -spec union_var_binds_symmetrical(list(), #tenv{}) -> map().
-union_var_binds_symmetrical([], TEnv) ->
+union_var_binds_symmetrical([], _TEnv) ->
     #{};
 union_var_binds_symmetrical(VarBindsList, TEnv) ->
     Lub = fun(_K, Ty1, Ty2) ->
