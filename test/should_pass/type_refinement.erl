@@ -5,7 +5,8 @@
          disjoint_stuff_1/1, disjoint_stuff_2/1,
          disjoint_stuff_3/1, disjoint_stuff_4/1,
          var_pat/2, nil_elimination/1,
-         tuple_union/1, beside_match_all/2, beside_singleton/2]).
+         tuple_union/1, beside_match_all/2, beside_singleton/2,
+         refine_bound_var_by_guard_bifs/1]).
 
 %% Test that Value is not considered to be string() | false.
 -spec basic_type_refinement(string()) -> string().
@@ -75,3 +76,14 @@ beside_match_all(_, X) -> X.
 -spec beside_singleton(ignore, a | b) -> b.
 beside_singleton(ignore, a) -> b;
 beside_singleton(ignore, X) -> X.
+
+-spec refine_bound_var_by_guard_bifs(ok | integer() | pid() |
+                                     #{x => y} | {x, y}) -> ok.
+refine_bound_var_by_guard_bifs(X) ->
+    if
+        is_map(X)     -> ok;
+        is_tuple(X)   -> ok;
+        is_integer(X) -> ok;
+        is_pid(X)     -> ok;
+        true          -> X
+    end.

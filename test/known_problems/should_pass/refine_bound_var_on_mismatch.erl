@@ -21,11 +21,3 @@ refine_bound_var_by_pattern_mismatch(Var) ->
         nok -> ok;
         _   -> Var
     end.
-
--spec refine_bound_var_by_guard_bifs(ok | integer() | map()) -> ok.
-refine_bound_var_by_guard_bifs(X) ->
-    if
-        is_map(X)     -> ok;
-        is_integer(X) -> ok;
-        true          -> X
-    end.

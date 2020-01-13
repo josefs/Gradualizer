@@ -3208,18 +3208,18 @@ check_clauses(Env, any, ResTy, [{clause, _, Args, _, _} | _] = Clauses) ->
     %% 'any' is the ... in the type fun((...) -> ResTy)
     ArgsTy = lists:duplicate(length(Args), type(any)),
     check_clauses(Env, ArgsTy, ResTy, Clauses);
-check_clauses(Env, [], {var, _, TyVar}, Clauses) ->
-    %% This case was added for 'if' clauses.
-    {Ty, VarBinds, Cs} = infer_clauses(Env, Clauses),
-    {VarBinds, constraints:combine(constraints:upper(TyVar, Ty), Cs)};
-check_clauses(Env, ArgsTy, ResTy, Clauses) ->
-    {VarBindsList, Css, RefinedArgsTy} =
-        lists:foldl(fun (Clause, {VBs, Css, RefinedArgsTy}) ->
+check_clauses(Env = #env{tenv = TEnv}, ArgsTy, ResTy, Clauses) ->
+    %% Clauses for if, case, functions, receive, etc.
+    {VarBindsList, Css, RefinedArgsTy, _VEnvJunk} =
+        lists:foldl(fun (Clause, {VBs, Css, RefinedArgsTy, VEnvIn}) ->
                             {NewRefinedArgsTy, VB, Cs} =
-                                check_clause(Env, RefinedArgsTy, ResTy, Clause),
-                            {[VB | VBs], [Cs | Css], NewRefinedArgsTy}
+                                check_clause(Env#env{venv = VEnvIn},
+                                             RefinedArgsTy, ResTy, Clause),
+                            VEnvOut =
+                                refine_vars_by_mismatching_clause(Clause, VEnvIn, TEnv),
+                            {[VB | VBs], [Cs | Css], NewRefinedArgsTy, VEnvOut}
                     end,
-                    {[], [], ArgsTy},
+                    {[], [], ArgsTy, Env#env.venv},
                     Clauses),
     % Checking for exhaustive patternmatching
     case {Env#env.exhaust
@@ -3293,8 +3293,10 @@ refine_clause_arg_tys(Tys, MatchedTys, [], TEnv) ->
 refine_clause_arg_tys(Tys, _TysBounds, _Guards, _TEnv) ->
     Tys.
 
-%% Normalize, refine, revert normalize if no refinement.
-%% May throw no_refinement.
+%% Refine = Type Difference as in set-difference Ty1 \ Ty2
+%% -------------------------------------------------------
+%% Normalize, refine by OrigTy \ Ty, revert normalize if result is
+%% unchanged.  May throw no_refinement.
 refine(OrigTy, Ty, TEnv) ->
     NormTy = normalize(OrigTy, TEnv),
     case refine_ty(NormTy, normalize(Ty, TEnv), TEnv) of
@@ -3319,6 +3321,12 @@ refine_ty(?type(union, UnionTys), Ty, TEnv) ->
                           end,
                           [], UnionTys),
     normalize(type(union, RefTys), TEnv);
+refine_ty(?type(map, _Assocs), ?type(map, any), _Tenv) ->
+    %% #{x => y} \ map() = none()
+    type(none);
+refine_ty(?type(tuple, _Tys), ?type(tuple, any), _TEnv) ->
+    %% {x,y,z} \ tuple() = none()
+    type(none);
 refine_ty(?type(tuple, Tys1), ?type(tuple, Tys2), TEnv)
   when length(Tys1) > 0, length(Tys1) == length(Tys2) ->
     %% Non-empty tuple
@@ -3423,6 +3431,47 @@ refinable(_) ->
 no_guards({clause, _, _, Guards, _}) ->
     Guards == [].
 
+%% Refines the types of bound variables using the assumption that a clause has
+%% mismatched.
+refine_vars_by_mismatching_clause({clause, _, Pats, Guards, _Block}, VEnv, TEnv) ->
+    PatternCantFail = are_patterns_matching_all_input(Pats, VEnv),
+    case Guards of
+        [[{call, _, {atom, _, Fun}, Args = [{var, _, Var}]}]] when PatternCantFail ->
+            %% Simple case: A single guard on the form `when is_TYPE(Var)'.
+            %% If Var was bound before the clause, which failed because of a
+            %% failing is_TYPE guard, we can exclude TYPE (as in is_TYPE).
+            case {VEnv, check_guard_call(Fun, Args)} of
+                {#{Var := Ty}, #{Var := GuardTy}} ->
+                    RefinedTy = try refine(Ty, GuardTy, TEnv)
+                                catch no_refinement -> Ty
+                                end,
+                    VEnv#{Var := RefinedTy};
+                _ ->
+                    %% No refinement
+                    VEnv
+            end;
+        _OtherGuards ->
+            %% No refinement
+            VEnv
+    end.
+
+%% Returns true if a list of patterns match all possible inputs of the same
+%% length. For this to be true, all patterns must be distinct free variables or
+%% the underscore pattern.
+are_patterns_matching_all_input([], _VEnv) ->
+    true;
+are_patterns_matching_all_input([{var, _, '_'} | Pats], VEnv) ->
+    are_patterns_matching_all_input(Pats, VEnv);
+are_patterns_matching_all_input([{var, _, V} | Pats], VEnv) ->
+    case maps:is_key(V, VEnv) of
+        true ->
+            false;
+        false ->
+            %% It doesn't matter which type we set it to. We just need the key.
+            are_patterns_matching_all_input(Pats, VEnv#{V => type(any)})
+    end;
+are_patterns_matching_all_input(_Pat, _VEnv) ->
+    false.
 
 -spec check_guard_call(atom(), list()) -> map().
 check_guard_call(is_atom, [{var, _, Var}]) -> #{Var => type(atom)};
@@ -3434,14 +3483,14 @@ check_guard_call(is_function, [{var, _, Var}]) -> #{Var => type('fun')};
 check_guard_call(is_function, [{var, _, Var}, {integer, _, Arity}]) -> #{Var => type_fun(Arity)};
 check_guard_call(is_integer, [{var, _, Var}]) -> #{Var => type(integer)};
 check_guard_call(is_list, [{var, _, Var}]) -> #{Var => type(list)};
-check_guard_call(is_map, [{var, _, Var}]) -> #{Var => type(map)};
+check_guard_call(is_map, [{var, _, Var}]) -> #{Var => type(map, any)};
 check_guard_call(is_number, [{var, _, Var}]) -> #{Var => type(number)};
 check_guard_call(is_pid, [{var, _, Var}]) -> #{Var => type(pid)};
 check_guard_call(is_port, [{var, _, Var}]) -> #{Var => type(port)};
 check_guard_call(is_record, [{var, _, Var}, {atom, _, Record}]) -> #{Var => type_record(Record)};
 check_guard_call(is_record, [{var, _, Var}, {atom, _, Record}, _]) -> #{Var => type_record(Record)};
 check_guard_call(is_reference, [{var, _, Var}]) -> #{Var => type(reference)};
-check_guard_call(is_tuple, [{var, _, Var}]) -> #{Var => type(tuple)};
+check_guard_call(is_tuple, [{var, _, Var}]) -> #{Var => type(tuple, any)};
 check_guard_call(_Fun, _Vars) -> #{}.
 
 -spec check_guard_expression(#env{}, term()) -> map().
