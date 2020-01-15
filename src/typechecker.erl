@@ -3255,9 +3255,11 @@ check_clause(Env, ArgsTy, ResTy, C = {clause, P, Args, Guards, Block}) ->
             VarBinds1   = check_guards(EnvNew, Guards),
             EnvNewest   = EnvNew#env{ venv = add_var_binds(EnvNew#env.venv, VarBinds1, Env#env.tenv) },
             {VarBinds2, Cs2} = type_check_block_in(EnvNewest, ResTy, Block),
-            RefinedTys  = refine_clause_arg_tys(ArgsTy, PatTys,
+            RefinedTys1 = refine_clause_arg_tys(ArgsTy, PatTys,
                                                 Guards, Env#env.tenv),
-            {RefinedTys
+            RefinedTys2 = refine_mismatch_using_guards(RefinedTys1, C,
+                                                       Env#env.venv, Env#env.tenv),
+            {RefinedTys2
             ,union_var_binds([VarBinds1, VarBinds2, VEnv2], Env#env.tenv)
             ,constraints:combine(Cs1, Cs2)};
         {LenTy, LenArgs} ->
@@ -3290,8 +3292,39 @@ refine_clause_arg_tys(Tys, MatchedTys, [], TEnv) ->
             %% No refinement.
             Tys
     end;
-refine_clause_arg_tys(Tys, _TysBounds, _Guards, _TEnv) ->
+refine_clause_arg_tys(Tys, _MatchedTys, _Guards, _TEnv) ->
     Tys.
+
+%% Refine a list of types using a list of patterns and guards.
+refine_mismatch_using_guards(PatTys,
+                             {clause, _,
+                              Pats,
+                              [[{call, _, {atom, _, Fun}, Args = [{var, _, Var}]}]],
+                              _Block},
+                             VEnv, TEnv) ->
+    %% A single guard on the form `when is_TYPE(Var)' where Var is one of the
+    %% patterns matched against.  If Var was free before the clause (i.e. it
+    %% becomes bound in the clause), which failed because of a failing is_TYPE
+    %% guard, we can refine the type of that *pattern*.
+    PatternCantFail = are_patterns_matching_all_input(Pats, VEnv),
+    case {maps:is_key(Var, VEnv), check_guard_call(Fun, Args)} of
+        {false, #{Var := GuardTy}} when PatternCantFail ->
+            %% Find the variable in the list of patterns and refine the
+            %% corresponding type.
+            lists:map(fun ({Ty, {var, _, V}}) when V =:= Var ->
+                              try refine(Ty, GuardTy, TEnv)
+                              catch no_refinement -> Ty
+                              end;
+                          ({Ty, _}) ->
+                              Ty
+                      end,
+                      lists:zip(PatTys, Pats));
+        _NoRefinementPossible ->
+            PatTys
+    end;
+refine_mismatch_using_guards(PatTys, {clause, _, _, _, _}, _VEnv, _TEnv) ->
+    %% No Refinement
+    PatTys.
 
 %% Refine = Type Difference as in set-difference Ty1 \ Ty2
 %% -------------------------------------------------------
