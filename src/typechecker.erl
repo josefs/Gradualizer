@@ -827,6 +827,21 @@ merge_int_ranges_help([{R1, R2} = R | Rs], [{S1, S2} | StackTail] = Stack) ->
 merge_int_ranges_help([], Stack) ->
     lists:reverse(Stack).
 
+%% Computes the difference between two integer intervals and returns the result
+%% as a list of zero, one or two intervals.
+-spec int_range_diff(int_range(), int_range()) -> [int_range()].
+int_range_diff({Lo1, Hi1}, {Lo2x, Hi2x}) ->
+    %% R1:   xxxxxxxxxxxxxxxxxxxxx
+    %% R2:         xxxxxxxxxxx
+    %% diff: xxxxxx           xxxx
+
+    Lo2 = int_decr(Lo2x),
+    Hi2 = int_incr(Hi2x),
+
+    BeforeR2 = [{Lo1, int_min(Hi1, Lo2)} || int_less_than(Lo1, Lo2x)],
+    AfterR2  = [{int_max(Lo1, Hi2), Hi1} || int_greater_than(Hi1, Hi2x)],
+    BeforeR2 ++ AfterR2.
+
 %% callback for sorting ranges.
 -spec lower_bound_less_or_eq(int_range(), int_range()) -> boolean().
 lower_bound_less_or_eq({A, _}, {B, _}) ->
@@ -854,12 +869,35 @@ int_max(neg_inf, B) -> B;
 int_max(A, neg_inf) -> A;
 int_max(A, B) when is_integer(A), is_integer(B) -> max(A, B).
 
+int_less_than(A, A) -> false;
+int_less_than(A, B) -> A =:= int_min(A, B).
+
+int_greater_than(A, A) -> false;
+int_greater_than(A, B) -> A =:= int_max(A, B).
+
+int_incr(N) when is_integer(N) -> N + 1;
+int_incr(Inf)                  -> Inf.
+
+int_decr(N) when is_integer(N) -> N - 1;
+int_decr(Inf)                  -> Inf.
+
 int_negate(pos_inf) ->
     neg_inf;
 int_negate(neg_inf) ->
     pos_inf;
 int_negate(I) when is_integer(I) ->
     -I.
+
+%% Makes sure a range can be represented as an Erlang type, by expanding it if
+%% necessary.
+int_range_expand_to_valid({neg_inf, N}) when is_integer(N),
+                                             N < -1 ->
+    {neg_inf, -1}; % neg_integer()
+int_range_expand_to_valid({N, pos_inf}) when is_integer(N),
+                                             N > 1 ->
+    {1, pos_inf}; % pos_integer()
+int_range_expand_to_valid(Range) ->
+    Range.
 
 %% Integer type to range, where the bounds can be infinities in some cases.
 -spec int_type_to_range(type()) -> int_range().
@@ -887,6 +925,7 @@ int_range_to_types({neg_inf, I}) when I > 0 ->
      {type, erl_anno:new(0), range, [{integer, erl_anno:new(0), 0}
                                     ,{integer, erl_anno:new(0), I}]}];
 int_range_to_types({neg_inf, I}) when I < -1 ->
+    %% Non-standard
     [{type, erl_anno:new(0), range, [{integer, erl_anno:new(0), neg_inf}
                                     ,{integer, erl_anno:new(0), I}]}];
 int_range_to_types({I, pos_inf}) when I < -1 ->
@@ -900,6 +939,7 @@ int_range_to_types({0, pos_inf}) ->
 int_range_to_types({1, pos_inf}) ->
     [type(pos_integer)];
 int_range_to_types({I, pos_inf}) when I > 1 ->
+    %% Non-standard
     [{type, erl_anno:new(0), range, [{integer, erl_anno:new(0), I}
                                     ,{integer, erl_anno:new(0), pos_inf}]}];
 int_range_to_types({I, I}) ->
@@ -3275,22 +3315,13 @@ check_clause(_Env, _ArgsTy, _ResTy, Term) ->
 refine_clause_arg_tys(Tys, MatchedTys, [], TEnv) ->
     Ty        = type(tuple, Tys),
     MatchedTy = type(tuple, MatchedTys),
-    try refine(Ty, MatchedTy, TEnv) of
+    case type_diff(Ty, MatchedTy, TEnv) of
         ?type(tuple, RefTys) ->
             RefTys;
         ?type(none) ->
             lists:duplicate(length(Tys), type(none));
         ?type(union, _) ->
             Tys %% Multiple possibilities => don't refine
-    catch
-        no_refinement ->
-            %% Imprecision prohibits refinement
-            Tys;
-        disjoint ->
-            %% This can currently happen due to unhandled type variables, e.g.
-            %% Elem :: T \ {attribute, _TyVar-54982374928, compile, export_all}
-            %% No refinement.
-            Tys
     end;
 refine_clause_arg_tys(Tys, _MatchedTys, _Guards, _TEnv) ->
     Tys.
@@ -3312,9 +3343,7 @@ refine_mismatch_using_guards(PatTys,
             %% Find the variable in the list of patterns and refine the
             %% corresponding type.
             lists:map(fun ({Ty, {var, _, V}}) when V =:= Var ->
-                              try refine(Ty, GuardTy, TEnv)
-                              catch no_refinement -> Ty
-                              end;
+                              type_diff(Ty, GuardTy, TEnv);
                           ({Ty, _}) ->
                               Ty
                       end,
@@ -3326,8 +3355,23 @@ refine_mismatch_using_guards(PatTys, {clause, _, _, _, _}, _VEnv, _TEnv) ->
     %% No Refinement
     PatTys.
 
-%% Refine = Type Difference as in set-difference Ty1 \ Ty2
-%% -------------------------------------------------------
+%% Type Difference as in set-difference Ty1 \ Ty2
+%% ----------------------------------------------
+type_diff(Ty1, Ty2, TEnv) ->
+    try
+        refine(Ty1, Ty2, TEnv)
+    catch
+        no_refinement ->
+            %% Imprecision prevents refinement
+            Ty1;
+        disjoint ->
+            %% The types are disjoint.  No refinement.
+            %% This can currently also happen due to unhandled type variables, e.g.
+            %% T \ {attribute, _TyVar-54982374928, compile, export_all}
+            Ty1
+    end.
+
+%% Helper for type_diff/3.
 %% Normalize, refine by OrigTy \ Ty, revert normalize if result is
 %% unchanged.  May throw no_refinement.
 refine(OrigTy, Ty, TEnv) ->
@@ -3354,6 +3398,18 @@ refine_ty(?type(union, UnionTys), Ty, TEnv) ->
                           end,
                           [], UnionTys),
     normalize(type(union, RefTys), TEnv);
+refine_ty(Ty, ?type(union, UnionTys), TEnv) ->
+    %% Union e.g. integer() | float() from an is_number(X) guard.
+    %% Refine Ty with each type in the union.
+    lists:foldl(fun (UnionTy, AccTy) ->
+                        try refine(AccTy, UnionTy, TEnv) of
+                            RefTy -> RefTy
+                        catch
+                            disjoint -> AccTy
+                        end
+                end,
+                Ty,
+                UnionTys);
 refine_ty(?type(map, _Assocs), ?type(map, any), _Tenv) ->
     %% #{x => y} \ map() = none()
     type(none);
@@ -3370,45 +3426,35 @@ refine_ty(?type(tuple, Tys1), ?type(tuple, Tys2), TEnv)
     normalize(type(union, Tuples), TEnv);
 refine_ty({atom, _, A}, {atom, _, A}, _) ->
     type(none);
+refine_ty({atom, _, _}, ?type(atom), _) ->
+    type(none);
 refine_ty(?type(list, A), ?type(nil), _TEnv) ->
     type(nonempty_list, A);
+refine_ty(?type(nil), ?type(list, _), _TEnv) ->
+    type(none);
+refine_ty(?type(nonempty_list, _), ?type(list, [?type(any)]), _TEnv) ->
+    %% The guard is_list/1 catches every nonempty list
+    type(none);
+refine_ty(?type(binary, [_,_]),
+          ?type(binary, [{integer, _, 0}, {integer, _, 1}]), _TEnv) ->
+    %% B \ bitstring() => none()
+    %% where B is any binary or bitstring type
+    type(none);
 refine_ty({Tag1, _, M}, {Tag2, _, N}, _TEnv)
     when Tag1 == integer orelse Tag1 == char,
          Tag2 == integer orelse Tag2 == char ->
     if M == N -> type(none);
        M /= N -> throw(disjoint)
     end;
-refine_ty(Ty, {Tag, _, V}, TEnv) when ?is_int_type(Ty),
-                                      Tag == integer orelse Tag == char ->
-    case Ty of
-        ?type(non_neg_integer) when V == 0 -> type(pos_integer);
-        ?type(non_neg_integer) when V < 0  -> throw(disjoint);
-        ?type(pos_integer)     when V =< 0 -> throw(disjoint);
-	?type(pos_integer) ->
-	    Tys = int_range_to_types({1, V - 1}) ++
-		  int_range_to_types({V + 1, pos_inf}),
-	    normalize(type(union, Tys), TEnv);
-        ?type(neg_integer)     when V >= 0 -> throw(disjoint);
-	?type(neg_integer) ->
-	    Tys = int_range_to_types({neg_inf, V - 1}) ++
-		  int_range_to_types({V + 1, -1}),
-	    normalize(type(union, Tys), TEnv);
-        ?type(integer)         when V == 0 ->
-            type(union, [type(neg_integer), type(pos_integer)]);
-        ?type(range, [{_TagLo, _, Lo}, {_TagHi, _, Hi}]) ->
-            if
-                Lo =< V, V =< Hi ->
-                    %% It's in the range
-                    Tys = int_range_to_types({Lo, V - 1}) ++
-                          int_range_to_types({V + 1, Hi}),
-                    normalize(type(union, Tys), TEnv);
-                true ->
-                    throw(disjoint)
-            end;
-        _OtherIntType ->
-            %% Not possible to subtract from other integer types
-            throw(no_refinement)
-    end;
+refine_ty(Ty1, Ty2, TEnv) when ?is_int_type(Ty1),
+                               ?is_int_type(Ty2) ->
+    IntRanges = int_range_diff(int_type_to_range(Ty1),
+                               int_type_to_range(Ty2)),
+    %% Make sure the result is a standard erlang type.
+    %% Perhaps we can include generalized ranges such as 10..pos_inf
+    ExpandedRanges = lists:map(fun int_range_expand_to_valid/1, IntRanges),
+    Types = lists:flatmap(fun int_range_to_types/1, ExpandedRanges),
+    normalize(type(union, Types), TEnv);
 refine_ty(Ty1, Ty2, TEnv) ->
     case glb(Ty1, Ty2, TEnv) of
         {?type(none), _}  -> throw(disjoint);     %% disjoint
@@ -3475,9 +3521,7 @@ refine_vars_by_mismatching_clause({clause, _, Pats, Guards, _Block}, VEnv, TEnv)
             %% failing is_TYPE guard, we can exclude TYPE (as in is_TYPE).
             case {VEnv, check_guard_call(Fun, Args)} of
                 {#{Var := Ty}, #{Var := GuardTy}} ->
-                    RefinedTy = try refine(Ty, GuardTy, TEnv)
-                                catch no_refinement -> Ty
-                                end,
+                    RefinedTy = type_diff(Ty, GuardTy, TEnv),
                     VEnv#{Var := RefinedTy};
                 _ ->
                     %% No refinement
@@ -3515,7 +3559,7 @@ check_guard_call(is_float, [{var, _, Var}]) -> #{Var => type(float)};
 check_guard_call(is_function, [{var, _, Var}]) -> #{Var => type('fun')};
 check_guard_call(is_function, [{var, _, Var}, {integer, _, Arity}]) -> #{Var => type_fun(Arity)};
 check_guard_call(is_integer, [{var, _, Var}]) -> #{Var => type(integer)};
-check_guard_call(is_list, [{var, _, Var}]) -> #{Var => type(list)};
+check_guard_call(is_list, [{var, _, Var}]) -> #{Var => type(list)}; % should this be [top()] instead?
 check_guard_call(is_map, [{var, _, Var}]) -> #{Var => type(map, any)};
 check_guard_call(is_number, [{var, _, Var}]) -> #{Var => type(number)};
 check_guard_call(is_pid, [{var, _, Var}]) -> #{Var => type(pid)};
