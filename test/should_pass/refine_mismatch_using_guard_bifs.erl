@@ -17,9 +17,11 @@ refine_by_guards_1(X) when is_pid(X)       -> ok;
 refine_by_guards_1(X) when is_reference(X) -> ok;
 refine_by_guards_1(X)                      -> X.
 
--spec refine_by_guards_2(neg_integer() | 2..4 | boolean() | port() | ok) -> ok.
+-spec refine_by_guards_2(neg_integer() | 2..4 | boolean() |
+                         [a, ...] | port() | ok) -> ok.
 refine_by_guards_2(X) when is_integer(X) -> ok;
 refine_by_guards_2(X) when is_boolean(X) -> ok;
+refine_by_guards_2(X) when is_list(X)    -> ok;
 refine_by_guards_2(X) when is_port(X)    -> ok;
 refine_by_guards_2(X)                    -> X.
 
