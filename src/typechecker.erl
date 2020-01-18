@@ -1648,10 +1648,11 @@ do_type_check_expr(Env, {'receive', _, Clauses, _After, Block}) ->
 
 %% Operators
 do_type_check_expr(Env, {op, _, '!', Proc, Val}) ->
-    % Message passing is always untyped, which is why we discard the types
+    % Message passing is untyped remotely so the types of Proc and Val are not
+    % checked. Val is the return value of the expression.
     {_, VB1, Cs1} = type_check_expr(Env, Proc),
-    {_, VB2, Cs2} = type_check_expr(Env, Val),
-    {type(any)
+    {TyVal, VB2, Cs2} = type_check_expr(Env, Val),
+    {TyVal
     ,union_var_binds(VB1, VB2, Env#env.tenv)
     ,constraints:combine(Cs1, Cs2)};
 do_type_check_expr(Env, {op, _, 'not', Arg} = Expr) ->
