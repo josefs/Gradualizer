@@ -94,3 +94,7 @@ unary_op3(X) -> - (bnot X).
 -spec unary_op4(float()) -> number().
 unary_op4(X) -> -X.
 
+-spec unary_op5(0..10) -> integer().
+unary_op5(X) ->
+    A = bnot X,
+    A.
