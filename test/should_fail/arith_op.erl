@@ -2,7 +2,7 @@
 -export([failplus/1, faildivvar/1, faildivlit/1, failpositivedivision/1,
          faildivprecise/1, failplusprecise/2, failminusprecisepos/2,
          failminusnonneg/2, failminuspreciseneg/2,
-         failbnot/1]).
+         failbnot/1, int_error/2, int_error2/2]).
 
 -spec failplus(_) -> tuple().
 failplus(X) -> X + X.
@@ -35,3 +35,13 @@ failminuspreciseneg(X, Y) -> X - Y.
 failbnot(S) ->
     O = bnot(S),
     O.
+
+-spec int_error(any(), atom()) -> integer().
+int_error(X, Y) ->
+    A = X div Y,
+    A.
+
+-spec int_error2(float(), float()) -> integer().
+int_error2(X, Y) ->
+    A = X div Y,
+    A.
