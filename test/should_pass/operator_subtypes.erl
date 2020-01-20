@@ -52,6 +52,12 @@ logic_op2(X, Y, Z) -> {X andalso Y, X orelse Z}.
 rel_op1(other, _) -> other;
 rel_op1(X, Y) -> X == Y.
 
+-spec rel_subtype_left(1..10, integer()) -> boolean().
+rel_subtype_left(X, Y) -> X == Y.
+
+-spec rel_subtype_right(integer(), 1..10) -> boolean().
+rel_subtype_right(X, Y) -> X == Y.
+
 %% List operations
 
 -spec list_op1([integer()], [integer()]) -> [integer() | error] | error.
