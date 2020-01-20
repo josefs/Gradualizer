@@ -201,10 +201,7 @@ compat_ty({type, _, union, Tys1}, Ty2, A, TEnv) ->
 
 % Integer types
 compat_ty(Ty1, Ty2, A, _TEnv) when ?is_int_type(Ty1), ?is_int_type(Ty2) ->
-    R1 = int_type_to_range(Ty1),
-    R2 = int_type_to_range(Ty2),
-    case lower_bound_less_or_eq(R2, R1) andalso
-        upper_bound_more_or_eq(R2, R1) of
+    case gradualizer_int:is_int_subtype(Ty1, Ty2) of
         true -> ret(A);
         false -> throw(nomatch)
     end;
@@ -483,9 +480,8 @@ glb_ty({type, _, atom, []}, Ty2 = {atom, _, _}, _A, _TEnv) ->
 
 %% Number types
 glb_ty(Ty1, Ty2, _A, _TEnv) when ?is_int_type(Ty1), ?is_int_type(Ty2) ->
-    {Lo1, Hi1} = int_type_to_range(Ty1),
-    {Lo2, Hi2} = int_type_to_range(Ty2),
-    ret(type(union, int_range_to_types({int_max(Lo1, Lo2), int_min(Hi1, Hi2)})));
+    Glb = gradualizer_int:int_type_glb(Ty1, Ty2),
+    ret(Glb);
 
 %% List types
 glb_ty(Ty1, Ty2, A, TEnv) when ?is_list_type(Ty1), ?is_list_type(Ty2) ->
@@ -765,8 +761,8 @@ merge_union_types(Types, _TEnv) ->
             [top()];
         false ->
             {IntegerTypes1, OtherTypes1} =
-                lists:partition(fun is_int_type/1, Types),
-            IntegerTypes2 = merge_int_types(IntegerTypes1),
+                lists:partition(fun gradualizer_int:is_int_type/1, Types),
+            IntegerTypes2 = gradualizer_int:merge_int_types(IntegerTypes1),
             OtherTypes2 = merge_atom_types(OtherTypes1),
             OtherTypes3 = lists:usort(OtherTypes2),
             IntegerTypes2 ++ OtherTypes3
@@ -786,171 +782,7 @@ merge_atom_types(Types) ->
         true      -> Types
     end.
 
--spec is_int_type(type()) -> boolean().
-is_int_type({type, _, T, _})
-  when T == pos_integer; T == non_neg_integer; T == neg_integer;
-       T == integer; T == range -> true;
-is_int_type({integer, _, _}) -> true;
-is_int_type({char, _, _}) -> true;
-is_int_type(_) -> false.
 
-%% A type used while normalizing integer types. The ranges that are possible to
-%% write in the type system, i.e. non_neg_integer(), pos_integer(),
-%% neg_integer(), integer(), finite ranges, singletons and unions of these.
--type int_range() :: {neg_inf, -1 | non_neg_integer() | pos_inf} |
-                     {neg_integer() | 0 | 1, pos_inf} |
-                     {integer(), integer()}.
-
-%% Merges integer types by sorting on the lower bound and then merging adjacent
-%% ranges. Returns a list of mutually exclusive integer types.
-%%
-%% This is an adoption of the standard algorithm for merging intervals.
--spec merge_int_types([type()]) -> [type()].
-merge_int_types([]) ->
-    [];
-merge_int_types(IntTypes) ->
-    Ranges = lists:map(fun int_type_to_range/1, IntTypes),
-    [T | Ts] = lists:sort(fun lower_bound_less_or_eq/2, Ranges),
-    MergedRanges = merge_int_ranges_help(Ts, [T]),
-    lists:append(lists:map(fun int_range_to_types/1, MergedRanges)).
-
-merge_int_ranges_help([{R1, R2} = R | Rs], [{S1, S2} | StackTail] = Stack) ->
-    NewStack = if
-                   R1 == neg_inf; S2 == pos_inf; R1 =< S2 + 1 ->
-                       %% Overlapping or adjacent ranges. Merge them.
-                       [{S1, int_max(R2, S2)} | StackTail];
-                   true ->
-                       %% Not mergeable ranges. Push R to stack.
-                       [R | Stack]
-               end,
-    merge_int_ranges_help(Rs, NewStack);
-merge_int_ranges_help([], Stack) ->
-    lists:reverse(Stack).
-
-%% Computes the difference between two integer intervals and returns the result
-%% as a list of zero, one or two intervals.
--spec int_range_diff(int_range(), int_range()) -> [int_range()].
-int_range_diff({Lo1, Hi1}, {Lo2x, Hi2x}) ->
-    %% R1:   xxxxxxxxxxxxxxxxxxxxx
-    %% R2:         xxxxxxxxxxx
-    %% diff: xxxxxx           xxxx
-
-    Lo2 = int_decr(Lo2x),
-    Hi2 = int_incr(Hi2x),
-
-    BeforeR2 = [{Lo1, int_min(Hi1, Lo2)} || int_less_than(Lo1, Lo2x)],
-    AfterR2  = [{int_max(Lo1, Hi2), Hi1} || int_greater_than(Hi1, Hi2x)],
-    BeforeR2 ++ AfterR2.
-
-%% callback for sorting ranges.
--spec lower_bound_less_or_eq(int_range(), int_range()) -> boolean().
-lower_bound_less_or_eq({A, _}, {B, _}) ->
-    if
-        A == neg_inf -> true;
-        B == neg_inf -> false;
-        true         -> A =< B
-    end.
-
--spec upper_bound_more_or_eq(int_range(), int_range()) -> boolean().
-upper_bound_more_or_eq({_, A}, {_, B}) ->
-    if
-        A == pos_inf -> true;
-        B == pos_inf -> false;
-        true         -> A >= B
-    end.
-
-int_min(A, B) when A == neg_inf; B == neg_inf   -> neg_inf;
-int_min(pos_inf, B) -> B;
-int_min(A, pos_inf) -> A;
-int_min(A, B) when is_integer(A), is_integer(B) -> min(A, B).
-
-int_max(A, B) when A == pos_inf; B == pos_inf   -> pos_inf;
-int_max(neg_inf, B) -> B;
-int_max(A, neg_inf) -> A;
-int_max(A, B) when is_integer(A), is_integer(B) -> max(A, B).
-
-int_less_than(A, A) -> false;
-int_less_than(A, B) -> A =:= int_min(A, B).
-
-int_greater_than(A, A) -> false;
-int_greater_than(A, B) -> A =:= int_max(A, B).
-
-int_incr(N) when is_integer(N) -> N + 1;
-int_incr(Inf)                  -> Inf.
-
-int_decr(N) when is_integer(N) -> N - 1;
-int_decr(Inf)                  -> Inf.
-
-int_negate(pos_inf) ->
-    neg_inf;
-int_negate(neg_inf) ->
-    pos_inf;
-int_negate(I) when is_integer(I) ->
-    -I.
-
-%% Makes sure a range can be represented as an Erlang type, by expanding it if
-%% necessary.
-int_range_expand_to_valid({neg_inf, N}) when is_integer(N),
-                                             N < -1 ->
-    {neg_inf, -1}; % neg_integer()
-int_range_expand_to_valid({N, pos_inf}) when is_integer(N),
-                                             N > 1 ->
-    {1, pos_inf}; % pos_integer()
-int_range_expand_to_valid(Range) ->
-    Range.
-
-%% Integer type to range, where the bounds can be infinities in some cases.
--spec int_type_to_range(type()) -> int_range().
-int_type_to_range({type, _, integer, []})              -> {neg_inf, pos_inf};
-int_type_to_range({type, _, neg_integer, []})          -> {neg_inf, -1};
-int_type_to_range({type, _, non_neg_integer, []})      -> {0, pos_inf};
-int_type_to_range({type, _, pos_integer, []})          -> {1, pos_inf};
-int_type_to_range({type, _, range, [{Tag1, _, I1}, {Tag2, _, I2}]})
-  when Tag1 =:= integer orelse Tag1 =:= char,
-       Tag2 =:= integer orelse Tag2 =:= char           -> {I1, I2};
-int_type_to_range({char, _, I})                        -> {I, I};
-int_type_to_range({integer, _, I})                     -> {I, I}.
-
-%% Converts a range back to a type. Creates two types in some cases and zero
-%% types if lower bound is greater than upper bound.
--spec int_range_to_types(int_range()) -> [type()].
-int_range_to_types({neg_inf, pos_inf}) ->
-    [type(integer)];
-int_range_to_types({neg_inf, -1}) ->
-    [type(neg_integer)];
-int_range_to_types({neg_inf, 0}) ->
-    [type(neg_integer), {integer, erl_anno:new(0), 0}];
-int_range_to_types({neg_inf, I}) when I > 0 ->
-    [type(neg_integer),
-     {type, erl_anno:new(0), range, [{integer, erl_anno:new(0), 0}
-                                    ,{integer, erl_anno:new(0), I}]}];
-int_range_to_types({neg_inf, I}) when I < -1 ->
-    %% Non-standard
-    [{type, erl_anno:new(0), range, [{integer, erl_anno:new(0), neg_inf}
-                                    ,{integer, erl_anno:new(0), I}]}];
-int_range_to_types({I, pos_inf}) when I < -1 ->
-    [{type, erl_anno:new(0), range, [{integer, erl_anno:new(0), I}
-                                    ,{integer, erl_anno:new(0), -1}]},
-     type(non_neg_integer)];
-int_range_to_types({-1, pos_inf}) ->
-    [{integer, erl_anno:new(0), -1}, type(non_neg_integer)];
-int_range_to_types({0, pos_inf}) ->
-    [type(non_neg_integer)];
-int_range_to_types({1, pos_inf}) ->
-    [type(pos_integer)];
-int_range_to_types({I, pos_inf}) when I > 1 ->
-    %% Non-standard
-    [{type, erl_anno:new(0), range, [{integer, erl_anno:new(0), I}
-                                    ,{integer, erl_anno:new(0), pos_inf}]}];
-int_range_to_types({I, I}) ->
-    [{integer, erl_anno:new(0), I}];
-int_range_to_types({I, J}) when is_integer(I) andalso
-				is_integer(J) andalso
-				I < J ->
-    [{type, erl_anno:new(0), range, [{integer, erl_anno:new(0), I}
-                                    ,{integer, erl_anno:new(0), J}]}];
-int_range_to_types({I, J}) when I > J ->
-    [].
 
 %% Input arg must be already normalized
 negate_num_type({type, _, TyName, []} = Ty) when
@@ -971,17 +803,7 @@ negate_num_type(None = {type, _, none, []}) ->
     None;
 negate_num_type(RangeTy) ->
     %% some kind of range type like `1..3' or `neg_integer()'
-    {L, U} = int_type_to_range(RangeTy),
-    L2 = int_negate(U),
-    U2 = int_negate(L),
-    case int_range_to_types({L2, U2}) of
-        [Ty] ->
-            Ty;
-        Tys = [_, _] ->
-            %% In some cases the result is two mutually exclusive type.
-            %% (Currently only when `non_neg_integer()` => `neg_integer() | 0`)
-            type(union, Tys)
-    end.
+    gradualizer_int:negate_int_type(RangeTy).
 
 negate_bool_type({atom, P, true}) ->
     {atom, P, false};
@@ -2627,9 +2449,9 @@ arith_op_arg_types(Op, Ty = {type, _, neg_integer, []}) ->
 %% This lets you work with types like
 %%  -type word16() :: 0..65535.
 arith_op_arg_types(Op, {type, _, range, _} = Ty) ->
-    case int_type_to_range(Ty) of
+    case gradualizer_int:int_type_to_range(Ty) of
         {0, B} when Op == 'rem' ->
-            [TyR] = int_range_to_types({0, B + 1}),
+            TyR = gradualizer_int:int_range_to_type({0, B + 1}),
             {type(non_neg_integer), TyR, constraints:empty()};
         %% bsr and div make things smaller for any non_neg/pos second argument
         {0, _} when Op == 'bsr' -> {Ty, type(non_neg_integer)
@@ -2807,12 +2629,13 @@ unary_op_arg_type(Op, {type, _, union, Tys}) ->
 unary_op_arg_type('not', {atom, _, B}) ->
     {atom, erl_anno:new(0), not B}; %% boolean() = false | true
 unary_op_arg_type(Op, Ty) when ?is_int_type(Ty), Op == '-' orelse Op == 'bnot' ->
-    {Lo, Hi} = int_type_to_range(Ty),
+    {Lo, Hi} = gradualizer_int:int_type_to_range(Ty),
+    %% TODO: Move this logic to gradualizer_int?
     Neg = fun(pos_inf)             -> neg_inf;
              (neg_inf)             -> pos_inf;
              (N) when Op == '-'    -> -N;
              (N) when Op == 'bnot' -> bnot N end,
-    type(union, int_range_to_types({Neg(Hi), Neg(Lo)}));
+    gradualizer_int:int_range_to_type({Neg(Hi), Neg(Lo)});
 unary_op_arg_type('-', Ty = {type, _, float, []}) ->
     Ty.
 
@@ -3449,13 +3272,7 @@ refine_ty({Tag1, _, M}, {Tag2, _, N}, _TEnv)
     end;
 refine_ty(Ty1, Ty2, TEnv) when ?is_int_type(Ty1),
                                ?is_int_type(Ty2) ->
-    IntRanges = int_range_diff(int_type_to_range(Ty1),
-                               int_type_to_range(Ty2)),
-    %% Make sure the result is a standard erlang type.
-    %% Perhaps we can include generalized ranges such as 10..pos_inf
-    ExpandedRanges = lists:map(fun int_range_expand_to_valid/1, IntRanges),
-    Types = lists:flatmap(fun int_range_to_types/1, ExpandedRanges),
-    normalize(type(union, Types), TEnv);
+    gradualizer_int:int_type_diff(Ty1, Ty2);
 refine_ty(Ty1, Ty2, TEnv) ->
     case glb(Ty1, Ty2, TEnv) of
         {?type(none), _}  -> throw(disjoint);     %% disjoint
