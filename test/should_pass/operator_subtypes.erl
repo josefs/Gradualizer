@@ -104,3 +104,18 @@ unary_op4(X) -> -X.
 unary_op5(X) ->
     A = bnot X,
     A.
+
+-spec unary_op6(pos_integer()) -> neg_integer().
+unary_op6(X) ->
+    A = -X,
+    A.
+
+-spec unary_op7(neg_integer()) -> pos_integer().
+unary_op7(X) ->
+    A = -X,
+    A.
+
+-spec unary_op8(0 | neg_integer()) -> non_neg_integer().
+unary_op8(X) ->
+    A = -X,
+    A.
