@@ -23,3 +23,10 @@
           element(3, T) =:= nonempty_list orelse
           element(3, T) =:= maybe_improper_list orelse
           element(3, T) =:= nonempty_improper_list))).
+
+%% Checks if an operator is a comparison operator
+-define(is_comp_op(OP),
+        (OP =:= '>' orelse OP =:= '>=' orelse
+         OP =:= '<' orelse OP =:= '=<' orelse
+         OP =:= '==' orelse OP =:= '/=' orelse
+         OP =:= '=:=' orelse OP =:= '=/=')).

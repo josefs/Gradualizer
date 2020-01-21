@@ -3388,11 +3388,60 @@ check_guard_call(is_reference, [{var, _, Var}]) -> #{Var => type(reference)};
 check_guard_call(is_tuple, [{var, _, Var}]) -> #{Var => type(tuple, any)};
 check_guard_call(_Fun, _Vars) -> #{}.
 
+%% Derive a type from a comparison against a literal value
+%% using Erlang's term order:
+%%
+%%     number < atom < reference < fun < port < pid <
+%%            < tuple < map < nil < list < bitstring
+%%
+%% Note: This function may return non-standard ranges like 10..pos_inf
+type_comp_op('=<', I) when is_integer(I) ->
+    IntTypes = gradualizer_int:int_range_to_types({neg_inf, I}),
+    type(union, [type(float) | IntTypes]);
+type_comp_op('<', I) when is_integer(I) ->
+    type_comp_op('=<', I - 1);
+type_comp_op('>=', I) when is_integer(I) ->
+    IntTypes = gradualizer_int:int_range_to_types({I, pos_inf}),
+    GtTypes = [type(atom), type(reference), type('fun'), type(port), type(pid),
+               type(tuple, any), type(map, any), type(list), type(bitstring)],
+    type(union, IntTypes ++ GtTypes);
+type_comp_op('>', I) when is_integer(I) ->
+    type_comp_op('>=', I + 1);
+type_comp_op('==', I) when is_integer(I) ->
+    type(union, [type(float), {integer, erl_anno:new(0), I}]);
+type_comp_op('=:=', I) when is_integer(I) ->
+    {integer, erl_anno:new(0), I};
+type_comp_op(Op, A) when Op =:= '==' orelse Op =:= '=:=',
+                         is_atom(A) ->
+    {atom, erl_anno:new(0), A};
+type_comp_op(Neq, I) when Neq =:= '/=' orelse Neq =:= '/=',
+                          is_integer(I) ->
+    {type, _, union, U1} = type_comp_op('<', I),
+    {type, _, union, U2} = type_comp_op('>', I),
+    type(union, U1 ++ U2);
+type_comp_op(_Op, _Val) ->
+    %% No refinement / not implemented
+    type(any).
+
+%% "Mirrors" a comparison operator to preserve equivalence when swapping the left
+%% and right operands. Used for e.g. transforming A < B to B > A.
+mirror_comp_op('<')  -> '>';
+mirror_comp_op('>')  -> '<';
+mirror_comp_op('>=') -> '=<';
+mirror_comp_op('=<') -> '>=';
+mirror_comp_op(Comm) -> Comm.
+
 -spec check_guard_expression(#env{}, term()) -> map().
 check_guard_expression(_Env, {call, _, {atom, _, Fun}, Vars}) ->
     check_guard_call(Fun, Vars);
 check_guard_expression(_Env, {call, _, {remote,_, {atom, _, erlang},{atom, _, Fun}}, Vars}) ->
     check_guard_call(Fun, Vars);
+check_guard_expression(_Env, {op, _, Op, {var, _, Var}, {Tag, _, Value}})
+  when ?is_comp_op(Op), Tag =:= integer orelse Tag =:= atom ->
+    #{Var => type_comp_op(Op, Value)};
+check_guard_expression(_Env, {op, _, Op, {Tag, _, Value}, {var, _, Var}})
+  when ?is_comp_op(Op), Tag =:= integer orelse Tag =:= atom ->
+    #{Var => type_comp_op(mirror_comp_op(Op), Value)};
 check_guard_expression(Env, {op, _OrElseAnno, Op, Call1, Call2}) when Op == 'orelse'; Op == 'or' ->
     G1 = check_guard_expression(Env, Call1),
     G2 = check_guard_expression(Env, Call2),
