@@ -22,29 +22,31 @@ Gradualizer aims to integrate well into existing Erlang code bases in a non intr
 
 # Usage
 
-To run Gradualizer from the command line:
+## To run Gradualizer from the command line
 
-* Compile the project as an escript:
+Compile the project as an escript. Then use it to check beam files or erl
+files. Use the `-h` option for help.
 
-  `make escript`
+    make escript
 
-* Run Gradualizer:
+    bin/gradualizer [ OPTIONS ] [ FILES TO CHECK ]
 
-  `bin/gradualizer`
+## To run Gradualizer from the Erlang shell
 
-To run Gradualizer from the Erlang shell:
+Launch the interactive prompt with all the relevant modules in the path. Then,
+use the functions in the `gradualizer` module.
 
-* Launch the interactive prompt with all the relevant modules in the path:
+    make shell
 
-  `make shell`
+    1> gradualizer:type_check_file("path/to/some_file.erl").
 
-* From the prompt you can run the type checker as follows:
+## To run Gradualizer from rebar3 or Mix
 
-  `gradualizer:type_check_file(<path/to/some_file.erl>).`
+There is a rebar3 plugin included. See [examples/rebar3/README.md](examples/rebar3/README.md).
 
-  You can try typechecking some of the example modules in the `test` directory.
+For Mix, a wrapper is provided at https://github.com/OvermindDL1/gradualixir.
 
-To run Gradualizer from rebar3, read `examples/rebar3/README.md`.
+## Prerequisites
 
 The Gradualizer requires at least OTP 19 and is built using plain OTP
 functionality and a self-contained Makefile; alternetively using
@@ -53,13 +55,16 @@ used as a dependency.
 
 # Status
 
-The Gradualizer is in alpha. There are plenty of things that don't work right
-now. It is not meant for public consumption. That being said, pull requests
-are most welcome!
+The Gradualizer is close to a beta release. Most of the language constructs and
+data types are handled, although there are things that don't work yet.
 
-A non-exhaustive list of things which need fixing:
+That being said, pull requests are most welcome!
 
-* Integrate gradualizer with editors and build tools
+A work-in-progress manual is located in in the
+[wiki](https://github.com/josefs/Gradualizer/wiki).
+
+For a non-exhaustive list of known problems, see [test/known_problems/](test/known_problems/).
+Additionally, these are things which need fixing:
+
 * Support for intersection types
 * Support for subtype polymorphism
-* Support for all language constructs in Erlang
