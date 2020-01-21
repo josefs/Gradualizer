@@ -11,7 +11,8 @@
 
 %% Ranges <--> integer types
 -export([int_type_to_range/1,
-         int_range_to_type/1]).
+         int_range_to_type/1,
+         int_range_to_types/1]).
 
 %% Ranges
 -export([int_range_diff/2]).

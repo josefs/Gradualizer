@@ -49,6 +49,8 @@ ebin/%.beam: src/%.erl | ebin
 # Compile-time dependencies between modules and other files
 ebin/gradualizer_prelude.beam: priv/prelude \
                                ebin/gradualizer_prelude_parse_trans.beam
+ebin/typechecker.beam: src/typelib.hrl
+ebin/gradualizer_fmt.beam: src/typelib.hrl
 
 # .app file
 # TODO When we start using git tags, insert version from
