@@ -153,10 +153,6 @@ compat_ty({type, _, any, []}, _, A, _TEnv) ->
     ret(A);
 compat_ty(_, {type, _, any ,[]}, A, _TEnv) ->
     ret(A);
-compat_ty({type, _, term, []}, _, A, _TEnv) ->
-    ret(A);
-compat_ty(_, {type, _, term ,[]}, A, _TEnv) ->
-    ret(A);
 % gradualizer:top() is the top of the subtyping hierarchy
 compat_ty(_, {remote_type, _, [{atom, _, gradualizer}
 			      ,{atom, _, top}, []]}, A, _TEnv) ->
@@ -418,14 +414,10 @@ glb(T1, T2, A, TEnv) ->
             end
     end.
 
-%% If either type is any()/term() we don't know anything
+%% We don't know anything if either type is any()
 glb_ty({type, _, any, []} = Ty1, _Ty2, _A, _TEnv) ->
     ret(Ty1);
 glb_ty(_Ty1, {type, _, any, []} = Ty2, _A, _TEnv) ->
-    ret(Ty2);
-glb_ty({type, _, term, []} = Ty1, _Ty2, _A, _TEnv) ->
-    ret(Ty1);
-glb_ty(_Ty1, {type, _, term, []} = Ty2, _A, _TEnv) ->
     ret(Ty2);
 
 %% gradualizer:top() is the top of the hierarchy
@@ -1087,8 +1079,6 @@ expect_fun_type1(_Env, {var, _, Var}) ->
          {type, erl_anno:new(0), 'fun', [{type, erl_anno:new(0), any}
                                         ,{var,  erl_anno:new(0), ResTy}]}))};
 expect_fun_type1(_Env, {type, _, any, []}) ->
-    any;
-expect_fun_type1(_Env, {type, _, term, []}) ->
     any;
 expect_fun_type1(_Env, {remote_type, _, [{atom,_,gradualizer}
 					,{atom,_,top}, []]}) ->

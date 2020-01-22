@@ -52,6 +52,12 @@ logic_op2(X, Y, Z) -> {X andalso Y, X orelse Z}.
 rel_op1(other, _) -> other;
 rel_op1(X, Y) -> X == Y.
 
+-spec rel_subtype_left(1..10, integer()) -> boolean().
+rel_subtype_left(X, Y) -> X == Y.
+
+-spec rel_subtype_right(integer(), 1..10) -> boolean().
+rel_subtype_right(X, Y) -> X == Y.
+
 %% List operations
 
 -spec list_op1([integer()], [integer()]) -> [integer() | error] | error.
@@ -94,3 +100,22 @@ unary_op3(X) -> - (bnot X).
 -spec unary_op4(float()) -> number().
 unary_op4(X) -> -X.
 
+-spec unary_op5(0..10) -> integer().
+unary_op5(X) ->
+    A = bnot X,
+    A.
+
+-spec unary_op6(pos_integer()) -> neg_integer().
+unary_op6(X) ->
+    A = -X,
+    A.
+
+-spec unary_op7(neg_integer()) -> pos_integer().
+unary_op7(X) ->
+    A = -X,
+    A.
+
+-spec unary_op8(0 | neg_integer()) -> non_neg_integer().
+unary_op8(X) ->
+    A = -X,
+    A.
