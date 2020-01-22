@@ -3270,8 +3270,8 @@ refine_ty({Tag1, _, M}, {Tag2, _, N}, _TEnv)
     if M == N -> type(none);
        M /= N -> throw(disjoint)
     end;
-refine_ty(Ty1, Ty2, TEnv) when ?is_int_type(Ty1),
-                               ?is_int_type(Ty2) ->
+refine_ty(Ty1, Ty2, _TEnv) when ?is_int_type(Ty1),
+                                ?is_int_type(Ty2) ->
     gradualizer_int:int_type_diff(Ty1, Ty2);
 refine_ty(Ty1, Ty2, TEnv) ->
     case glb(Ty1, Ty2, TEnv) of
@@ -3402,8 +3402,9 @@ type_comp_op('<', I) when is_integer(I) ->
     type_comp_op('=<', I - 1);
 type_comp_op('>=', I) when is_integer(I) ->
     IntTypes = gradualizer_int:int_range_to_types({I, pos_inf}),
-    GtTypes = [type(atom), type(reference), type('fun'), type(port), type(pid),
-               type(tuple, any), type(map, any), type(list), type(bitstring)],
+    GtTypes = [type(float), type(atom), type(reference), type('fun'),
+               type(port), type(pid), type(tuple, any), type(map, any),
+               type(list), type(bitstring)],
     type(union, IntTypes ++ GtTypes);
 type_comp_op('>', I) when is_integer(I) ->
     type_comp_op('>=', I + 1);
@@ -3934,9 +3935,22 @@ type_of_bin_element({bin_element, _P, Expr, _Size, Specifiers}) ->
 type(Name, Args) ->
     {type, erl_anno:new(0), Name, Args}.
 
+%% Helper to create a type, typically a normalized type
 type(top) ->
     top();
-type(Name) -> type(Name, []).
+type(list) ->
+    type(list, [type(any)]);
+type(bitstring) ->
+    type(binary, [{integer, erl_anno:new(0), 0},
+                  {integer, erl_anno:new(0), 1}]);
+type(binary) ->
+    type(binary, [{integer, erl_anno:new(0), 0},
+                  {integer, erl_anno:new(0), 8}]);
+type('fun') ->
+    %% fun() is normalized as fun((...) -> any())
+    type('fun', [{type, erl_anno:new(0), any}, type(any)]);
+type(Name) ->
+    type(Name, []).
 
 top() ->
     {remote_type, erl_anno:new(0), [{atom, erl_anno:new(0), gradualizer}
