@@ -88,6 +88,8 @@
              %,tyvenv  = #{}
              }).
 
+-include("gradualizer.hrl").
+
 %% Two types are compatible if one is a subtype of the other, or both.
 compatible(Ty1, Ty2, TEnv) ->
     case {subtype(Ty1, Ty2, TEnv), subtype(Ty2, Ty1, TEnv)} of
@@ -1127,7 +1129,7 @@ expect_record_type(Record, {type, _, union, Tys}, TEnv) ->
     expect_record_union(Record, Tys, TEnv);
 expect_record_type(Record, {var, _, Var}, _TEnv) ->
     {ok, constraints:add_var(Var,
-           constraints:upper(Var, {record, erl_anno:new(0), Record}))};
+           constraints:upper(Var, type_record(Record)))};
 expect_record_type(_, _, _) ->
     type_error.
 
@@ -1141,6 +1143,7 @@ expect_record_union(Record, [Ty | Tys], TEnv) ->
 expect_record_union(_Record, [], _TEnv) ->
     type_error.
 
+-spec new_type_var() -> constraints:var().
 new_type_var() ->
     I = erlang:unique_integer(),
     "_TyVar" ++ integer_to_list(I).
