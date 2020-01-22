@@ -7,28 +7,35 @@
 -type type() :: gradualizer_type:abstract_type().
 
 -record(constraints, {
-          lower_bounds = #{}        :: #{ atom() => [type()] },
-          upper_bounds = #{}        :: #{ atom() => [type()] },
-          exist_vars   = sets:new() :: sets:set(string())
+          lower_bounds = #{}        :: #{ var() => [type()] },
+          upper_bounds = #{}        :: #{ var() => [type()] },
+          exist_vars   = sets:new() :: sets:set(var())
          }).
 
 -type constraints() :: #constraints{}.
+-type var() :: atom() | string().
 
+-spec empty() -> constraints().
 empty() ->
     #constraints{}.
 
+-spec add_var(var(), constraints()) -> constraints().
 add_var(Var, Cs) ->
     Cs#constraints{ exist_vars = sets:add_element(Var, Cs#constraints.exist_vars) }.
 
+-spec upper(var(), type()) -> constraints().
 upper(Var, Ty) ->
     #constraints{ upper_bounds = #{ Var => [Ty] } }.
 
+-spec lower(var(), type()) -> constraints().
 lower(Var, Ty) ->
     #constraints{ lower_bounds = #{ Var => [Ty] } }.
 
+-spec combine(constraints(), constraints()) -> constraints().
 combine(C1, C2) ->
     combine([C1, C2]).
 
+-spec combine([constraints()]) -> constraints().
 combine([]) ->
     empty();
 combine([Cs]) ->
