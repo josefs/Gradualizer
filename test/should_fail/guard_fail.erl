@@ -31,3 +31,19 @@ wrong_union2(_) -> not_number.
 wrong_orelse(X, Y) when is_integer(X) orelse is_integer(Y) -> X + Y;
 wrong_orelse(_, _) -> 42.
 
+%% We currently don't infer X :: nonempty_list() from hd(X)
+-spec other_guard_fun([true, ...] | boo) -> boolean().
+other_guard_fun(X) when is_list(X); hd(X) -> length(X) > 3;
+other_guard_fun(_) -> false.
+
+-spec compare_still_float(number()) -> list().
+compare_still_float(N) when 1 =< N, 10 >= N ->
+    integer_to_list(N); % error: N can still be a float
+compare_still_float(_) ->
+    "X".
+
+-spec equal_still_float(number()) -> list().
+equal_still_float(N) when 0 == N ->
+    list_to_integer(0); % error: N can still be float, since 0.0 == 0
+equal_still_float(_) ->
+    "X".
