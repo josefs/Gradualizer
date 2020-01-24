@@ -3786,11 +3786,6 @@ add_type_pat_map_key(_Key, [], _TEnv, _VEnv) ->
     %% Key is not defined in this map type.
     error.
 
-transpose([[]|_]) -> [];
-transpose(M) ->
-  [lists:map(fun hd/1, M) | transpose(lists:map(fun tl/1, M))].
-
-
 -spec add_any_types_pats([gradualizer_type:abstract_pattern()], VEnv :: map()) ->
                              NewVEnv :: map().
 add_any_types_pats([], VEnv) ->
