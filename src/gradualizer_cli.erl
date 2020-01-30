@@ -44,7 +44,12 @@ handle_args(Args) ->
                                             gradualizer:options().
 add_default_print_file_to_opts(Files, Opts) ->
     [print_file || not proplists:is_defined(print_file, Opts),
-                   length(Files) > 1 orelse filelib:is_dir(hd(Files))] ++ Opts.
+                   is_multiple_files(Files)] ++ Opts.
+
+-spec is_multiple_files(FilesToCheck :: list()) -> boolean().
+is_multiple_files([])     -> false;
+is_multiple_files([Path]) -> filelib:is_dir(Path);
+is_multiple_files(_)      -> true.
 
 -spec get_ver(atom()) -> string().
 get_ver(App) ->
