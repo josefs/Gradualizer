@@ -2,7 +2,7 @@
 
 -export([c/1]).
 
-c(File) ->
+c(File) when not is_atom(File) ->
     % TODO: we can be a lot more clever about recognizing
     % if the argument is a file or a module, just like
     % shell_default:c/1.
@@ -11,4 +11,7 @@ c(File) ->
             shell_default:c(File);
         Err ->
             Err
-    end.
+    end;
+c(File) ->
+    shell_default:c(File).
+
