@@ -60,7 +60,7 @@ ebin/gradualizer.app: src/gradualizer.app.src | ebin
 
 .PHONY: shell
 shell: app
-	erl -pa ebin
+	erl -pz ebin
 
 .PHONY: escript
 escript: bin/gradualizer
