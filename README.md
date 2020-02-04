@@ -60,7 +60,7 @@ data types are handled, although there are things that don't work yet.
 
 That being said, pull requests are most welcome!
 
-A work-in-progress manual is located in in the
+A work-in-progress manual is located on the
 [wiki](https://github.com/josefs/Gradualizer/wiki).
 
 For a non-exhaustive list of known problems, see [test/known_problems/](test/known_problems/).
