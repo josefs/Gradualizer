@@ -3,6 +3,8 @@
 %% API used by gradualizer.erl
 -export([type_check_forms/2]).
 
+-export_type([tenv/0]).
+
 %% Export all for easier testing and debugging while the project is
 %% still in an early stage
 -compile([export_all]).
@@ -73,6 +75,8 @@
                                                               Body :: type()}},
                records = #{} :: #{Name :: atom()          => [typed_record_field()]}
               }).
+
+-type tenv() :: #tenv{}.
 
 %%% The environment passed around during typechecking.
 -record(env, {fenv     = #{}
