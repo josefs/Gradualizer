@@ -3785,7 +3785,7 @@ add_type_pat_fields([{record_field, _, {var, _, '_'}, _Pat}|Fields],
 			   Caps        :: capture_vars | bind_vars
                           ) -> {ok, ValueTy :: type(), constraints:constraints()} |
                                error.
-add_type_pat_map_key(_Key, any, _TEnv, _VEnv, Caps) ->
+add_type_pat_map_key(_Key, any, _TEnv, _VEnv, _Caps) ->
     {ok, type(any), constraints:empty()};
 add_type_pat_map_key(Key, [{type, _, AssocTag, [KeyTy, ValueTy]} | MapAssocs], TEnv, VEnv, Caps)
   when AssocTag == map_field_exact; AssocTag == map_field_assoc ->
