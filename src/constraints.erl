@@ -9,10 +9,10 @@
 -type type() :: gradualizer_type:abstract_type().
 
 -record(constraints, {
-          lower_bounds = #{}        :: #{ var() => [type()] },
-          upper_bounds = #{}        :: #{ var() => [type()] },
-          exist_vars   = sets:new() :: sets:set(var())
-         }).
+	  lower_bounds = #{}        :: #{ var() => [type()] },
+	  upper_bounds = #{}        :: #{ var() => [type()] },
+	  exist_vars   = sets:new() :: sets:set(var())
+	 }).
 
 -type constraints() :: #constraints{}.
 -type var() :: atom() | string().
@@ -44,74 +44,93 @@ combine([Cs]) ->
     Cs;
 combine([C1, C2 | Cs]) ->
     C = #constraints{ lower_bounds =
-                          gradualizer_lib:merge_with(fun (_Var, Tys1, Tys2) ->
-                                                 Tys1 ++ Tys2
-                                         end
-                                        ,C1#constraints.lower_bounds
-                                        ,C2#constraints.lower_bounds)
-                    , upper_bounds =
-                          gradualizer_lib:merge_with(fun (_Var, Tys1, Tys2) ->
-                                                 Tys1 ++ Tys2
-                                         end
-                                        ,C1#constraints.upper_bounds
-                                        ,C2#constraints.upper_bounds)
-                    , exist_vars =
-                          sets:union(C1#constraints.exist_vars
-                                    ,C2#constraints.exist_vars)
-                    },
+			  gradualizer_lib:merge_with(fun (_Var, Tys1, Tys2) ->
+						 Tys1 ++ Tys2
+					 end
+					,C1#constraints.lower_bounds
+					,C2#constraints.lower_bounds)
+		    , upper_bounds =
+			  gradualizer_lib:merge_with(fun (_Var, Tys1, Tys2) ->
+						 Tys1 ++ Tys2
+					 end
+					,C1#constraints.upper_bounds
+					,C2#constraints.upper_bounds)
+		    , exist_vars =
+			  sets:union(C1#constraints.exist_vars
+				    ,C2#constraints.exist_vars)
+		    },
     combine([C | Cs]).
 
--spec solve(constraints(), typechecker:tenv()) -> constraints().
+-spec solve(constraints(), typechecker:tenv()) -> {constraints(), #{var() => type()}}.
 solve(Constraints, TEnv) ->
     ElimVars = Constraints#constraints.exist_vars,
     WorkList =
-        [ {LB, UB} || E <- sets:to_list(ElimVars),
-                      LB <- maps:get(E,Constraints#constraints.lower_bounds),
-                      UB <- maps:get(E,Constraints#constraints.upper_bounds) ],
-    Cs = solve_loop(WorkList, sets:new(), ElimVars, Constraints, TEnv),
-    #constraints{
-       upper_bounds = maps:without(sets:to_list(ElimVars), Cs#constraints.upper_bounds),
-       lower_bounds = maps:without(sets:to_list(ElimVars), Cs#constraints.lower_bounds),
-       exist_vars = sets:new()
-     }.
+	[ {LB, UB} || E <- sets:to_list(ElimVars),
+		      LB <- maps:get(E,Constraints#constraints.lower_bounds, []),
+		      UB <- maps:get(E,Constraints#constraints.upper_bounds, []) ],
+    Cs = solve_loop(WorkList, sets:new(), Constraints, ElimVars, TEnv),
+    GlbSubs = fun(_Var, Tys) ->
+		      {Ty, _C} = typechecker:glb(Tys, TEnv),
+		      % TODO: Don't throw away the constraints
+		      Ty
+	      end,
+    LubSubst = fun(_Var, Tys) ->
+		       Ty = typechecker:lub(Tys, TEnv),
+		       Ty
+	       end,
+    % TODO: What if the substition contains occurrences of the variables we're eliminating
+    % in the range of the substitution?
+    Subst = {maps:map(GlbSubs,
+		      maps:with(sets:to_list(ElimVars), Cs#constraints.upper_bounds))
+	    ,maps:map(LubSubst,
+		      maps:with(sets:to_list(ElimVars), Cs#constraints.lower_bounds))
+	    },
+    C = #constraints{
+	   upper_bounds = maps:without(sets:to_list(ElimVars), Cs#constraints.upper_bounds),
+	   lower_bounds = maps:without(sets:to_list(ElimVars), Cs#constraints.lower_bounds),
+	   exist_vars = sets:new()
+	  },
+    {C, Subst}.
 
-solve_loop([], _, _, Constraints, _) ->
+solve_loop([], _, Constraints, _, _) ->
     Constraints;
-solve_loop([I={LB,UB}|WL], Seen, ElimVars, Constraints, TEnv) ->
+solve_loop([I={LB,UB}|WL], Seen, Constraints, ElimVars, TEnv) ->
     case sets:is_element(I, Seen) of
-        true ->
-            solve_loop(WL, Seen, ElimVars, Constraints, TEnv);
-        false ->
+	true ->
+	    solve_loop(WL, Seen, Constraints, ElimVars, TEnv);
+	false ->
 
-            C = case typechecker:subtype(LB,UB, TEnv) of
-                    false ->
-                        throw({type_error, LB, UB});
-                    {true, Cs} ->
-                        Cs
-                end,
+	    C = case typechecker:subtype(LB, UB, TEnv) of
+		    false ->
+			throw({constraint_error, LB, UB});
+		    {true, Cs} ->
+			Cs
+		end,
 
-            % Subtyping should not create new existential variables
-            ?assert(sets:is_empty(C#constraints.exist_vars)),
+	    % Subtyping should not create new existential variables
+	    ?assert(sets:is_empty(C#constraints.exist_vars)),
 
-            ELowerBounds = maps:with(sets:to_list(ElimVars), C#constraints.lower_bounds),
-            EUpperBounds = maps:with(sets:to_list(ElimVars), C#constraints.upper_bounds),
+	    ELowerBounds = maps:with(sets:to_list(ElimVars), C#constraints.lower_bounds),
+	    EUpperBounds = maps:with(sets:to_list(ElimVars), C#constraints.upper_bounds),
 
-            Constraints2 =
-                #constraints{
-                   lower_bounds =
-                       gradualizer_lib:merge_with(fun app/3, Constraints#constraints.lower_bounds
-                                                           , C#constraints.lower_bounds),
-                   upper_bounds =
-                       gradualizer_lib:merge_with(fun app/3, Constraints#constraints.upper_bounds
-                                                           , C#constraints.upper_bounds)
-                  },
-            NewWL =
-                [ {Lower, Upper} || {EVar, Lowers} <- maps:to_list(ELowerBounds), Lower <- Lowers,
-                                    Upper <- [maps:get(EVar, Constraints2#constraints.upper_bounds)] ] ++
-                [ {Lower, Upper} || {Evar, Uppers} <- maps:to_list(EUpperBounds), Upper <- Uppers,
-                                    Lower <- [maps:get(Evar, Constraints2#constraints.lower_bounds)] ] ++
-                WL,
-            solve_loop(NewWL, sets:add_element(I,Seen), ElimVars, Constraints2, TEnv)
+	    Constraints2 =
+		#constraints{
+		   lower_bounds =
+		       gradualizer_lib:merge_with(fun app/3, Constraints#constraints.lower_bounds
+							   , C#constraints.lower_bounds),
+		   upper_bounds =
+		       gradualizer_lib:merge_with(fun app/3, Constraints#constraints.upper_bounds
+							   , C#constraints.upper_bounds)
+		  },
+	    NewWL =
+		[ {Lower, Upper} || {EVar, Lowers} <- maps:to_list(ELowerBounds),
+				    Lower <- Lowers,
+				    Upper <- maps:get(EVar, Constraints2#constraints.upper_bounds) ] ++
+		[ {Lower, Upper} || {Evar, Uppers} <- maps:to_list(EUpperBounds),
+				    Upper <- Uppers,
+				    Lower <- maps:get(Evar, Constraints2#constraints.lower_bounds) ] ++
+		WL,
+	    solve_loop(NewWL, sets:add_element(I,Seen), Constraints2, ElimVars, TEnv)
     end.
 
 app(_, Xs, Ys) ->
