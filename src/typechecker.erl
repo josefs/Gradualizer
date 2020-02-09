@@ -604,6 +604,11 @@ glb_ty({type, _, Name, Args1}, {type, _, Name, Args2}, A, TEnv)
 %% Incompatible
 glb_ty(_Ty1, _Ty2, _A, _TEnv) -> {type(none), constraints:empty()}.
 
+-spec lub([type()], TEnv :: #tenv{}) -> type().
+lub(Tys, TEnv) ->
+    normalize(type(union, Tys), TEnv).
+
+
 %% Normalize
 %% ---------
 %%
@@ -3624,7 +3629,8 @@ type_check_function(Env, {function,_, Name, NArgs, Clauses}) ->
     ?verbose(Env, "Checking function ~p/~p~n", [Name, NArgs]),
     case maps:find({Name, NArgs}, Env#env.fenv) of
         {ok, FunTy} ->
-            check_clauses_fun(Env, expect_fun_type(Env, FunTy), Clauses);
+            {_Vars, Cs} = check_clauses_fun(Env, expect_fun_type(Env, FunTy), Clauses),
+	    constraints:solve(Cs, Env#env.tenv);
         error ->
             throw({internal_error, missing_type_spec, Name, NArgs})
     end.
