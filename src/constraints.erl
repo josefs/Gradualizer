@@ -62,7 +62,8 @@ combine([C1, C2 | Cs]) ->
                     },
     combine([C | Cs]).
 
--spec solve(t(), typechecker:env()) -> {t(), #{var() => type()}}.
+-spec solve(t(), typechecker:env()) -> R when
+      R :: {t(), {#{var() => type()}, #{var() => type()}}}.
 solve(Constraints, Env) ->
     ElimVars = Constraints#constraints.exist_vars,
     WorkList =
