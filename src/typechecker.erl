@@ -3680,7 +3680,7 @@ add_type_pat({map, _, _} = MapPat, {var, _, Var} = TyVar, _TEnv, VEnv, _) ->
     %% - variables from the map pattern become any()
     %% - the contraint could contain the map keys
     Cs = constraints:add_var(
-           Var, constraints:upper(Var, type(map, any))),
+           Var, constraints:lower(Var, type(map, any))),
     {type(none), TyVar, add_any_types_pat(MapPat, VEnv), Cs};
 add_type_pat({map, _, _} = MapPat, ?top(), TEnv, VEnv, Caps) ->
     %% TODO instead of implemented an expect_map_type properly
