@@ -61,7 +61,9 @@ combine([C1, C2 | Cs]) ->
 		    },
     combine([C | Cs]).
 
--spec solve(constraints(), typechecker:tenv()) -> {constraints(), #{var() => type()}}.
+-spec solve(constraints(), typechecker:tenv()) -> {constraints()
+						  , {#{var() => type()}
+						    ,#{var() => type()}}}.
 solve(Constraints, TEnv) ->
     ElimVars = Constraints#constraints.exist_vars,
     WorkList =
