@@ -3499,7 +3499,8 @@ type_check_function(Env, {function,_, Name, NArgs, Clauses}) ->
 %% is the singleton type. Otherwise, PatTy is none(). PatTy is a type exhausted
 %% by Pat. UBound is Ty or a subtype such that Pat :: UBound.
 add_types_pats(Pats, Tys, TEnv, VEnv, Caps) ->
-    add_types_pats(Pats, Tys, TEnv, VEnv, Caps, [], [], []).
+    NewVEnv = assign_types_to_vars_bound_more_than_once(Pats, VEnv),
+    add_types_pats(Pats, Tys, TEnv, NewVEnv, Caps, [], [], []).
 
 add_types_pats([], [], _TEnv, VEnv, _Caps, PatTysAcc, UBoundsAcc, CsAcc) ->
     {lists:reverse(PatTysAcc), lists:reverse(UBoundsAcc),
@@ -3530,13 +3531,16 @@ add_type_pat({var, _, '_'}, Ty, _TEnv, VEnv, _) ->
 add_type_pat({var, _, A} = Var, Ty, TEnv, VEnv, CapOrBind) ->
     case VEnv of
 	#{A := VarTy} when CapOrBind == capture_vars ->
-	    case subtype(VarTy, Ty, TEnv) of
-		{true, Cs} ->
-		    {type(none), VarTy, VEnv, Cs};
-		false ->
-		    throw({type_error, Var, VarTy, Ty})
+	    case glb(VarTy, Ty, TEnv) of
+                {?type(none), _Cs} ->
+                    %% TODO: Better type error (it's a pattern, not an
+                    %% expression)
+		    throw({type_error, Var, VarTy, Ty});
+		{RefinedTy, Cs} ->
+		    {type(none), RefinedTy, VEnv#{A := RefinedTy}, Cs}
 	    end;
 	_FreeVar ->
+            %% Match all
 	    {Ty, Ty, VEnv#{A => Ty}, constraints:empty()}
     end;
 add_type_pat(Expr, {type, _, any, []} = Ty, _TEnv, VEnv, _) ->
@@ -3863,6 +3867,38 @@ add_any_types_pat({op, _, _Op, _Pat}, VEnv) ->
     %% Cannot contain variables.
     VEnv.
 
+-spec assign_types_to_vars_bound_more_than_once(Pats :: [gradualizer_type:abstract_pattern()],
+                                                VEnv :: map()) ->
+                                                       NewVEnv :: map().
+%% Assigns the type top() to variables occurring more than once in the list of
+%% patterns. This prevents the variables from being treated as match-all, thus
+%% affecting refinement.
+assign_types_to_vars_bound_more_than_once(Pats, VEnv) ->
+    VarOccurences = count_var_occurrences(Pats),
+    maps:fold(fun (Var, N, VEnvAcc) when N > 1 ->
+                      case maps:is_key(Var, VEnvAcc) of
+                          true  -> VEnvAcc;
+                          false -> VEnvAcc#{Var => top()}
+                      end;
+                  (Var, 1, VEnvAcc) ->
+                      %% Leave it as a free variable
+                      VEnvAcc
+              end,
+              VEnv,
+              VarOccurences).
+
+%% Counts the variables in a list of expressions or patterns.
+-spec count_var_occurrences([gradualizer_type:abstract_expr()]) ->
+                                   #{atom() | list() => pos_integer()}.
+count_var_occurrences(Exprs) ->
+    Inc = fun (N) -> N + 1 end,
+    gradualizer_lib:fold_ast(fun ({var, _, Var}, Acc) when Var =/= '_' ->
+                                     maps:update_with(Var, Inc, 1, Acc);
+                                 (_, Acc) ->
+                                     Acc
+                             end,
+                             #{},
+                             Exprs).
 
 %% Get type from specifiers in a bit syntax, e.g. <<Foo/float-little>>
 -spec type_of_bin_element({bin_element,
