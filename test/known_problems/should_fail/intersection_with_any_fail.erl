@@ -2,7 +2,8 @@
 
 -export([any_refined_using_guard/1,
          intersection_using_constraits/1,
-         var_as_pattern/1]).
+         var_as_pattern/1,
+         var_inside_pattern/1]).
 
 %% X :: any() & atom() by refinement
 -spec any_refined_using_guard(any()) -> 5.
@@ -22,6 +23,15 @@ var_as_pattern(Atom) ->
         Atom ->
 	    %% at this point Atom :: any()
 	    %% but we want Atom :: atom() & any()
+            Atom
+    end.
+
+-spec var_inside_pattern(atom()) -> integer().
+var_inside_pattern(Atom) ->
+    case get_any() of
+        {Atom} ->
+            %% at this point Atom :: any()
+            %% but we want Atom :: atom() & any()
             Atom
     end.
 
