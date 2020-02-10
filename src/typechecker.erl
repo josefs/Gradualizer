@@ -3268,6 +3268,10 @@ refine_ty({Tag1, _, M}, {Tag2, _, N}, _TEnv)
 refine_ty(Ty1, Ty2, _TEnv) when ?is_int_type(Ty1),
                                 ?is_int_type(Ty2) ->
     gradualizer_int:int_type_diff(Ty1, Ty2);
+refine_ty({user_type, Anno, Name, Args}, {user_type, Anno, Name, Args}, _TEnv) ->
+    % After being normalized, it's because it's defined as opaque.
+    % If it has the same annotation, name and args, it's the same.
+    type(none);
 refine_ty(Ty1, Ty2, TEnv) ->
     case glb(Ty1, Ty2, TEnv) of
         {?type(none), _}  -> throw(disjoint);     %% disjoint
