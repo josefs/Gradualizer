@@ -3868,8 +3868,9 @@ add_any_types_pat({var, _, '_'}, VEnv) ->
     VEnv;
 add_any_types_pat({var, _, A}, VEnv) ->
     case VEnv of
-        #{A := _} ->
-            VEnv;
+        #{A := VarTy} ->
+            {RefinedTy, _Cs} = glb(VarTy, type(any), #tenv{}),
+            VEnv#{ A := RefinedTy };
         _ ->
             VEnv#{ A => type(any) }
     end;
