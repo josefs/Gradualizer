@@ -2,7 +2,7 @@
 
 -module(gradualizer_lib).
 
--export([merge_with/3, top_sort/1, pick_value/1]).
+-export([merge_with/3, top_sort/1, pick_value/1, fold_ast/3]).
 -export_type([graph/1]).
 
 %% Pattern macros
@@ -119,3 +119,37 @@ pick_value(?type(range, [{_TagLo, _, neg_inf}, {_TagHi, _, Hi}])) ->
     Hi;
 pick_value(?type(range, [{_TagLo, _, Lo}, {_TagHi, _, _Hi}])) ->
     Lo.
+
+%% ------------------------------------------------
+%% Functions for working with abstract syntax trees
+%% ------------------------------------------------
+
+%% erl_parse:erl_parse_tree() is documented but not exported :-(
+-type erl_parse_tree() :: erl_parse:abstract_clause()
+                        | erl_parse:abstract_expr()
+                        | erl_parse:abstract_form()
+                        | erl_parse:abstract_type().
+
+%% Folds a function over an Erlang abstract syntax tree.  The fun is applied to
+%% each node (tuple) in the AST, which is traversed in depth first order.
+-spec fold_ast(Fun, AccIn, Ast) -> AccOut
+        when Fun    :: fun((tuple(), Acc) -> Acc),
+             Ast    :: erl_parse_tree() | [erl_parse_tree()],
+             AccIn  :: Acc,
+             AccOut :: Acc.
+fold_ast(Fun, AccIn, [X|Xs]) ->
+    Acc = fold_ast(Fun, AccIn, X),
+    fold_ast(Fun, Acc, Xs);
+fold_ast(Fun, AccIn, Node) when is_tuple(Node) ->
+    Acc = Fun(Node, AccIn),
+    fold_ast(Fun, Acc, get_ast_children(Node));
+fold_ast(_Fun, Acc, _LiteralEtc) ->
+    Acc.
+
+%% Returns the children of an AST node
+get_ast_children({clauses, Clauses}) ->
+    %% This one doesn't have an annotation
+    Clauses;
+get_ast_children(Node) ->
+    [_Tag, _Anno | Children] = tuple_to_list(Node),
+    Children.
