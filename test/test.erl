@@ -15,7 +15,7 @@ should_test_() ->
 gen_should_pass() ->
     {setup,
      fun() ->
-             %% user_types.erl is referenced by remote_types.erl.
+             %% user_types.erl is referenced by remote_types.erl and opaque.erl.
              %% It is not in the sourcemap of the DB so let's import it manually
              gradualizer_db:import_erl_files(["test/should_pass/user_types.erl"]),
              %% imported.erl references any.erl
@@ -30,7 +30,7 @@ gen_should_pass() ->
 gen_should_fail() ->
     {setup,
         fun() ->
-            %% user_types.erl is referenced by remote_types.erl.
+            %% user_types.erl is referenced by opaque_fail.erl.
             %% It is not in the sourcemap of the DB so let's import it manually
             gradualizer_db:import_erl_files(["test/should_pass/user_types.erl"])
         end,
