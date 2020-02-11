@@ -21,6 +21,6 @@ guess_two_dice(X, Y) ->
             0
     end.
 
-%% untyped heper returning {1..6, 1..6}
+%% untyped helper returning {1..6, 1..6}
 roll_two_dice() ->
     {random:uniform(6), random:uniform(6)}.

@@ -3502,7 +3502,10 @@ add_types_pats(Pats, Tys, TEnv, VEnv, Caps) ->
     NewVEnv = assign_types_to_vars_bound_more_than_once(Pats, VEnv, Caps),
     do_add_types_pats(Pats, Tys, TEnv, NewVEnv).
 
-%% Used in recursive calls from add_type_pat/4
+%% Helper for add_types_pats/5, also used in recursive calls from
+%% add_type_pat/4.
+%%
+%% NB: Don't use this function directly. Use add_types_pats/5 instead.
 -spec do_add_types_pats(Pats :: [gradualizer_type:abstract_pattern()],
                         Tys  :: [type()],
                         TEnv :: #tenv{},
@@ -3531,6 +3534,7 @@ add_types_pats([Pat | Pats], [Ty | Tys], TEnv, VEnv, PatTysAcc, UBoundsAcc, CsAc
                    [PatTy|PatTysAcc], [UBound|UBoundsAcc], [Cs1|CsAcc]).
 
 %% Type check a pattern against a normalized type and add variable bindings.
+%%
 %% NB: For correct variable binding and refinement logic, don't use this
 %% function directly.  Instead, use add_types_pats([Pat], [Type], TEnv, VEnv).
 -spec add_type_pat(Pat  :: gradualizer_type:abstract_pattern(),
@@ -3801,9 +3805,10 @@ add_type_pat_map_key(_Key, any, _TEnv, _VEnv) ->
     {ok, type(any), constraints:empty()};
 add_type_pat_map_key(Key, [{type, _, AssocTag, [KeyTy, ValueTy]} | MapAssocs], TEnv, VEnv)
   when AssocTag == map_field_exact; AssocTag == map_field_assoc ->
-    try add_type_pat(Key, KeyTy, TEnv, VEnv) of
-        {_, _, VEnv, Cs} ->
-            %% No free vars in Key, so no new variable binds
+    try add_types_pats([Key], [KeyTy], TEnv, VEnv, capture_vars) of
+        {_, _, _VEnv, Cs} ->
+            %% No free vars in Key, so no new variable binds.  (Types in VEnv
+            %% can be refined though, so _VEnv doesn't have to match VEenv.)
             {ok, ValueTy, Cs}
     catch _TypeError ->
         add_type_pat_map_key(Key, MapAssocs, TEnv, VEnv)

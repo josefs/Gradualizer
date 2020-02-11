@@ -2,7 +2,7 @@
 
 -module(gradualizer_lib).
 
--export([merge_with/3, top_sort/1, pick_value/1, fold_ast/3]).
+-export([merge_with/3, top_sort/1, pick_value/1, fold_ast/3, get_ast_children/1]).
 -export_type([graph/1]).
 
 %% Pattern macros
