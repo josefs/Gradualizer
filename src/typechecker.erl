@@ -2992,23 +2992,80 @@ get_atom(_Env, Atom = {atom, _, _}) ->
     Atom;
 get_atom(Env, {var, _, Var}) ->
     case maps:get(Var, Env#env.venv) of
-        Atom = {atom, _, _} ->
-            Atom;
-        _ ->
-            false
+	Atom = {atom, _, _} ->
+	    Atom;
+	_ ->
+	    false
     end;
 get_atom(_Env, _) ->
     false.
 
+% Find all the type variables in a function type and instantiate them
+% to fresh type variables. We have a choice of how to interpret the
+% combination of polymorphism and intersection. If we have two types
+% which have type variables with the same name, are these variables
+% actually the same or different but with the same name?
+%
+% Example:
+%
+% -spec foo(integer(), A) -> A;
+%       foo(boolean(), A) -> A.
+% Are all the 'A's the same?
+%
+% I've chosen to interpret them as being the same type variable. This
+% give more expressivity in the type system. If we want to have
+% different type variables we can clearly just name them
+% differently. If we had chosen the other interpretation and
+% interpreted them as different type variables, there wouldn't have
+% been any way of expressing that the type variables should be the
+% same across the intersection. Hence, I've gone with the more
+% expressive option. As luck would have it, it's simpler to implement
+% also.
+-spec instantiate_fun_type([type()]) -> {[type()], constraints:constraints()}.
+instantiate_fun_type(Tys) ->
+    {NewTys, Vars, _Map} = instantiate_list(Tys, #{}),
+    {NewTys, constraints:vars(Vars)}.
+
+-spec instantiate(type(), #{ constraints:var() => type() }) ->
+			 { type()
+			 , sets:set(constraints:var())
+			 , #{ constraints:var() => type() }}.
+instantiate({var, _, TyVar}, Map) ->
+    try maps:get(TyVar, Map) of
+	Ty ->
+	    {Ty, sets:new(), Map}
+    catch
+	{badkey, _} ->
+	    NewTyVar = new_type_var(),
+	    Type = {var, erl_anno:new(0), NewTyVar},
+	    {Type, sets:from_list([NewTyVar]), Map#{ TyVar := Type }}
+    end;
+instantiate(T = ?type(_), Map) ->
+    {T, sets:new(), Map};
+instantiate(?type(Ty, Args), Map) ->
+    {NewArgs, Set, NewMap} = instantiate_list(Args, Map),
+    {type(Ty, NewArgs), Set, NewMap};
+instantiate(T = {Tag, _,_}, Map) when Tag == integer orelse Tag == atom ->
+    {T, sets:new(), Map}.
+
+
+instantiate_list([], Map) ->
+    {[], sets:new(), Map};
+instantiate_list([Ty|Tys], Map) ->
+    {NewTy, Vars, NewMap} = instantiate(Ty, Map),
+    {NewTys, MoreVars, EvenNewerMap} = instantiate_list(Tys, NewMap),
+    {[NewTy|NewTys], sets:union(Vars,MoreVars), EvenNewerMap}.
+
+
 
 %% Infers (or at least propagates types from) fun/receive/try/case/if clauses.
 -spec infer_clauses(#env{}, [gradualizer_type:abstract_clause()]) ->
-        {type(), VarBinds :: map(), constraints:constraints()}.
+	{type(), VarBinds :: map(), constraints:constraints()}.
 infer_clauses(Env, Clauses) ->
     {Tys, VarBindsList, Css} =
-        lists:unzip3(lists:map(fun (Clause) ->
-                                       infer_clause(Env, Clause)
-                               end, Clauses)),
+	lists:unzip3(lists:map(fun (Clause) ->
+				       infer_clause(Env, Clause)
+			       end, Clauses)),
     {normalize(type(union, Tys), Env#env.tenv)
     ,union_var_binds(VarBindsList, Env#env.tenv)
     ,constraints:combine(Css)}.
