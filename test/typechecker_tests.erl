@@ -269,6 +269,23 @@ normalize_test_() ->
                                           typechecker:create_tenv(?MODULE, [], [])))}
     ].
 
+unfold_bounded_type_test() ->
+    OrigSpecStr =
+        "-spec unzip(List1) -> {List2, List3} when\n"
+        "      List1 :: [{A, B}],\n"
+        "      List2 :: [A],\n"
+        "      List3 :: [B],\n"
+        "      A :: term(),\n"
+        "      B :: term().",
+    ExpectedTypeStr =
+        "fun(([{A, B}]) -> {[A], [B]})",
+
+    {attribute, _, spec, {{unzip, 1}, [BoundedFun]}} = merl:quote(OrigSpecStr),
+    TEnv = typechecker:create_tenv(?MODULE, [], []),
+    UnfoldedType = typechecker:unfold_bounded_type(TEnv, BoundedFun),
+    UnfoldedTypeStr = typelib:pp_type(UnfoldedType),
+    ?assertEqual(ExpectedTypeStr, UnfoldedTypeStr).
+
 normalize_e2e_test_() ->
     [
      {"Normalize local user types",
