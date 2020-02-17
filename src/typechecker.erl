@@ -1157,6 +1157,9 @@ bounded_type_list_to_type(TEnv, Types) ->
 unfold_bounded_type_list(TEnv, Types) when is_list(Types) ->
     [ unfold_bounded_type(TEnv, Ty) || Ty <- Types ].
 
+%% Unfolds constrained type variables in a bounded fun type. Unconstrained type
+%% variables are left unchanged. Constraints on the form T :: any(), T :: term()
+%% and T :: gradualizer:top() are ignored. A "plain" fun type is returned.
 unfold_bounded_type(TEnv, BTy = {type, _, bounded_fun, [Ty, _]}) ->
     Sub = bounded_type_subst(TEnv, BTy),
     subst_ty(Sub, Ty);
@@ -1175,8 +1178,12 @@ bounded_type_subst(TEnv, BTy = {type, P, bounded_fun, [_, Bounds]}) ->
 solve_bounds(TEnv, Cs) ->
     Defs = [ {X, T} || {type, _, constraint, [{atom, _, is_subtype}, [{var, _, X}, T]]} <- Cs ],
     Env  = lists:foldl(fun
+                           ({_, ?type(any)}, E) ->
+                               E; % Ignore constraint X :: any()
+                           ({_, ?type(term)}, E) ->
+                               E; % Ignore constraint X :: term()
                            ({_, ?top()}, E) ->
-                               E; %% Don't unfold X :: gradualizer:top()
+                               E; % Ignore constraint X :: gradualizer:top()
                            ({X, T}, E) ->
                                maps:update_with(X,
                                                 fun(Ts) -> [T | Ts] end,
@@ -1200,8 +1207,9 @@ solve_bounds(TEnv, Defs, [{acyclic, X} | SCCs], Acc) ->
 				  {Ty, constraints:combine(Cs, Css)}
 			  end,
 			  {top(), constraints:empty()}, Tys1);
-	  _NoBoundsForX ->
-	      {type(any), constraints:empty()} %% or should we return top()?
+          _NoBoundsForX ->
+              %% Unconstrained type variables are kept as type variables.
+              {{var, erl_anno:new(0), X}, constraints:empty()}
       end,
     solve_bounds(TEnv, maps:remove(X, Defs), SCCs, Acc#{ X => Ty1 });
 solve_bounds(_, _, [{cyclic, Xs} | _], _) ->
