@@ -3966,6 +3966,7 @@ type_of_bin_element({bin_element, _P, Expr, _Size, Specifiers}) ->
                           {string, _, _} -> true;
                           _              -> false
                       end,
+    IsSigned = length([signed || signed <- Specifiers]) > 0,
     Types =
         lists:filtermap(fun
                             (S) when S == integer;
@@ -3977,7 +3978,10 @@ type_of_bin_element({bin_element, _P, Expr, _Size, Specifiers}) ->
                                         %% <<"ab"/utf8>> == <<$a/utf8, $b/utf8>>.
                                         {true, type(string)};
                                     not IsStringLiteral ->
-                                        {true, type(integer)}
+                                        case IsSigned of
+                                            true -> {true, type(integer)};
+                                            false -> {true, type(non_neg_integer)}
+                                        end
                                 end;
                             (float) when IsStringLiteral ->
                                 %% <<"abc"/float>> is integers to floats conversion
@@ -4005,7 +4009,10 @@ type_of_bin_element({bin_element, _P, Expr, _Size, Specifiers}) ->
             type(string);
         [] ->
             %% <<X>>
-            type(integer);
+            case IsSigned of
+                true -> type(integer);
+                false -> type(non_neg_integer)
+            end;
         [T] ->
             T
     end.
