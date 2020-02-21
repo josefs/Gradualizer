@@ -3547,8 +3547,11 @@ add_types_pats([Pat | Pats], [Ty | Tys], TEnv, VEnv, PatTysAcc, UBoundsAcc, CsAc
 
 %% Type check a pattern against a normalized type and add variable bindings.
 %%
-%% NB: For correct variable binding and refinement logic, don't use this
+%% Note 1: For correct variable binding and refinement logic, don't use this
 %% function directly.  Instead, use add_types_pats([Pat], [Type], TEnv, VEnv).
+%%
+%% Note 2: When this function calls itself recursively, take care that the type
+%% is normalized first.
 -spec add_type_pat(Pat  :: gradualizer_type:abstract_pattern(),
                    Type :: type(),
                    TEnv :: #tenv{},
@@ -3577,6 +3580,7 @@ add_type_pat(Expr, {type, _, any, []} = Ty, _TEnv, VEnv) ->
 add_type_pat(Pat, ?type(union, UnionTys)=UnionTy, TEnv, VEnv) ->
     {PatTys, UBounds, VEnvs, Css} =
         lists:foldr(fun (Ty, {PatTysAcc, UBoundsAcc, VEnvAcc, CsAcc}=Acc) ->
+                        %% Ty is normalized, since UnionTy is normalized
                         try add_type_pat(Pat, Ty, TEnv, VEnv) of
                             {PatTy, UBound, NewVEnv, Cs} ->
                                 {[PatTy|PatTysAcc],
@@ -3660,7 +3664,8 @@ add_type_pat(CONS = {cons, P, PH, PT}, ListTy, TEnv, VEnv) ->
             {_TailPatTy, _TauUBound, VEnv3, Cs} = add_type_pat(PT, TailTy, TEnv, VEnv2),
             {type(none), ListTy, VEnv3, Cs};
         {elem_ty, ElemTy, Cs1} ->
-            {_PatTy1, _UBound1, VEnv2, Cs2} = add_type_pat(PH, ElemTy, TEnv, VEnv),
+            {_PatTy1, _UBound1, VEnv2, Cs2} =
+                add_type_pat(PH, normalize(ElemTy, TEnv), TEnv, VEnv),
             TailTy = normalize(type(union, [ListTy, type(nil)]), TEnv),
             {_PatTy2, _Ubound2, VEnv3, Cs3} = add_type_pat(PT, TailTy, TEnv, VEnv2),
             {type(none), ListTy, VEnv3, constraints:combine([Cs1, Cs2, Cs3])};
@@ -3725,7 +3730,8 @@ add_type_pat({map, _P, PatAssocs}, {type, _, map, MapTyAssocs} = MapTy, TEnv, VE
                             case add_type_pat_map_key(Key, MapTyAssocs, TEnv, VEnvIn) of
                                 {ok, ValueTy, Cs1} ->
                                     {_ValPatTy, _ValUBound, VEnvOut, Cs2} =
-                                        add_type_pat(ValuePat, ValueTy, TEnv, VEnvIn),
+                                        add_type_pat(ValuePat, normalize(ValueTy, TEnv),
+                                                     TEnv, VEnvIn),
                                     {VEnvOut, [Cs1, Cs2 | CsAcc]};
                                 error ->
                                     throw({type_error, badkey, Key, MapTy})
@@ -3792,7 +3798,8 @@ add_type_pat_fields([{record_field, Anno, {atom, _, _} = FieldWithAnno, Pat}|Fie
                     Record, TEnv, VEnv) ->
     Rec = get_record_fields(Record, Anno, TEnv),
     FieldTy = get_rec_field_type(FieldWithAnno, Rec),
-    {_TyPat, _UBound, VEnv2, Cs1} = add_type_pat(Pat, FieldTy, TEnv, VEnv),
+    {_TyPat, _UBound, VEnv2, Cs1} =
+        add_type_pat(Pat, normalize(FieldTy, TEnv), TEnv, VEnv),
     {VEnv3, Cs2} = add_type_pat_fields(Fields, Record, TEnv, VEnv2),
     {VEnv3, constraints:combine(Cs1, Cs2)};
 add_type_pat_fields([{record_field, _, {var, _, '_'}, _Pat}|Fields],
