@@ -1176,16 +1176,10 @@ expect_record_type(Union = {type, _, union, UnionTys}, Record, TEnv) ->
             {fields_tys, Tyss, Cs}
     end;
 expect_record_type({var, _, Var}, Record, #tenv{records = REnv}) ->
-%%    Not sure how to make this work
-%%    TyVar = new_type_var(),
-%%    {fields_ty
-%%        ,{var, erl_anno:new(0), TyVar}
-%%        ,constraints:add_var(Var,
-%%            constraints:upper(Var, type_record(Record)))
-%%    };
     case REnv of
         #{Record := Fields} ->
-            {fields_ty, Fields, constraints:empty()};
+            Cs = constraints:add_var(Var, constraints:upper(Var, type_record(Record))),
+            {fields_ty, Fields, Cs};
         _NotFound ->
             {type_error, Record}
     end;
