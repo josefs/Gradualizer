@@ -198,11 +198,11 @@ test/covertool.beam: test/covertool.erl test/covertool.hrl
 
 # Download the deps for generating XML cover report
 test/covertool.erl:
-	curl -Ls https://github.com/covertool/covertool/raw/2.0.1/src/covertool.erl \
+	curl -Ls https://github.com/covertool/covertool/raw/2.0.2/src/covertool.erl \
 	     -o $@
 
 test/covertool.hrl:
-	curl -Ls https://github.com/covertool/covertool/raw/2.0.1/include/covertool.hrl \
+	curl -Ls https://github.com/covertool/covertool/raw/2.0.2/include/covertool.hrl \
 	     -o $@
 
 DIALYZER_PLT = .dialyzer_plt
