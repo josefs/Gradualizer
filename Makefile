@@ -23,7 +23,8 @@
 # Capitalized variables can be overriden on the command line.
 # Example:
 #
-#   make tests EUNIT_OPTS=      Run tests without the eunit verbose option
+#   make tests EUNIT_OPTS=verbose
+#               Run tests with the eunit verbose option
 #
 # The directory structure is following what is described on
 # http://erlang.org/doc/design_principles/applications.html
@@ -124,7 +125,7 @@ test/any.beam: test/should_pass/any.erl
 test/records.beam: test/should_pass/records.erl
 	erlc $(ERLC_OPTS) -o test $<
 
-EUNIT_OPTS = verbose
+EUNIT_OPTS =
 
 define erl_run_eunit
 case eunit:test("test", [$(EUNIT_OPTS)]) of \
@@ -171,7 +172,6 @@ cli-tests: bin/gradualizer
 	  test/should_pass/cyclic_otp_specs.erl || (echo "CLI 10"; exit 1)
 
 .PHONY: cover
-cover: EUNIT_OPTS =
 cover: compile-tests
 	mkdir -p cover
 	erl -noinput -pa ebin -pa test -eval \
