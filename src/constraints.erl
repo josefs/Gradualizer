@@ -2,7 +2,7 @@
 
 -export([empty/0, upper/2, lower/2, combine/1, combine/2, add_var/2]).
 
--export_type([constraints/0]).
+-export_type([constraints/0, var/0]).
 
 -type type() :: gradualizer_type:abstract_type().
 
