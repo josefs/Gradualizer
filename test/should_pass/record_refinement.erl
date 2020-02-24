@@ -45,3 +45,8 @@ without_spec(R) -> with_spec(R#any.f).
 
 -spec with_spec(integer()) -> integer().
 with_spec(I) -> I + 1.
+
+-record(refined_field, {f :: integer() | undefined}).
+-spec refined_field(#refined_field{}) -> #refined_field{f :: integer()}.
+refined_field(#refined_field{f = undefined}) -> #refined_field{f = 0};
+refined_field(R) -> R.
