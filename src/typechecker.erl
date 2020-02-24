@@ -2158,7 +2158,13 @@ do_type_check_expr_in(Env, ResTy, {record, Anno, Name, Fields} = Record) ->
             {VarBinds, Cs2} = type_check_fields(Env, Rec, Fields),
             {VarBinds, constraints:combine(Cs1, Cs2)};
         {fields_tys, Tyss, Cs1} ->
-            todo;
+            case type_check_record_union_in(Env, Tyss, Fields) of
+                none ->
+                    {Ty, _VB, _Cs} = type_check_expr(Env#env{infer = true}, Record),
+                    throw({type_error, Record, Ty, ResTy});
+                {VBs, Cs2} ->
+                    {union_var_binds(VBs, Env#env.tenv), constraints:combine(Cs1, Cs2)}
+            end;
         any ->
             Rec = get_record_fields(Name, Anno, Env#env.tenv),
             type_check_fields(Env, Rec, Fields);
