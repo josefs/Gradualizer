@@ -3844,9 +3844,6 @@ add_type_pat({bin, _P, BinElements} = Bin, Ty, TEnv, VEnv) ->
 add_type_pat({record, P, Record, Fields}, Ty, TEnv, VEnv) ->
     case expect_record_type(Ty, Record, TEnv) of
         any ->
-            %% FIXME: If record() is used and we try to bind, every field types
-            %% - should be any(). add_any_types_pat won't work, will need a
-            %% - add_any_type_pat_fields
             {type(none)
                 ,Ty
                 ,union_var_binds([add_any_types_pat(Field, VEnv) || Field <- Fields], TEnv)
