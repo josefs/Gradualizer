@@ -54,6 +54,7 @@
 -define(record_field(Name), {record_field, _, {atom, _, Name}, _}).
 -define(typed_record_field(Name), {typed_record_field, ?record_field(Name), _}).
 -define(typed_record_field(Name, Type), {typed_record_field, ?record_field(Name), Type}).
+-define(type_field_type(Name, Type), {type, _, field_type, [{atom, _, Name}, Type]}).
 
 %% Data collected from epp parse tree
 -record(parsedata, {
@@ -249,6 +250,10 @@ compat_ty({type, Anno1, record, [{atom, _, Name}|Fields1]},
     compat_record_tys(AllFields1, AllFields2, A, TEnv);
 compat_ty({type, _, record, _}, {type, _, tuple, any}, A, _TEnv) ->
     ret(A);
+
+%% Record fields that have been refined
+compat_ty(?type_field_type(Name, Ty1), ?type_field_type(Name, Ty2), A, TEnv) ->
+    compat(Ty1, Ty2, A, TEnv);
 
 %% Lists
 compat_ty(Ty1, Ty2, A, TEnv) when ?is_list_type(Ty1), ?is_list_type(Ty2) ->
@@ -619,6 +624,8 @@ glb_ty(_Ty1, _Ty2, _A, _TEnv) -> {type(none), constraints:empty()}.
 normalize({type, _, record, [{atom, _, Name}|Fields]}, TEnv) when length(Fields) > 0 ->
     NormFields = [normalize(Field, TEnv) || Field <- Fields],
     type_record(Name, NormFields);
+normalize(?type_field_type(_Name, Type), TEnv) ->
+    normalize(Type, TEnv);
 normalize({type, _, union, Tys}, TEnv) ->
     Types = flatten_unions(Tys, TEnv),
     case merge_union_types(Types, TEnv) of
@@ -2172,7 +2179,7 @@ do_type_check_expr_in(Env, ResTy, {record, Anno, Exp, Name, Fields} = Record) ->
                           end
                     ,Fields)
             ),
-            RecordTy = type_record(Name, [Type || {_, _, Type} <- Rec]),
+            RecordTy = type_record(Name, [type_field_type(Name, Type) || ?typed_record_field(Name, Type) <- Rec]),
             {VarBinds, Cs2} = type_check_expr_in(Env, RecordTy, Exp),
             {union_var_binds([VarBinds|VarBindsList], Env#env.tenv)
                 ,constraints:combine([Cs1, Cs2|Css])};
@@ -3314,7 +3321,7 @@ refine(OrigTy, Ty, TEnv) ->
 
 get_record_fields_types(Name, Anno, TEnv) ->
     RecordFields = get_maybe_remote_record_fields(Name, Anno, TEnv),
-    [Type || ?typed_record_field(_, Type) <- RecordFields].
+    [type_field_type(Name, Type) || ?typed_record_field(Name, Type) <- RecordFields].
 
 expand_record(Name, Anno, TEnv) ->
     type_record(Name, get_record_fields_types(Name, Anno, TEnv)).
@@ -3339,6 +3346,9 @@ refine_ty(?type(record, [Name|Tys1]), ?type(record, [Name|Tys2]), TEnv)
     RecordsElems = pick_one_refinement_each(Tys1, RefTys),
     Records = [type(record, [Name|RecordElems]) || RecordElems <- RecordsElems],
     normalize(type(union, Records), TEnv);
+refine_ty(?type_field_type(Name, Ty1), ?type_field_type(Name, Ty2), TEnv) ->
+    RefTy = refine(Ty1, Ty2, TEnv),
+    normalize(type_field_type(Name, RefTy), TEnv);
 refine_ty(?type(union, UnionTys), Ty, TEnv) ->
     RefTys = lists:foldr(fun (UnionTy, Acc) ->
                              try refine(UnionTy, Ty, TEnv) of
@@ -3948,7 +3958,7 @@ add_type_pat_fields(Fields, Tys, TEnv, VEnv) ->
 add_type_pat_fields([], _, _TEnv, VEnv, PatTysAcc, UBoundsAcc, CsAcc) ->
     {lists:reverse(PatTysAcc), lists:reverse(UBoundsAcc),
      VEnv, constraints:combine(CsAcc)};
-add_type_pat_fields([{record_field, _, {atom, _, _} = FieldWithAnno, Pat}|Fields],
+add_type_pat_fields([{record_field, _, {atom, _, Name} = FieldWithAnno, Pat}|Fields],
                     Record, TEnv, VEnv, PatTysAcc, UBoundsAcc, CsAcc) ->
     Ty = get_rec_field_type(FieldWithAnno, Record),
     NormTy = normalize(Ty, TEnv),
@@ -3956,10 +3966,12 @@ add_type_pat_fields([{record_field, _, {atom, _, _} = FieldWithAnno, Pat}|Fields
         ?throw_orig_type(add_type_pat(Pat, NormTy, TEnv, VEnv),
                          Ty, NormTy),
     %% De-normalize the returned types if they are the type checked against.
-    PatTy  = case PatTyNorm  of NormTy -> Ty;
-                 _      -> PatTyNorm end,
-    UBound = case UBoundNorm of NormTy -> Ty;
-                 _      -> UBoundNorm end,
+    RawPatTy  = case PatTyNorm  of NormTy -> Ty;
+                                _      -> PatTyNorm end,
+    PatTy = type_field_type(Name, RawPatTy),
+    RawUBound = case UBoundNorm of NormTy -> Ty;
+                                _      -> UBoundNorm end,
+    UBound = type_field_type(Name, RawUBound),
     add_type_pat_fields(Fields, Record, TEnv, VEnv2,
                         [PatTy|PatTysAcc], [UBound|UBoundsAcc], [Cs1|CsAcc]).
 
@@ -4210,6 +4222,9 @@ type_record(Name) ->
 
 type_record(Name, Fields) ->
     {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Name} | Fields]}.
+
+type_field_type(Name, Type) ->
+    {type, erl_anno:new(0), field_type, [{atom, erl_anno:new(0), Name}, Type]}.
 
 type_fun(Arity) ->
     Args = [{type, erl_anno:new(0), any, []} || _ <- lists:seq(1, Arity)],

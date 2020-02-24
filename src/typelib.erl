@@ -37,8 +37,6 @@ pp_type({type, _, bounded_fun, [FunType, []]}) ->
     %% Bounded fun with empty constraints gets printed with a trailing "when"
     %% when pretty-printed as a spec (next clause)
     pp_type(?assert_type(FunType, function_type()));
-pp_type({type, Anno, record, [Name|Fields]}) when length(Fields) > 0 ->
-    pp_type({type, Anno, record, [Name]});
 pp_type(Type = {type, _, bounded_fun, _}) ->
     %% erl_pp can't handle bounded_fun in type definitions
     %% We invent our own syntax here, e.g. "fun((A) -> ok when A :: atom())"
@@ -94,9 +92,6 @@ remove_pos({Type, _, Value})
 remove_pos({user_type, Anno, Name, Params}) when is_list(Params) ->
     {user_type, anno_keep_only_filename(Anno), Name,
      lists:map(fun remove_pos/1, Params)};
-remove_pos({type, Anno, record, Params = [{atom, AtomAnno, Name}|Fields0]}) ->
-    Fields = [remove_pos(Field) || Field <- Fields0],
-    {type, anno_keep_only_filename(Anno), record, [{atom, anno_keep_only_filename(AtomAnno), Name}|Fields]};
 remove_pos({type, _, bounded_fun, [FT, Cs]}) ->
     {type, erl_anno:new(0), bounded_fun, [remove_pos(FT)
                                          ,lists:map(fun remove_pos/1, Cs)]};
