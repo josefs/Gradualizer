@@ -50,3 +50,10 @@ with_spec(I) -> I + 1.
 -spec refined_field(#refined_field{}) -> #refined_field{f :: integer()}.
 refined_field(#refined_field{f = undefined}) -> #refined_field{f = 0};
 refined_field(R) -> R.
+
+-spec refined_field_safe(#refined_field{f :: integer()}) -> #refined_field{f :: integer()}.
+refined_field_safe(#refined_field{f = I}) -> #refined_field{f = I + 1}.
+
+-spec refined_field_unsafe(#refined_field{}) -> #refined_field{}.
+refined_field_unsafe(R = #refined_field{f = undefined}) -> R;
+refined_field_unsafe(R) -> refined_field_safe(R).
