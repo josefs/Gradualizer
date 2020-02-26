@@ -33,7 +33,7 @@ bc9(N) ->
 bc10(Str) ->
     << <<B:2/bytes>> || <<B:4/bytes>> <= list_to_binary(Str) >>.
 
--spec bc11(integer()) -> bitstring().
+-spec bc11(non_neg_integer()) -> bitstring().
 bc11(N) ->
     << <<B/bitstring>> || B <- union_of_lists(N), N > 0 >>.
 
@@ -43,7 +43,7 @@ ipv4_to_binary({A, B, C, D}) ->
     <<A, B, C, D>>.
 
 %% Returns a bitstring of a fixed size plus a multiple of some size
--spec unusually_sized_bitstring(integer()) -> <<_:17, _:_*3>>.
+-spec unusually_sized_bitstring(non_neg_integer()) -> <<_:17, _:_*3>>.
 unusually_sized_bitstring($a) -> <<1:17, 3:3>>;
 unusually_sized_bitstring($b) -> <<2:17, 3:6>>;
 unusually_sized_bitstring(N)  -> <<3:17, N:9>>.
@@ -54,7 +54,7 @@ union_of_bitstrings(true) -> <<0:42>>;
 union_of_bitstrings(false) -> <<"xyz"/utf16-little>>.
 
 %% Returns a union of lists of some bitstring type
--spec union_of_lists(integer()) -> [<<_:_*3>>] | [<<_:_*16>>].
+-spec union_of_lists(non_neg_integer()) -> [<<_:_*3>>] | [<<_:_*16>>].
 union_of_lists(N) when N > 42 -> [<<>>, <<N/utf16>>];
 union_of_lists(N)             -> [<<42:3>>, <<N:9>>].
 
