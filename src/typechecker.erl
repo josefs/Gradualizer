@@ -3969,7 +3969,7 @@ type_of_bin_element({bin_element, _P, Expr, _Size, Specifiers}, Source) ->
                       end,
     IsSigned =
         case Source of
-            pattern -> length([signed || signed <- Specifiers]) > 0;
+            pattern -> lists:member(signed, Specifiers);
             expr -> true
         end,
     Types =
