@@ -73,3 +73,18 @@ integer_signed(B) ->
     <<A/signed>> = B,
     A.
 
+-spec expr_vs_pat_default() -> non_neg_integer().
+expr_vs_pat_default() ->
+    <<A>> = <<-1>>,
+    A.
+
+-spec expr_vs_pat_unsigned() -> non_neg_integer().
+expr_vs_pat_unsigned() ->
+    <<A/unsigned>> = <<-1>>,
+    A.
+
+-spec expr_vs_pat_signed() -> integer().
+expr_vs_pat_signed() ->
+    <<A/signed>> = <<-1>>,
+    A.
+
