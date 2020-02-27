@@ -3958,17 +3958,17 @@ count_var_occurrences(Exprs) ->
                                          default,
                            Specifiers :: [atom() | {unit, pos_integer()}] |
                                          default},
-                           Source     :: pattern | expr) -> type().
-type_of_bin_element({bin_element, Anno, Expr, Size, default}, Source) ->
-    type_of_bin_element({bin_element, Anno, Expr, Size, []}, Source);
-type_of_bin_element({bin_element, _P, Expr, _Size, Specifiers}, Source) ->
+                           OccursAs   :: pattern | expr) -> type().
+type_of_bin_element({bin_element, Anno, Expr, Size, default}, OccursAs) ->
+    type_of_bin_element({bin_element, Anno, Expr, Size, []}, OccursAs);
+type_of_bin_element({bin_element, _P, Expr, _Size, Specifiers}, OccursAs) ->
     %% String literal is syntactic sugar for multiple char literals,
     IsStringLiteral = case Expr of
                           {string, _, _} -> true;
                           _              -> false
                       end,
     IsSigned =
-        case Source of
+        case OccursAs of
             pattern -> lists:member(signed, Specifiers);
             expr -> true
         end,
@@ -3982,11 +3982,10 @@ type_of_bin_element({bin_element, _P, Expr, _Size, Specifiers}, Source) ->
                                     IsStringLiteral ->
                                         %% <<"ab"/utf8>> == <<$a/utf8, $b/utf8>>.
                                         {true, type(string)};
-                                    not IsStringLiteral ->
-                                        case IsSigned of
-                                            true -> {true, type(integer)};
-                                            false -> {true, type(non_neg_integer)}
-                                        end
+                                    IsSigned ->
+                                        {true, type(integer)};
+                                    true ->
+                                        {true, type(non_neg_integer)}
                                 end;
                             (float) when IsStringLiteral ->
                                 %% <<"abc"/float>> is integers to floats conversion
@@ -4012,12 +4011,11 @@ type_of_bin_element({bin_element, _P, Expr, _Size, Specifiers}, Source) ->
         [] when IsStringLiteral ->
             %% <<"abc">>
             type(string);
-        [] ->
+        [] when IsSigned ->
             %% <<X>>
-            case IsSigned of
-                true -> type(integer);
-                false -> type(non_neg_integer)
-            end;
+            type(integer);
+        [] when not IsSigned ->
+            type(non_neg_integer);
         [T] ->
             T
     end.
