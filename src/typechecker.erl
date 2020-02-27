@@ -4012,10 +4012,11 @@ type_of_bin_element({bin_element, _P, Expr, _Size, Specifiers}, OccursAs) ->
             %% <<"abc">>
             type(string);
         [] when IsSigned ->
-            %% <<X>>
+            %% As expr: <<X>>
+            %% As pattern: <<X/signed>>
             type(integer);
         [] when not IsSigned ->
-            %% <<X>>
+            %% As pattern: <<X>> or <<X/unsigned>>
             type(non_neg_integer);
         [T] ->
             T
