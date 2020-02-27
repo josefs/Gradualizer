@@ -4015,6 +4015,7 @@ type_of_bin_element({bin_element, _P, Expr, _Size, Specifiers}, OccursAs) ->
             %% <<X>>
             type(integer);
         [] when not IsSigned ->
+            %% <<X>>
             type(non_neg_integer);
         [T] ->
             T
