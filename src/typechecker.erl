@@ -1336,7 +1336,7 @@ do_type_check_expr(Env, {bin, _, BinElements} = BinExpr) ->
     VarBindAndCsList =
         lists:map(fun ({bin_element, _P, Expr, _Size, _Specif} = BinElem) ->
                           %% Treat bin type specifier as type annotation
-                          Ty = type_of_bin_element(BinElem),
+                          Ty = type_of_bin_element(BinElem, expr),
                           type_check_expr_in(Env, Ty, Expr)
                   end,
                   BinElements),
@@ -3693,7 +3693,7 @@ add_type_pat({bin, _P, BinElements} = Bin, Ty, TEnv, VEnv) ->
         lists:foldl(fun ({bin_element, _, Pat, _Size, _Specifiers} = BinElem,
                          {VEnvAcc, CsAcc}) ->
                             %% Check Pat against the bit syntax type specifiers
-                            ElemTy = type_of_bin_element(BinElem),
+                            ElemTy = type_of_bin_element(BinElem, pattern),
                             {_PatTy, _UBound, VEnv2, Cs2} =
                                 add_type_pat(Pat, ElemTy, TEnv, VEnvAcc),
                             {VEnv2, constraints:combine(CsAcc, Cs2)}
@@ -3957,15 +3957,21 @@ count_var_occurrences(Exprs) ->
                            Size       :: non_neg_integer() |
                                          default,
                            Specifiers :: [atom() | {unit, pos_integer()}] |
-                                         default}) -> type().
-type_of_bin_element({bin_element, Anno, Expr, Size, default}) ->
-    type_of_bin_element({bin_element, Anno, Expr, Size, []});
-type_of_bin_element({bin_element, _P, Expr, _Size, Specifiers}) ->
+                                         default},
+                           OccursAs   :: pattern | expr) -> type().
+type_of_bin_element({bin_element, Anno, Expr, Size, default}, OccursAs) ->
+    type_of_bin_element({bin_element, Anno, Expr, Size, []}, OccursAs);
+type_of_bin_element({bin_element, _P, Expr, _Size, Specifiers}, OccursAs) ->
     %% String literal is syntactic sugar for multiple char literals,
     IsStringLiteral = case Expr of
                           {string, _, _} -> true;
                           _              -> false
                       end,
+    IsSigned =
+        case OccursAs of
+            pattern -> lists:member(signed, Specifiers);
+            expr -> true
+        end,
     Types =
         lists:filtermap(fun
                             (S) when S == integer;
@@ -3976,8 +3982,10 @@ type_of_bin_element({bin_element, _P, Expr, _Size, Specifiers}) ->
                                     IsStringLiteral ->
                                         %% <<"ab"/utf8>> == <<$a/utf8, $b/utf8>>.
                                         {true, type(string)};
-                                    not IsStringLiteral ->
-                                        {true, type(integer)}
+                                    IsSigned ->
+                                        {true, type(integer)};
+                                    true ->
+                                        {true, type(non_neg_integer)}
                                 end;
                             (float) when IsStringLiteral ->
                                 %% <<"abc"/float>> is integers to floats conversion
@@ -4003,9 +4011,13 @@ type_of_bin_element({bin_element, _P, Expr, _Size, Specifiers}) ->
         [] when IsStringLiteral ->
             %% <<"abc">>
             type(string);
-        [] ->
-            %% <<X>>
+        [] when IsSigned ->
+            %% As expr: <<X>>
+            %% As pattern: <<X/signed>>
             type(integer);
+        [] when not IsSigned ->
+            %% As pattern: <<X>> or <<X/unsigned>>
+            type(non_neg_integer);
         [T] ->
             T
     end.

@@ -58,3 +58,33 @@ union_of_bitstrings(false) -> <<"xyz"/utf16-little>>.
 union_of_lists(N) when N > 42 -> [<<>>, <<N/utf16>>];
 union_of_lists(N)             -> [<<42:3>>, <<N:9>>].
 
+-spec integer_default(binary()) -> non_neg_integer().
+integer_default(B) ->
+    <<A>> = B,
+    A.
+
+-spec integer_unsigned(binary()) -> non_neg_integer().
+integer_unsigned(B) ->
+    <<A/unsigned>> = B,
+    A.
+
+-spec integer_signed(binary()) -> integer().
+integer_signed(B) ->
+    <<A/signed>> = B,
+    A.
+
+-spec expr_vs_pat_default() -> non_neg_integer().
+expr_vs_pat_default() ->
+    <<A>> = <<-1>>,
+    A.
+
+-spec expr_vs_pat_unsigned() -> non_neg_integer().
+expr_vs_pat_unsigned() ->
+    <<A/unsigned>> = <<-1>>,
+    A.
+
+-spec expr_vs_pat_signed() -> integer().
+expr_vs_pat_signed() ->
+    <<A/signed>> = <<-1>>,
+    A.
+
