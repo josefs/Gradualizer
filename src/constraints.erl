@@ -131,10 +131,10 @@ solve_loop([I={LB,UB}|WL], Seen, Constraints, ElimVars, Env) ->
 	    NewWL =
 		[ {Lower, Upper} || {EVar, Lowers} <- maps:to_list(ELowerBounds),
 				    Lower <- Lowers,
-				    Upper <- maps:get(EVar, Constraints2#constraints.upper_bounds) ] ++
+				    Upper <- maps:get(EVar, Constraints2#constraints.upper_bounds, []) ] ++
 		[ {Lower, Upper} || {Evar, Uppers} <- maps:to_list(EUpperBounds),
 				    Upper <- Uppers,
-				    Lower <- maps:get(Evar, Constraints2#constraints.lower_bounds) ] ++
+				    Lower <- maps:get(Evar, Constraints2#constraints.lower_bounds, []) ] ++
 		WL,
 	    solve_loop(NewWL, sets:add_element(I,Seen), Constraints2, ElimVars, Env)
     end.
