@@ -3424,10 +3424,9 @@ get_atom(_Env, _) ->
 % same across the intersection. Hence, I've gone with the more
 % expressive option. As luck would have it, it's simpler to implement
 % also.
-%
+
 % We assume that the constraints have been removed at this point.
--spec instantiate_fun_type([type()], type()) ->
-                                  {{[type()], type()}, constraints:t()}.
+-spec instantiate_fun_type([type()], type()) -> {{[type()], type()}, constraints:t()}.
 instantiate_fun_type(Args,Res) ->
     {NewArgs, ArgVars, Map} = instantiate_list(Args, #{}),
     {NewRes , ResVars, _Map} = instantiate(Res, Map),
