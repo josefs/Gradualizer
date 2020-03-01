@@ -325,7 +325,11 @@ any_type(_Ty, [], _A, _TEnv) ->
     throw(nomatch);
 any_type(Ty, [Ty1|Tys], A, TEnv) ->
     try
-        compat(Ty, Ty1, A, TEnv)
+        % TODO: Don't drop the constraint here.
+        % This requires a radically different representation of constraints
+        % which allows to represent unions of constraints
+        {Ret, _Cs} = compat(Ty, Ty1, A, TEnv),
+        {Ret, constraints:empty()}
     catch
         nomatch ->
             any_type(Ty, Tys, A, TEnv)
