@@ -3145,7 +3145,15 @@ get_atom(_Env, _) ->
 % same across the intersection. Hence, I've gone with the more
 % expressive option. As luck would have it, it's simpler to implement
 % also.
--spec instantiate_fun_type([type()]) -> {[type()], constraints:constraints()}.
+
+%-spec instantiate_fun_type([type()]) -> {[type()], constraints:constraints()}.
+% We assume that the constraints have been removed at this point.
+-spec instantiate_fun_type([type()], type()) ->
+                                  {{[type()], type()}, constraints:constraints()}.
+instantiate_fun_type(Args,Res) ->
+    {NewArgs, ArgVars, Map} = instantiate_list(Args, #{}),
+    {NewRes , ResVars, _Map} = instantiate(Res, Map),
+    {{NewArgs, NewRes}, constraints:vars(sets:union(ArgVars, ResVars))}.
 instantiate_fun_type(Tys) ->
     {NewTys, Vars, _Map} = instantiate_list(Tys, #{}),
     {NewTys, constraints:vars(Vars)}.
@@ -3154,31 +3162,47 @@ instantiate_fun_type(Tys) ->
 			 { type()
 			 , sets:set(constraints:var())
 			 , #{ constraints:var() => type() }}.
+instantiate(T = {var, _, '_'}, Map) ->
+    {T, sets:new(), Map};
 instantiate({var, _, TyVar}, Map) ->
-    try maps:get(TyVar, Map) of
+    case maps:get(TyVar, Map, not_found) of
+        not_found ->
+            NewTyVar = new_type_var(),
+            Type = {var, erl_anno:new(0), NewTyVar},
+            {Type, sets:from_list([NewTyVar]), Map#{ TyVar => Type }};
 	Ty ->
 	    {Ty, sets:new(), Map}
-    catch
-	{badkey, _} ->
-	    NewTyVar = new_type_var(),
-	    Type = {var, erl_anno:new(0), NewTyVar},
-	    {Type, sets:from_list([NewTyVar]), Map#{ TyVar := Type }}
     end;
 instantiate(T = ?type(_), Map) ->
     {T, sets:new(), Map};
 instantiate(?type(Ty, Args), Map) ->
     {NewArgs, Set, NewMap} = instantiate_list(Args, Map),
     {type(Ty, NewArgs), Set, NewMap};
-instantiate(T = {Tag, _,_}, Map) when Tag == integer orelse Tag == atom ->
-    {T, sets:new(), Map}.
+instantiate(T = {type, _, any}, Map) ->
+    {T, sets:new(), Map};
+instantiate(T = {Tag, _,_}, Map)
+  when Tag == integer orelse Tag == atom orelse Tag == char ->
+    {T, sets:new(), Map};
+instantiate(T = {op, _, _, _}, Map) ->
+    {T, sets:new(), Map};
+instantiate(T = {op, _, _, _, _}, Map) ->
+    {T, sets:new(), Map};
+instantiate(T = {remote_type, _, _}, Map) ->
+    {T, sets:new(), Map};
+instantiate(T = {user_type, Ann, Name, Tys}, Map) ->
+    {NewTys, Vars, NewMap} = instantiate_list(Tys, Map),
+    {{user_type, Ann, Name, NewTys}, Vars, NewMap};
+instantiate(any, Map) ->
+    {any, sets:new(), Map}.
 
-
+instantiate_list(any, Map) ->
+    {any, sets:new(), Map};
 instantiate_list([], Map) ->
     {[], sets:new(), Map};
 instantiate_list([Ty|Tys], Map) ->
     {NewTy, Vars, NewMap} = instantiate(Ty, Map),
     {NewTys, MoreVars, EvenNewerMap} = instantiate_list(Tys, NewMap),
-    {[NewTy|NewTys], sets:union(Vars,MoreVars), EvenNewerMap}.
+    {[NewTy|NewTys], sets:union(Vars, MoreVars), EvenNewerMap}.
 
 
 
