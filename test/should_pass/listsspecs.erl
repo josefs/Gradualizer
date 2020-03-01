@@ -46,7 +46,7 @@ foldl() ->
 foldr() ->
     lists:foldr(fun (A, B) -> A + B end, 0, [1, 2, 3]).
 
--spec join() -> string().
+-spec join() -> [string()].
 join() ->
     lists:join("/", ["a", "b", "c"]).
 
