@@ -919,7 +919,7 @@ expect_list_type({var, _, Var}, _, _) ->
     TyVar = new_type_var(),
     ElemTy = {var, erl_anno:new(0), TyVar},
     {elem_ty
-    ,{var, erl_anno:new(0), TyVar}
+    ,ElemTy
     ,constraints:add_var(TyVar,
       constraints:upper(Var, {type, erl_anno:new(0), list, [ElemTy]}))
     };
