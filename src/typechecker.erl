@@ -271,17 +271,17 @@ compat_ty({type, _, map, any}, {type, _, map, _Assocs}, A, _TEnv) ->
 compat_ty({type, _, map, _Assocs}, {type, _, map, any}, A, _TEnv) ->
     ret(A);
 compat_ty({type, _, map, Assocs1}, {type, _, map, Assocs2}, A, TEnv) ->
-    lists:foldl(fun (Assoc2, {As, Cs1}) ->
+    lists:foldl(fun (Assoc1, {As, Cs1}) ->
 			begin
-			    {Ax, Cs2} = any_type(Assoc2, Assocs1, As, TEnv),
+			    {Ax, Cs2} = any_type(Assoc1, Assocs2, As, TEnv),
 			    {Ax, constraints:combine(Cs1, Cs2)}
 			end
-		end, ret(A), Assocs2);
+		end, ret(A), Assocs1);
 compat_ty({type, _, AssocTag2, [Key2, Val2]},
           {type, _, AssocTag1, [Key1, Val1]}, A, TEnv)
         when AssocTag2 == map_field_assoc, AssocTag1 == map_field_assoc;
              AssocTag2 == map_field_exact, AssocTag1 == map_field_exact;
-             AssocTag2 == map_field_assoc, AssocTag1 == map_field_exact ->
+             AssocTag2 == map_field_exact, AssocTag1 == map_field_assoc ->
     %% For M1 <: M2, mandatory fields in M2 must be mandatory fields in M1
     {A1, Cs1} = compat(Key1, Key2, A, TEnv),
     {A2, Cs2} = compat(Val1, Val2, A1, TEnv),
