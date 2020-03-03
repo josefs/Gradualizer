@@ -271,14 +271,18 @@ compat_ty({type, _, map, any}, {type, _, map, _Assocs}, A, _TEnv) ->
 compat_ty({type, _, map, _Assocs}, {type, _, map, any}, A, _TEnv) ->
     ret(A);
 compat_ty({type, _, map, Assocs1}, {type, _, map, Assocs2}, A, TEnv) ->
-    lists:foldl(fun (Assoc1, {As, Cs1}) ->
+    lists:foldl(fun (Assoc2, {As, Cs1}) ->
 			begin
-			    {Ax, Cs2} = any_type(Assoc1, Assocs2, As, TEnv),
+                {Ax, Cs2} =
+                    case Assoc2 of
+                        {type, _, map_field_exact, _} -> any_type(Assoc2, Assocs1, As, TEnv);
+                        {type, _, map_field_assoc, _} -> safe_any_type(Assoc2, Assocs1, As, TEnv)
+                    end,
 			    {Ax, constraints:combine(Cs1, Cs2)}
 			end
-		end, ret(A), Assocs1);
-compat_ty({type, _, AssocTag1, [Key1, Val1]},
-          {type, _, AssocTag2, [Key2, Val2]}, A, TEnv)
+		end, ret(A), Assocs2);
+compat_ty({type, _, AssocTag2, [Key2, Val2]},
+          {type, _, AssocTag1, [Key1, Val1]}, A, TEnv)
         when AssocTag2 == map_field_assoc, AssocTag1 == map_field_assoc;
              AssocTag2 == map_field_exact, AssocTag1 == map_field_exact;
              AssocTag2 == map_field_assoc, AssocTag1 == map_field_exact ->
@@ -330,6 +334,17 @@ compat_record_fields(_, _, _, _) ->
 %% there were no type variables involved.
 ret(A) ->
     {A, constraints:empty()}.
+
+safe_any_type(_Ty, [], A, _TEnv) ->
+    ret(A);
+safe_any_type(Ty, [Ty1|Tys], A, TEnv) ->
+    try
+        compat(Ty, Ty1, A, TEnv)
+    catch
+        nomatch ->
+            safe_any_type(Ty, Tys, A, TEnv)
+    end.
+
 
 any_type(_Ty, [], _A, _TEnv) ->
     throw(nomatch);
