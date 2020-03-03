@@ -351,11 +351,13 @@ format_type_error({bad_type_annotation, TypeLit}, Opts) ->
       [format_location(TypeLit, brief, Opts),
        pp_expr(TypeLit, Opts),
        format_location(TypeLit, verbose, Opts)]);
-format_type_error({constraint_error, LB, UB}, Opts) ->
+format_type_error({constraint_error, LA, LB, UA, UB}, Opts) ->
     io_lib:format(
-      "The type ~s is not a subtype of ~s~n",
+      "The type ~s~s is not a subtype of ~s~s~n",
       [pp_type(LB, Opts)
+      ,format_location(LA, verbose, Opts)
       ,pp_type(UB, Opts)
+      ,format_location(UA, verbose, Opts)
       ]);
 format_type_error(type_error, _) ->
     io_lib:format("TYPE ERROR~n", []).

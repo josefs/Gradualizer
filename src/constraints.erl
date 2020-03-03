@@ -1,6 +1,6 @@
 -module(constraints).
 
--export([empty/0, vars/1, upper/2, lower/2, combine/1, combine/2, add_var/2, solve/2]).
+-export([empty/0, vars/1, upper/2, lower/2, upper/3, lower/3, combine/1, combine/2, add_var/2, solve/2]).
 
 -export_type([constraints/0]).
 
@@ -9,10 +9,10 @@
 -type type() :: gradualizer_type:abstract_type().
 
 -record(constraints, {
-	  lower_bounds = #{}        :: #{ var() => [type()] },
-	  upper_bounds = #{}        :: #{ var() => [type()] },
-	  exist_vars   = sets:new() :: sets:set(var())
-	 }).
+          lower_bounds = #{}        :: #{ var() => [{erl_anno:anno(),type()}] },
+          upper_bounds = #{}        :: #{ var() => [{erl_anno:anno(),type()}] },
+          exist_vars   = sets:new() :: sets:set(var())
+         }).
 
 -type constraints() :: #constraints{}.
 -type var() :: atom() | string().
@@ -31,11 +31,19 @@ add_var(Var, Cs) ->
 
 -spec upper(var(), type()) -> constraints().
 upper(Var, Ty) ->
-    #constraints{ upper_bounds = #{ Var => [Ty] } }.
+    #constraints{ upper_bounds = #{ Var => [{erl_anno:new({0,1}),Ty}] } }.
 
 -spec lower(var(), type()) -> constraints().
 lower(Var, Ty) ->
-    #constraints{ lower_bounds = #{ Var => [Ty] } }.
+    #constraints{ lower_bounds = #{ Var => [{erl_anno:new({0,1}),Ty}] } }.
+
+-spec upper(var(), erl_anno:anno(), type()) -> constraints().
+upper(Var, Anno, Ty) ->
+    #constraints{ upper_bounds = #{ Var => [{Anno,Ty}] } }.
+
+-spec lower(var(), erl_anno:anno(), type()) -> constraints().
+lower(Var, Anno, Ty) ->
+    #constraints{ lower_bounds = #{ Var => [{Anno,Ty}] } }.
 
 -spec combine(constraints(), constraints()) -> constraints().
 combine(C1, C2) ->
@@ -75,18 +83,20 @@ solve(Constraints, TEnv) ->
 		      LB <- maps:get(E,Constraints#constraints.lower_bounds, []),
 		      UB <- maps:get(E,Constraints#constraints.upper_bounds, []) ],
     Cs = solve_loop(WorkList, sets:new(), Constraints, ElimVars, TEnv),
-    GlbSubs = fun(_Var, Tys) ->
-		      {Ty, _C} = typechecker:glb(Tys, TEnv),
-		      % TODO: Don't throw away the constraints
-		      Ty
+    GlbSubst = fun(_Var, ATys) ->
+                       Tys = lists:map(fun ({_,Ty}) -> Ty end, ATys),
+                       {Ty, _C} = typechecker:glb(Tys, TEnv),
+                       % TODO: Don't throw away the constraints
+                       Ty
 	      end,
-    LubSubst = fun(_Var, Tys) ->
+    LubSubst = fun(_Var, ATys) ->
+                       Tys = lists:map(fun ({_,Ty}) -> Ty end, ATys),
 		       Ty = typechecker:lub(Tys, TEnv),
 		       Ty
 	       end,
     % TODO: What if the substition contains occurrences of the variables we're eliminating
     % in the range of the substitution?
-    Subst = {maps:map(GlbSubs,
+    Subst = {maps:map(GlbSubst,
 		      maps:with(sets:to_list(ElimVars), Cs#constraints.upper_bounds))
 	    ,maps:map(LubSubst,
 		      maps:with(sets:to_list(ElimVars), Cs#constraints.lower_bounds))
@@ -100,7 +110,8 @@ solve(Constraints, TEnv) ->
 
 solve_loop([], _, Constraints, _, _) ->
     Constraints;
-solve_loop([I={LB,UB}|WL], Seen, Constraints, ElimVars, TEnv) ->
+solve_loop([{{LA,LB},{UA,UB}}|WL], Seen, Constraints, ElimVars, TEnv) ->
+    I = {LB,UB},
     case sets:is_element(I, Seen) of
 	true ->
 	    solve_loop(WL, Seen, Constraints, ElimVars, TEnv);
@@ -108,7 +119,7 @@ solve_loop([I={LB,UB}|WL], Seen, Constraints, ElimVars, TEnv) ->
 
 	    C = case typechecker:subtype(LB, UB, TEnv) of
 		    false ->
-			throw({constraint_error, LB, UB});
+			throw({constraint_error, LA, LB, UA, UB});
 		    {true, Cs} ->
 			Cs
 		end,
