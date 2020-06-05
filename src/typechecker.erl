@@ -1718,7 +1718,8 @@ type_check_fields(_Env, _Rec, [], should_not_be_inspected) ->
     {#{}, constraints:empty()};
 type_check_fields(Env, Rec, [], [UnAssignedField|UnAssignedFields]) ->
     FieldTy = get_rec_field_type({atom, erl_anno:new(0), UnAssignedField}, Rec),
-    {VB1, Cs1} = type_check_expr_in(Env, FieldTy, {atom, erl_anno:new(0), undefined}),
+    FieldDefault = get_rec_field_default({atom, erl_anno:new(0), UnAssignedField}, Rec),
+    {VB1, Cs1} = type_check_expr_in(Env, FieldTy, FieldDefault),
     {VB2, Cs2} = type_check_fields(Env, Rec, [], UnAssignedFields),
     {union_var_binds(VB1, VB2, Env#env.tenv), constraints:combine(Cs1,Cs2)};
 type_check_fields(_Env, _Rec, [], []) ->
@@ -4313,6 +4314,15 @@ add_var_binds(VEnv, VarBinds, TEnv) ->
     % TODO: Don't drop the constraints
     Glb = fun(_K, Ty1, Ty2) -> {Ty, _C} = glb(Ty1, Ty2, TEnv), Ty end,
     gradualizer_lib:merge_with(Glb, VEnv, VarBinds).
+
+get_rec_field_default({atom, _, FieldName},
+                    [{typed_record_field,
+                        {record_field, _, {atom, _, FieldName}, Default}, _}|_]) ->
+    Default;
+get_rec_field_default(FieldWithAnno, [_|RecFields]) ->
+    get_rec_field_default(FieldWithAnno, RecFields);
+get_rec_field_default(FieldWithAnno, []) ->
+    throw({undef, record_field, FieldWithAnno}).
 
 get_rec_field_type(FieldWithAnno, RecFields) ->
     %% The first field is the second element of the tuple - so start from 2
