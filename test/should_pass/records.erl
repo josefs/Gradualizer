@@ -1,6 +1,6 @@
 -module(records).
 
--export([f/0, g/1, h/0, i/0, j/0,
+-export([f/0, g/1, h/0, i/0, j/0, l/0,
          rec_field_subtype/1,
          rec_index_subtype/0,
          record_as_tuple/1]).
@@ -31,6 +31,15 @@ i() ->
 -spec j() -> 3.
 j() ->
     #r.f2.
+
+-record(test, {
+    field :: integer() | undefined
+}).
+
+-spec l() -> integer() | undefined.
+l() ->
+    Test = #test{},
+    Test#test.field.
 
 -spec rec_field_subtype(#r{}) -> number().
 rec_field_subtype(R) ->

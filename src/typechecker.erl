@@ -1713,9 +1713,15 @@ type_check_fields(Env, Rec, [{record_field, _, {var, _, '_'}, Expr} | Fields]
                                      ,{atom, erl_anno:new(0), Field}, Expr}
                                      || Field <- UnAssignedFields]
                                   ,should_not_be_inspected),
-    {VB2, Cs2} = type_check_fields(Env, Rec, Fields, UnAssignedFields),
+    {VB1, Cs1};
+type_check_fields(_Env, _Rec, [], should_not_be_inspected) ->
+    {#{}, constraints:empty()};
+type_check_fields(Env, Rec, [], [UnAssignedField|UnAssignedFields]) ->
+    FieldTy = get_rec_field_type({atom, erl_anno:new(0), UnAssignedField}, Rec),
+    {VB1, Cs1} = type_check_expr_in(Env, FieldTy, {atom, erl_anno:new(0), undefined}),
+    {VB2, Cs2} = type_check_fields(Env, Rec, [], UnAssignedFields),
     {union_var_binds(VB1, VB2, Env#env.tenv), constraints:combine(Cs1,Cs2)};
-type_check_fields(_Env, _Rec, [], _U) ->
+type_check_fields(_Env, _Rec, [], []) ->
     {#{}, constraints:empty()}.
 
 get_unassigned_fields(Fields, All) ->
