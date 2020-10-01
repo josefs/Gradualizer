@@ -251,10 +251,6 @@ compat_ty({type, Anno1, record, [{atom, _, Name}|Fields1]},
 compat_ty({type, _, record, _}, {type, _, tuple, any}, A, _TEnv) ->
     ret(A);
 
-%% Record fields that have been refined
-compat_ty(?type_field_type(Name, Ty1), ?type_field_type(Name, Ty2), A, TEnv) ->
-    compat(Ty1, Ty2, A, TEnv);
-
 %% Lists
 compat_ty(Ty1, Ty2, A, TEnv) when ?is_list_type(Ty1), ?is_list_type(Ty2) ->
     {Empty1, Elem1, Term1} = list_view(Ty1),
@@ -315,7 +311,7 @@ compat_tys(_Tys1, _Tys2, _, _) ->
 
 compat_record_tys([], [], A, _TEnv) ->
     ret(A);
-compat_record_tys([Field1|Fields1], [Field2|Fields2], A, TEnv) ->
+compat_record_tys([?type_field_type(Name, Field1)|Fields1], [?type_field_type(Name, Field2)|Fields2], A, TEnv) ->
     {A1, Cs1} = compat(Field1, Field2, A, TEnv),
     {A2, Cs2} = compat_record_tys(Fields1, Fields2, A1, TEnv),
     {A2, constraints:combine(Cs1, Cs2)};
@@ -622,10 +618,9 @@ glb_ty(_Ty1, _Ty2, _A, _TEnv) -> {type(none), constraints:empty()}.
 %% * Flatten unions and merge overlapping types (e.g. ranges) in unions
 -spec normalize(type(), TEnv :: #tenv{}) -> type().
 normalize({type, _, record, [{atom, _, Name}|Fields]}, TEnv) when length(Fields) > 0 ->
-    NormFields = [normalize(Field, TEnv) || Field <- Fields],
+    NormFields = [type_field_type(FieldName, normalize(Type, TEnv)) 
+        || ?type_field_type(FieldName, Type) <- Fields],
     type_record(Name, NormFields);
-normalize(?type_field_type(_Name, Type), TEnv) ->
-    normalize(Type, TEnv);
 normalize({type, _, union, Tys}, TEnv) ->
     Types = flatten_unions(Tys, TEnv),
     case merge_union_types(Types, TEnv) of
@@ -1160,7 +1155,7 @@ expect_record_type({type, _, record, [{atom, _, Name}|RefinedTypes]}, Record, #t
                     [] -> Fields;
                     _ ->
                         [ {typed_record_field, RecordField, RefinedType}
-                        || {{typed_record_field, RecordField, _}, RefinedType} <- lists:zip(Fields, RefinedTypes)]
+                        || {{typed_record_field, RecordField, _}, ?type_field_type(_, RefinedType)} <- lists:zip(Fields, RefinedTypes)]
                 end,
             {fields_ty, Tys, constraints:empty()};
         _NotFound ->
@@ -2225,7 +2220,8 @@ do_type_check_expr_in(Env, ResTy, {record_field, Anno, Expr, Name, FieldWithAnno
                             {type, _, record, [{atom, _, Name}]} ->
                                 {VarType, FieldTy};
                             {type, _, record, [{atom, _, Name}|RefinedFields]} ->
-                                {VarType, lists:nth(FieldIndex-1, RefinedFields)};
+                                ?type_field_type(_, RefinedField) = lists:nth(FieldIndex-1, RefinedFields),
+                                {VarType, RefinedField};
                             {var, _, _} ->
                                 {type_record(Name), FieldTy};
                             ?type(any) ->
@@ -3352,16 +3348,17 @@ refine_ty(?type(record, [{atom, Anno, Name}]), Refined = ?type(record, [{atom, _
     refine_ty(expand_record(Name, Anno, TEnv), Refined, TEnv);
 refine_ty(?type(record, [{atom, _, Name} | _]), ?type(record, [{atom, _, Name}]), _TEnv) ->
     type(none);
-refine_ty(?type(record, [Name|Tys1]), ?type(record, [Name|Tys2]), TEnv)
-  when length(Tys1) > 0, length(Tys1) == length(Tys2) ->
+refine_ty(?type(record, [Name|FieldTys1]), ?type(record, [Name|FieldTys2]), TEnv)
+  when length(FieldTys1) > 0, length(FieldTys1) == length(FieldTys2) ->
     % Record without just the name
+    Tys1 = [Ty || ?type_field_type(_, Ty) <- FieldTys1],
+    Tys2 = [Ty || ?type_field_type(_, Ty) <- FieldTys2],
     RefTys = [refine(Ty1, Ty2, TEnv) || {Ty1, Ty2} <- lists:zip(Tys1, Tys2)],
-    RecordsElems = pick_one_refinement_each(Tys1, RefTys),
+    RecordsTys = pick_one_refinement_each(Tys1, RefTys),
+    RecordsElems = [ [ type_field_type(FieldName, RecordTy) || {?type_field_type(FieldName, _), RecordTy} <- lists:zip(FieldTys1, RecordTys)]
+        || RecordTys <- RecordsTys],
     Records = [type(record, [Name|RecordElems]) || RecordElems <- RecordsElems],
     normalize(type(union, Records), TEnv);
-refine_ty(?type_field_type(Name, Ty1), ?type_field_type(Name, Ty2), TEnv) ->
-    RefTy = refine(Ty1, Ty2, TEnv),
-    normalize(type_field_type(Name, RefTy), TEnv);
 refine_ty(?type(union, UnionTys), Ty, TEnv) ->
     RefTys = lists:foldr(fun (UnionTy, Acc) ->
                              try refine(UnionTy, Ty, TEnv) of
