@@ -1695,6 +1695,14 @@ type_check_fields(Env, Rec, Fields) ->
     UnAssignedFields = get_unassigned_fields(Fields, Rec),
     type_check_fields(Env, Rec, Fields, UnAssignedFields).
 
+%% type_check_fields for multiple cases, split by function head
+%% 1. The field is present with a value, need to make sure that field type checks that value
+%% 2. There is a _ present with a value, need to make sure all the remaining fields type checks that value
+%% 3. If case 2 was present, we have type checked all the fields and we can stop
+%% 4. If case 2 was absent, we need to make sure all the fields that were not type checked support:
+%%      In the case of having a default value: putting the default value
+%%      In the case of not having a default value: that it supports `undefined`
+%% 5. If case 2 was absent, we have type checked all the unassigned fields.
 type_check_fields(Env, Rec, [{record_field, _, {atom, _, _} = FieldWithAnno, Expr} | Fields]
                  ,UnAssignedFields) ->
     FieldTy = get_rec_field_type(FieldWithAnno, Rec),
@@ -4310,6 +4318,7 @@ add_var_binds(VEnv, VarBinds, TEnv) ->
     Glb = fun(_K, Ty1, Ty2) -> {Ty, _C} = glb(Ty1, Ty2, TEnv), Ty end,
     gradualizer_lib:merge_with(Glb, VEnv, VarBinds).
 
+%% From a record field name, find the default value from the typed list of record field definitions
 get_rec_field_default({atom, _, FieldName},
                     [{typed_record_field,
                         {record_field, _, {atom, _, FieldName}, Default}, _}|_]) ->
