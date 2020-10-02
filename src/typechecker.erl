@@ -3342,12 +3342,10 @@ refine_ty(_Ty, ?type(none), _TEnv) ->
     throw(no_refinement);
 refine_ty(?type(T, A), ?type(T, A), _) ->
     type(none);
-refine_ty(?type(record, [{atom, _, Name}]), ?type(record, [{atom, _, Name}]), _) ->
+refine_ty(?type(record, [{atom, _, Name} | _]), ?type(record, [{atom, _, Name}]), _TEnv) ->
     type(none);
 refine_ty(?type(record, [{atom, Anno, Name}]), Refined = ?type(record, [{atom, _, Name} | _]), TEnv) ->
     refine_ty(expand_record(Name, Anno, TEnv), Refined, TEnv);
-refine_ty(?type(record, [{atom, _, Name} | _]), ?type(record, [{atom, _, Name}]), _TEnv) ->
-    type(none);
 refine_ty(?type(record, [Name|FieldTys1]), ?type(record, [Name|FieldTys2]), TEnv)
   when length(FieldTys1) > 0, length(FieldTys1) == length(FieldTys2) ->
     % Record without just the name
