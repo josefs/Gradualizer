@@ -57,3 +57,24 @@ refined_field_safe(#refined_field{f = I}) -> #refined_field{f = I + 1}.
 -spec refined_field_unsafe(#refined_field{}) -> #refined_field{}.
 refined_field_unsafe(R = #refined_field{f = undefined}) -> R;
 refined_field_unsafe(R) -> refined_field_safe(R).
+
+-record(two_level2, {value :: undefined | integer()}).
+-record(two_level1, {two_level2 :: undefined | #two_level2{}}).
+
+-spec two_level1(#two_level1{}) -> integer().
+two_level1(#two_level1{two_level2 = undefined}) -> 
+    0;
+two_level1(#two_level1{two_level2 = #two_level2{value = undefined}}) -> 
+    0;
+two_level1(#two_level1{two_level2 = #two_level2{value = Value}}) ->
+    Value.
+
+
+-spec two_level2(#two_level1{}) -> integer().
+two_level2(#two_level1{two_level2 = undefined}) -> 
+    0;
+two_level2(#two_level1{two_level2 = #two_level2{value = undefined}}) -> 
+    0;
+two_level2(R1) ->
+    R1#two_level1.two_level2#two_level2.value.
+
