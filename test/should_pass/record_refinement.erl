@@ -69,7 +69,6 @@ two_level1(#two_level1{two_level2 = #two_level2{value = undefined}}) ->
 two_level1(#two_level1{two_level2 = #two_level2{value = Value}}) ->
     Value.
 
-
 -spec two_level2(#two_level1{}) -> integer().
 two_level2(#two_level1{two_level2 = undefined}) -> 
     0;
@@ -77,4 +76,3 @@ two_level2(#two_level1{two_level2 = #two_level2{value = undefined}}) ->
     0;
 two_level2(R1) ->
     R1#two_level1.two_level2#two_level2.value.
-
