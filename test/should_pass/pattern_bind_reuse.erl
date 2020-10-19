@@ -1,6 +1,6 @@
 -module(pattern_bind_reuse).
 
--export([test/2, guess_the_die/1, is_same/2]).
+-export([test/2, guess_the_die/1, is_same/2, record/2]).
 
 -spec test(integer() | undefined, integer()) -> integer().
 test(I, I) -> I + I;
@@ -27,3 +27,11 @@ is_same(N, N) ->
 is_same(_, _) ->
     %% False error: This clause can't be reached
     false.
+
+-record(r, { f :: integer() | undefined }).
+
+-spec record(#r{}, integer()) -> integer().
+record(#r{f = I}, I) -> I;
+record(#r{f = undefined}, I) -> I;
+record(#r{f = I}, _) -> I.
+
