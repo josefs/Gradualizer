@@ -117,7 +117,7 @@ remove_pos({type, _, Assoc, Tys}) when Assoc == map_field_exact;
 remove_pos({remote_type, _, [Mod, Name, Params]}) ->
     Params1 = lists:map(fun remove_pos/1, Params),
     {remote_type, erl_anno:new(0), [Mod, Name, Params1]};
-remove_pos({ann_type, _, [Var, Type]}) ->
+remove_pos({ann_type, _, [_Var, Type]}) ->
     %% Also remove annotated types one the form Name :: Type
     remove_pos(Type);
 remove_pos({op, _, Op, Type}) ->

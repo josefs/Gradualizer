@@ -1728,7 +1728,7 @@ type_check_fields(Env, TypedRecFields, [{record_field, _, {atom, _, _} = FieldWi
     {VB1, Cs1} = type_check_expr_in(Env, FieldTy, Expr),
     {VB2, Cs2} = type_check_fields(Env, TypedRecFields, Fields, UnAssignedFields),
     {union_var_binds(VB1, VB2, Env#env.tenv), constraints:combine(Cs1,Cs2)};
-type_check_fields(Env, TypedRecFields, [{record_field, _, {var, _, '_'}, Expr} | Fields]
+type_check_fields(Env, TypedRecFields, [{record_field, _, {var, _, '_'}, Expr} | _Fields]
                  ,UnAssignedFields) ->
     {VB1, Cs1} = type_check_fields(Env, TypedRecFields
                                   ,[ {record_field, erl_anno:new(0)
@@ -2214,7 +2214,7 @@ do_type_check_expr_in(Env, ResTy, {record, Anno, Exp, Name, Fields} = Record) ->
                           end
                     ,Fields)
             ),
-            RecordTy = type_record(Name, [type_field_type(Name, Type) || ?typed_record_field(Name, Type) <- Rec]),
+            RecordTy = type_record(Name, [type_field_type(FieldName, Type) || ?typed_record_field(FieldName, Type) <- Rec]),
             {VarBinds, Cs2} = type_check_expr_in(Env, RecordTy, Exp),
             {union_var_binds([VarBinds|VarBindsList], Env#env.tenv)
                 ,constraints:combine([Cs1, Cs2|Css])};
@@ -3332,7 +3332,7 @@ refine(OrigTy, Ty, TEnv) ->
 
 get_record_fields_types(Name, Anno, TEnv) ->
     RecordFields = get_maybe_remote_record_fields(Name, Anno, TEnv),
-    [type_field_type(Name, Type) || ?typed_record_field(Name, Type) <- RecordFields].
+    [type_field_type(FieldName, Type) || ?typed_record_field(FieldName, Type) <- RecordFields].
 
 expand_record(Name, Anno, TEnv) ->
     type_record(Name, get_record_fields_types(Name, Anno, TEnv)).
