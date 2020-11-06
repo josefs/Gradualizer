@@ -54,13 +54,21 @@ files_to_check(App) ->
     Files = lists:flatmap(fun (Pattern) ->
             filelib:wildcard(filename:absname(Pattern, Cwd))
         end, Patterns),
+    ExpandedFiles = lists:flatmap(fun (Dir) ->
+            case filelib:is_dir(Dir) of
+                true ->
+                    filelib:wildcard(filename:join(Dir, "*.{erl,beam}"));
+                false ->
+                    [Dir]
+            end
+        end, Files),
     ExpandedExclude = lists:flatmap(fun (Pattern) ->
                 filelib:wildcard(filename:absname(Pattern, Cwd))
             end, Exclude),
     lists:filter(
         fun (File) ->
             not lists:member(File, ExpandedExclude)
-        end, Files).
+        end, ExpandedFiles).
 
 -spec format_error(any()) -> string().
 format_error(_) ->
