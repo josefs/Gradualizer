@@ -11,10 +11,6 @@
 
 -include("typelib.hrl").
 
--ifdef(OTP_RELEASE).
--compile([{nowarn_deprecated_function,{erlang,get_stacktrace,0}}]).
--endif.
-
 %% Performance hack: Unions larger than this value are replaced by any() in normalization.
 -define(union_size_limit, 20).
 
@@ -27,10 +23,9 @@
 -define(throw_orig_type(EXPR, ORIGTYPE, NORMTYPE),
         try EXPR
         catch
-            throw:TypeError when element(size(TypeError), TypeError) =:= NORMTYPE ->
+            throw:TypeError:ST when element(size(TypeError), TypeError) =:= NORMTYPE ->
                 %% if the last element of the type_error tuple is the normalized type
                 %% replace it with the original result type
-                ST = erlang:get_stacktrace(),
                 erlang:raise(throw, setelement(size(TypeError), TypeError, ORIGTYPE), ST)
         end).
 
@@ -3793,7 +3788,8 @@ add_type_pat(Atom = {atom, P, Val}, Ty, TEnv, VEnv) ->
             throw({type_error, pattern, P, Atom, Ty})
     end;
 add_type_pat(Nil = {nil, P}, Ty, TEnv, VEnv) ->
-    case subtype(NilTy = type(nil), Ty, TEnv) of
+    NilTy = type(nil),
+    case subtype(NilTy, Ty, TEnv) of
         {true, Cs} ->
             {NilTy, NilTy, VEnv, Cs};
         false ->
@@ -4381,20 +4377,20 @@ type_check_forms(Forms, Opts) ->
                             {_VarBinds, _Cs} ->
                                 Errors
                         catch
-                            Throw ->
+                            throw:Throw:ST ->
                                 % Useful for debugging
                                 % io:format("~p~n", [erlang:get_stacktrace()]),
                                 if
                                     CrashOnError ->
                                         io:format("Crashing...~n"),
-                                        erlang:raise(throw, Throw, erlang:get_stacktrace());
+                                        erlang:raise(throw, Throw, ST);
                                     not CrashOnError ->
                                         [Throw | Errors]
                                 end;
-                            error:Error ->
+                            error:Error:ST ->
                                 %% A hack to hide the (very large) #env{} in
                                 %% error stacktraces. TODO: Add an opt for this.
-                                Trace = case erlang:get_stacktrace() of
+                                Trace = case ST of
                                     [{M, F, [#env{}|Args], Pos} | RestTrace] ->
                                         [{M, F, ['*environment excluded*'|Args], Pos} | RestTrace];
                                     Trace0 ->
