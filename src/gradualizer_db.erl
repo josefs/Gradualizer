@@ -4,10 +4,6 @@
 %% as the type for all parameters and return values.
 -module(gradualizer_db).
 
--ifdef(OTP_RELEASE).
--compile([{nowarn_deprecated_function,{erlang,get_stacktrace,0}}]).
--endif.
-
 %% API functions
 -export([start_link/0,
          get_spec/3,
@@ -215,8 +211,8 @@ handle_call({load, Filename}, _From, State) ->
                                        types  = maps:merge(Ty1, Ty2),
                                        loaded = maps:merge(Loaded1, Loaded2)},
                 {reply, ok, NewState}
-            catch error:E ->
-                {reply, {error, E, erlang:get_stacktrace()}, State}
+            catch error:E:Stack ->
+                {reply, {error, E, Stack}, State}
             end;
         {error, Reason} ->
             {reply, {error, Reason}, State}
