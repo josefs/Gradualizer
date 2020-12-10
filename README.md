@@ -48,7 +48,7 @@ For Mix, a wrapper is provided at https://github.com/OvermindDL1/gradualixir.
 
 ## Prerequisites
 
-The Gradualizer requires at least OTP 19 and is built using plain OTP
+The Gradualizer requires at least OTP 21 and is built using plain OTP
 functionality and a self-contained Makefile; alternetively using
 [rebar3](https://www.rebar3.org/). It can also be built using Mix if
 used as a dependency.
