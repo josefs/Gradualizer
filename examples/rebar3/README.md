@@ -7,7 +7,20 @@ To run Gradualizer from rebar3, add it as a plugin in your `rebar.config`:
 ]}.
 ```
 
-# Options
+# Analyzing erl files or beam files
+
+Gradualizer can process both `*.erl` files and `*.beam` files.
+
+By default, `rebar3 gradualizer` processes `*.erl` files from source directories.
+In this default mode gradualizer tries its best to get include directories, header files
+and compiler options right. However, in case of complex setup gradualizer may miss something.
+
+`rebar3 gradualizer --use_beams` uses `*.beam` files from `ebin` directories as input
+(beam files should be produced with debug info to be analyzable).
+
+`--use_beams` may be a more robust choice if there are problems with analyzing `*.erl` files.
+
+# Options (`gradualizer_opts`)
 
 Gradualizer checks every source file in your app(s), unless configured not to.
 Configuration is read from `gradualizer_opts` in `rebar.config` which

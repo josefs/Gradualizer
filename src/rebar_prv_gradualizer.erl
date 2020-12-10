@@ -13,7 +13,7 @@ init(State) ->
             {bare, true},
             {deps, ?DEPS},
             {example, "rebar gradualizer"},
-            {opts, []},
+            {opts, [{use_beams, $b, "use_beams", boolean, "use beam files as input"}]},
             {short_desc, "typecheck the project with gradualizer"},
             {desc, ""}
     ]),
@@ -21,19 +21,29 @@ init(State) ->
 
 -spec do(rebar_state:t()) -> {ok, rebar_state:t()} | {error, string()}.
 do(State) ->
+    {Opts, _} = rebar_state:command_parsed_args(State),
+    UseBeams = proplists:get_value(use_beams, Opts, false),
     code:add_pathsa(rebar_state:code_paths(State, all_deps)),
-    CheckedApps = lists:map(fun gradualizer_check_app/1, rebar_state:project_apps(State)),
+    CheckedApps = lists:map(
+        fun (App) -> gradualizer_check_app(App, UseBeams) end,
+        rebar_state:project_apps(State)),
     HasNok = lists:member(nok, CheckedApps),
     if
         HasNok -> {error, {?MODULE, undefined}};
         true -> {ok, State}
     end.
 
--spec gradualizer_check_app(rebar_app_info:t()) -> ok | nok.
-gradualizer_check_app(App) ->
+-spec gradualizer_check_app(rebar_app_info:t(), boolean()) -> ok | nok.
+gradualizer_check_app(App, UseBeams) ->
     GOpts = rebar_app_info:get(App, gradualizer_opts, []),
-    Files = files_to_check(App),
-    gradualizer:type_check_files(Files, GOpts).
+    case UseBeams of
+        false ->
+            Files = files_to_check(App),
+            gradualizer:type_check_files(Files, GOpts);
+        true ->
+            EBinDir = rebar_app_info:ebin_dir(App),
+            gradualizer:type_check_dir(EBinDir, GOpts)
+    end.
 
 -spec files_to_check(rebar_app_info:t()) -> [file:name()].
 files_to_check(App) ->
