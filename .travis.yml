@@ -22,29 +22,28 @@ matrix:
 
   - env: TEST=".travis/travis_has_latest_otp_version"
     # Latest minor version of current OTP release
-    otp_release: 22.2
+    otp_release: 23.1
 
   # Run make target specialized for the checks we want to make in Travis for
   # the latest OTP release.
   # Includes coverage report and dialyzer .
   - env: TEST="make travischeck" ENABLE_COVER=true
     # Latest minor version of current OTP release
-    otp_release: 22.2
+    otp_release: 23.0
 
   - env: TEST="make gradualize"
     # Latest minor version of current OTP release
-    otp_release: 22.2
+    otp_release: 23.0
 
 # OTP releases that we test in the same way.
 # The latest OTP version is special and therefore explicitly
 # included above instead.
 otp_release:
   # First minor version of current OTP release
-  - 22.0
+  - 23.0
   # Last minor version of older OTP releases
+  - 22.2
   - 21.3
-  - 20.3
-  - 19.3
 
 env:
   - TEST="make tests"
