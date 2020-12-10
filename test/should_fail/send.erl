@@ -1,4 +1,4 @@
--module(send_expr).
+-module(send).
 
 -export([foo/2, bar/2]).
 

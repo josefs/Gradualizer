@@ -2,7 +2,7 @@
 
 -export([f/1, g/0, h/1, i/1]).
 
--include_lib("gradualizer/include/gradualizer.hrl").
+-include_lib("../../include/gradualizer.hrl").
 
 f(Expr) ->
     {call, _, _Name, Args} = Expr,

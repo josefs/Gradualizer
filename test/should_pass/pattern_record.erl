@@ -36,7 +36,7 @@ pat_match2(T) ->
     f :: atom()
 }).
 
--spec pass(#r1{} | #r2{}) -> integer().
+-spec good(#r1{} | #r2{}) -> integer().
 good(R = #r1{f = F}) -> R#r1.f + F;
 good(_) -> 0.
 

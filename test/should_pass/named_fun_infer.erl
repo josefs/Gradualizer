@@ -1,4 +1,4 @@
--module(named_fun).
+-module(named_fun_infer).
 
 -gradualizer(infer).
 -export([atom_sum/1]).
