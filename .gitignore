@@ -20,3 +20,4 @@ test/covertool.hrl
 /gradualizer
 /_build
 /bin/
+/test_data/

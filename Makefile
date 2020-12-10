@@ -108,7 +108,7 @@ clean:
 	rm -rf bin/gradualizer ebin cover test/*.beam
 
 .PHONY: tests eunit compile-tests cli-tests
-tests: eunit cli-tests
+tests: build_test_data eunit cli-tests
 
 test_erls=$(wildcard test/*.erl)
 test_beams=$(test_erls:test/%.erl=test/%.beam)
@@ -124,6 +124,12 @@ test/any.beam: test/should_pass/any.erl
 
 test/records.beam: test/should_pass/records.erl
 	erlc $(ERLC_OPTS) -o test $<
+
+.PHONY: build_test_data
+test_data_erls = $(wildcard test/known_problems/**/*.erl test/should_fail/*.erl test/should_pass/*.erl)
+build_test_data:
+	mkdir -p "test_data"
+	erlc -o test_data $(test_data_erls)
 
 EUNIT_OPTS =
 
