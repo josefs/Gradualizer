@@ -20,7 +20,7 @@ undefined_errors_test_() ->
         %% Test that error formatting doesn't crash
         Opts = [{fmt_location, brief},
                 {fmt_expr_fun, fun erl_prettypr:format/1}],
-        lists:foreach(fun({_, Error}) -> typechecker:handle_type_error(Error, Opts) end, Errors),
+        lists:foreach(fun({_, Error}) -> gradualizer_fmt:handle_type_error(Error, Opts) end, Errors),
         {ok, Forms} = gradualizer_file_utils:get_forms_from_erl(File, []),
         ExpectedErrors = typechecker:number_of_exported_functions(Forms),
         ?assertEqual(ExpectedErrors, length(Errors))

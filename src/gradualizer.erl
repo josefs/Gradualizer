@@ -196,7 +196,7 @@ type_check_forms(File, Forms, Opts) ->
             ok;
         {false, [_|_]} ->
             Opts1 = add_source_file_and_forms_to_opts(File, Forms, Opts),
-            typechecker:print_errors(Errors, Opts1),
+            gradualizer_fmt:print_errors(Errors, Opts1),
             nok
     end.
 
