@@ -155,16 +155,16 @@ cli-tests: bin/gradualizer test/arg.beam
 	# 2. When checking a beam file; beam file name is printed
 	bin/gradualizer test/arg.beam \
 	2>&1|perl -0777 -ne 'm%^test/arg.beam:% or die "CLI 1 ($$_)"'
-	# 4. Brief formatting
+	# 3. Brief formatting
 	bin/gradualizer --fmt_location brief test/dir \
 	2>&1|perl -0777 -ne '/^test\/dir\/test_in_dir.erl:6:12: The variable/ or die "CLI 6 ($$_)"'
-	# 5. Verbose formatting, without filename
+	# 4. Verbose formatting
 	bin/gradualizer --fmt_location verbose --no_fancy test/dir \
 	2>&1|perl -ne '/^test\/dir\/test_in_dir.erl: The variable N on line 6 at column 12/ or die "CLI 7 ($$_)"'
-	# 6. Possible to exclude prelude (-0777 from https://stackoverflow.com/a/30594643/497116)
+	# 5. Possible to exclude prelude (-0777 from https://stackoverflow.com/a/30594643/497116)
 	bin/gradualizer --no_prelude test/should_pass/cyclic_otp_specs.erl \
 	2>&1|perl -0777 -ne '/^test\/should_pass\/cyclic_otp_specs.erl: The type spec/g or die "CLI 9 ($$_)"'
-	# 7. Excluding prelude and then including it is a no-op
+	# 6. Excluding prelude and then including it is a no-op
 	bin/gradualizer --no_prelude --specs_override_dir priv/prelude \
 	  test/should_pass/cyclic_otp_specs.erl || (echo "CLI 10"; exit 1)
 
