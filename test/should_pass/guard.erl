@@ -7,8 +7,8 @@ atom(A) when is_atom(A) -> A;
 atom(_) -> not_atom.
 
 -spec atom2(atom() | integer()) -> atom() | not_atom.
-atom(A) when erlang:is_atom(A) -> A;
-atom(_) -> not_atom.
+atom2(A) when erlang:is_atom(A) -> A;
+atom2(_) -> not_atom.
 
 -spec binary(binary() | atom()) -> binary() | not_binary.
 binary(B) when is_binary(B) -> B;

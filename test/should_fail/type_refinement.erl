@@ -19,11 +19,11 @@ imprecision_prevents_refinement(_, X) -> X.
 multi_pat_fail_1(a, a) -> {b, b};
 multi_pat_fail_1(A, B) -> {A, B}. %% Not only {b, b} here
 
--spec guard_prevents_refinement2(timestamp()) -> ok.
+-spec guard_prevents_refinement2(erlang:timestamp()) -> ok.
 guard_prevents_refinement2(X) when is_integer(X), X rem 7 == 0 -> ok;
 guard_prevents_refinement2(infinity) -> ok. % can still be an integer
 
--spec pattern_prevents_refinement(timestamp(), any()) -> atom().
+-spec pattern_prevents_refinement(erlang:timestamp(), any()) -> atom().
 pattern_prevents_refinement(X, X)    when is_integer(X) -> ok;
 pattern_prevents_refinement(X, {_Y}) when is_integer(X) -> ok;
 pattern_prevents_refinement(Inf, _) -> Inf. % Inf can still be an integer

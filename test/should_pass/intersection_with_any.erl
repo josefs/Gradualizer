@@ -7,9 +7,9 @@
 -spec any_refined_using_guard(any()) -> 5.
 any_refined_using_guard(X) when is_integer(X) -> X.
 
--spec intersection_using_constraints(X) when X :: integer(),
-                                             X :: any() ->
-                                                       5.
+-spec intersection_using_constraints(X) -> X when
+                                                X :: integer(),
+                                                X :: any().
 intersection_using_constraints(X) -> X.
 
 -spec guess_two_dice(integer(), integer()) -> 0..6.

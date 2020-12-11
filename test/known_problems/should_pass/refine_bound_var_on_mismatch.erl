@@ -3,8 +3,7 @@
 %% Note: Here we're refining an already bound variable
 
 -export([refined_var_not_matching_itself/1,
-         refine_bound_var_by_pattern_mismatch/1,
-         refine_bound_var_by_guard_bifs/1]).
+         refine_bound_var_by_pattern_mismatch/1]).
 
 %% Current error: Var is expected to have type y | z but has type x | y | z
 -spec refined_var_not_matching_itself(x | y | z) -> ok.
