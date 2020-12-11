@@ -1,5 +1,5 @@
 -module(gradualizer_fmt).
--export([format_location/2, format_type_error/2]).
+-export([format_location/2, format_type_error/2, print_errors/2, handle_type_error/2]).
 
 -include("typelib.hrl").
 
@@ -490,3 +490,20 @@ pp_type(Ty, Opts) ->
         true  -> [?color_type, PP, ?color_end];
         false -> PP
     end.
+
+print_errors(Errors, Opts) ->
+    [print_error(Error, Opts) || Error <- Errors],
+    ok.
+
+print_error(Error, Opts) ->
+    File = proplists:get_value(filename, Opts),
+    FmtLoc = proplists:get_value(fmt_location, Opts, verbose),
+    case File of
+        undefined -> ok;
+        _ when FmtLoc =:= brief -> io:format("~s:", [File]);
+        _  -> io:format("~s: ", [File])
+    end,
+    handle_type_error(Error, Opts).
+
+handle_type_error(Error, Opts) ->
+    io:put_chars(gradualizer_fmt:format_type_error(Error, Opts)).

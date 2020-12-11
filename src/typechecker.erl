@@ -1,9 +1,7 @@
 -module(typechecker).
 
 %% API used by gradualizer.erl
--export([type_check_forms/2,
-         print_errors/2
-        ]).
+-export([type_check_forms/2]).
 
 %% Export all for easier testing and debugging while the project is
 %% still in an early stage
@@ -4501,24 +4499,6 @@ number_of_exported_functions(Forms) ->
         true -> length(ParseData#parsedata.functions);
         false -> length(ParseData#parsedata.exports)
     end.
-
-%% TODO: Move these functions to gradualizer or gradualizer_fmt.
-print_errors(Errors, Opts) ->
-    [print_error(Error, Opts) || Error <- Errors],
-    ok.
-
-print_error(Error, Opts) ->
-    File = proplists:get_value(filename, Opts),
-    FmtLoc = proplists:get_value(fmt_location, Opts, verbose),
-    case File of
-        undefined -> ok;
-        _ when FmtLoc =:= brief -> io:format("~s:", [File]);
-        _  -> io:format("~s: ", [File])
-    end,
-    handle_type_error(Error, Opts).
-
-handle_type_error(Error, Opts) ->
-    io:put_chars(gradualizer_fmt:format_type_error(Error, Opts)).
 
 line_no(Expr) ->
     erl_anno:line(element(2, Expr)).
