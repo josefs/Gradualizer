@@ -16,16 +16,6 @@ help_output_no_halt_test() ->
 version_test() ->
     ?assertEqual(version, gradualizer_cli:handle_args(["--version"])).
 
-defaults_single_file_test() ->
-    ?assertEqual({ok, ["file.erl"], []},
-                 gradualizer_cli:handle_args(["file.erl"])).
-defaults_multi_file_test() ->
-    ?assertEqual({ok, ["m1.erl", "m2.erl"], [print_file]},
-                 gradualizer_cli:handle_args(["m1.erl", "m2.erl"])).
-defaults_dir_test() ->
-    ?assertEqual({ok, ["test/dir"], [print_file]},
-                 gradualizer_cli:handle_args(["test/dir"])).
-
 no_file_test() ->
     ?assertMatch({error, "No files"++_},
                  gradualizer_cli:handle_args(["--infer"])).
@@ -66,19 +56,6 @@ pa_test_() ->
      ?_assertMatch({error, "No files"++_}, gradualizer_cli:handle_args(["--path_add", "ebin", "file.erl"])),
      ?_assertMatch({error, "No files"++_}, gradualizer_cli:handle_args(["-pa", "ebin", "file.erl"])),
      ?_assertMatch({error, "Missing "++_}, gradualizer_cli:handle_args(["-pa", "--", "file.erl"]))].
-
-print_file_true_test() ->
-    {ok, _Files, Opts} = gradualizer_cli:handle_args(["--print_file", "file.erl"]),
-    ?assertEqual(true, proplists:get_value(print_file, Opts)).
-print_file_module_test() ->
-    {ok, _Files, Opts} = gradualizer_cli:handle_args(["--print_module", "file.erl"]),
-    ?assertEqual(module, proplists:get_value(print_file, Opts)).
-print_file_basename_test() ->
-    {ok, _Files, Opts} = gradualizer_cli:handle_args(["--print_basename", "file.erl"]),
-    ?assertEqual(basename, proplists:get_value(print_file, Opts)).
-print_file_false_test() ->
-    {ok, _Files, Opts} = gradualizer_cli:handle_args(["--no_print_file", "file.erl"]),
-    ?assertEqual(false, proplists:get_value(print_file, Opts)).
 
 stop_on_first_error_test() ->
     {ok, _Files, Opts} = gradualizer_cli:handle_args(["--stop_on_first_error", "file.erl"]),

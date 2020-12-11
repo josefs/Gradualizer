@@ -6,8 +6,6 @@
 %%% - `stop_on_first_error': if `true' stop type checking at the first error,
 %%%   if `false' continue checking all functions in the given file and all files
 %%%   in the given directory.
-%%% - `{print_file, true | false | module | basename}': if `true' prefix error
-%%%   printouts with the file name the error is from. Default `false'.
 %%% - `crash_on_error': if `true' crash on the first produced error
 %%% - `return_errors': if `true', turns off error printing and errors
 %%%   (in their internal format) are returned in a list instead of being
@@ -71,21 +69,9 @@ type_check_file(File, Opts) ->
         end,
     case ParsedFile of
         {ok, Forms} ->
-            Opts2 = add_filename_to_opts(File, Opts),
-            type_check_forms(File, Forms, Opts2);
+            type_check_forms(File, Forms, Opts);
         Error ->
             throw(Error)
-    end.
-
-%% @doc Prepends `{filename, string()}', depending on whether and how the
-%%      filename should be printed according to the print_file option in Opts.
-add_filename_to_opts(Filename, Opts) ->
-    case proplists:get_value(print_file, Opts, false) of
-        false    -> Opts;
-        true     -> [{filename, Filename} | Opts];
-        basename -> [{filename, filename:basename(Filename)} | Opts];
-        module   -> [{filename, filename:rootname(
-                                  filename:basename(Filename))} | Opts]
     end.
 
 %% @doc Type check a module
@@ -201,7 +187,7 @@ type_check_forms(File, Forms, Opts) ->
     end.
 
 add_source_file_and_forms_to_opts(File, Forms, Opts) ->
-    Opts1 = [{forms, Forms}|Opts],
+    Opts1 = [{filename, File}, {forms, Forms} | Opts],
     case filename:extension(File) == ".erl" andalso filelib:is_file(File) of
         true -> [{source_file, File} | Opts1];
         false -> Opts1
