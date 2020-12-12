@@ -153,8 +153,7 @@ compat_ty({type, _, any, []}, _, A, _TEnv) ->
 compat_ty(_, {type, _, any ,[]}, A, _TEnv) ->
     ret(A);
 % gradualizer:top() is the top of the subtyping hierarchy
-compat_ty(_, {remote_type, _, [{atom, _, gradualizer}
-			      ,{atom, _, top}, []]}, A, _TEnv) ->
+compat_ty(_, ?top(), A, _TEnv) ->
     ret(A);
 
 %% None is the bottom of the subtyping relation
@@ -437,11 +436,9 @@ glb_ty(_Ty1, {type, _, any, []} = Ty2, _A, _TEnv) ->
     ret(Ty2);
 
 %% gradualizer:top() is the top of the hierarchy
-glb_ty({remote_type, _, [{atom,_,gradualizer}
-			,{atom,_,top}, []]}, Ty2, _A, _TEnv) ->
+glb_ty(?top(), Ty2, _A, _TEnv) ->
     ret(Ty2);
-glb_ty(Ty1, {remote_type, _, [{atom,_,gradualizer}
-			     ,{atom,_,top}, []]}, _A, _TEnv) ->
+glb_ty(Ty1, ?top(), _A, _TEnv) ->
     ret(Ty1);
 
 %% none() is the bottom of the hierarchy
@@ -646,8 +643,7 @@ normalize({user_type, P, Name, Args} = Type, TEnv) ->
                     throw({undef, user_type, P, {Name, length(Args)}})
             end
     end;
-normalize(T = {remote_type, _, [{atom, _, gradualizer}, {atom, _, top}, []]}
-	 , _TEnv) ->
+normalize(T = ?top(), _TEnv) ->
     %% Don't normalize gradualizer:top().
     T;
 normalize({remote_type, P, [{atom, _, M}, {atom, _, N}, Args]}, TEnv) ->
@@ -1100,8 +1096,7 @@ expect_fun_type1(_Env, {var, _, Var}) ->
                                         ,{var,  erl_anno:new(0), ResTy}]}))};
 expect_fun_type1(_Env, {type, _, any, []}) ->
     any;
-expect_fun_type1(_Env, {remote_type, _, [{atom,_,gradualizer}
-					,{atom,_,top}, []]}) ->
+expect_fun_type1(_Env, ?top()) ->
     {fun_ty_any_args, top(), constraints:empty()};
 expect_fun_type1(_Env, _Ty) ->
     type_error.
