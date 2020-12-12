@@ -13,3 +13,12 @@ tup2(A,B) ->
 -spec tup3(atom(), integer()) -> tup().
 tup3(A,B) ->
     {A,B}.
+
+%% expect_tuple_type should be able to extract that the type `any() | atom()` expects (accepts) any tuple
+%% (There is a shortcut for f(any()) which avoids this code path)
+tup4(A) ->
+    f({A, 1}).
+
+-spec f(any() | atom()) -> ok.
+f(_) ->
+    ok.

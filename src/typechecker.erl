@@ -959,6 +959,8 @@ infer_literal_string(Str) ->
                                {char, erl_anno:new(0), lists:last(SortedChars)}])])
     end.
 
+expect_tuple_type({type, _, any, []}, _N) ->
+    any;
 expect_tuple_type({type, _, tuple, any}, _N) ->
     any;
 expect_tuple_type({type, _, tuple, Tys}, N) when length(Tys) == N ->
