@@ -553,11 +553,26 @@ glb_ty({type, _, record, _}, {type, _, record, _}, _A, _TEnv) ->
 
 %% Map types. These are a bit tricky and we can't reach this case in the
 %% current code. For now going with a very crude approximation.
-glb_ty(Ty1 = {type, _, map, Assocs1}, Ty2 = {type, _, map, Assocs2}, _A, _TEnv) ->
+glb_ty(Ty1 = {type, _, map, Assocs1}, Ty2 = {type, _, map, Assocs2}, A, TEnv) ->
     case {Assocs1, Assocs2} of
         {any, _} -> ret(Ty2);
         {_, any} -> ret(Ty1);
-        _        -> ret(type(none))
+        _ when length(Assocs1) /= length(Assocs2) ->
+            ret(type(none));
+        _ ->
+        Zipped = lists:zipwith(fun(T1, T2) ->
+            glb(T1, T2, A, TEnv)
+        end, Assocs1, Assocs2),
+        {Tys, Css} = lists:unzip(Zipped),
+            TupleType =
+                case lists:any(fun(?type(none)) -> true; (_) -> false end,
+                               Tys) of
+                    true ->
+                        type(none);
+                    false ->
+                        type(map, Tys)
+                end,
+	    {TupleType, constraints:combine(Css)}
     end;
 
 %% Binary types. For now approximate this by returning the smallest type if
@@ -1492,10 +1507,10 @@ do_type_check_expr(Env, {map, _, Assocs}) ->
     {_AssocTys, VB, Cs} = type_check_assocs(Env, Assocs),
     % TODO: When the --infer flag is set we should return the type of the map
     {type(any), VB, Cs};
-do_type_check_expr(Env, {map, _, Expr, Assocs}) ->
+do_type_check_expr(Env, {map, _, Expr, Assocs} = MapCreation) ->
     {Ty, VBExpr, Cs1} = type_check_expr(Env, Expr),
     {AssocTys, VBAssocs, Cs2} = type_check_assocs(Env, Assocs),
-    MapTy = update_map_type(Ty, AssocTys),
+    MapTy = update_map_type(MapCreation, Ty, AssocTys),
     % TODO: Check the type of the map.
     {MapTy, union_var_binds(VBExpr, VBAssocs, Env#env.tenv), constraints:combine(Cs1, Cs2)};
 
@@ -2172,7 +2187,7 @@ do_type_check_expr_in(Env, ResTy, {map, _, Assocs} = MapCreation) ->
     %% We start from an empty map (`type(map, [])') and use `AssocTys' to build the complete type.
     %% The inferred type will have only non-optional associations (as the fields are already there
     %% when we build the map).
-    MapTy = update_map_type(type(map, []), AssocTys),
+    MapTy = update_map_type(MapCreation, type(map, []), AssocTys),
     case subtype(MapTy, ResTy, Env#env.tenv) of
         {true, Cs1} ->
             {VBs, constraints:combine(Cs1, Cs2)};
@@ -2182,7 +2197,7 @@ do_type_check_expr_in(Env, ResTy, {map, _, Assocs} = MapCreation) ->
 do_type_check_expr_in(Env, ResTy, {map, _, Expr, Assocs} = MapUpdate) ->
     {Ty, VBExpr, Cs1} = type_check_expr(Env, Expr),
     {AssocTys, VBAssocs, Cs2} = type_check_assocs(Env, Assocs),
-    UpdatedTy = update_map_type(Ty, AssocTys),
+    UpdatedTy = update_map_type(MapUpdate, Ty, AssocTys),
     case subtype(UpdatedTy, ResTy, Env#env.tenv) of
         {true, Cs3} ->
             {union_var_binds(VBExpr, VBAssocs, Env#env.tenv),
@@ -2868,7 +2883,7 @@ type_check_assocs(Env, [{Assoc, _P, Key, Val}| Assocs])
 type_check_assocs(_Env, []) ->
     {[], #{}, constraints:empty()}.
 
-update_map_type({type, _, Ty, Arg}, AssocTys)
+update_map_type(_InitialMap, {type, _, Ty, Arg}, AssocTys)
     when Ty == map, Arg == any;
 	 Ty == any, Arg == [] ->
     %% The original type could have any keys
@@ -2878,14 +2893,24 @@ update_map_type({type, _, Ty, Arg}, AssocTys)
     %% so let's append it as the last entry.
     UpdatedAssocs = update_assocs(AssocTys, []) ++ [type(map_field_assoc, [type(any), type(any)])],
     type(map, UpdatedAssocs);
-update_map_type({type, _, map, Assocs}, AssocTys) ->
+update_map_type(InitalMap, {type, _, union, Args} = OrigExpr, AssocTys) ->
+    UpdateMap = lists:map(fun(Arg) ->
+        case Arg of 
+            {type, _, map, _} ->
+                update_map_type(InitalMap, Arg, AssocTys);
+            _ ->
+                throw({type_error, InitalMap, Arg, type(map)})
+        end
+    end, Args),
+    type(union, UpdateMap);
+update_map_type(_InitialMap, {type, _, map, Assocs}, AssocTys) ->
     %% `AssocTys' come from a map creation or map update expr - after the expr is evaluated the map
     %% will contain the associations. Therefore in the resulting map type they
     %% cannot be optional - we rewrite optional assocs to non-optional ones.
     UpdatedAssocs = update_assocs(AssocTys,
                                   lists:map(fun typelib:remove_pos/1, Assocs)),
     type(map, UpdatedAssocs);
-update_map_type({var, _, _Var}, _AssocTys) ->
+update_map_type(_InitialMap, {var, _, _Var}, _AssocTys) ->
     type(any).
 
 %% Override existing key's value types and append those key types
