@@ -109,6 +109,8 @@ pick_value(?type(tuple, any)) ->
     {};
 pick_value(?type(tuple, Tys)) ->
     list_to_tuple([pick_value(Ty) || Ty <- Tys]);
+pick_value(Rec = ?type(record, _)) ->
+    typelib:pp_type(Rec);
 pick_value(?type(list)) ->
     [];
 pick_value(?type(list,_)) ->
