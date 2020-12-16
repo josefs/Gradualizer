@@ -3463,6 +3463,8 @@ refinable(?type(union,Tys)) when is_list(Tys) ->
     lists:all(fun refinable/1, Tys);
 refinable(?type(tuple, Tys)) when is_list(Tys) ->
     lists:all(fun refinable/1, Tys);
+refinable(?type(record, [_ | Fields])) ->
+    lists:all(fun refinable/1, [X || ?type(field_type, X) <- Fields]);
 refinable(_) ->
     false.
 
