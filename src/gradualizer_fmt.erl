@@ -46,12 +46,19 @@ format_type_error({type_error, Expression, ActualType, ExpectedType}, Opts)
   when is_tuple(Expression) ->
     format_expr_type_error(Expression, ActualType, ExpectedType, Opts);
 format_type_error({nonexhaustive, Anno, Example}, Opts) ->
+    FormattedExample =
+        case Example of
+            X when not is_list(X) -> io_lib:format("~p", [X]);
+            %% X is a list, only records are formatted as io_lists,
+            %% Add a newline for readability and formatting
+            X -> ["\n", X]
+        end,
     io_lib:format(
       "~sNonexhaustive patterns~s~n"
-      "Example values which are not covered: ~p~n",
+      "Example values which are not covered: ~s~n",
       [format_location(Anno, brief, Opts),
        format_location(Anno, verbose, Opts),
-       Example]);
+       FormattedExample]);
 format_type_error({call_undef, Anno, Func, Arity}, Opts) ->
     io_lib:format(
       "~sCall to undefined function ~p/~p~s~n",
