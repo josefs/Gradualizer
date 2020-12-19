@@ -9,6 +9,9 @@
 -define(type(T), {type, _, T, []}).
 -define(type(T, A), {type, _, T, A}).
 
+%% Prettyprinting Records nesting spaces (or tabs)
+-define(PP_RECORD_NESTING_OFFSET, 2).
+
 %% merge_with for maps. Similar to merge_with for dicts.
 %% Arguably, this function should be in OTP.
 merge_with(F, M1, M2) ->
@@ -110,7 +113,7 @@ pick_value(?type(tuple, any)) ->
 pick_value(?type(tuple, Tys)) ->
     list_to_tuple([pick_value(Ty) || Ty <- Tys]);
 pick_value(Rec = ?type(record, _)) ->
-    typelib:pp_type(Rec);
+    prettyprint(Rec);
 pick_value(?type(list)) ->
     [];
 pick_value(?type(list,_)) ->
@@ -121,6 +124,68 @@ pick_value(?type(range, [{_TagLo, _, neg_inf}, {_TagHi, _, Hi}])) ->
     Hi;
 pick_value(?type(range, [{_TagLo, _, Lo}, {_TagHi, _, _Hi}])) ->
     Lo.
+
+%% Prettyprints a ?type(record)
+%%
+%% What to expect:
+%% ```
+%%   #record_name{
+%%     field_one = #nested_record{
+%%       nested_field = 1
+%%     },
+%%     field_two = some_atom
+%%   }
+%% ```
+prettyprint(Record) ->
+    Doc =
+        case pp_record(Record) of
+            X when is_list(X) -> lists:foldr(fun prettypr:above/2, prettypr:empty(), X);
+            X -> X
+        end,
+    prettypr:format(Doc).
+
+pp_record(?type(record, [{atom, _, RecName} | Fields])) ->
+    PPFields = pp_record_fields(Fields),
+    %% We return a list instead of a document to achieve "C-style" nesting of tuples/records.
+    %% The list is embedded directly in a `field_type`'s fields for instance
+    %% to align the field nesting with the name of the field;
+    %% otherwise, the nesting would be aligned with the name of the record.
+    [
+        prettypr:text(["#", atom_to_list(RecName), "{"]),
+        prettypr:nest(?PP_RECORD_NESTING_OFFSET, PPFields),
+        prettypr:text("}")
+    ];
+pp_record(?type(field_type, [{atom, _, FieldName}, FieldValue])) ->
+    Val = lists:flatten([pp_record(FieldValue)]),
+    prettypr:par([
+        prettypr:text([atom_to_list(FieldName), " ="])
+        | Val
+    ], 0);
+pp_record(Value) ->
+    prettypr:text(io_lib:format("~p", [pick_value(Value)])).
+
+pp_record_fields(Fields) ->
+    R = pp_record_fields(Fields, [], []),
+    lists:foldl(fun prettypr:above/2, prettypr:empty(), R).
+pp_record_fields([], [X, sep | Tail], Acc) ->
+    pp_record_fields([], Tail, [prettypr:beside(X, prettypr:text(",")) | Acc]);
+pp_record_fields([], [X | Tail], Acc) ->
+    pp_record_fields([], Tail, [X | Acc]);
+pp_record_fields([], [], Acc) ->
+    Acc;
+pp_record_fields([X | Tail], [], []) ->
+    pp_record_fields([], [
+        pp_record(X)
+        |
+        lists:foldr(fun (Field, Acc) ->
+            %% prettypr:above(prettypr:beside(Acc, prettypr:text(",")), pp_record(Field))
+            [sep, pp_record(Field) | Acc]
+        end, [], Tail)
+    ], []);
+    %% lists:foldr(fun lists:flatmap(fun pp_record/1, [X | Tail]);
+pp_record_fields(_, _, _) ->
+    prettypr:empty().
+
 
 %% ------------------------------------------------
 %% Functions for working with abstract syntax trees
