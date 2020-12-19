@@ -9,7 +9,7 @@
 -define(type(T), {type, _, T, []}).
 -define(type(T, A), {type, _, T, A}).
 
-%% Prettyprinting Records nesting spaces (or tabs)
+%% Number of space used when prettyprinting records for nesting
 -define(PP_RECORD_NESTING_OFFSET, 2).
 
 %% merge_with for maps. Similar to merge_with for dicts.
@@ -144,6 +144,7 @@ prettyprint(Record) ->
         end,
     prettypr:format(Doc).
 
+-spec pp_record(gradualizer_type:abstract_type()) -> prettyprint:document() | [prettyprint:document()].
 pp_record(?type(record, [{atom, _, RecName} | Fields])) ->
     PPFields = pp_record_fields(Fields),
     %% We return a list instead of a document to achieve "C-style" nesting of tuples/records.
@@ -151,19 +152,20 @@ pp_record(?type(record, [{atom, _, RecName} | Fields])) ->
     %% to align the field nesting with the name of the field;
     %% otherwise, the nesting would be aligned with the name of the record.
     [
-        prettypr:text(["#", atom_to_list(RecName), "{"]),
+        prettypr:text(lists:concat(["#", atom_to_list(RecName), "{"])),
         prettypr:nest(?PP_RECORD_NESTING_OFFSET, PPFields),
         prettypr:text("}")
     ];
 pp_record(?type(field_type, [{atom, _, FieldName}, FieldValue])) ->
     Val = lists:flatten([pp_record(FieldValue)]),
     prettypr:par([
-        prettypr:text([atom_to_list(FieldName), " ="])
+        prettypr:text(atom_to_list(FieldName) ++ " =")
         | Val
     ], 0);
 pp_record(Value) ->
     prettypr:text(io_lib:format("~p", [pick_value(Value)])).
 
+-spec pp_record_fields([gradualizer_type:abstract_type()]) -> prettyprint:document().
 pp_record_fields([X | Tail]) ->
     %% Format all fields with a separator between
     %% The fold of prettypr:beside is not done in one go because
@@ -175,6 +177,7 @@ pp_record_fields([X | Tail]) ->
 pp_record_fields(_) ->
     prettypr:empty().
 
+% -spec pp_record_fields([prettyprint:document()], [prettyprint:document()]) -> prettyprint:document().
 pp_record_fields([], Acc) ->
     Acc;
 pp_record_fields([X, sep | Tail], Acc) ->
