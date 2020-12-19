@@ -164,27 +164,23 @@ pp_record(?type(field_type, [{atom, _, FieldName}, FieldValue])) ->
 pp_record(Value) ->
     prettypr:text(io_lib:format("~p", [pick_value(Value)])).
 
-pp_record_fields(Fields) ->
-    R = pp_record_fields(Fields, [], []),
-    lists:foldl(fun prettypr:above/2, prettypr:empty(), R).
-pp_record_fields([], [X, sep | Tail], Acc) ->
-    pp_record_fields([], Tail, [prettypr:beside(X, prettypr:text(",")) | Acc]);
-pp_record_fields([], [X | Tail], Acc) ->
-    pp_record_fields([], Tail, [X | Acc]);
-pp_record_fields([], [], Acc) ->
-    Acc;
-pp_record_fields([X | Tail], [], []) ->
-    pp_record_fields([], [
-        pp_record(X)
-        |
-        lists:foldr(fun (Field, Acc) ->
-            %% prettypr:above(prettypr:beside(Acc, prettypr:text(",")), pp_record(Field))
-            [sep, pp_record(Field) | Acc]
-        end, [], Tail)
-    ], []);
-    %% lists:foldr(fun lists:flatmap(fun pp_record/1, [X | Tail]);
-pp_record_fields(_, _, _) ->
+pp_record_fields([X | Tail]) ->
+    %% Format all fields with a separator between
+    %% The fold of prettypr:beside is not done in one go because
+    %% we want a list of document, not nested `prettypr:beside`
+    Fields = lists:foldr(fun (Field, Acc) -> [sep, pp_record(Field) | Acc] end, [], Tail),
+    %% Then recursively construct the list of comma delimited document
+    FinalFields = pp_record_fields([pp_record(X) | Fields], []),
+    lists:foldl(fun prettypr:above/2, prettypr:empty(), FinalFields);
+pp_record_fields(_) ->
     prettypr:empty().
+
+pp_record_fields([], Acc) ->
+    Acc;
+pp_record_fields([X, sep | Tail], Acc) ->
+    pp_record_fields(Tail, [prettypr:beside(X, prettypr:text(",")) | Acc]);
+pp_record_fields([X | Tail], Acc) ->
+    pp_record_fields(Tail, [X | Acc]).
 
 
 %% ------------------------------------------------
