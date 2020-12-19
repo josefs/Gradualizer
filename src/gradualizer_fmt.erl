@@ -47,11 +47,9 @@ format_type_error({type_error, Expression, ActualType, ExpectedType}, Opts)
     format_expr_type_error(Expression, ActualType, ExpectedType, Opts);
 format_type_error({nonexhaustive, Anno, Example}, Opts) ->
     FormattedExample =
-        case Example of
-            X when not is_list(X) -> io_lib:format("~p", [X]);
-            %% X is a list, only records are formatted as io_lists,
-            %% Add a newline for readability and formatting
-            X -> ["\n", X]
+        case io_lib:deep_char_list(Example) of
+            true -> ["\n", Example];
+            false -> io_lib:format("~p", [Example])
         end,
     io_lib:format(
       "~sNonexhaustive patterns~s~n"
