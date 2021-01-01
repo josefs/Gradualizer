@@ -1301,11 +1301,11 @@ expect_fun_type1(Env, BTy = {type, _, bounded_fun, [Ft, _Fc]}, Arity) ->
                                                       subst_ty(Sub, ResTy)),
             {fun_ty, Args, Res, constraints:combine(Cs, CsI)};
         {fun_ty_intersection, Tys, Cs} ->
-            InstTys = instantiate_fun_type(subst_ty(Sub, Tys)),
-            {fun_ty_intersection, InstTys, Cs};
+            {InstTys, CsI} = instantiate_fun_type(subst_ty(Sub, Tys)),
+            {fun_ty_intersection, InstTys, constraints:combine(Cs, CsI)};
         {fun_ty_union, Tys, Cs} ->
-            InstTys = instantiate_fun_type(subst_ty(Sub, Tys)),
-            {fun_ty_union, InstTys, Cs};
+            {InstTys, CsI} = instantiate_fun_type(subst_ty(Sub, Tys)),
+            {fun_ty_union, InstTys, constraints:combine(Cs, CsI)};
         Err ->
             Err
     end;
