@@ -1075,14 +1075,14 @@ expect_fun_type1(Env, BTy = {type, _, bounded_fun, [Ft, _Fc]}) ->
             {fun_ty, Args, Res, constraints:combine(Cs, CsI)};
         {fun_ty_any_args, ResTy, Cs} ->
             % TODO: This case is broken right now.
-            [Res] = instantiate_fun_type([subst_ty(Sub, ResTy)]),
-            {fun_ty_any_args, Res, Cs};
+            {[Res], CsI} = instantiate_fun_type([subst_ty(Sub, ResTy)]),
+            {fun_ty_any_args, Res, constraints:combine(Cs, CsI)};
         {fun_ty_intersection, Tys, Cs} ->
-            InstTys = instantiate_fun_type(subst_ty(Sub, Tys)),
-            {fun_ty_intersection, InstTys, Cs};
+            {InstTys, CsI} = instantiate_fun_type(subst_ty(Sub, Tys)),
+            {fun_ty_intersection, InstTys, constraints:combine(Cs, CsI)};
         {fun_ty_union, Tys, Cs} ->
-            InstTys = instantiate_fun_type(subst_ty(Sub, Tys)),
-            {fun_ty_union, InstTys, Cs};
+            {InstTys, CsI} = instantiate_fun_type(subst_ty(Sub, Tys)),
+            {fun_ty_union, InstTys, constraints:combine(Cs, CsI)};
         Err ->
             Err
     end;
