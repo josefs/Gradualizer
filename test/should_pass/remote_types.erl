@@ -1,6 +1,6 @@
 -module(remote_types).
 
--compile(export_all).
+-compile([export_all, nowarn_export_all]).
 
 -type local_tuple() :: {atom(), integer()}.
 -type local_list() :: list(atom()).

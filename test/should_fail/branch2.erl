@@ -2,7 +2,7 @@
 
 -export([c/1]).
 
--spec c(bool()) -> integer().
+-spec c(boolean()) -> integer().
 c(true) ->
     1;
 c(false) ->

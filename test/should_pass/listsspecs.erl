@@ -1,6 +1,6 @@
 -module(listsspecs).
 
--compile([export_all]).
+-compile([export_all, nowarn_export_all]).
 
 -spec append([integer()]) -> [integer()].
 append(X) ->
@@ -52,7 +52,7 @@ join() ->
 
 -spec foreach() -> ok.
 foreach() ->
-    lists:foreach(fun (X) -> X+1, ok end, [1, 2, 3]).
+    lists:foreach(fun (X) -> X+1 end, [1, 2, 3]).
 
 -spec last() -> 1.
 last() ->

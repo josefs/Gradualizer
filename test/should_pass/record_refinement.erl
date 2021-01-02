@@ -1,5 +1,7 @@
 -module(record_refinement).
 
+-compile([export_all, nowarn_export_all]).
+
 -record(one_field, {a :: integer() | undefined}).
 
 -spec one_field(#one_field{}, integer()) -> integer().

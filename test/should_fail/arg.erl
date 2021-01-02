@@ -6,6 +6,6 @@
 f(N) ->
     N.
 
--spec g(bool()) -> bool().
+-spec g(boolean()) -> boolean().
 g(N) ->
     f(N).

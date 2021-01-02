@@ -47,6 +47,12 @@ subtype_test_() ->
      ?_assert(subtype(?t( integer()         ), ?t( number()         ))),
      ?_assert(subtype(?t( float()           ), ?t( number()         ))),
 
+     %% Boolean
+     %% We support both the new boolean() and the deprecated bool()
+     %% and they're both equivalent.
+     ?_assert(subtype(?t( bool()            ), ?t( boolean()        ))),
+     ?_assert(subtype(?t( boolean()         ), ?t( bool()           ))),
+
      %% Atom
      ?_assert(subtype(?t( a                 ), ?t( atom()           ))),
      ?_assert(subtype(?t( a                 ), ?t( a                ))),

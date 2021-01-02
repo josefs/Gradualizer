@@ -1,6 +1,6 @@
 -module(refine_comparison).
 
--export([comp1/1, comp2/1, comp3/1, comp4/1, compatom1/1]).
+-compile([export_all, nowarn_export_all]).
 
 -spec comp1(integer()) -> pos_integer() | neg_integer().
 comp1(N) when 0 < N -> N;

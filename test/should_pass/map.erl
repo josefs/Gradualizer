@@ -1,6 +1,6 @@
 -module(map).
 
--compile(export_all).
+-compile([export_all, nowarn_export_all]).
 
 -spec unknown_map1(#{a => b}) -> map().
 unknown_map1(M) -> M.

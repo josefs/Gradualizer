@@ -1,9 +1,9 @@
 -module(tuple).
 
--compile([export_all]).
+-compile([export_all, nowarn_export_all]).
 
 -spec tup({any(),any(),any()}) -> any().
-tup({A,B,C}) ->
+tup({A,_,_}) ->
     A.
 
 tup2(A,B) ->

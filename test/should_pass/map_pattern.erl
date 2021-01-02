@@ -1,5 +1,7 @@
 -module(map_pattern).
 
+-compile([export_all, nowarn_export_all]).
+
 -type t() :: #{apa := integer(), bepa := boolean()}.
 
 -spec f(t()) -> boolean().

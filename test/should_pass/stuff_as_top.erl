@@ -16,7 +16,7 @@ tuple_pat_as_top({X, Y}) ->
 cons_as_top() -> [x, y].
 
 -spec cons_pat_as_top(gradualizer:top()) -> any().
-cons_pat_as_top([X|Xs]) -> X.
+cons_pat_as_top([X|_]) -> X.
 
 -spec fun_as_top() -> gradualizer:top().
 fun_as_top() -> fun (X) -> X + 1 end.

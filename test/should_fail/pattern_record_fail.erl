@@ -1,6 +1,6 @@
 -module(pattern_record_fail).
 
--compile(export_all).
+-compile([export_all, nowarn_export_all]).
 
 -record(r1, {
     f

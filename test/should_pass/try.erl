@@ -1,11 +1,11 @@
 -module('try').
 
--compile([export_all]).
+-compile([export_all, nowarn_export_all, nowarn_unused_vars]).
 
 -spec t() -> 2..4.
 t()->
     try A = 1 of
-        ok ->
+        1 ->
             %% a:b(A), unsafe
             B = 2
     catch _:_ ->
@@ -25,7 +25,7 @@ t()->
 
 r()->
     try A = 1 of
-        ok ->
+        1 ->
             %% a:b(A), unsafe
             B = 2
     catch _:_ ->

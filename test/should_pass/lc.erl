@@ -1,5 +1,7 @@
 -module(lc).
 
+-compile([export_all, nowarn_export_all]).
+
 bin_gen_1() ->
     [X || <<X>> <= bin_fixed_size()].
 

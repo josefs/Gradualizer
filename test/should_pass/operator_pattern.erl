@@ -1,6 +1,6 @@
 -module(operator_pattern).
 
--compile([export_all]).
+-compile([export_all, nowarn_export_all]).
 
 -spec f1(float()) -> {}.
 f1(1.0+1.0)   -> {};

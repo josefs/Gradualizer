@@ -1,6 +1,6 @@
 -module(shortcut_ops).
 
--compile(export_all).
+-compile([export_all, nowarn_export_all]).
 
 -spec andalso_too_precise1(true, number()) -> number().
 andalso_too_precise1(True, N) -> True andalso N.

@@ -1,6 +1,6 @@
 -module(refine_list_tail).
 
--compile([export_all]).
+-compile([export_all, nowarn_export_all]).
 
 %% Currently fails with:
 %% "The variable 'T' has type [] | [any(), ...] but is expected to have type [any(), ...]"

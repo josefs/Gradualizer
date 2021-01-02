@@ -1,6 +1,6 @@
 -module(record_refinement_fail).
 
--compile(export_all).
+-compile([export_all, nowarn_export_all]).
 
 -record(one_field, {a :: integer() | undefined}).
 

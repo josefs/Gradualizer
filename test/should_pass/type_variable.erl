@@ -1,6 +1,6 @@
 -module(type_variable).
 
--compile(export_all).
+-compile([export_all, nowarn_export_all]).
 
 -spec fff() -> Result when Result :: integer().
 fff() -> 0.

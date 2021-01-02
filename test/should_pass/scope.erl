@@ -1,6 +1,6 @@
 -module(scope).
 
--compile([export_all]).
+-compile([export_all, nowarn_export_all, nowarn_unused_vars]).
 
 f(X) ->
     case g(X) of
@@ -20,7 +20,7 @@ g(_X) ->
 %     (X = 5) + X.
 
 t() ->
-    { X = 5, Y = 4 },
+    _ = { X = 5, Y = 4 },
 % Fails
 %    { X = 5, Y = 4, X },
     X.

@@ -1,5 +1,6 @@
 -module(covariant_map_keys).
 
+-compile([nowarn_unused_function]).
 -export([not_good/1]).
 
 -spec good(#{ good := A }) -> A.

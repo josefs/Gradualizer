@@ -1,5 +1,7 @@
 -module(bc).
 
+-compile([export_all, nowarn_export_all]).
+
 bc1() ->
     << <<X:4, Y:4>> || X <- [$a, $b], <<Y:4>> <= <<"xy">> >>.
 

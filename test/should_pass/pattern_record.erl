@@ -1,6 +1,6 @@
 -module(pattern_record).
 
--compile(export_all).
+-compile([export_all, nowarn_export_all]).
 
 -record(test, {
     field :: integer()

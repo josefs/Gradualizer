@@ -1,12 +1,6 @@
 -module(type_refinement).
 
--export([basic_type_refinement/1,
-         int_literals_1/1, int_literals_2/1, int_literals_3/1,
-         disjoint_stuff_1/1, disjoint_stuff_2/1,
-         disjoint_stuff_3/1, disjoint_stuff_4/1,
-         var_pat/2, nil_elimination/1,
-         tuple_union/1, beside_match_all/2, beside_singleton/2,
-         refine_bound_var_by_guard_bifs/1]).
+-compile([export_all, nowarn_export_all]).
 
 %% Test that Value is not considered to be string() | false.
 -spec basic_type_refinement(string()) -> string().
@@ -53,7 +47,7 @@ disjoint_stuff_4(3) -> 4; %% doesn't affect mismatching singleton and range
 disjoint_stuff_4(X) -> X.
 
 -spec var_pat(N :: 1..2, X :: 1..2) -> 2.
-var_pat(1, X) -> 2;
+var_pat(1, _) -> 2;
 var_pat(N, _) -> N.
 
 -spec nil_elimination([atom()]) -> nonempty_list(atom()).

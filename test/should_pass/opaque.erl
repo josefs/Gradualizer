@@ -1,6 +1,7 @@
 -module(opaque).
 
 -export([external/2, internal/2, use_internal/2]).
+-export_type([my_opaque/0]).
 
 -spec external(user_types:my_opaque(), integer() | undefined) -> integer().
 external(_, undefined) -> 0;

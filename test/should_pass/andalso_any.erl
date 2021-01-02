@@ -1,6 +1,6 @@
 -module(andalso_any).
 
--compile([export_all]).
+-compile([export_all, nowarn_export_all]).
 
 -spec f1() -> boolean().
 f1() ->
