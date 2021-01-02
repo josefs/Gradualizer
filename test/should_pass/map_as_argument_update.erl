@@ -1,5 +1,6 @@
 -module(map_as_argument_update).
--compile(export_all).
+
+-compile([export_all, nowarn_export_all]).
 
 %% See https://github.com/josefs/Gradualizer/pull/233 for the bug report,
 %% and https://github.com/josefs/Gradualizer/pull/237 for the fix.

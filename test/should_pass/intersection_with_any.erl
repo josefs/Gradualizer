@@ -1,8 +1,6 @@
 -module(intersection_with_any).
 
--export([any_refined_using_guard/1,
-         intersection_using_constraints/1,
-         guess_two_dice/2]).
+-compile([export_all, nowarn_export_all]).
 
 -spec any_refined_using_guard(any()) -> 5.
 any_refined_using_guard(X) when is_integer(X) -> X.
@@ -23,4 +21,4 @@ guess_two_dice(X, Y) ->
 
 %% untyped helper returning {1..6, 1..6}
 roll_two_dice() ->
-    {random:uniform(6), random:uniform(6)}.
+    {rand:uniform(6), rand:uniform(6)}.

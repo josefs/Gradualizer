@@ -2,15 +2,14 @@
 
 %% Check that the pattern type is normalized when recursively checking a pattern
 
-
--export([cons/1]).
+-compile([export_all, nowarn_export_all]).
 
 -type t()  :: {}.
 
 %% Cons: The element type t() should be normalized to {}, to check that the head
 %% pattern {} has type t().
 -spec cons([t()]) -> boolean().
-cons([{} | Xs]) -> true;
+cons([{} | _]) -> true;
 cons([])        -> false.
 
 %% Map: Key {} and value {} are of type t()

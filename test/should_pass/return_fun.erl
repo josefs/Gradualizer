@@ -1,6 +1,6 @@
 -module(return_fun).
 
--compile(export_all).
+-compile([export_all, nowarn_export_all]).
 
 -spec return_fun_term() -> term().
 return_fun_term() -> fun nil/0.

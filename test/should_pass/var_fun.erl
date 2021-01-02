@@ -1,6 +1,6 @@
 -module(var_fun).
 
--export([f/0,apa/1,bepa/1]).
+-compile([export_all, nowarn_export_all]).
 
 f() ->
     lists:map(fun (F) -> F(5) end, [ fun ?MODULE:F/1 || F <- [apa, bepa]]).

@@ -5,9 +5,6 @@
 -spec ok() -> ok.
 ok() -> ok.
 
--spec nok() -> nok.
-nok() -> nok.
-
 server() ->
   receive
     quit ->

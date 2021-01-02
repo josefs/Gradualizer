@@ -1,6 +1,6 @@
 -module(guard).
 
--compile(export_all).
+-compile([export_all, nowarn_export_all]).
 
 -spec atom(atom() | integer()) -> atom() | not_atom.
 atom(A) when is_atom(A) -> A;

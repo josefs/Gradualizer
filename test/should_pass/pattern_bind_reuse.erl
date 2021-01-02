@@ -19,7 +19,7 @@ guess_the_die(Guess) ->
 
 %% Untyped helper; returns 1..6
 roll_die() ->
-    random:uniform(6).
+    rand:uniform(6).
 
 -spec is_same(integer(), integer()) -> boolean().
 is_same(N, N) ->

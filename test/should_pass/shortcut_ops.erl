@@ -1,6 +1,6 @@
 -module(shortcut_ops).
 
--compile(export_all).
+-compile([export_all, nowarn_export_all]).
 
 -spec andalso_check1(boolean(), number()) -> false | number().
 andalso_check1(B, N) -> B andalso N.

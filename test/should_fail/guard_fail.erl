@@ -1,6 +1,6 @@
 -module(guard_fail).
 
--compile(export_all).
+-compile([export_all, nowarn_export_all]).
 
 -spec wrong_guard(integer() | atom()) -> atom() | not_atom.
 wrong_guard(A) when is_integer(A) -> A;
@@ -44,6 +44,6 @@ compare_still_float(_) ->
 
 -spec equal_still_float(number()) -> list().
 equal_still_float(N) when 0 == N ->
-    list_to_integer(0); % error: N can still be float, since 0.0 == 0
+    integer_to_list(N); % error: N can still be float, since 0.0 == 0
 equal_still_float(_) ->
     "X".

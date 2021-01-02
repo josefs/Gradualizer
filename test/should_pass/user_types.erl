@@ -1,6 +1,6 @@
 -module(user_types).
 
--export([f/1]).
+-compile([export_all, nowarn_export_all]).
 
 %% these exported types are used in remote_types module
 -export_type([my_tuple/0, my_list/0, my_union/0, my_opaque/0, my_empty_record/0]).

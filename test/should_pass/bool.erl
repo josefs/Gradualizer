@@ -1,8 +1,8 @@
 -module(bool).
 
--export([b/2]).
+-compile([export_all, nowarn_export_all]).
 
--spec b(boolean(), bool()) -> bool().
+-spec b(boolean(), boolean()) -> boolean().
 b(B1, B2) ->
     B1 andalso B2.
 
