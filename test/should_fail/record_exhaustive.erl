@@ -46,18 +46,20 @@ two_fields(undefined) -> 0.
 
 
 %% expected error message in the console:
-%%     Example values which are not coverd:
+%%     Example values which are not covered:
 %%     #union_rec{
-%%       field = c
+%%       foo = c
+%%       bar = 0.0
 %%     }
 -record(union_rec, {
-    field :: a | b | c
+    foo :: a | b | c,
+    bar :: float()       %% non-refinable field
 }).
 -spec union_rec(#union_rec{}) -> integer().
-union_rec(#union_rec{field = a}) ->
+union_rec(#union_rec{foo = a}) ->
     0;
-union_rec(#union_rec{field = b}) ->
+union_rec(#union_rec{foo = b}) ->
     1.
 %% unhandled
-%%union_rec(#union_rec{field = c}) ->
+%%union_rec(#union_rec{foo = c}) ->
 %%    2.
