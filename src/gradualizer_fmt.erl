@@ -47,13 +47,16 @@ format_type_error({type_error, Expression, ActualType, ExpectedType}, Opts)
     format_expr_type_error(Expression, ActualType, ExpectedType, Opts);
 format_type_error({nonexhaustive, Anno, Example}, Opts) ->
     FormattedExample =
-        case io_lib:deep_char_list(Example) of
-            true -> ["\n", Example];
-            false -> io_lib:format("~p", [Example])
+        case Example of
+            [X | Xs] ->
+                lists:foldl(fun(A, Acc) ->
+                    [erl_pp:expr(A), $\n | Acc]
+                end, [erl_pp:expr(X)], Xs);
+            X -> erl_pp:expr(X)
         end,
     io_lib:format(
       "~sNonexhaustive patterns~s~n"
-      "Example values which are not covered: ~s~n",
+      "Example values which are not covered:~n\t~s~n",
       [format_location(Anno, brief, Opts),
        format_location(Anno, verbose, Opts),
        FormattedExample]);
