@@ -89,101 +89,52 @@ reverse_graph(G) ->
 pick_value(List) when is_list(List) ->
     [pick_value(Ty) || Ty <- List ];
 pick_value(?type(integer)) ->
-    0;
+    {integer, erl_anno:new(0), 0};
 pick_value(?type(char)) ->
-    $a;
+    {char, erl_anno:new(0), $a};
 pick_value(?type(non_neg_integer)) ->
-    0;
+    {integer, erl_anno:new(0), 0};
 pick_value(?type(pos_integer)) ->
-    1;
+    {integer, erl_anno:new(0), 0};
 pick_value(?type(neg_integer)) ->
-    -1;
+    {integer, erl_anno:new(0), -1};
 pick_value(?type(float)) ->
-    0.0;
+    {float, erl_anno:new(0), -1};
 pick_value(?type(atom)) ->
-    a;
+    {atom, erl_anno:new(0), a};
 pick_value({atom, _, A}) ->
-    A;
+    {atom, erl_anno:new(0), A};
 pick_value({ann_type, _, [_, Ty]}) ->
     pick_value(Ty);
 pick_value(?type(union, [Ty|_])) ->
     pick_value(Ty);
 pick_value(?type(tuple, any)) ->
-    {};
+    {tuple, erl_anno:new(0), []};
 pick_value(?type(tuple, Tys)) ->
-    list_to_tuple([pick_value(Ty) || Ty <- Tys]);
-pick_value(Rec = ?type(record, _)) ->
-    prettyprint(Rec);
+    {tuple, erl_anno:new(0), [pick_value(Ty) || Ty <- Tys]};
+pick_value(?type(record, [{atom, _, RecordName}])) ->
+    {record, erl_anno:new(0), RecordName, []};
+pick_value(?type(record, [{atom, _, RecordName} | Tys])) ->
+    MFields = [
+        {record_field, erl_anno:new(0), {atom, erl_anno:new(0), FieldName}, pick_value(Ty)}
+        || ?type(field_type, [{atom, _, FieldName}, Ty]) <- Tys
+    ],
+    {record, erl_anno:new(0), RecordName, MFields};
 pick_value(?type(list)) ->
-    [];
+    {nil, erl_anno:new(0)};
 pick_value(?type(list,_)) ->
-    [];
+    {nil, erl_anno:new(0)};
 pick_value(?type(nil)) ->
-    [];
-pick_value(?type(range, [{_TagLo, _, neg_inf}, {_TagHi, _, Hi}])) ->
+    {nil, erl_anno:new(0)};
+%% The ?type(range) is a different case because the type range
+%% ..information is not encoded as an abstract_type()
+%% i.e. {type, Anno, range, [{integer, Anno2, Low}, {integer, Anno3, High}]}
+pick_value(?type(range, [{_TagLo, _, neg_inf}, Hi = {_TagHi, _, _Hi}])) ->
+    %% pick_value(Hi);
     Hi;
-pick_value(?type(range, [{_TagLo, _, Lo}, {_TagHi, _, _Hi}])) ->
+pick_value(?type(range, [Lo = {_TagLo, _, _Lo}, {_TagHi, _, _Hi}])) ->
+    %% pick_value(Lo).
     Lo.
-
-%% Prettyprints a ?type(record)
-%%
-%% What to expect:
-%% ```
-%%   #record_name{
-%%     field_one = #nested_record{
-%%       nested_field = 1
-%%     },
-%%     field_two = some_atom
-%%   }
-%% ```
-prettyprint(Record) ->
-    Doc =
-        case pp_record(Record) of
-            X when is_list(X) -> lists:foldr(fun prettypr:above/2, prettypr:empty(), X);
-            X -> X
-        end,
-    prettypr:format(Doc).
-
--spec pp_record(gradualizer_type:abstract_type()) -> prettyprint:document() | [prettyprint:document()].
-pp_record(?type(record, [{atom, _, RecName} | Fields])) ->
-    PPFields = pp_record_fields(Fields),
-    %% We return a list instead of a document to achieve "C-style" nesting of tuples/records.
-    %% The list is embedded directly in a `field_type`'s fields for instance
-    %% to align the field nesting with the name of the field;
-    %% otherwise, the nesting would be aligned with the name of the record.
-    [
-        prettypr:text(lists:concat(["#", atom_to_list(RecName), "{"])),
-        prettypr:nest(?PP_RECORD_NESTING_OFFSET, PPFields),
-        prettypr:text("}")
-    ];
-pp_record(?type(field_type, [{atom, _, FieldName}, FieldValue])) ->
-    Val = lists:flatten([pp_record(FieldValue)]),
-    prettypr:par([
-        prettypr:text(atom_to_list(FieldName) ++ " =")
-        | Val
-    ], 0);
-pp_record(Value) ->
-    prettypr:text(io_lib:format("~p", [pick_value(Value)])).
-
--spec pp_record_fields([gradualizer_type:abstract_type()]) -> prettyprint:document().
-pp_record_fields([X | Tail]) ->
-    %% Format all fields with a separator between
-    %% The fold of prettypr:beside is not done in one go because
-    %% we want a list of document, not nested `prettypr:beside`
-    Fields = lists:foldr(fun (Field, Acc) -> [sep, pp_record(Field) | Acc] end, [], Tail),
-    %% Then recursively construct the list of comma delimited document
-    FinalFields = pp_record_fields([pp_record(X) | Fields], []),
-    lists:foldl(fun prettypr:above/2, prettypr:empty(), FinalFields);
-pp_record_fields(_) ->
-    prettypr:empty().
-
-% -spec pp_record_fields([prettyprint:document()], [prettyprint:document()]) -> prettyprint:document().
-pp_record_fields([], Acc) ->
-    Acc;
-pp_record_fields([X, sep | Tail], Acc) ->
-    pp_record_fields(Tail, [prettypr:beside(X, prettypr:text(",")) | Acc]);
-pp_record_fields([X | Tail], Acc) ->
-    pp_record_fields(Tail, [X | Acc]).
 
 
 %% ------------------------------------------------
