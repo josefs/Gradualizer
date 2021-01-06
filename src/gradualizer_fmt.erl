@@ -49,9 +49,11 @@ format_type_error({nonexhaustive, Anno, Example}, Opts) ->
     FormattedExample =
         case Example of
             [X | Xs] ->
-                lists:foldl(fun(A, Acc) ->
-                    [erl_pp:expr(A), $\n | Acc]
-                end, [erl_pp:expr(X)], Xs);
+                lists:reverse(
+                    lists:foldl(fun(A, Acc) ->
+                        [erl_pp:expr(A), $\n | Acc]
+                    end, [erl_pp:expr(X)], Xs)
+                );
             X -> erl_pp:expr(X)
         end,
     io_lib:format(
