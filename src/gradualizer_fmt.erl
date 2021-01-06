@@ -51,7 +51,7 @@ format_type_error({nonexhaustive, Anno, Example}, Opts) ->
             [X | Xs] ->
                 lists:reverse(
                     lists:foldl(fun(A, Acc) ->
-                        [erl_pp:expr(A), $\n | Acc]
+                        [erl_pp:expr(A), "\n\t" | Acc]
                     end, [erl_pp:expr(X)], Xs)
                 );
             X -> erl_pp:expr(X)
