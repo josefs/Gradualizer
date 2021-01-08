@@ -1,6 +1,6 @@
 -module(record_exhaustive).
 
--compile(export_all).
+-compile([export_all, nowarn_export_all]).
 
 -record(inner, {
     field :: integer()
