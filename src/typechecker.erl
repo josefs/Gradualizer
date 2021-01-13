@@ -565,14 +565,14 @@ glb_ty(Ty1 = {type, _, map, Assocs1}, Ty2 = {type, _, map, Assocs2}, A, TEnv) ->
         end, Assocs1, Assocs2),
         {Tys, Css} = lists:unzip(Zipped),
             TupleType =
-                case lists:any(fun(?type(none)) -> true; (_) -> false end,
-                               Tys) of
+                case lists:any(fun(?type(map)) -> false; (_) -> true end,
+                                Tys) of
                     true ->
                         type(none);
                     false ->
                         type(map, Tys)
                 end,
-	    {TupleType, constraints:combine(Css)}
+        {TupleType, constraints:combine(Css)}
     end;
 
 %% Binary types. For now approximate this by returning the smallest type if

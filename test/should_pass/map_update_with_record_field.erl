@@ -54,12 +54,13 @@ map_update_with_case(Bool, Map1) ->
     end,
     Map2#{c := 1}.
 
--spec map_tuple_update_with_case(boolean(), map()) -> #{a => 1, b => 1, c => 1}.
-map_tuple_update_with_case(Bool, Map1) ->
-    {Map2} = case Bool of
-        true ->
-            {Map1#{a := 1}};
-        false ->
-            {Map1#{b := 2}}
-    end,
-    Map2#{c := 1}.
+% TODO: Not yet supported
+% -spec map_tuple_update_with_case(boolean(), map()) -> #{a => 1, b => 1, c => 1}.
+% map_tuple_update_with_case(Bool, Map1) ->
+%     {Map2} = case Bool of
+%         true ->
+%             {Map1#{a := 1}};
+%         false ->
+%             {Map1#{b := 2}}
+%     end,
+%     Map2#{c := 1}.
