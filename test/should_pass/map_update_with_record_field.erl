@@ -32,7 +32,7 @@ map_field_update_opt2(#{a := b, c := d} = M) ->
 -spec map_field_update_real_fields(map()) ->
     #{a := integer(), b => binary(), c => boolean(), d := atom()}.
 map_field_update_real_fields(#{a := <<"Hello">>, d := 42} = Map) ->
-    Map#{a => maps:get(d, Map), d => binary_to_atom(maps:get(a, Map))}.
+    Map#{a => maps:get(d, Map), d => binary_to_atom(maps:get(a, Map), utf8)}.
 
 -spec map_field_update_real_fields_2(map()) ->
     #{a := integer(), b => binary(), c => boolean(), d := atom()}.
@@ -41,7 +41,7 @@ map_field_update_real_fields(#{a := <<"Hello">>, d := 42} = Map) ->
         a => maps:get(d, Map),
         b => maps:get(a, Map),
         c => false,
-        d => binary_to_atom(maps:get(a, Map))
+        d => binary_to_atom(maps:get(a, Map), utf8)
     }.
 
 -spec map_update_with_case(boolean(), map()) -> #{a => 1, b => 1, c => 1}.
