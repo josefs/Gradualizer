@@ -45,6 +45,7 @@
 -define(top(), {remote_type, _, [{atom,_,gradualizer}
 				,{atom,_,top},[]]}).
 -define(record_field(Name), {record_field, _, {atom, _, Name}, _}).
+-define(record_field_expr(Expr), {record_field, _, _, Expr}).
 -define(typed_record_field(Name), {typed_record_field, ?record_field(Name), _}).
 -define(typed_record_field(Name, Type), {typed_record_field, ?record_field(Name), Type}).
 -define(type_field_type(Name, Type), {type, _, field_type, [{atom, _, Name}, Type]}).
@@ -1175,6 +1176,8 @@ expect_record_type({var, _, Var}, Record, #tenv{records = REnv}) ->
         _NotFound ->
             {type_error, Record}
     end;
+expect_record_type({type, _, any, []}, _Record, _TEnv) ->
+    any;
 expect_record_type(_, Ty, _) ->
     {type_error, Ty}.
 
@@ -3711,8 +3714,6 @@ add_type_pat({var, _, A} = Var, Ty, TEnv, VEnv) ->
             %% Match all
 	    {Ty, Ty, VEnv#{A => Ty}, constraints:empty()}
     end;
-add_type_pat(Expr, {type, _, any, []} = Ty, _TEnv, VEnv) ->
-    {type(none), Ty, add_any_types_pat(Expr, VEnv), constraints:empty()};
 add_type_pat(Pat, ?type(union, UnionTys)=UnionTy, TEnv, VEnv) ->
     {PatTys, UBounds, VEnvs, Css} =
         lists:foldr(fun (Ty, {PatTysAcc, UBoundsAcc, VEnvAcc, CsAcc}=Acc) ->
@@ -3843,7 +3844,7 @@ add_type_pat({record, P, Record, Fields}, Ty, TEnv, VEnv) ->
         any ->
             {type(none)
                 ,Ty
-                ,union_var_binds([add_any_types_pat(Field, VEnv) || Field <- Fields], TEnv)
+                ,union_var_binds([add_any_types_pat(Field, VEnv) || ?record_field_expr(Field) <- Fields], TEnv)
                 ,constraints:empty()};
         {fields_ty, Tys, Cs} ->
             {PatTys, UBounds, VEnv1, Cs1} = add_type_pat_fields(Fields, Tys, TEnv, VEnv),

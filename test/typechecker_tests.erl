@@ -562,7 +562,7 @@ add_type_pat_test_() ->
     [{"Pattern matching list against any()",
       ?_assert(type_check_forms(["f([E|_]) -> E."]))},
      {"Pattern matching record against any()",
-      ?_assert(type_check_forms(["-record(f, {r}).",
+      ?_assert(type_check_forms(["-record(r, {f}).",
                                  "f(#r{f = F}) -> F."]))}
     ].
 
