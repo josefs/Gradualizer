@@ -61,3 +61,6 @@ rec_index_subtype() ->
 -spec record_as_tuple(#r{}) -> tuple().
 record_as_tuple(R) ->
     R.
+
+-record(rec_any, {f}).
+f(#rec_any{f = F} = R) -> F.
