@@ -64,3 +64,13 @@ record_as_tuple(R) ->
 
 -record(rec_any, {f}).
 f(#rec_any{f = F} = R) -> F.
+
+-record(nospec_update_bug, {
+    a :: integer(),
+    b :: integer()
+}).
+
+nospec_update_bug(Rec) ->
+    Rec#nospec_update_bug{
+        b = 0
+    }.

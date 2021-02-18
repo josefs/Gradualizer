@@ -1513,7 +1513,7 @@ do_type_check_expr(Env, {record, Anno, Expr, Record, Fields}) ->
     RecTy = {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Record}]},
     {VB1, Cs1} = type_check_expr_in(Env, RecTy, Expr),
     Rec = get_record_fields(Record, Anno, Env#env.tenv),
-    {VB2, Cs2} = type_check_fields(Env, Rec, Fields),
+    {VB2, Cs2} = type_check_fields_for_update(Env, Rec, Fields),
     {RecTy, union_var_binds(VB1, VB2, Env#env.tenv), constraints:combine(Cs1, Cs2)};
 do_type_check_expr(Env, {record, Anno, Record, Fields}) ->
     RecTy    = {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Record}]},
@@ -1702,6 +1702,9 @@ type_check_fun(Env, Clauses) ->
 create_fun_type(Arity, RetTy) when is_integer(Arity) ->
     ParTys = lists:duplicate(Arity, type(any)),
     type('fun', [type(product, ParTys), RetTy]).
+
+type_check_fields_for_update(Env, Rec, Fields) ->
+    type_check_fields(Env, Rec, Fields, should_not_be_inspected).
 
 type_check_fields(Env, Rec, Fields) ->
     UnAssignedFields = get_unassigned_fields(Fields, Rec),
