@@ -174,9 +174,9 @@ glb_test_() ->
 
     [
      %% any()
-     [ ?glb( ?t(any()),  T, ?t(any()) )   || T <- Ts ],
+     [ ?glb( ?t(any()),  T, ?t(any()) )   || T <- Ts, T /= ?t(none()) ],
      [ ?glb( ?t(gradualizer:top()), T, T) || T <- Ts ],
-     [ ?glb( ?t(none()), T, ?t(none()) )  || T <- Ts, T /= ?t(any()) ],
+     [ ?glb( ?t(none()), T, ?t(none()) )  || T <- Ts ],
 
      %% Integer types
      ?glb( ?t(-5..10), ?t(2..3 | 5..15), ?t(2..3 | 5..10) ),
