@@ -430,6 +430,12 @@ glb(T1, T2, A, TEnv) ->
             end
     end.
 
+%% none() is the bottom of the hierarchy
+glb_ty({type, _, none, []} = Ty1, _Ty2, _A, _TEnv) ->
+    ret(Ty1);
+glb_ty(_Ty1, {type, _, none, []} = Ty2, _A, _TEnv) ->
+    ret(Ty2);
+
 %% We don't know anything if either type is any()
 glb_ty({type, _, any, []} = Ty1, _Ty2, _A, _TEnv) ->
     ret(Ty1);
@@ -441,12 +447,6 @@ glb_ty(?top(), Ty2, _A, _TEnv) ->
     ret(Ty2);
 glb_ty(Ty1, ?top(), _A, _TEnv) ->
     ret(Ty1);
-
-%% none() is the bottom of the hierarchy
-glb_ty({type, _, none, []} = Ty1, _Ty2, _A, _TEnv) ->
-    ret(Ty1);
-glb_ty(_Ty1, {type, _, none, []} = Ty2, _A, _TEnv) ->
-    ret(Ty2);
 
 %% glb is idempotent
 glb_ty(Ty, Ty, _A, _TEnv) ->
