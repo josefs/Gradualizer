@@ -62,10 +62,7 @@ type_check_file(File, Opts) ->
             ".beam" ->
                 gradualizer_file_utils:get_forms_from_beam(File);
             Ext ->
-                case filelib:is_dir(File) of
-                    true -> type_check_dir(File, Opts);
-                    false -> throw({unknown_file_extension, Ext})
-                end
+                throw({unknown_file_extension, Ext})
         end,
     case ParsedFile of
         {ok, Forms} ->
