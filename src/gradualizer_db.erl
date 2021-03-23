@@ -12,7 +12,7 @@
          get_modules/0, get_types/1,
          save/1, load/1,
          import_module/1,
-         import_erl_files/1, import_beam_files/1, import_extra_specs/1,
+         import_erl_files/1, import_erl_files/2, import_beam_files/1, import_extra_specs/1,
          import_app/1, import_otp/0, import_prelude/0]).
 
 %% Callbacks
@@ -102,7 +102,11 @@ load(Filename) ->
 
 -spec import_erl_files([file:filename()]) -> ok.
 import_erl_files(Files) ->
-    call({import_erl_files, Files}, infinity).
+    call({import_erl_files, Files, []}, infinity).
+
+-spec import_erl_files([file:filename()],any()) -> ok.
+import_erl_files(Files,Includes) ->
+    call({import_erl_files, Files, Includes}, infinity).
 
 -spec import_beam_files([file:filename() | binary()]) ->
                             ok | gradualizer_file_utils:parsed_file_error().
@@ -224,8 +228,8 @@ handle_call({import_module, Mod}, _From, State) ->
         not_found ->
             {reply, not_found, State}
     end;
-handle_call({import_erl_files, Files}, _From, State) ->
-    State1 = import_erl_files(Files, State),
+handle_call({import_erl_files, Files, Inc}, _From, State) ->
+    State1 = import_erl_files(Files, Inc, State),
     {reply, ok, State1};
 handle_call({import_beam_files, Files}, _From, State) ->
     case import_beam_files(Files, State) of
@@ -235,12 +239,12 @@ handle_call({import_beam_files, Files}, _From, State) ->
 handle_call({import_app, App}, _From, State) ->
     Pattern = code:lib_dir(App) ++ "/src/*.erl",
     Files = filelib:wildcard(Pattern),
-    State1 = import_erl_files(Files, State),
+    State1 = import_erl_files(Files, [], State),
     {reply, ok, State1};
 handle_call(import_otp, _From, State) ->
     Pattern = code:lib_dir() ++ "/*/src/*.erl",
     Files = filelib:wildcard(Pattern),
-    State1 = import_erl_files(Files, State),
+    State1 = import_erl_files(Files, [], State),
     {reply, ok, State1};
 handle_call(import_prelude, _From, State) ->
     State2 = import_prelude(State),
@@ -356,20 +360,20 @@ import_module(Mod, State) ->
 import_module_from_erl(Mod, State) ->
     case State#state.srcmap of
         #{Mod := Filename} ->
-            State1 = import_erl_files([Filename], State),
+            State1 = import_erl_files([Filename], [], State),
             {ok, State1};
         _ ->
             not_found
     end.
 
--spec import_erl_files([file:filename()], state()) -> state().
-import_erl_files([File | Files], State) ->
-    EppOpts = [{includes, guess_include_dirs(File)}],
+-spec import_erl_files([file:filename()], [file:filename()], state()) -> state().
+import_erl_files([File | Files], Inc, State) ->
+    EppOpts = [{includes, guess_include_dirs(File) ++ Inc}],
     {ok, Forms} = epp:parse_file(File, EppOpts),
     {attribute, _, module, Module} = lists:keyfind(module, 3, Forms),
     check_epp_errors(File, Forms),
-    import_erl_files(Files, import_absform(Module, Forms, State));
-import_erl_files([], St) ->
+    import_erl_files(Files, Inc, import_absform(Module, Forms, State));
+import_erl_files([], _, St) ->
     St.
 
 -spec import_beam_files([file:filename() | binary()], state()) -> {ok, state()} | gradualizer_file_utils:parsed_file_error().
