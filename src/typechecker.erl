@@ -609,7 +609,7 @@ glb_ty(_Ty1, _Ty2, _A, _TEnv) -> {type(none), constraints:empty()}.
 %% * Flatten unions and merge overlapping types (e.g. ranges) in unions
 -spec normalize(type(), TEnv :: #tenv{}) -> type().
 normalize({type, _, record, [{atom, _, Name}|Fields]}, TEnv) when length(Fields) > 0 ->
-    NormFields = [type_field_type(FieldName, normalize(Type, TEnv)) 
+    NormFields = [type_field_type(FieldName, normalize(Type, TEnv))
         || ?type_field_type(FieldName, Type) <- Fields],
     type_record(Name, NormFields);
 normalize({type, _, union, Tys}, TEnv) ->
@@ -1145,8 +1145,10 @@ expect_record_type({type, _, record, [{atom, _, Name}|RefinedTypes]}, Record, #t
                 case RefinedTypes of
                     [] -> Fields;
                     _ ->
-                        [ {typed_record_field, RecordField, RefinedType}
-                        || {{typed_record_field, RecordField, _}, ?type_field_type(_, RefinedType)} <- lists:zip(Fields, RefinedTypes)]
+                        %% `RefinedTypes' and `Fields' might be of different sizes
+                        RefinedMap = maps:from_list([ {FieldName, Ty} || ?type_field_type(FieldName, Ty) <- RefinedTypes ]),
+                        [ {typed_record_field, RecordField, maps:get(FieldName, RefinedMap, Ty)}
+                          || ?typed_record_field(FieldName) = {typed_record_field, RecordField, Ty} <- Fields ]
                 end,
             {fields_ty, Tys, constraints:empty()};
         _NotFound ->
