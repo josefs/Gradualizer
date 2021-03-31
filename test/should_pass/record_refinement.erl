@@ -78,3 +78,9 @@ two_level2(#two_level1{two_level2 = #two_level2{value = undefined}}) ->
     0;
 two_level2(R1) ->
     R1#two_level1.two_level2#two_level2.value.
+
+-record(not_all_fields_refined_r, {a, b}).
+-type not_all_fields_refined_t() :: #not_all_fields_refined_r{b :: b | c}.
+
+-spec not_all_fields_refined() -> not_all_fields_refined_t().
+not_all_fields_refined() -> #not_all_fields_refined_r{b = c}.
