@@ -45,3 +45,8 @@ local_type_with_same_name_as_remote_type(_) -> {ok, {ok, remote_types}}.
 %% Just as above, this should resolve the opaque type from this module
 -spec generic_remote_opaque() -> user_types:my_generic(my_opaque()).
 generic_remote_opaque() -> {ok, remote_types}.
+
+-spec local_type_nested_generic(atom()) -> other_module:nested_generic(my_shadowed_type()).
+local_type_nested_generic('1') -> nested_generic;
+local_type_nested_generic('2') -> other_module;
+local_type_nested_generic(_) -> {ok, remote_types}.
