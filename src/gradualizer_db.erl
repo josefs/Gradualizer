@@ -315,8 +315,8 @@ handle_get_type(M, T, Args, RequireExported, ExpandOpaque, State) ->
                  #typeinfo{params = Vars,
                            body = Type0} ->
                      VarMap = maps:from_list(lists:zip(Vars, Args)),
-                     Type1 = typelib:substitute_type_vars(Type0, VarMap),
-                     Type2 = typelib:annotate_user_types(M, Type1),
+                     Type1 = typelib:annotate_user_types(M, Type0),
+                     Type2 = typelib:substitute_type_vars(Type1, VarMap),
                      {reply, {ok, Type2}, State}
              end;
         _NoMatch ->
