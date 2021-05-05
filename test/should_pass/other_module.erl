@@ -3,7 +3,7 @@
 -compile([export_all, nowarn_export_all]).
 
 %% these exported types are used in remote_types module
--export_type([my_generic/1]).
+-export_type([my_generic/1, nested_generic/1]).
 
 % -type other_module_type() :: other_module.
 
@@ -12,3 +12,5 @@
 %% A type to be shadowed by a type with the same name in a local module.
 %% To be used in `user_types:my_generic(my_shadowed_type())`
 -type my_shadowed_type() :: other_module.
+
+-type nested_generic(RetType) :: nested_generic | my_generic(RetType).
