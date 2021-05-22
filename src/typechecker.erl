@@ -3206,9 +3206,9 @@ check_clauses(Env = #env{tenv = TEnv}, ArgsTy, ResTy, Clauses, Caps) ->
     % Checking for exhaustive pattern matching
     check_exhaustiveness(Env, ArgsTy, Clauses, RefinedArgsTy, VarBindsList, Css).
 
-check_exhaustiveness(Env = #env{}, ArgsTy, Clauses, RefinedArgsTy, VarBindsList, Css) ->
+check_exhaustiveness(Env = #env{tenv = TEnv}, ArgsTy, Clauses, RefinedArgsTy, VarBindsList, Css) ->
     case {Env#env.exhaust,
-          ArgsTy =/= any andalso lists:all(fun refinable/1, ArgsTy),
+          ArgsTy =/= any andalso lists:all(fun (T) -> refinable(TEnv, T) end, ArgsTy),
           lists:all(fun no_guards/1, Clauses),
           is_list(RefinedArgsTy) andalso lists:any(fun (T) -> T =/= type(none) end, RefinedArgsTy)} of
         {true, true, true, true} ->
@@ -3450,27 +3450,32 @@ pick_one_refinement_each([Ty|Tys], [RefTy|RefTys]) ->
     RefHeadCombinations ++ RefTailCombinations.
 
 %% Is a type refinable to the point that we do exhaustiveness checking on it?
-refinable(?type(integer)) ->
+refinable(_TEnv, ?type(integer)) ->
     true;
-refinable(?type(char)) ->
+refinable(_TEnv, ?type(char)) ->
     true;
-refinable(?type(non_neg_integer)) ->
+refinable(_TEnv, ?type(non_neg_integer)) ->
     true;
-refinable(?type(pos_integer)) ->
+refinable(_TEnv, ?type(pos_integer)) ->
     true;
-refinable(?type(neg_integer)) ->
+refinable(_TEnv, ?type(neg_integer)) ->
     true;
-refinable({atom, _, _}) ->
+refinable(_TEnv, {atom, _, _}) ->
     true;
-refinable(?type(nil)) ->
+refinable(_TEnv, ?type(nil)) ->
     true;
-refinable(?type(union,Tys)) when is_list(Tys) ->
-    lists:all(fun refinable/1, Tys);
-refinable(?type(tuple, Tys)) when is_list(Tys) ->
-    lists:all(fun refinable/1, Tys);
-refinable(?type(record, [_ | Fields])) ->
-    lists:all(fun refinable/1, [X || ?type(field_type, X) <- Fields]);
-refinable(_) ->
+refinable(TEnv, ?type(union,Tys)) when is_list(Tys) ->
+    lists:all(fun (Ty) -> refinable(TEnv, Ty) end, Tys);
+refinable(TEnv, ?type(tuple, Tys)) when is_list(Tys) ->
+    lists:all(fun (Ty) -> refinable(TEnv, Ty) end, Tys);
+refinable(TEnv, ?type(record, [_ | Fields])) ->
+    lists:all(fun (Ty) -> refinable(TEnv, Ty) end, [X || ?type(field_type, X) <- Fields]);
+refinable(TEnv = #tenv{}, {user_type, _Anno, Name, Args}) ->
+    case maps:get({Name, length(Args)}, TEnv#tenv.types, false) of
+        false -> false;
+        {_Params, Ty} -> refinable(TEnv, Ty)
+    end;
+refinable(_, _) ->
     false.
 
 no_guards({clause, _, _, Guards, _}) ->
