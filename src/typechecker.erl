@@ -3203,13 +3203,14 @@ check_clauses(Env = #env{tenv = TEnv}, ArgsTy, ResTy, Clauses, Caps) ->
                     end,
                     {[], [], ArgsTy, Env#env.venv},
                     Clauses),
-    % Checking for exhaustive patternmatching
-    case {Env#env.exhaust
-         ,ArgsTy =/= any andalso
-          lists:all(fun refinable/1, ArgsTy)
-         ,lists:all(fun no_guards/1, Clauses)
-         ,is_list(RefinedArgsTy) andalso
-          lists:any(fun (T) -> T =/= type(none) end, RefinedArgsTy)} of
+    % Checking for exhaustive pattern matching
+    check_exhaustiveness(Env, ArgsTy, Clauses, RefinedArgsTy, VarBindsList, Css).
+
+check_exhaustiveness(Env = #env{}, ArgsTy, Clauses, RefinedArgsTy, VarBindsList, Css) ->
+    case {Env#env.exhaust,
+          ArgsTy =/= any andalso lists:all(fun refinable/1, ArgsTy),
+          lists:all(fun no_guards/1, Clauses),
+          is_list(RefinedArgsTy) andalso lists:any(fun (T) -> T =/= type(none) end, RefinedArgsTy)} of
         {true, true, true, true} ->
             [{clause, P, _, _, _}|_] = Clauses,
             throw({nonexhaustive, P, gradualizer_lib:pick_value(RefinedArgsTy)});
