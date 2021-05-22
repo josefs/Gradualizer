@@ -3450,32 +3450,40 @@ pick_one_refinement_each([Ty|Tys], [RefTy|RefTys]) ->
     RefHeadCombinations ++ RefTailCombinations.
 
 %% Is a type refinable to the point that we do exhaustiveness checking on it?
-refinable(_TEnv, ?type(integer)) ->
+refinable(TEnv, Ty) ->
+    refinable(TEnv, Ty, sets:new()).
+
+refinable(_TEnv, ?type(integer), _Trace) ->
     true;
-refinable(_TEnv, ?type(char)) ->
+refinable(_TEnv, ?type(char), _Trace) ->
     true;
-refinable(_TEnv, ?type(non_neg_integer)) ->
+refinable(_TEnv, ?type(non_neg_integer), _Trace) ->
     true;
-refinable(_TEnv, ?type(pos_integer)) ->
+refinable(_TEnv, ?type(pos_integer), _Trace) ->
     true;
-refinable(_TEnv, ?type(neg_integer)) ->
+refinable(_TEnv, ?type(neg_integer), _Trace) ->
     true;
-refinable(_TEnv, {atom, _, _}) ->
+refinable(_TEnv, {atom, _, _}, _Trace) ->
     true;
-refinable(_TEnv, ?type(nil)) ->
+refinable(_TEnv, ?type(nil), _Trace) ->
     true;
-refinable(TEnv, ?type(union,Tys)) when is_list(Tys) ->
-    lists:all(fun (Ty) -> refinable(TEnv, Ty) end, Tys);
-refinable(TEnv, ?type(tuple, Tys)) when is_list(Tys) ->
-    lists:all(fun (Ty) -> refinable(TEnv, Ty) end, Tys);
-refinable(TEnv, ?type(record, [_ | Fields])) ->
-    lists:all(fun (Ty) -> refinable(TEnv, Ty) end, [X || ?type(field_type, X) <- Fields]);
-refinable(TEnv = #tenv{}, {user_type, _Anno, Name, Args}) ->
-    case maps:get({Name, length(Args)}, TEnv#tenv.types, false) of
-        false -> false;
-        {_Params, Ty} -> refinable(TEnv, Ty)
+refinable(TEnv, ?type(union,Tys), Trace) when is_list(Tys) ->
+    lists:all(fun (Ty) -> refinable(TEnv, Ty, Trace) end, Tys);
+refinable(TEnv, ?type(tuple, Tys), Trace) when is_list(Tys) ->
+    lists:all(fun (Ty) -> refinable(TEnv, Ty, Trace) end, Tys);
+refinable(TEnv, ?type(record, [_ | Fields]), Trace) ->
+    lists:all(fun (Ty) -> refinable(TEnv, Ty, Trace) end, [X || ?type(field_type, X) <- Fields]);
+refinable(TEnv = #tenv{}, RefinableTy = {user_type, _Anno, Name, Args}, Trace) ->
+    case sets:is_element(RefinableTy, Trace) of
+        true ->
+            true;
+        false ->
+            case maps:get({Name, length(Args)}, TEnv#tenv.types, false) of
+                false -> false;
+                {_Params, Ty} -> refinable(TEnv, Ty, sets:add_element(RefinableTy, Trace))
+            end
     end;
-refinable(_, _) ->
+refinable(_, _, _) ->
     false.
 
 no_guards({clause, _, _, Guards, _}) ->
