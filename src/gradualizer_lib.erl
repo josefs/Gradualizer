@@ -2,7 +2,7 @@
 
 -module(gradualizer_lib).
 
--export([merge_with/3, top_sort/1, pick_value/1, fold_ast/3, get_ast_children/1,
+-export([merge_with/3, top_sort/1, pick_value/2, fold_ast/3, get_ast_children/1,
          empty_tenv/0, create_tenv/3]).
 -export_type([graph/1, tenv/0]).
 
@@ -93,55 +93,60 @@ reverse_graph(G) ->
 % Given a type, pick a value of that type.
 % Used in exhaustiveness checking to show an example value
 % which is not covered by the cases.
-pick_value(List) when is_list(List) ->
-    [pick_value(Ty) || Ty <- List ];
-pick_value(?type(integer)) ->
+pick_value(Types, List) when is_list(List) ->
+    [pick_value(Types, Ty) || Ty <- List ];
+pick_value(_Types, ?type(integer)) ->
     {integer, erl_anno:new(0), 0};
-pick_value(?type(char)) ->
+pick_value(_Types, ?type(char)) ->
     {char, erl_anno:new(0), $a};
-pick_value(?type(non_neg_integer)) ->
+pick_value(_Types, ?type(non_neg_integer)) ->
     {integer, erl_anno:new(0), 0};
-pick_value(?type(pos_integer)) ->
+pick_value(_Types, ?type(pos_integer)) ->
     {integer, erl_anno:new(0), 0};
-pick_value(?type(neg_integer)) ->
+pick_value(_Types, ?type(neg_integer)) ->
     {integer, erl_anno:new(0), -1};
-pick_value(?type(float)) ->
+pick_value(_Types, ?type(float)) ->
     {float, erl_anno:new(0), -1};
-pick_value(?type(atom)) ->
+pick_value(_Types, ?type(atom)) ->
     {atom, erl_anno:new(0), a};
-pick_value({atom, _, A}) ->
+pick_value(_Types, {atom, _, A}) ->
     {atom, erl_anno:new(0), A};
-pick_value({ann_type, _, [_, Ty]}) ->
-    pick_value(Ty);
-pick_value(?type(union, [Ty|_])) ->
-    pick_value(Ty);
-pick_value(?type(tuple, any)) ->
+pick_value(Types, {ann_type, _, [_, Ty]}) ->
+    pick_value(Types, Ty);
+pick_value(Types, ?type(union, [Ty|_])) ->
+    pick_value(Types, Ty);
+pick_value(_Types, ?type(tuple, any)) ->
     {tuple, erl_anno:new(0), []};
-pick_value(?type(tuple, Tys)) ->
-    {tuple, erl_anno:new(0), [pick_value(Ty) || Ty <- Tys]};
-pick_value(?type(record, [{atom, _, RecordName}])) ->
+pick_value(Types, ?type(tuple, Tys)) ->
+    {tuple, erl_anno:new(0), [pick_value(Types, Ty) || Ty <- Tys]};
+pick_value(_Types, ?type(record, [{atom, _, RecordName}])) ->
     {record, erl_anno:new(0), RecordName, []};
-pick_value(?type(record, [{atom, _, RecordName} | Tys])) ->
+pick_value(Types, ?type(record, [{atom, _, RecordName} | Tys])) ->
     MFields = [
-        {record_field, erl_anno:new(0), {atom, erl_anno:new(0), FieldName}, pick_value(Ty)}
+        {record_field, erl_anno:new(0), {atom, erl_anno:new(0), FieldName}, pick_value(Types, Ty)}
         || ?type(field_type, [{atom, _, FieldName}, Ty]) <- Tys
     ],
     {record, erl_anno:new(0), RecordName, MFields};
-pick_value(?type(list)) ->
+pick_value(_Types, ?type(list)) ->
     {nil, erl_anno:new(0)};
-pick_value(?type(list,_)) ->
+pick_value(_Types, ?type(list,_)) ->
     {nil, erl_anno:new(0)};
-pick_value(?type(nil)) ->
+pick_value(_Types, ?type(nil)) ->
     {nil, erl_anno:new(0)};
 %% The ?type(range) is a different case because the type range
 %% ..information is not encoded as an abstract_type()
 %% i.e. {type, Anno, range, [{integer, Anno2, Low}, {integer, Anno3, High}]}
-pick_value(?type(range, [{_TagLo, _, neg_inf}, Hi = {_TagHi, _, _Hi}])) ->
+pick_value(_Types, ?type(range, [{_TagLo, _, neg_inf}, Hi = {_TagHi, _, _Hi}])) ->
     %% pick_value(Hi);
     Hi;
-pick_value(?type(range, [Lo = {_TagLo, _, _Lo}, {_TagHi, _, _Hi}])) ->
+pick_value(_Types, ?type(range, [Lo = {_TagLo, _, _Lo}, {_TagHi, _, _Hi}])) ->
     %% pick_value(Lo).
-    Lo.
+    Lo;
+pick_value(Types, UserTy = {user_type, _Anno, Name, Args}) ->
+    case maps:get({Name, length(Args)}, Types, false) of
+        false -> erlang:error(unknown_type, [Types, UserTy]);
+        {_Params, Ty} -> pick_value(Types, Ty)
+    end.
 
 
 %% ------------------------------------------------
