@@ -95,7 +95,7 @@ get_user_type_definition(Types, Anno, Name, Args) ->
     %% Let's check if the type is a known remote type.
     case typelib:get_module_from_annotation(Anno) of
         {ok, Module} ->
-            case gradualizer_db:get_type(Module, Name, Args) of
+            case gradualizer_db:get_opaque_type(Module, Name, Args) of
                 {ok, Ty} ->
                     {ok, Ty};
                 not_found ->
