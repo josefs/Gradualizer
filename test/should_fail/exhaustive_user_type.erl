@@ -6,7 +6,8 @@
          recursive/1,
          mutually_recursive/1]).
 
--export_type([t/0]).
+-export_type([t/0,
+              recursive_t/0]).
 
 -type info() :: integer().
 
