@@ -1,4 +1,4 @@
--module(string).
+-module(string_literal).
 
 -export([f/0]).
 
