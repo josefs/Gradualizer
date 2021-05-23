@@ -142,10 +142,24 @@ pick_value(_Types, ?type(range, [{_TagLo, _, neg_inf}, Hi = {_TagHi, _, _Hi}])) 
 pick_value(_Types, ?type(range, [Lo = {_TagLo, _, _Lo}, {_TagHi, _, _Hi}])) ->
     %% pick_value(Lo).
     Lo;
-pick_value(Types, UserTy = {user_type, _Anno, Name, Args}) ->
-    case maps:get({Name, length(Args)}, Types, false) of
-        false -> erlang:error(unknown_type, [Types, UserTy]);
-        {_Params, Ty} -> pick_value(Types, Ty)
+pick_value(Types, UserTy = {user_type, Anno, Name, Args}) ->
+    %% Let's check if the type is defined in the context of this module.
+    case maps:get({Name, length(Args)}, Types, not_found) of
+        {_Params, Ty} ->
+            pick_value(Types, Ty);
+        not_found ->
+            %% Let's check if the type is a known remote type.
+            case typelib:get_module_from_annotation(Anno) of
+                {ok, Module} ->
+                    case gradualizer_db:get_type(Module, Name, Args) of
+                        {ok, Ty} ->
+                            pick_value(Types, Ty);
+                        not_found ->
+                            erlang:error(unknown_remote_type, [Types, UserTy])
+                    end;
+                none ->
+                    erlang:error(no_module_in_annotation, [Types, UserTy])
+            end
     end.
 
 

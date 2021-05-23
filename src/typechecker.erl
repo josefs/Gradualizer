@@ -3473,14 +3473,32 @@ refinable(TEnv, ?type(tuple, Tys), Trace) when is_list(Tys) ->
     lists:all(fun (Ty) -> refinable(TEnv, Ty, Trace) end, Tys);
 refinable(TEnv, ?type(record, [_ | Fields]), Trace) ->
     lists:all(fun (Ty) -> refinable(TEnv, Ty, Trace) end, [X || ?type(field_type, X) <- Fields]);
-refinable(TEnv = #tenv{}, RefinableTy = {user_type, _Anno, Name, Args}, Trace) ->
+refinable(TEnv = #tenv{}, RefinableTy = {user_type, Anno, Name, Args}, Trace) ->
     case sets:is_element(RefinableTy, Trace) of
         true ->
+            %% We're searching down the variants of a recursive type and we've
+            %% reached this recursive type again (that is, it's found in `Trace').
+            %% We assume it's refinable to terminate recursion.
+            %% Refinability will be determined by the variants which are not (mutually) recursive.
             true;
         false ->
-            case maps:get({Name, length(Args)}, TEnv#tenv.types, false) of
-                false -> false;
-                {_Params, Ty} -> refinable(TEnv, Ty, sets:add_element(RefinableTy, Trace))
+            %% Let's check if the type is defined in the context of this module.
+            case maps:get({Name, length(Args)}, TEnv#tenv.types, not_found) of
+                {_Params, Ty} ->
+                    refinable(TEnv, Ty, sets:add_element(RefinableTy, Trace));
+                not_found ->
+                    %% Let's check if the type is a known remote type.
+                    case typelib:get_module_from_annotation(Anno) of
+                        {ok, Module} ->
+                            case gradualizer_db:get_type(Module, Name, Args) of
+                                {ok, Ty} ->
+                                    refinable(TEnv, Ty, sets:add_element(RefinableTy, Trace));
+                                not_found ->
+                                    false
+                            end;
+                        none ->
+                            false
+                    end
             end
     end;
 refinable(_, _, _) ->
