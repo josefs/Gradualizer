@@ -2,7 +2,8 @@
 
 -module(gradualizer_lib).
 
--export([merge_with/3, top_sort/1, pick_value/2, fold_ast/3, get_ast_children/1,
+-export([merge_with/3, top_sort/1, get_user_type_definition/4,
+         pick_value/2, fold_ast/3, get_ast_children/1,
          empty_tenv/0, create_tenv/3]).
 -export_type([graph/1, tenv/0]).
 
@@ -90,6 +91,27 @@ reverse_graph(G) ->
     from_edges(maps:keys(G), [ {J, I} || {I, Js} <- maps:to_list(G), J <- Js ]).
 
 
+get_user_type_definition(Types, Anno, Name, Args) ->
+    %% Let's check if the type is defined in the context of this module.
+    case maps:get({Name, length(Args)}, Types, not_found) of
+        {_Params, Ty} ->
+            {ok, Ty};
+        not_found ->
+            %% Let's check if the type is a known remote type.
+            case typelib:get_module_from_annotation(Anno) of
+                {ok, Module} ->
+                    case gradualizer_db:get_type(Module, Name, Args) of
+                        {ok, Ty} ->
+                            {ok, Ty};
+                        not_found ->
+                            not_found
+                    end;
+                none ->
+                    not_found
+            end
+    end.
+
+
 % Given a type, pick a value of that type.
 % Used in exhaustiveness checking to show an example value
 % which is not covered by the cases.
@@ -142,24 +164,12 @@ pick_value(_Types, ?type(range, [{_TagLo, _, neg_inf}, Hi = {_TagHi, _, _Hi}])) 
 pick_value(_Types, ?type(range, [Lo = {_TagLo, _, _Lo}, {_TagHi, _, _Hi}])) ->
     %% pick_value(Lo).
     Lo;
-pick_value(Types, UserTy = {user_type, Anno, Name, Args}) ->
-    %% Let's check if the type is defined in the context of this module.
-    case maps:get({Name, length(Args)}, Types, not_found) of
-        {_Params, Ty} ->
+pick_value(Types, {user_type, Anno, Name, Args}) ->
+    case get_user_type_definition(Types, Anno, Name, Args) of
+        {ok, Ty} ->
             pick_value(Types, Ty);
         not_found ->
-            %% Let's check if the type is a known remote type.
-            case typelib:get_module_from_annotation(Anno) of
-                {ok, Module} ->
-                    case gradualizer_db:get_type(Module, Name, Args) of
-                        {ok, Ty} ->
-                            pick_value(Types, Ty);
-                        not_found ->
-                            erlang:error(unknown_remote_type, [Types, UserTy])
-                    end;
-                none ->
-                    erlang:error(no_module_in_annotation, [Types, UserTy])
-            end
+            throw({undef, user_type, Anno, {Name, length(Args)}})
     end.
 
 

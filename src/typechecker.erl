@@ -3482,23 +3482,9 @@ refinable(TEnv = #tenv{}, RefinableTy = {user_type, Anno, Name, Args}, Trace) ->
             %% Refinability will be determined by the variants which are not (mutually) recursive.
             true;
         false ->
-            %% Let's check if the type is defined in the context of this module.
-            case maps:get({Name, length(Args)}, TEnv#tenv.types, not_found) of
-                {_Params, Ty} ->
-                    refinable(TEnv, Ty, sets:add_element(RefinableTy, Trace));
-                not_found ->
-                    %% Let's check if the type is a known remote type.
-                    case typelib:get_module_from_annotation(Anno) of
-                        {ok, Module} ->
-                            case gradualizer_db:get_type(Module, Name, Args) of
-                                {ok, Ty} ->
-                                    refinable(TEnv, Ty, sets:add_element(RefinableTy, Trace));
-                                not_found ->
-                                    false
-                            end;
-                        none ->
-                            false
-                    end
+            case gradualizer_lib:get_user_type_definition(TEnv#tenv.types, Anno, Name, Args) of
+                {ok, Ty} -> refinable(TEnv, Ty, sets:add_element(RefinableTy, Trace));
+                not_found -> false
             end
     end;
 refinable(_, _, _) ->
