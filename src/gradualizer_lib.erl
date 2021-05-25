@@ -2,7 +2,7 @@
 
 -module(gradualizer_lib).
 
--export([merge_with/3, top_sort/1, get_user_type_definition/2,
+-export([merge_with/3, top_sort/1, get_type_definition/2,
          pick_value/2, fold_ast/3, get_ast_children/1,
          empty_tenv/0, create_tenv/3]).
 -export_type([graph/1, tenv/0]).
@@ -95,23 +95,18 @@ reverse_graph(G) ->
 %% first in `gradualizer_db', then, if not found, in provided `Types' map.
 %% `UserTy' is actually an unexported `gradualizer_type:af_user_defined_type()'.
 
--spec get_user_type_definition(UserTy, Types) -> {ok, Ty} | opaque | not_found when
+-spec get_type_definition(UserTy, Types) -> {ok, Ty} | opaque | not_found when
       UserTy :: gradualizer_type:abstract_type(),
       Types :: #{{Name :: atom(), arity()} => {Params :: [atom()],
                                                Body :: gradualizer_type:abstract_type()}},
       Ty :: gradualizer_type:abstract_type().
-get_user_type_definition({user_type, Anno, Name, Args}, Types) ->
+get_type_definition({remote_type, _Anno, [{atom, _, Module}, {atom, _, Name}, Args]}, _Types) ->
+    gradualizer_db:get_type(Module, Name, Args);
+get_type_definition({user_type, Anno, Name, Args}, Types) ->
     %% Let's check if the type is a known remote type.
     case typelib:get_module_from_annotation(Anno) of
         {ok, Module} ->
-            case gradualizer_db:get_type(Module, Name, Args) of
-                {ok, Ty} ->
-                    {ok, Ty};
-                opaque ->
-                    opaque;
-                not_found ->
-                    not_found
-            end;
+            gradualizer_db:get_type(Module, Name, Args);
         none ->
             %% Let's check if the type is defined in the context of this module.
             case maps:get({Name, length(Args)}, Types, not_found) of
@@ -181,14 +176,21 @@ pick_value(?type(range, [{_TagLo, _, neg_inf}, Hi = {_TagHi, _, _Hi}]), _Types) 
 pick_value(?type(range, [Lo = {_TagLo, _, _Lo}, {_TagHi, _, _Hi}]), _Types) ->
     %% pick_value(Lo, Types).
     Lo;
-pick_value({user_type, Anno, Name, Args} = UserTy, Types) ->
-    case get_user_type_definition(UserTy, Types) of
+pick_value(Type, Types)
+  when element(1, Type) =:= remote_type; element(1, Type) =:= user_type ->
+    {Kind, Anno, Name, Args} = case Type of
+                                   {remote_type, Anno, [_, {atom, _, Name}, Args]} ->
+                                       {remote_type, Anno, Name, Args};
+                                   {user_type, Anno, Name, Args} ->
+                                       {user_type, Anno, Name, Args}
+                               end,
+    case get_type_definition(Type, Types) of
         {ok, Ty} ->
             pick_value(Ty, Types);
         opaque ->
-            throw({opaque, user_type, Anno, {Name, length(Args)}});
+            {var, Anno, '_'};
         not_found ->
-            throw({undef, user_type, Anno, {Name, length(Args)}})
+            throw({undef, Kind, Anno, {Name, length(Args)}})
     end.
 
 

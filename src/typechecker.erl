@@ -3473,7 +3473,10 @@ refinable(?type(tuple, Tys), TEnv, Trace) when is_list(Tys) ->
     lists:all(fun (Ty) -> refinable(Ty, TEnv, Trace) end, Tys);
 refinable(?type(record, [_ | Fields]), TEnv, Trace) ->
     lists:all(fun (Ty) -> refinable(Ty, TEnv, Trace) end, [X || ?type(field_type, X) <- Fields]);
-refinable(RefinableTy = {user_type, _Anno, _Name, _Args}, TEnv, Trace) ->
+refinable({var, _, _TypeVar}, _TEnv, _Trace) ->
+    true;
+refinable(RefinableTy, TEnv, Trace)
+  when element(1, RefinableTy) =:= remote_type; element(1, RefinableTy) =:= user_type ->
     case sets:is_element(RefinableTy, Trace) of
         true ->
             %% We're searching down the variants of a recursive type and we've
@@ -3482,9 +3485,9 @@ refinable(RefinableTy = {user_type, _Anno, _Name, _Args}, TEnv, Trace) ->
             %% Refinability will be determined by the variants which are not (mutually) recursive.
             true;
         false ->
-            case gradualizer_lib:get_user_type_definition(RefinableTy, TEnv#tenv.types) of
+            case gradualizer_lib:get_type_definition(RefinableTy, TEnv#tenv.types) of
                 {ok, Ty} -> refinable(Ty, TEnv, sets:add_element(RefinableTy, Trace));
-                opaque -> false;
+                opaque -> true;
                 not_found -> false
             end
     end;

@@ -5,10 +5,13 @@
 -export([simple/1,
          recursive/1,
          mutually_recursive/1,
-         generic/1]).
+         generic/1,
+         local_opaque/1,
+         generic_with_local_opaque/1]).
 
 -export_type([t/0,
-              recursive_t/0]).
+              recursive_t/0,
+              opaque_t/0]).
 
 -type info() :: integer().
 
@@ -42,6 +45,20 @@ mutually_recursive(T) ->
 
 -spec generic(g(integer())) -> ok.
 generic(T) ->
+    case T of
+        ok -> ok
+    end.
+
+-opaque opaque_t() :: left | right.
+
+-spec local_opaque(opaque_t()) -> ok.
+local_opaque(T) ->
+    case T of
+        left -> ok
+    end.
+
+-spec generic_with_local_opaque(g(opaque_t())) -> ok.
+generic_with_local_opaque(T) ->
     case T of
         ok -> ok
     end.
