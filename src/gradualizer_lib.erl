@@ -2,7 +2,7 @@
 
 -module(gradualizer_lib).
 
--export([merge_with/3, top_sort/1, get_user_type_definition/4,
+-export([merge_with/3, top_sort/1, get_user_type_definition/2,
          pick_value/2, fold_ast/3, get_ast_children/1,
          empty_tenv/0, create_tenv/3]).
 -export_type([graph/1, tenv/0]).
@@ -91,7 +91,16 @@ reverse_graph(G) ->
     from_edges(maps:keys(G), [ {J, I} || {I, Js} <- maps:to_list(G), J <- Js ]).
 
 
-get_user_type_definition(Types, Anno, Name, Args) ->
+%% Look up `UserTy' definition:
+%% first in `gradualizer_db', then, if not found, in provided `Types' map.
+%% `UserTy' is actually an unexported `gradualizer_type:af_user_defined_type()'.
+
+-spec get_user_type_definition(UserTy, Types) -> Ty when
+      UserTy :: gradualizer_type:abstract_type(),
+      Types :: #{{Name :: atom(), arity()} => {Params :: [atom()],
+                                               Body :: gradualizer_type:abstract_type()}},
+      Ty :: gradualizer_type:abstract_type().
+get_user_type_definition({user_type, Anno, Name, Args}, Types) ->
     %% Let's check if the type is a known remote type.
     case typelib:get_module_from_annotation(Anno) of
         {ok, Module} ->
