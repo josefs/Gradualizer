@@ -33,7 +33,9 @@ gen_should_fail() ->
         fun() ->
             %% user_types.erl is referenced by opaque_fail.erl.
             %% It is not in the sourcemap of the DB so let's import it manually
-            gradualizer_db:import_erl_files(["test/should_pass/user_types.erl"])
+            gradualizer_db:import_erl_files(["test/should_pass/user_types.erl"]),
+            %% exhaustive_user_type.erl is referenced by exhaustive_remote_user_type.erl
+            gradualizer_db:import_erl_files(["test/should_fail/exhaustive_user_type.erl"])
         end,
         map_erl_files(
             fun(File) ->
@@ -41,7 +43,7 @@ gen_should_fail() ->
                     Errors = gradualizer:type_check_file(File, [return_errors]),
                     %% Test that error formatting doesn't crash
                     Opts = [{fmt_location, brief},
-                        {fmt_expr_fun, fun erl_prettypr:format/1}],
+                            {fmt_expr_fun, fun erl_prettypr:format/1}],
                     lists:foreach(fun({_, Error}) -> gradualizer_fmt:handle_type_error(Error, Opts) end, Errors),
                     {ok, Forms} = gradualizer_file_utils:get_forms_from_erl(File, []),
                     ExpectedErrors = typechecker:number_of_exported_functions(Forms),
