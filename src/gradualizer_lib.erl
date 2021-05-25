@@ -95,23 +95,25 @@ reverse_graph(G) ->
 %% first in `gradualizer_db', then, if not found, in provided `Types' map.
 %% `UserTy' is actually an unexported `gradualizer_type:af_user_defined_type()'.
 
--spec get_type_definition(UserTy, Types) -> {ok, Ty} | opaque | not_found when
+-spec get_type_definition(UserTy, TEnv) -> {ok, Ty} | opaque | not_found when
       UserTy :: gradualizer_type:abstract_type(),
-      Types :: #{{Name :: atom(), arity()} => {Params :: [atom()],
-                                               Body :: gradualizer_type:abstract_type()}},
+      TEnv :: tenv(),
       Ty :: gradualizer_type:abstract_type().
-get_type_definition({remote_type, _Anno, [{atom, _, Module}, {atom, _, Name}, Args]}, _Types) ->
+get_type_definition({remote_type, _Anno, [{atom, _, Module}, {atom, _, Name}, Args]}, _TEnv) ->
     gradualizer_db:get_type(Module, Name, Args);
-get_type_definition({user_type, Anno, Name, Args}, Types) ->
+get_type_definition({user_type, Anno, Name, Args}, TEnv) ->
     %% Let's check if the type is a known remote type.
     case typelib:get_module_from_annotation(Anno) of
         {ok, Module} ->
             gradualizer_db:get_type(Module, Name, Args);
         none ->
             %% Let's check if the type is defined in the context of this module.
-            case maps:get({Name, length(Args)}, Types, not_found) of
-                {_Params, Ty} ->
-                    {ok, Ty};
+            case maps:get({Name, length(Args)}, maps:get(types, TEnv), not_found) of
+                {Params, Type0} ->
+                    VarMap = maps:from_list(lists:zip(Params, Args)),
+                    Type1 = typelib:annotate_user_types(maps:get(module, TEnv), Type0),
+                    Type2 = typelib:substitute_type_vars(Type1, VarMap),
+                    {ok, Type2};
                 not_found ->
                     not_found
             end
@@ -122,61 +124,60 @@ get_type_definition({user_type, Anno, Name, Args}, Types) ->
 %% Used in exhaustiveness checking to show an example value
 %% which is not covered by the cases.
 
--spec pick_value(Ty, Types) -> AbstractVal when
+-spec pick_value(Ty, TEnv) -> AbstractVal when
       Ty :: gradualizer_type:abstract_type(),
-      Types :: #{{Name :: atom(), arity()} => {Params :: [atom()],
-                                               Body :: gradualizer_type:abstract_type()}},
+      TEnv :: tenv(),
       AbstractVal :: gradualizer_type:abstract_expr().
-pick_value(List, Types) when is_list(List) ->
-    [pick_value(Ty, Types) || Ty <- List ];
-pick_value(?type(integer), _Types) ->
+pick_value(List, TEnv) when is_list(List) ->
+    [pick_value(Ty, TEnv) || Ty <- List ];
+pick_value(?type(integer), _TEnv) ->
     {integer, erl_anno:new(0), 0};
-pick_value(?type(char), _Types) ->
+pick_value(?type(char), _TEnv) ->
     {char, erl_anno:new(0), $a};
-pick_value(?type(non_neg_integer), _Types) ->
+pick_value(?type(non_neg_integer), _TEnv) ->
     {integer, erl_anno:new(0), 0};
-pick_value(?type(pos_integer), _Types) ->
+pick_value(?type(pos_integer), _TEnv) ->
     {integer, erl_anno:new(0), 0};
-pick_value(?type(neg_integer), _Types) ->
+pick_value(?type(neg_integer), _TEnv) ->
     {integer, erl_anno:new(0), -1};
-pick_value(?type(float), _Types) ->
+pick_value(?type(float), _TEnv) ->
     {float, erl_anno:new(0), -1};
-pick_value(?type(atom), _Types) ->
+pick_value(?type(atom), _TEnv) ->
     {atom, erl_anno:new(0), a};
-pick_value({atom, _, A}, _Types) ->
+pick_value({atom, _, A}, _TEnv) ->
     {atom, erl_anno:new(0), A};
-pick_value({ann_type, _, [_, Ty]}, Types) ->
-    pick_value(Ty, Types);
-pick_value(?type(union, [Ty|_]), Types) ->
-    pick_value(Ty, Types);
-pick_value(?type(tuple, any), _Types) ->
+pick_value({ann_type, _, [_, Ty]}, TEnv) ->
+    pick_value(Ty, TEnv);
+pick_value(?type(union, [Ty|_]), TEnv) ->
+    pick_value(Ty, TEnv);
+pick_value(?type(tuple, any), _TEnv) ->
     {tuple, erl_anno:new(0), []};
-pick_value(?type(tuple, Tys), Types) ->
-    {tuple, erl_anno:new(0), [pick_value(Ty, Types) || Ty <- Tys]};
-pick_value(?type(record, [{atom, _, RecordName}]), _Types) ->
+pick_value(?type(tuple, Tys), TEnv) ->
+    {tuple, erl_anno:new(0), [pick_value(Ty, TEnv) || Ty <- Tys]};
+pick_value(?type(record, [{atom, _, RecordName}]), _TEnv) ->
     {record, erl_anno:new(0), RecordName, []};
-pick_value(?type(record, [{atom, _, RecordName} | Tys]), Types) ->
+pick_value(?type(record, [{atom, _, RecordName} | Tys]), TEnv) ->
     MFields = [
-        {record_field, erl_anno:new(0), {atom, erl_anno:new(0), FieldName}, pick_value(Ty, Types)}
+        {record_field, erl_anno:new(0), {atom, erl_anno:new(0), FieldName}, pick_value(Ty, TEnv)}
         || ?type(field_type, [{atom, _, FieldName}, Ty]) <- Tys
     ],
     {record, erl_anno:new(0), RecordName, MFields};
-pick_value(?type(list), _Types) ->
+pick_value(?type(list), _TEnv) ->
     {nil, erl_anno:new(0)};
-pick_value(?type(list,_), _Types) ->
+pick_value(?type(list,_), _TEnv) ->
     {nil, erl_anno:new(0)};
-pick_value(?type(nil), _Types) ->
+pick_value(?type(nil), _TEnv) ->
     {nil, erl_anno:new(0)};
 %% The ?type(range) is a different case because the type range
 %% ..information is not encoded as an abstract_type()
 %% i.e. {type, Anno, range, [{integer, Anno2, Low}, {integer, Anno3, High}]}
-pick_value(?type(range, [{_TagLo, _, neg_inf}, Hi = {_TagHi, _, _Hi}]), _Types) ->
-    %% pick_value(Hi, Types);
+pick_value(?type(range, [{_TagLo, _, neg_inf}, Hi = {_TagHi, _, _Hi}]), _TEnv) ->
+    %% pick_value(Hi, TEnv);
     Hi;
-pick_value(?type(range, [Lo = {_TagLo, _, _Lo}, {_TagHi, _, _Hi}]), _Types) ->
-    %% pick_value(Lo, Types).
+pick_value(?type(range, [Lo = {_TagLo, _, _Lo}, {_TagHi, _, _Hi}]), _TEnv) ->
+    %% pick_value(Lo, TEnv).
     Lo;
-pick_value(Type, Types)
+pick_value(Type, TEnv)
   when element(1, Type) =:= remote_type; element(1, Type) =:= user_type ->
     {Kind, Anno, Name, Args} = case Type of
                                    {remote_type, Anno, [_, {atom, _, Name}, Args]} ->
@@ -184,11 +185,11 @@ pick_value(Type, Types)
                                    {user_type, Anno, Name, Args} ->
                                        {user_type, Anno, Name, Args}
                                end,
-    case get_type_definition(Type, Types) of
+    case get_type_definition(Type, TEnv) of
         {ok, Ty} ->
-            pick_value(Ty, Types);
+            pick_value(Ty, TEnv);
         opaque ->
-            {var, Anno, '_'};
+            {var, Anno, '_Opaque'};
         not_found ->
             throw({undef, Kind, Anno, {Name, length(Args)}})
     end.

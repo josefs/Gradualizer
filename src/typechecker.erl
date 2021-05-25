@@ -3213,7 +3213,7 @@ check_exhaustiveness(Env = #env{tenv = TEnv}, ArgsTy, Clauses, RefinedArgsTy, Va
           is_list(RefinedArgsTy) andalso lists:any(fun (T) -> T =/= type(none) end, RefinedArgsTy)} of
         {true, true, true, true} ->
             [{clause, P, _, _, _}|_] = Clauses,
-            throw({nonexhaustive, P, gradualizer_lib:pick_value(RefinedArgsTy, TEnv#tenv.types)});
+            throw({nonexhaustive, P, gradualizer_lib:pick_value(RefinedArgsTy, TEnv)});
         _ ->
             ok
     end,
@@ -3473,8 +3473,6 @@ refinable(?type(tuple, Tys), TEnv, Trace) when is_list(Tys) ->
     lists:all(fun (Ty) -> refinable(Ty, TEnv, Trace) end, Tys);
 refinable(?type(record, [_ | Fields]), TEnv, Trace) ->
     lists:all(fun (Ty) -> refinable(Ty, TEnv, Trace) end, [X || ?type(field_type, X) <- Fields]);
-refinable({var, _, _TypeVar}, _TEnv, _Trace) ->
-    true;
 refinable(RefinableTy, TEnv, Trace)
   when element(1, RefinableTy) =:= remote_type; element(1, RefinableTy) =:= user_type ->
     case sets:is_element(RefinableTy, Trace) of
@@ -3485,7 +3483,7 @@ refinable(RefinableTy, TEnv, Trace)
             %% Refinability will be determined by the variants which are not (mutually) recursive.
             true;
         false ->
-            case gradualizer_lib:get_type_definition(RefinableTy, TEnv#tenv.types) of
+            case gradualizer_lib:get_type_definition(RefinableTy, TEnv) of
                 {ok, Ty} -> refinable(Ty, TEnv, sets:add_element(RefinableTy, Trace));
                 opaque -> true;
                 not_found -> false
