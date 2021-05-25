@@ -4,7 +4,8 @@
 
 -export([simple/1,
          recursive/1,
-         mutually_recursive/1]).
+         mutually_recursive/1,
+         generic/1]).
 
 -export_type([t/0,
               recursive_t/0]).
@@ -33,6 +34,14 @@ recursive(T) ->
 
 -spec mutually_recursive(mutually_recursive1_t()) -> ok.
 mutually_recursive(T) ->
+    case T of
+        ok -> ok
+    end.
+
+-type g(T) :: ok | {generic, T}.
+
+-spec generic(g(integer())) -> ok.
+generic(T) ->
     case T of
         ok -> ok
     end.
