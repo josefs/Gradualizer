@@ -3484,6 +3484,7 @@ refinable(RefinableTy = {user_type, _Anno, _Name, _Args}, TEnv, Trace) ->
         false ->
             case gradualizer_lib:get_user_type_definition(RefinableTy, TEnv#tenv.types) of
                 {ok, Ty} -> refinable(Ty, TEnv, sets:add_element(RefinableTy, Trace));
+                opaque -> false;
                 not_found -> false
             end
     end;
