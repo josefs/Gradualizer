@@ -3213,7 +3213,7 @@ check_exhaustiveness(Env = #env{tenv = TEnv}, ArgsTy, Clauses, RefinedArgsTy, Va
           is_list(RefinedArgsTy) andalso lists:any(fun (T) -> T =/= type(none) end, RefinedArgsTy)} of
         {true, true, true, true} ->
             [{clause, P, _, _, _}|_] = Clauses,
-            throw({nonexhaustive, P, gradualizer_lib:pick_value(TEnv#tenv.types, RefinedArgsTy)});
+            throw({nonexhaustive, P, gradualizer_lib:pick_value(RefinedArgsTy, TEnv#tenv.types)});
         _ ->
             ok
     end,

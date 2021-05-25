@@ -112,62 +112,68 @@ get_user_type_definition(Types, Anno, Name, Args) ->
     end.
 
 
-% Given a type, pick a value of that type.
-% Used in exhaustiveness checking to show an example value
-% which is not covered by the cases.
-pick_value(Types, List) when is_list(List) ->
-    [pick_value(Types, Ty) || Ty <- List ];
-pick_value(_Types, ?type(integer)) ->
+%% Given a type `Ty', pick a value of that type.
+%% Used in exhaustiveness checking to show an example value
+%% which is not covered by the cases.
+
+-spec pick_value(Ty, Types) -> AbstractVal when
+      Ty :: gradualizer_type:abstract_type(),
+      Types :: #{{Name :: atom(), arity()} => {Params :: [atom()],
+                                               Body :: gradualizer_type:abstract_type()}},
+      AbstractVal :: gradualizer_type:abstract_expr().
+pick_value(List, Types) when is_list(List) ->
+    [pick_value(Ty, Types) || Ty <- List ];
+pick_value(?type(integer), _Types) ->
     {integer, erl_anno:new(0), 0};
-pick_value(_Types, ?type(char)) ->
+pick_value(?type(char), _Types) ->
     {char, erl_anno:new(0), $a};
-pick_value(_Types, ?type(non_neg_integer)) ->
+pick_value(?type(non_neg_integer), _Types) ->
     {integer, erl_anno:new(0), 0};
-pick_value(_Types, ?type(pos_integer)) ->
+pick_value(?type(pos_integer), _Types) ->
     {integer, erl_anno:new(0), 0};
-pick_value(_Types, ?type(neg_integer)) ->
+pick_value(?type(neg_integer), _Types) ->
     {integer, erl_anno:new(0), -1};
-pick_value(_Types, ?type(float)) ->
+pick_value(?type(float), _Types) ->
     {float, erl_anno:new(0), -1};
-pick_value(_Types, ?type(atom)) ->
+pick_value(?type(atom), _Types) ->
     {atom, erl_anno:new(0), a};
-pick_value(_Types, {atom, _, A}) ->
+pick_value({atom, _, A}, _Types) ->
     {atom, erl_anno:new(0), A};
-pick_value(Types, {ann_type, _, [_, Ty]}) ->
-    pick_value(Types, Ty);
-pick_value(Types, ?type(union, [Ty|_])) ->
-    pick_value(Types, Ty);
-pick_value(_Types, ?type(tuple, any)) ->
+pick_value({ann_type, _, [_, Ty]}, Types) ->
+    pick_value(Ty, Types);
+pick_value(?type(union, [Ty|_]), Types) ->
+    pick_value(Ty, Types);
+pick_value(?type(tuple, any), _Types) ->
     {tuple, erl_anno:new(0), []};
-pick_value(Types, ?type(tuple, Tys)) ->
-    {tuple, erl_anno:new(0), [pick_value(Types, Ty) || Ty <- Tys]};
-pick_value(_Types, ?type(record, [{atom, _, RecordName}])) ->
+pick_value(?type(tuple, Tys), Types) ->
+    {tuple, erl_anno:new(0), [pick_value(Ty, Types) || Ty <- Tys]};
+pick_value(?type(record, [{atom, _, RecordName}]), _Types) ->
     {record, erl_anno:new(0), RecordName, []};
-pick_value(Types, ?type(record, [{atom, _, RecordName} | Tys])) ->
+pick_value(?type(record, [{atom, _, RecordName} | Tys]), Types) ->
     MFields = [
-        {record_field, erl_anno:new(0), {atom, erl_anno:new(0), FieldName}, pick_value(Types, Ty)}
+        {record_field, erl_anno:new(0), {atom, erl_anno:new(0), FieldName}, pick_value(Ty, Types)}
         || ?type(field_type, [{atom, _, FieldName}, Ty]) <- Tys
     ],
     {record, erl_anno:new(0), RecordName, MFields};
-pick_value(_Types, ?type(list)) ->
+pick_value(?type(list), _Types) ->
     {nil, erl_anno:new(0)};
-pick_value(_Types, ?type(list,_)) ->
+pick_value(?type(list,_), _Types) ->
     {nil, erl_anno:new(0)};
-pick_value(_Types, ?type(nil)) ->
+pick_value(?type(nil), _Types) ->
     {nil, erl_anno:new(0)};
 %% The ?type(range) is a different case because the type range
 %% ..information is not encoded as an abstract_type()
 %% i.e. {type, Anno, range, [{integer, Anno2, Low}, {integer, Anno3, High}]}
-pick_value(_Types, ?type(range, [{_TagLo, _, neg_inf}, Hi = {_TagHi, _, _Hi}])) ->
-    %% pick_value(Hi);
+pick_value(?type(range, [{_TagLo, _, neg_inf}, Hi = {_TagHi, _, _Hi}]), _Types) ->
+    %% pick_value(Hi, Types);
     Hi;
-pick_value(_Types, ?type(range, [Lo = {_TagLo, _, _Lo}, {_TagHi, _, _Hi}])) ->
-    %% pick_value(Lo).
+pick_value(?type(range, [Lo = {_TagLo, _, _Lo}, {_TagHi, _, _Hi}]), _Types) ->
+    %% pick_value(Lo, Types).
     Lo;
-pick_value(Types, {user_type, Anno, Name, Args}) ->
+pick_value({user_type, Anno, Name, Args}, Types) ->
     case get_user_type_definition(Types, Anno, Name, Args) of
         {ok, Ty} ->
-            pick_value(Types, Ty);
+            pick_value(Ty, Types);
         not_found ->
             throw({undef, user_type, Anno, {Name, length(Args)}})
     end.
