@@ -3473,6 +3473,10 @@ refinable(?type(tuple, Tys), TEnv, Trace) when is_list(Tys) ->
     lists:all(fun (Ty) -> refinable(Ty, TEnv, Trace) end, Tys);
 refinable(?type(record, [_ | Fields]), TEnv, Trace) ->
     lists:all(fun (Ty) -> refinable(Ty, TEnv, Trace) end, [X || ?type(field_type, X) <- Fields]);
+refinable(?top(), _TEnv, _Trace) ->
+    %% This clause prevents incorrect exhaustiveness warnings
+    %% when `gradualizer:top()' is used explicitly.
+    false;
 refinable(RefinableTy, TEnv, Trace)
   when element(1, RefinableTy) =:= remote_type; element(1, RefinableTy) =:= user_type ->
     case sets:is_element(RefinableTy, Trace) of
