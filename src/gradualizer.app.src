@@ -1,11 +1,12 @@
 {application, gradualizer,
  [{description, "A type checker for Erlang"},
-  {vsn, "0.1.0"},
+  {vsn, "git"},
   {registered, []},
   {applications,
    [kernel,
     stdlib
    ]},
+  {licenses, ["MIT License"]},
   {mod, {gradualizer_app, []}},
   {env,[
       {providers, [rebar_prv_gradualizer]}
