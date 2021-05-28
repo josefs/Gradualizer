@@ -7,7 +7,7 @@
 -export_type([graph/1, tenv/0]).
 
 %% Type environment, passed around while comparing compatible subtypes.
--type tenv() :: #{ module := module(),
+-type tenv() :: #{ module => module(),
                    types := #{{Ty :: atom(), arity()} => {Params :: [atom()],
                                                           Body :: gradualizer_type:abstract_type()}},
                    records := #{Rec :: atom() => [typechecker:typed_record_field()]} }.
@@ -185,12 +185,11 @@ get_ast_children(Node) ->
 
 -spec empty_tenv() -> tenv().
 empty_tenv() ->
-    #{module => undefined,
-      types => #{},
+    #{types => #{},
       records => #{}}.
 
 -spec create_tenv(_, _, _) -> tenv().
-create_tenv(Module, TypeDefs, RecordDefs) ->
+create_tenv(Module, TypeDefs, RecordDefs) when is_atom(Module) ->
     TypeMap =
         maps:from_list([begin
                             Id       = {Name, length(Vars)},

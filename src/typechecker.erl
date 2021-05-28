@@ -411,13 +411,14 @@ glb(T1, T2, A, TEnv) ->
         %% actual use case.
         true -> {type(none), constraints:empty()};
         false ->
-            case gradualizer_cache:get_glb(maps:get(module, TEnv), T1, T2) of
+            Module = maps:get(module, TEnv, '$__improbable__module__name__$'),
+            case gradualizer_cache:get_glb(Module, T1, T2) of
                 false ->
                     Ty1 = typelib:remove_pos(normalize(T1, TEnv)),
                     Ty2 = typelib:remove_pos(normalize(T2, TEnv)),
                     {Ty, Cs} = glb_ty(Ty1, Ty2, A#{ {Ty1, Ty2} => 0 }, TEnv),
                     NormTy = normalize(Ty, TEnv),
-                    gradualizer_cache:store_glb(maps:get(module, TEnv), T1, T2, {NormTy, Cs}),
+                    gradualizer_cache:store_glb(Module, T1, T2, {NormTy, Cs}),
                     {NormTy, Cs};
                 TyCs ->
                     %% these two types have already been seen and calculated
