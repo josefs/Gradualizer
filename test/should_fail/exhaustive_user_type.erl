@@ -1,7 +1,5 @@
 -module(exhaustive_user_type).
 
--compile(debug_info).
-
 -export([simple/1,
          recursive/1,
          mutually_recursive/1,

@@ -132,7 +132,7 @@ test/arg.beam: test/should_fail/arg.erl
 test_data_erls = $(wildcard test/known_problems/**/*.erl test/should_fail/*.erl test/should_pass/*.erl)
 build_test_data:
 	mkdir -p "test_data"
-	erlc -o test_data $(test_data_erls)
+	erlc $(ERLC_OPTS) -o test_data $(test_data_erls)
 
 EUNIT_OPTS =
 
