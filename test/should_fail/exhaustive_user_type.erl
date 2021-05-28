@@ -5,11 +5,13 @@
          mutually_recursive/1,
          generic/1,
          local_opaque/1,
-         generic_with_local_opaque/1]).
+         generic_with_local_opaque/1,
+         record_variants/1]).
 
 -export_type([t/0,
               recursive_t/0,
-              opaque_t/0]).
+              opaque_t/0,
+              record_sum_t/0]).
 
 -type info() :: integer().
 
@@ -59,4 +61,15 @@ local_opaque(T) ->
 generic_with_local_opaque(T) ->
     case T of
         ok -> ok
+    end.
+
+-include("exhaustive_user_type.hrl").
+
+-type record_sum_t() :: #variant1{}
+                      | #variant2{}.
+
+-spec record_variants(record_sum_t()) -> ok.
+record_variants(T) ->
+    case T of
+        #variant1{} -> ok
     end.

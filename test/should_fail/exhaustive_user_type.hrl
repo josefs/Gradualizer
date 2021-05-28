@@ -1,0 +1,2 @@
+-record(variant1, {a}).
+-record(variant2, {b}).

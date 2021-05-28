@@ -4,7 +4,8 @@
          local_alias_to_recursive_type/1,
          remote/1,
          generic_with_remote_opaque/1,
-         remote_opaque/1]).
+         remote_opaque/1,
+         remote_record_variants/1]).
 
 -type alias_t() :: exhaustive_user_type:t().
 -type recursive_t() :: exhaustive_user_type:recursive_t().
@@ -39,4 +40,12 @@ generic_with_remote_opaque(T) ->
 remote_opaque(T) ->
     case T of
         left -> ok
+    end.
+
+-include("exhaustive_user_type.hrl").
+
+-spec remote_record_variants(exhaustive_user_type:record_sum_t()) -> ok.
+remote_record_variants(T) ->
+    case T of
+        #variant1{} -> ok
     end.
