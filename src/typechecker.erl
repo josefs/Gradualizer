@@ -35,6 +35,8 @@
             _ -> error({position_not_removed, Tuple})
         end).
 
+-type tenv() :: gradualizer_lib:tenv().
+
 -export_type([typed_record_field/0]).
 
 -type type() :: gradualizer_type:abstract_type().
@@ -68,18 +70,11 @@
                                 DefaultValue :: gradualizer_type:abstract_expr()},
                                 Type :: type()}.
 
-%% Type environment, passed around while comparing compatible subtypes
--record(tenv, {module :: module(),
-               types = #{} :: #{{Name :: atom(), arity()} => {Params :: [atom()],
-                                                              Body :: type()}},
-               records = #{} :: #{Name :: atom()          => [typed_record_field()]}
-              }).
-
-%%% The environment passed around during typechecking.
+%% The environment passed around during typechecking.
 -record(env, {fenv     = #{}
              ,imported = #{}   :: #{{atom(), arity()} => module()}
              ,venv     = #{}
-             ,tenv             :: #tenv{}
+             ,tenv             :: tenv()
              ,infer    = false :: boolean()
              ,verbose  = false :: boolean()
              ,exhaust  = true  :: boolean()
@@ -107,7 +102,7 @@ compatible(Ty1, Ty2, TEnv) ->
 
 %% The first argument is a "compatible subtype" of the second.
 
--spec subtype(type(), type(), #tenv{}) -> {true, any()} | false.
+-spec subtype(type(), type(), tenv()) -> {true, any()} | false.
 subtype(Ty1, Ty2, TEnv) ->
     try compat(Ty1, Ty2, sets:new(), TEnv) of
         {_Memoization, Constraints} ->
@@ -358,7 +353,7 @@ all_type([Ty1|Tys], Ty, AIn, Css, TEnv) ->
 %% it belongs if a filename is included in the Anno.
 -spec get_maybe_remote_record_fields(RecName :: atom(),
                                      Anno    :: erl_anno:anno(),
-                                     TEnv    :: #tenv{}) ->
+                                     TEnv    :: tenv()) ->
                                             [{typed_record_field, _, type()}].
 get_maybe_remote_record_fields(RecName, Anno, TEnv) ->
     case typelib:get_module_from_annotation(Anno) of
@@ -380,9 +375,9 @@ get_maybe_remote_record_fields(RecName, Anno, TEnv) ->
 %% fields.
 -spec get_record_fields(RecName :: atom(),
                         Anno    :: erl_anno:anno(),
-                        TEnv    :: #tenv{}) ->
+                        TEnv    :: tenv()) ->
                                [{typed_record_field, _, _}].
-get_record_fields(RecName, Anno, #tenv{records = REnv}) ->
+get_record_fields(RecName, Anno, #{records := REnv}) ->
     case REnv of
         #{RecName := Fields} ->
             Fields;
@@ -396,11 +391,11 @@ get_record_fields(RecName, Anno, #tenv{records = REnv}) ->
 %% * Computes the maximal (in the subtyping hierarchy) type that is a subtype
 %%   of two given types.
 
--spec glb(type(), type(), TEnv :: #tenv{}) -> {type(), constraints:constraints()}.
+-spec glb(type(), type(), TEnv :: tenv()) -> {type(), constraints:constraints()}.
 glb(T1, T2, TEnv) ->
     glb(T1, T2, #{}, TEnv).
 
--spec glb([type()], TEnv :: #tenv{}) -> {type(), constraints:constraints()}.
+-spec glb([type()], TEnv :: tenv()) -> {type(), constraints:constraints()}.
 glb(Ts, TEnv) ->
     lists:foldl(fun (T, {TyAcc, Cs1}) ->
 			{Ty, Cs2} = glb(T, TyAcc, TEnv),
@@ -416,13 +411,14 @@ glb(T1, T2, A, TEnv) ->
         %% actual use case.
         true -> {type(none), constraints:empty()};
         false ->
-            case gradualizer_cache:get_glb(TEnv#tenv.module, T1, T2) of
+            Module = maps:get(module, TEnv, '$__improbable__module__name__$'),
+            case gradualizer_cache:get_glb(Module, T1, T2) of
                 false ->
                     Ty1 = typelib:remove_pos(normalize(T1, TEnv)),
                     Ty2 = typelib:remove_pos(normalize(T2, TEnv)),
                     {Ty, Cs} = glb_ty(Ty1, Ty2, A#{ {Ty1, Ty2} => 0 }, TEnv),
                     NormTy = normalize(Ty, TEnv),
-                    gradualizer_cache:store_glb(TEnv#tenv.module, T1, T2, {NormTy, Cs}),
+                    gradualizer_cache:store_glb(Module, T1, T2, {NormTy, Cs}),
                     {NormTy, Cs};
                 TyCs ->
                     %% these two types have already been seen and calculated
@@ -607,7 +603,7 @@ glb_ty(_Ty1, _Ty2, _A, _TEnv) -> {type(none), constraints:empty()}.
 %% * Expand user-defined and remote types on head level (except opaque types)
 %% * Replace built-in type synonyms
 %% * Flatten unions and merge overlapping types (e.g. ranges) in unions
--spec normalize(type(), TEnv :: #tenv{}) -> type().
+-spec normalize(type(), TEnv :: tenv()) -> type().
 normalize({type, _, record, [{atom, _, Name}|Fields]}, TEnv) when length(Fields) > 0 ->
     NormFields = [type_field_type(FieldName, normalize(Type, TEnv))
         || ?type_field_type(FieldName, Type) <- Fields],
@@ -635,7 +631,7 @@ normalize({user_type, P, Name, Args} = Type, TEnv) ->
         none ->
             %% Local user-defined type
             TypeId = {Name, length(Args)},
-            case TEnv#tenv.types of
+            case maps:get(types, TEnv) of
                 #{TypeId := {Vars, Type0}} ->
                     VarMap = maps:from_list(lists:zip(Vars, Args)),
                     Type1 = typelib:substitute_type_vars(Type0, VarMap),
@@ -747,7 +743,7 @@ expand_builtin_aliases(Type) ->
 %% * Remove subtypes of other types in the same union; keeping any() separate
 %% * Merge integer types, including singleton integers and ranges
 %%   1, 1..5, integer(), non_neg_integer(), pos_integer(), neg_integer()
--spec flatten_unions([type()], #tenv{}) -> [type()].
+-spec flatten_unions([type()], tenv()) -> [type()].
 flatten_unions(Tys, TEnv) ->
     [ FTy || Ty <- Tys, FTy <- flatten_type(normalize(Ty, TEnv), TEnv) ].
 
@@ -807,7 +803,7 @@ negate_num_type({type, P, union, Tys}) ->
     %% The incoming union type must be already normalized so it shouldn't
     %% contain any unresolved types. So it is ok to normalize the result with an
     %% empty TEnv.
-    normalize({type, P, union, [negate_num_type(Ty)||Ty <- Tys]}, #tenv{});
+    normalize({type, P, union, [negate_num_type(Ty)||Ty <- Tys]}, gradualizer_lib:empty_tenv());
 negate_num_type(None = {type, _, none, []}) ->
     None;
 negate_num_type(RangeTy) ->
@@ -872,7 +868,7 @@ from_list_view({Empty, Elem, Term}) ->
 %% its type parameter. One example is the list type, and there are
 %% cases where we need to get the type of the elements.
 
--spec expect_list_type(type(), allow_nil_type | dont_allow_nil_type, #tenv{}) ->
+-spec expect_list_type(type(), allow_nil_type | dont_allow_nil_type, tenv()) ->
           {elem_ty,  type(),   constraints:constraints()}    %% There is exactly one element type
         | {elem_tys, [type()], constraints:constraints()}  %% A union can give rise to multiple elem types
         | any                   %% If we don't know the element type
@@ -953,7 +949,7 @@ infer_literal_string(Str) ->
             %% heuristics: if there are not more than 10 different characters
             %% list them explicitely as singleton types
             CharTypes = [{char, erl_anno:new(0), C} || C <- SortedChars],
-            type(nonempty_list, [normalize(type(union, CharTypes), #tenv{})]);
+            type(nonempty_list, [normalize(type(union, CharTypes), gradualizer_lib:empty_tenv())]);
        true ->
             type(nonempty_list,
                  [type(range, [{char, erl_anno:new(0), hd(SortedChars)},
@@ -1131,14 +1127,14 @@ expect_fun_type_union(Env, [Ty|Tys]) ->
             [TyOut | expect_fun_type_union(Env, Tys)]
     end.
 
--spec expect_record_type(type(), atom(), #tenv{}) -> Any | FieldsTy | FieldsTys | TypeError when
+-spec expect_record_type(type(), atom(), tenv()) -> Any | FieldsTy | FieldsTys | TypeError when
     Any :: any,
     FieldsTy :: {fields_ty, [typed_record_field()], constraints:constraints()},
     FieldsTys :: {fields_tys, [[typed_record_field()]], constraints:constraints()},
     TypeError :: {type_error, type()}.
 expect_record_type({user_type, _, record, []}, _Record, _TEnv) ->
     any;
-expect_record_type({type, _, record, [{atom, _, Name}|RefinedTypes]}, Record, #tenv{records = REnv}) when Name =:= Record ->
+expect_record_type({type, _, record, [{atom, _, Name}|RefinedTypes]}, Record, #{records := REnv}) when Name =:= Record ->
     case REnv of
         #{Record := Fields} ->
             Tys =
@@ -1170,7 +1166,7 @@ expect_record_type(Union = {type, _, union, UnionTys}, Record, TEnv) ->
         _ ->
             {fields_tys, Tyss, Cs}
     end;
-expect_record_type({var, _, Var}, Record, #tenv{records = REnv}) ->
+expect_record_type({var, _, Var}, Record, #{records := REnv}) ->
     case REnv of
         #{Record := Fields} ->
             Cs = constraints:add_var(Var, constraints:upper(Var, type_record(Record))),
@@ -1221,7 +1217,7 @@ unfold_bounded_type(TEnv, BTy = {type, _, bounded_fun, [Ty, _]}) ->
     subst_ty(Sub, Ty);
 unfold_bounded_type(_Env, Ty) -> Ty.
 
--spec bounded_type_subst(#tenv{}, {type, erl_anno:anno(), bounded_fun, [_]}) ->
+-spec bounded_type_subst(tenv(), {type, erl_anno:anno(), bounded_fun, [_]}) ->
         #{ atom() => type() }.
 bounded_type_subst(TEnv, BTy = {type, P, bounded_fun, [_, Bounds]}) ->
     try
@@ -1230,7 +1226,7 @@ bounded_type_subst(TEnv, BTy = {type, P, bounded_fun, [_, Bounds]}) ->
         throw({type_error, cyclic_type_vars, P, BTy, Xs})
     end.
 
--spec solve_bounds(#tenv{}, [type()]) -> #{ atom() := type() }.
+-spec solve_bounds(tenv(), [type()]) -> #{ atom() := type() }.
 solve_bounds(TEnv, Cs) ->
     Defs = [ {X, T} || {type, _, constraint, [{atom, _, is_subtype}, [{var, _, X}, T]]} <- Cs ],
     Env  = lists:foldl(fun
@@ -1921,14 +1917,14 @@ type_check_call_ty_union(Env, Tys, Args, E) ->
 compat_arith_type(Any = {type, _, any, []}, {type, _, any, []}) ->
     {Any, constraints:empty()};
 compat_arith_type(Any = {type, _, any, []}, Ty) ->
-    case subtype(Ty, type(number), #tenv{}) of
+    case subtype(Ty, type(number), gradualizer_lib:empty_tenv()) of
         false ->
             false;
         _ ->
             {Any, constraints:empty()}
     end;
 compat_arith_type(Ty, Any = {type, _, any, []}) ->
-    case subtype(Ty, type(number), #tenv{}) of
+    case subtype(Ty, type(number), gradualizer_lib:empty_tenv()) of
         false ->
             false;
         _ ->
@@ -1936,20 +1932,20 @@ compat_arith_type(Ty, Any = {type, _, any, []}) ->
     end;
 compat_arith_type(Ty1, Ty2) ->
     TInteger = type(integer),
-    case {subtype(Ty1, TInteger, #tenv{})
-         ,subtype(Ty2, TInteger, #tenv{})} of
+    case {subtype(Ty1, TInteger, gradualizer_lib:empty_tenv())
+         ,subtype(Ty2, TInteger, gradualizer_lib:empty_tenv())} of
         {{true, C1}, {true, C2}} ->
             {TInteger, constraints:combine(C1, C2)};
         _ ->
             TFloat = type(float),
-            case {subtype(Ty1, TFloat, #tenv{})
-                 ,subtype(Ty2, TFloat, #tenv{})} of
+            case {subtype(Ty1, TFloat, gradualizer_lib:empty_tenv())
+                 ,subtype(Ty2, TFloat, gradualizer_lib:empty_tenv())} of
                 {{true, C1},{true, C2}} ->
                     {TFloat, constraints:combine(C1, C2)};
                 _ ->
                     TNumber = type(number),
-                    case {subtype(Ty1, TNumber, #tenv{})
-                         ,subtype(Ty2, TNumber, #tenv{})} of
+                    case {subtype(Ty1, TNumber, gradualizer_lib:empty_tenv())
+                         ,subtype(Ty2, TNumber, gradualizer_lib:empty_tenv())} of
                         {{true, C1},{true, C2}} ->
                             {TNumber, constraints:combine(C1, C2)};
                         _ ->
@@ -3637,7 +3633,7 @@ type_check_function(Env, {function,_, Name, NArgs, Clauses}) ->
 
 -spec add_types_pats(Pats :: [gradualizer_type:abstract_pattern()],
                      Tys  :: [type()],
-                     TEnv :: #tenv{},
+                     TEnv :: tenv(),
                      VEnv :: map(),
 		     Caps :: capture_vars | bind_vars
 		    )
@@ -3664,7 +3660,7 @@ add_types_pats(Pats, Tys, TEnv, VEnv, Caps) ->
 %% NB: Don't use this function directly. Use add_types_pats/5 instead.
 -spec do_add_types_pats(Pats :: [gradualizer_type:abstract_pattern()],
                         Tys  :: [type()],
-                        TEnv :: #tenv{},
+                        TEnv :: tenv(),
                         VEnv :: map()
                        ) -> {PatTys      :: [type()],
                              UBounds     :: [type()],
@@ -3698,7 +3694,7 @@ add_types_pats([Pat | Pats], [Ty | Tys], TEnv, VEnv, PatTysAcc, UBoundsAcc, CsAc
 %% is normalized first.
 -spec add_type_pat(Pat  :: gradualizer_type:abstract_pattern(),
                    Type :: type(),
-                   TEnv :: #tenv{},
+                   TEnv :: tenv(),
                    VEnv :: map()) ->
           {PatTy :: type(), UBound :: type(), NewVEnv :: map(),
            constraints:constraints()}.
@@ -3987,7 +3983,7 @@ add_type_pat_fields([{record_field, _, {atom, _, Name} = FieldWithAnno, Pat}|Fie
                            MapTyAssocs :: [{type, erl_anno:anno(),
                                             map_field_exact | map_field_assoc,
                                             [type()]}] | any,
-                           TEnv        :: #tenv{},
+                           TEnv        :: tenv(),
                            VEnv        :: #{atom() => type()}
                           ) -> {ok, ValueTy :: type(), constraints:constraints()} |
                                error.
@@ -4060,7 +4056,7 @@ add_any_types_pat({var, _, '_'}, VEnv) ->
 add_any_types_pat({var, _, A}, VEnv) ->
     case VEnv of
         #{A := VarTy} ->
-            {RefinedTy, _Cs} = glb(VarTy, type(any), #tenv{}),
+            {RefinedTy, _Cs} = glb(VarTy, type(any), gradualizer_lib:empty_tenv()),
             VEnv#{ A := RefinedTy };
         _ ->
             VEnv#{ A => type(any) }
@@ -4248,7 +4244,7 @@ is_power_of_two(N) when N rem 2 == 0 ->
     is_power_of_two(N div 2);
 is_power_of_two(_) -> false.
 
--spec union_var_binds_symmetrical(list(), #tenv{}) -> map().
+-spec union_var_binds_symmetrical(list(), tenv()) -> map().
 union_var_binds_symmetrical([], _TEnv) ->
     #{};
 union_var_binds_symmetrical(VarBindsList, TEnv) ->
@@ -4341,15 +4337,15 @@ get_rec_field_index_and_type(FieldWithAnno, [], _) ->
     throw({undef, record_field, FieldWithAnno}).
 
 %% Helper for finding the return type of record_info/2
--spec get_record_info_type(erl_parse:abstract_expr(), #tenv{}) -> type().
+-spec get_record_info_type(erl_parse:abstract_expr(), tenv()) -> type().
 get_record_info_type({call, Anno, {atom, _, record_info},
-                            [{atom, _, fields}, {atom, _, RecName}]}, TEnv) ->
+                      [{atom, _, fields}, {atom, _, RecName}]}, TEnv) ->
     Fields = get_record_fields(RecName, Anno, TEnv),
     Names = [typelib:remove_pos(Name)
              || {typed_record_field, {record_field, _, Name, _}, _Ty} <- Fields],
     type(list, [type(union, Names)]);
 get_record_info_type({call, Anno, {atom, _, record_info},
-                            [{atom, _, size}, {atom, _, RecName}]}, TEnv) ->
+                      [{atom, _, size}, {atom, _, RecName}]}, TEnv) ->
     Fields = get_record_fields(RecName, Anno, TEnv),
     {integer, erl_anno:new(0), length(Fields) + 1};
 get_record_info_type(Expr, _TEnv) ->
@@ -4415,7 +4411,7 @@ create_env(#parsedata{module    = Module
                      ,imports   = Imports
                      }, Opts) ->
     FEnv = create_fenv(Specs, Funs),
-    TEnv = create_tenv(Module, Types ++ Opaques, Records),
+    TEnv = gradualizer_lib:create_tenv(Module, Types ++ Opaques, Records),
     Imported = maps:from_list([{{F, A}, M} || {M, F, A} <- Imports]),
     #env{fenv = FEnv,
          tenv = TEnv,
@@ -4424,23 +4420,6 @@ create_env(#parsedata{module    = Module
          infer = proplists:get_bool(infer, Opts),
          verbose = proplists:get_bool(verbose, Opts)}.
 
-create_tenv(Module, TypeDefs, RecordDefs) ->
-    TypeMap =
-        maps:from_list([begin
-                            Id       = {Name, length(Vars)},
-                            Params   = [VarName || {var, _, VarName} <- Vars],
-                            {Id, {Params, typelib:remove_pos(Body)}}
-                        end || {Name, Body, Vars} <- TypeDefs]),
-    RecordMap =
-        maps:from_list([{Name, [{typed_record_field, Field, typelib:remove_pos(Type)}
-                                || {typed_record_field, Field, Type}
-                                       <- lists:map(fun absform:normalize_record_field/1,
-                                                    Fields)]}
-                         || {Name, Fields} <- RecordDefs]),
-    #tenv{module  = Module,
-          types   = TypeMap,
-          records = RecordMap
-         }.
 
 create_fenv(Specs, Funs) ->
 % We're taking advantage of the fact that if a key occurrs more than once

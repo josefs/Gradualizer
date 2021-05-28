@@ -2,8 +2,15 @@
 
 -module(gradualizer_lib).
 
--export([merge_with/3, top_sort/1, pick_value/1, fold_ast/3, get_ast_children/1]).
--export_type([graph/1]).
+-export([merge_with/3, top_sort/1, pick_value/1, fold_ast/3, get_ast_children/1,
+         empty_tenv/0, create_tenv/3]).
+-export_type([graph/1, tenv/0]).
+
+%% Type environment, passed around while comparing compatible subtypes.
+-type tenv() :: #{ module => module(),
+                   types := #{{Ty :: atom(), arity()} => {Params :: [atom()],
+                                                          Body :: gradualizer_type:abstract_type()}},
+                   records := #{Rec :: atom() => [typechecker:typed_record_field()]} }.
 
 %% Pattern macros
 -define(type(T), {type, _, T, []}).
@@ -170,3 +177,31 @@ get_ast_children({clauses, Clauses}) ->
 get_ast_children(Node) ->
     [_Tag, _Anno | Children] = tuple_to_list(Node),
     Children.
+
+
+%% ------------------------------------------------
+%% Type environment
+%% ------------------------------------------------
+
+-spec empty_tenv() -> tenv().
+empty_tenv() ->
+    #{types => #{},
+      records => #{}}.
+
+-spec create_tenv(_, _, _) -> tenv().
+create_tenv(Module, TypeDefs, RecordDefs) when is_atom(Module) ->
+    TypeMap =
+        maps:from_list([begin
+                            Id       = {Name, length(Vars)},
+                            Params   = [VarName || {var, _, VarName} <- Vars],
+                            {Id, {Params, typelib:remove_pos(Body)}}
+                        end || {Name, Body, Vars} <- TypeDefs]),
+    RecordMap =
+        maps:from_list([{Name, [{typed_record_field, Field, typelib:remove_pos(Type)}
+                                || {typed_record_field, Field, Type}
+                                       <- lists:map(fun absform:normalize_record_field/1,
+                                                    Fields)]}
+                         || {Name, Fields} <- RecordDefs]),
+    #{module => Module,
+      types => TypeMap,
+      records => RecordMap}.
