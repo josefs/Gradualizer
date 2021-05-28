@@ -2,7 +2,7 @@
 
 -module(gradualizer_lib).
 
--export([merge_with/3, top_sort/1, get_type_definition/2,
+-export([merge_with/3, top_sort/1, get_type_definition/3,
          pick_value/2, fold_ast/3, get_ast_children/1,
          empty_tenv/0, create_tenv/3]).
 -export_type([graph/1, tenv/0]).
@@ -95,13 +95,14 @@ reverse_graph(G) ->
 %% first in `gradualizer_db', then, if not found, in provided `Types' map.
 %% `UserTy' is actually an unexported `gradualizer_type:af_user_defined_type()'.
 
--spec get_type_definition(UserTy, TEnv) -> {ok, Ty} | opaque | not_found when
+-spec get_type_definition(UserTy, TEnv, Opts) -> {ok, Ty} | opaque | not_found when
       UserTy :: gradualizer_type:abstract_type(),
       TEnv :: tenv(),
+      Opts :: [annotate_user_types],
       Ty :: gradualizer_type:abstract_type().
-get_type_definition({remote_type, _Anno, [{atom, _, Module}, {atom, _, Name}, Args]}, _TEnv) ->
+get_type_definition({remote_type, _Anno, [{atom, _, Module}, {atom, _, Name}, Args]}, _TEnv, _Opts) ->
     gradualizer_db:get_type(Module, Name, Args);
-get_type_definition({user_type, Anno, Name, Args}, TEnv) ->
+get_type_definition({user_type, Anno, Name, Args}, TEnv, Opts) ->
     %% Let's check if the type is a known remote type.
     case typelib:get_module_from_annotation(Anno) of
         {ok, Module} ->
@@ -111,8 +112,13 @@ get_type_definition({user_type, Anno, Name, Args}, TEnv) ->
             case maps:get({Name, length(Args)}, maps:get(types, TEnv), not_found) of
                 {Params, Type0} ->
                     VarMap = maps:from_list(lists:zip(Params, Args)),
-                    Type1 = typelib:annotate_user_types(maps:get(module, TEnv), Type0),
-                    Type2 = typelib:substitute_type_vars(Type1, VarMap),
+                    Type2 = case proplists:is_defined(annotate_user_types, Opts) of
+                                true ->
+                                    Type1 = typelib:annotate_user_types(maps:get(module, TEnv), Type0),
+                                    typelib:substitute_type_vars(Type1, VarMap);
+                                false ->
+                                    typelib:substitute_type_vars(Type0, VarMap)
+                            end,
                     {ok, Type2};
                 not_found ->
                     not_found
@@ -185,7 +191,7 @@ pick_value(Type, TEnv)
                                    {user_type, Anno, Name, Args} ->
                                        {user_type, Anno, Name, Args}
                                end,
-    case get_type_definition(Type, TEnv) of
+    case get_type_definition(Type, TEnv, [annotate_user_types]) of
         {ok, Ty} ->
             pick_value(Ty, TEnv);
         opaque ->

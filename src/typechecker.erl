@@ -617,28 +617,13 @@ normalize({type, _, union, Tys}, TEnv) ->
         Ts  -> type(union, Ts)
     end;
 normalize({user_type, P, Name, Args} = Type, TEnv) ->
-    case typelib:get_module_from_annotation(P) of
-        {ok, Module} ->
-            %% Local type in another module, from an expanded remote type
-            case gradualizer_db:get_type(Module, Name, Args) of
-                {ok, T} ->
-                    normalize(typelib:remove_pos(T), TEnv);
-                opaque ->
-                    Type;
-                not_found ->
-                    throw({undef, user_type, P, {Module, Name, length(Args)}})
-            end;
-        none ->
-            %% Local user-defined type
-            TypeId = {Name, length(Args)},
-            case maps:get(types, TEnv) of
-                #{TypeId := {Vars, Type0}} ->
-                    VarMap = maps:from_list(lists:zip(Vars, Args)),
-                    Type1 = typelib:substitute_type_vars(Type0, VarMap),
-                    normalize(Type1, TEnv);
-                _NotFound ->
-                    throw({undef, user_type, P, {Name, length(Args)}})
-            end
+    case gradualizer_lib:get_type_definition(Type, TEnv, []) of
+        {ok, T} ->
+            normalize(typelib:remove_pos(T), TEnv);
+        opaque ->
+            Type;
+        not_found ->
+            throw({undef, user_type, P, {Name, length(Args)}})
     end;
 normalize(T = ?top(), _TEnv) ->
     %% Don't normalize gradualizer:top().
@@ -3487,7 +3472,7 @@ refinable(RefinableTy, TEnv, Trace)
             %% Refinability will be determined by the variants which are not (mutually) recursive.
             true;
         false ->
-            case gradualizer_lib:get_type_definition(RefinableTy, TEnv) of
+            case gradualizer_lib:get_type_definition(RefinableTy, TEnv, [annotate_user_types]) of
                 {ok, Ty} -> refinable(Ty, TEnv, sets:add_element(RefinableTy, Trace));
                 opaque -> true;
                 not_found -> false
