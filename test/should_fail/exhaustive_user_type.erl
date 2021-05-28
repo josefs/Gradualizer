@@ -11,7 +11,8 @@
 -export_type([t/0,
               recursive_t/0,
               opaque_t/0,
-              record_sum_t/0]).
+              record_sum_t/0,
+              map_sum_t/0]).
 
 -type info() :: integer().
 
@@ -73,3 +74,13 @@ record_variants(T) ->
     case T of
         #variant1{} -> ok
     end.
+
+-type map_sum_t() :: #{field_one := _}
+                   | #{field_two := _}.
+
+%% See test/known_problems/should_fail/exhaustive_map_variants.erl
+%-spec map_variants(map_sum_t()) -> ok.
+%map_variants(T) ->
+%    case T of
+%        #{field_one := _} -> ok
+%    end.
