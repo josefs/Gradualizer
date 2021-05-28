@@ -261,18 +261,18 @@ normalize_test_() ->
      {"Merge intervals",
       ?_assertEqual(?t( 1..6 ),
                     typechecker:normalize(?t( 1..3|4..6 ),
-                                          typechecker:create_tenv(?MODULE, [], [])))},
+                                          gradualizer_type_env:create(?MODULE, [], [])))},
      {"Remove singleton atoms if atom() is present",
       ?_assertEqual(?t( atom() ),
                     typechecker:normalize(?t( a | atom() | b ),
-                                          typechecker:create_tenv(?MODULE, [], [])))},
+                                          gradualizer_type_env:create(?MODULE, [], [])))},
      {"Evaluate numeric operators in types",
       %% ?t(-8) is parsed as {op,0,'-',{integer,0,8}}
       ?_assertEqual({integer, 0 , -8},
                     typechecker:normalize(?t( (bnot 3) *
                                               (( + 7 ) rem ( 5 div - 2 ) ) bxor
                                               (1 bsl 6 bsr 4) ),
-                                          typechecker:create_tenv(?MODULE, [], [])))}
+                                          gradualizer_type_env:create(?MODULE, [], [])))}
     ].
 
 unfold_bounded_type_test() ->
@@ -287,7 +287,7 @@ unfold_bounded_type_test() ->
         "fun(([{A, B}]) -> {[A], [B]})",
 
     {attribute, _, spec, {{unzip, 1}, [BoundedFun]}} = merl:quote(OrigSpecStr),
-    TEnv = typechecker:create_tenv(?MODULE, [], []),
+    TEnv = gradualizer_type_env:create(?MODULE, [], []),
     UnfoldedType = typechecker:unfold_bounded_type(TEnv, BoundedFun),
     UnfoldedTypeStr = typelib:pp_type(UnfoldedType),
     ?assertEqual(ExpectedTypeStr, UnfoldedTypeStr).
@@ -597,7 +597,7 @@ cleanup_app(Apps) ->
     ok.
 
 subtype(T1, T2) ->
-    case typechecker:subtype(T1, T2, typechecker:create_tenv(?MODULE, [], [])) of
+    case typechecker:subtype(T1, T2, gradualizer_type_env:create(?MODULE, [], [])) of
         {true, _} ->
             true;
         false ->
@@ -605,13 +605,13 @@ subtype(T1, T2) ->
     end.
 
 glb(T1, T2) ->
-    glb(T1, T2, typechecker:create_tenv(?MODULE, [], [])).
+    glb(T1, T2, gradualizer_type_env:create(?MODULE, [], [])).
 
 glb(T1, T2, Env) ->
     typechecker:glb(T1, T2, Env).
 
 deep_normalize(T) ->
-    deep_normalize(T, typechecker:create_tenv(?MODULE, [], [])).
+    deep_normalize(T, gradualizer_type_env:create(?MODULE, [], [])).
 
 deep_normalize(T, TEnv) ->
     case typechecker:normalize(T, TEnv) of
