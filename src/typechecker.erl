@@ -411,7 +411,7 @@ glb(T1, T2, A, TEnv) ->
         %% actual use case.
         true -> {type(none), constraints:empty()};
         false ->
-            Module = maps:get(module, TEnv, '$__improbable__module__name__$'),
+            Module = maps:get(module, TEnv),
             case gradualizer_cache:get_glb(Module, T1, T2) of
                 false ->
                     Ty1 = typelib:remove_pos(normalize(T1, TEnv)),
@@ -4054,13 +4054,7 @@ add_any_types_pat({bin, _, BinElements}, VEnv) ->
 add_any_types_pat({var, _, '_'}, VEnv) ->
     VEnv;
 add_any_types_pat({var, _, A}, VEnv) ->
-    case VEnv of
-        #{A := VarTy} ->
-            {RefinedTy, _Cs} = glb(VarTy, type(any), gradualizer_lib:empty_tenv()),
-            VEnv#{ A := RefinedTy };
-        _ ->
-            VEnv#{ A => type(any) }
-    end;
+    VEnv#{ A => type(any) };
 add_any_types_pat({op, _, '++', _Pat1, Pat2}, VEnv) ->
     %% Pat1 cannot contain any variables so there is no need to traverse it.
     add_any_types_pat(Pat2, VEnv);
