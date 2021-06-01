@@ -38,6 +38,7 @@ erls = $(wildcard src/*.erl)
 beams = $(erls:src/%.erl=ebin/%.beam)
 
 ERLC_OPTS = -I include -pa ebin +debug_info
+TEST_ERLC_OPTS = +debug_info
 
 app: $(beams) ebin/gradualizer.app
 
@@ -132,7 +133,7 @@ test/arg.beam: test/should_fail/arg.erl
 test_data_erls = $(wildcard test/known_problems/**/*.erl test/should_fail/*.erl test/should_pass/*.erl)
 build_test_data:
 	mkdir -p "test_data"
-	erlc $(ERLC_OPTS) -o test_data $(test_data_erls)
+	erlc $(TEST_ERLC_OPTS) -o test_data $(test_data_erls)
 
 EUNIT_OPTS =
 
