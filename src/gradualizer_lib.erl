@@ -195,7 +195,8 @@ pick_value(Type, TEnv)
         {ok, Ty} ->
             pick_value(Ty, TEnv);
         opaque ->
-            {var, Anno, '_Opaque'};
+            UniqueOpaque = list_to_atom("Opaque" ++ integer_to_list(erlang:unique_integer([positive]))),
+            {var, Anno, UniqueOpaque};
         not_found ->
             throw({undef, Kind, Anno, {Name, length(Args)}})
     end.
