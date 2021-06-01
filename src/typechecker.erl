@@ -617,28 +617,13 @@ normalize({type, _, union, Tys}, TEnv) ->
         Ts  -> type(union, Ts)
     end;
 normalize({user_type, P, Name, Args} = Type, TEnv) ->
-    case typelib:get_module_from_annotation(P) of
-        {ok, Module} ->
-            %% Local type in another module, from an expanded remote type
-            case gradualizer_db:get_type(Module, Name, Args) of
-                {ok, T} ->
-                    normalize(typelib:remove_pos(T), TEnv);
-                opaque ->
-                    Type;
-                not_found ->
-                    throw({undef, user_type, P, {Module, Name, length(Args)}})
-            end;
-        none ->
-            %% Local user-defined type
-            TypeId = {Name, length(Args)},
-            case maps:get(types, TEnv) of
-                #{TypeId := {Vars, Type0}} ->
-                    VarMap = maps:from_list(lists:zip(Vars, Args)),
-                    Type1 = typelib:substitute_type_vars(Type0, VarMap),
-                    normalize(Type1, TEnv);
-                _NotFound ->
-                    throw({undef, user_type, P, {Name, length(Args)}})
-            end
+    case gradualizer_lib:get_type_definition(Type, TEnv, []) of
+        {ok, T} ->
+            normalize(typelib:remove_pos(T), TEnv);
+        opaque ->
+            Type;
+        not_found ->
+            throw({undef, user_type, P, {Name, length(Args)}})
     end;
 normalize(T = ?top(), _TEnv) ->
     %% Don't normalize gradualizer:top().
@@ -3203,16 +3188,17 @@ check_clauses(Env = #env{tenv = TEnv}, ArgsTy, ResTy, Clauses, Caps) ->
                     end,
                     {[], [], ArgsTy, Env#env.venv},
                     Clauses),
-    % Checking for exhaustive patternmatching
-    case {Env#env.exhaust
-         ,ArgsTy =/= any andalso
-          lists:all(fun refinable/1, ArgsTy)
-         ,lists:all(fun no_guards/1, Clauses)
-         ,is_list(RefinedArgsTy) andalso
-          lists:any(fun (T) -> T =/= type(none) end, RefinedArgsTy)} of
+    % Checking for exhaustive pattern matching
+    check_exhaustiveness(Env, ArgsTy, Clauses, RefinedArgsTy, VarBindsList, Css).
+
+check_exhaustiveness(Env = #env{tenv = TEnv}, ArgsTy, Clauses, RefinedArgsTy, VarBindsList, Css) ->
+    case {Env#env.exhaust,
+          ArgsTy =/= any andalso lists:all(fun (Ty) -> refinable(Ty, TEnv) end, ArgsTy),
+          lists:all(fun no_guards/1, Clauses),
+          is_list(RefinedArgsTy) andalso lists:any(fun (T) -> T =/= type(none) end, RefinedArgsTy)} of
         {true, true, true, true} ->
             [{clause, P, _, _, _}|_] = Clauses,
-            throw({nonexhaustive, P, gradualizer_lib:pick_value(RefinedArgsTy)});
+            throw({nonexhaustive, P, gradualizer_lib:pick_value(RefinedArgsTy, TEnv)});
         _ ->
             ok
     end,
@@ -3449,27 +3435,50 @@ pick_one_refinement_each([Ty|Tys], [RefTy|RefTys]) ->
     RefHeadCombinations ++ RefTailCombinations.
 
 %% Is a type refinable to the point that we do exhaustiveness checking on it?
-refinable(?type(integer)) ->
+refinable(Ty, TEnv) ->
+    refinable(Ty, TEnv, sets:new()).
+
+refinable(?type(integer), _TEnv, _Trace) ->
     true;
-refinable(?type(char)) ->
+refinable(?type(char), _TEnv, _Trace) ->
     true;
-refinable(?type(non_neg_integer)) ->
+refinable(?type(non_neg_integer), _TEnv, _Trace) ->
     true;
-refinable(?type(pos_integer)) ->
+refinable(?type(pos_integer), _TEnv, _Trace) ->
     true;
-refinable(?type(neg_integer)) ->
+refinable(?type(neg_integer), _TEnv, _Trace) ->
     true;
-refinable({atom, _, _}) ->
+refinable({atom, _, _}, _TEnv, _Trace) ->
     true;
-refinable(?type(nil)) ->
+refinable(?type(nil), _TEnv, _Trace) ->
     true;
-refinable(?type(union,Tys)) when is_list(Tys) ->
-    lists:all(fun refinable/1, Tys);
-refinable(?type(tuple, Tys)) when is_list(Tys) ->
-    lists:all(fun refinable/1, Tys);
-refinable(?type(record, [_ | Fields])) ->
-    lists:all(fun refinable/1, [X || ?type(field_type, X) <- Fields]);
-refinable(_) ->
+refinable(?type(union,Tys), TEnv, Trace) when is_list(Tys) ->
+    lists:all(fun (Ty) -> refinable(Ty, TEnv, Trace) end, Tys);
+refinable(?type(tuple, Tys), TEnv, Trace) when is_list(Tys) ->
+    lists:all(fun (Ty) -> refinable(Ty, TEnv, Trace) end, Tys);
+refinable(?type(record, [_ | Fields]), TEnv, Trace) ->
+    lists:all(fun (Ty) -> refinable(Ty, TEnv, Trace) end, [X || ?type(field_type, X) <- Fields]);
+refinable(?top(), _TEnv, _Trace) ->
+    %% This clause prevents incorrect exhaustiveness warnings
+    %% when `gradualizer:top()' is used explicitly.
+    false;
+refinable(RefinableTy, TEnv, Trace)
+  when element(1, RefinableTy) =:= remote_type; element(1, RefinableTy) =:= user_type ->
+    case sets:is_element(RefinableTy, Trace) of
+        true ->
+            %% We're searching down the variants of a recursive type and we've
+            %% reached this recursive type again (that is, it's found in `Trace').
+            %% We assume it's refinable to terminate recursion.
+            %% Refinability will be determined by the variants which are not (mutually) recursive.
+            true;
+        false ->
+            case gradualizer_lib:get_type_definition(RefinableTy, TEnv, [annotate_user_types]) of
+                {ok, Ty} -> refinable(Ty, TEnv, sets:add_element(RefinableTy, Trace));
+                opaque -> true;
+                not_found -> false
+            end
+    end;
+refinable(_, _, _) ->
     false.
 
 no_guards({clause, _, _, Guards, _}) ->
