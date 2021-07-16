@@ -3456,8 +3456,21 @@ refinable(?type(union,Tys), TEnv, Trace) when is_list(Tys) ->
     lists:all(fun (Ty) -> refinable(Ty, TEnv, Trace) end, Tys);
 refinable(?type(tuple, Tys), TEnv, Trace) when is_list(Tys) ->
     lists:all(fun (Ty) -> refinable(Ty, TEnv, Trace) end, Tys);
-refinable(?type(record, [_ | Fields]), TEnv, Trace) ->
-    lists:all(fun (Ty) -> refinable(Ty, TEnv, Trace) end, [X || ?type(field_type, X) <- Fields]);
+refinable(?type(record, [{atom, _, RecordName}]), TEnv = #{records := REnv}, Trace) ->
+    case REnv of
+        %% An empty record i.e. -record(variant1, { })
+        %% This is used for instance when pattern matching a union of empty records
+        %% i.e. -type my_type() :: #record1{} | #record2{}
+        %% Without explicitly handling this, we wouldn't show the record as a possible
+        %% value that is not handled by the user pattern.
+        #{RecordName := [{typed_record_field, _, ?type(any, [])}]} ->
+            true;
+        #{RecordName := RecordDef} ->
+            Fields = [X || {typed_record_field, _, X} <- RecordDef],
+            lists:all(fun (Ty) -> refinable(Ty, TEnv, Trace) end, Fields);
+        _NotFound ->
+            false
+    end;
 refinable(?top(), _TEnv, _Trace) ->
     %% This clause prevents incorrect exhaustiveness warnings
     %% when `gradualizer:top()' is used explicitly.
