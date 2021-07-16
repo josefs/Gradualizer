@@ -5,7 +5,7 @@
 
 %% Export all for easier testing and debugging while the project is
 %% still in an early stage
--compile([export_all]).
+-compile([export_all, nowarn_export_all]).
 
 -include("typelib.hrl").
 
