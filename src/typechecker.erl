@@ -51,6 +51,7 @@
 -define(typed_record_field(Name), {typed_record_field, ?record_field(Name), _}).
 -define(typed_record_field(Name, Type), {typed_record_field, ?record_field(Name), Type}).
 -define(type_field_type(Name, Type), {type, _, field_type, [{atom, _, Name}, Type]}).
+-define(any_assoc, ?type(map_field_assoc, [?type(any), ?type(any)])).
 
 %% Data collected from epp parse tree
 -record(parsedata, {
@@ -261,22 +262,51 @@ compat_ty({type, _, tuple, Args1}, {type, _, tuple, Args2}, A, TEnv) ->
 %    compat(unfold_user_type(Name, Args, TEnv), Ty, A, TEnv);
 
 %% Maps
-compat_ty({type, _, map, any}, {type, _, map, _Assocs}, A, _TEnv) ->
+compat_ty({type, _, map, [?any_assoc]}, {type, _, map, _Assocs}, A, _TEnv) ->
     ret(A);
-compat_ty({type, _, map, _Assocs}, {type, _, map, any}, A, _TEnv) ->
+compat_ty({type, _, map, _Assocs}, {type, _, map, [?any_assoc]}, A, _TEnv) ->
     ret(A);
 compat_ty({type, _, map, Assocs1}, {type, _, map, Assocs2}, A, TEnv) ->
-    lists:foldl(fun (Assoc2, {As, Cs1}) ->
-			begin
-			    {Ax, Cs2} = any_type(Assoc2, Assocs1, As, TEnv),
-			    {Ax, constraints:combine(Cs1, Cs2)}
-			end
-		end, ret(A), Assocs2);
-compat_ty({type, _, AssocTag2, [Key2, Val2]},
-          {type, _, AssocTag1, [Key1, Val1]}, A, TEnv)
-        when AssocTag2 == map_field_assoc, AssocTag1 == map_field_assoc;
-             AssocTag2 == map_field_exact, AssocTag1 == map_field_exact;
-             AssocTag2 == map_field_assoc, AssocTag1 == map_field_exact ->
+    %% Please see: https://github.com/josefs/Gradualizer/wiki/Map-types#subtyping-rule-long-version
+    %% for the below rule definitions:
+    %% 2. For all mandatory associations K2 := V2 in M2,
+    %% there is a mandatory association K1 := V1 in M1...
+    IsMandatory = fun
+                      ({type, _, map_field_exact, _}) -> true;
+                      (_) -> false
+                  end,
+    MandatoryAssocs1 = lists:filter(IsMandatory, Assocs1),
+    MandatoryAssocs2 = lists:filter(IsMandatory, Assocs2),
+    {A3, Cs3} = lists:foldl(fun ({type, _, map_field_exact, _} = Assoc2, {A2, Cs2}) ->
+                                    %% This nested loop will only throw nomatch, if there's at least
+                                    %% one assoc in MandatoryAssocs1;
+                                    %% if that's not the case, let's throw now.
+                                    length(MandatoryAssocs1) == 0 andalso throw(nomatch),
+                                    case lists:foldl(fun
+                                                         (_Assoc1, {A1, Cs1}) -> {A1, Cs1};
+                                                         (Assoc1, nomatch) ->
+                                                             try
+                                                                 compat(Assoc1, Assoc2, A2, TEnv)
+                                                             catch
+                                                                 nomatch -> nomatch
+                                                             end
+                                                     end, nomatch, MandatoryAssocs1)
+                                    of
+                                        nomatch -> throw(nomatch);
+                                        {A1, Cs1} -> {A1, constraints:combine(Cs1, Cs2)}
+                                    end
+                            end, ret(A), MandatoryAssocs2),
+    %% 1. For all associations K1 <Assoc1> V1 in M1,
+    %% there exists an association K2 <Assoc2> V2 in M2...
+    lists:foldl(fun (Assoc1, {As, Cs1}) ->
+                        {Ax, Cs2} = any_type(Assoc1, Assocs2, As, TEnv),
+                        {Ax, constraints:combine(Cs1, Cs2)}
+                end, {A3, Cs3}, Assocs1);
+compat_ty({type, _, AssocTag1, [Key1, Val1]},
+          {type, _, AssocTag2, [Key2, Val2]}, A, TEnv)
+        when AssocTag1 == map_field_assoc, AssocTag2 == map_field_assoc;
+             AssocTag1 == map_field_exact, AssocTag2 == map_field_exact;
+             AssocTag1 == map_field_exact, AssocTag2 == map_field_assoc ->
     %% For M1 <: M2, mandatory fields in M2 must be mandatory fields in M1
     {A1, Cs1} = compat(Key1, Key2, A, TEnv),
     {A2, Cs2} = compat(Val1, Val2, A1, TEnv),
@@ -284,7 +314,6 @@ compat_ty({type, _, AssocTag2, [Key2, Val2]},
 
 compat_ty(_Ty1, _Ty2, _, _) ->
     throw(nomatch).
-
 
 compat_tys([], [], A, _TEnv) ->
     ret(A);
@@ -337,7 +366,7 @@ any_type(Ty, [Ty1|Tys], A, TEnv) ->
     end.
 
 %% @doc All types in `Tys' must be compatible with `Ty'.
-%% Returns all the gather memoizations and constrains.
+%% Returns all the gather memoizations and constraints.
 %% Does not return (throws `nomatch') if any of the types is not compatible.
 all_type(Tys, Ty, A, TEnv) ->
     all_type(Tys, Ty, A, [], TEnv).
@@ -532,13 +561,66 @@ glb_ty({type, _, tuple, any}, Ty2 = {type, _, record, _}, _A, _TEnv) ->
 glb_ty({type, _, record, _}, {type, _, record, _}, _A, _TEnv) ->
     ret(type(none));
 
-%% Map types. These are a bit tricky and we can't reach this case in the
-%% current code. For now going with a very crude approximation.
-glb_ty(Ty1 = {type, _, map, Assocs1}, Ty2 = {type, _, map, Assocs2}, _A, _TEnv) ->
+%% Map types. These are a bit tricky.
+%% For now going with a very crude approximation.
+glb_ty(Ty1 = {type, _, map, Assocs1}, Ty2 = {type, _, map, Assocs2}, A, TEnv) ->
     case {Assocs1, Assocs2} of
-        {any, _} -> ret(Ty2);
-        {_, any} -> ret(Ty1);
-        _        -> ret(type(none))
+        %% TODO: add a test case
+        {[?any_assoc], _} -> ret(Ty2);
+        {_, [?any_assoc]} -> ret(Ty1);
+        _ ->
+            %% TODO: Too simplistic!
+            %% We're not capable of handling overlapping keys without intersection
+            %% and negation types!
+            case {has_overlapping_keys(Ty1, TEnv), has_overlapping_keys(Ty2, TEnv)} of
+                {false, false} ->
+                    {NewAssocs0, Css} = lists:unzip([ glb(As1, As2, A, TEnv) || As1 <- Assocs1,
+                                                                                As2 <- Assocs2 ]),
+                    NewAssocs = lists:filter(fun(?type(none)) -> false; (_) -> true end, NewAssocs0),
+                    case NewAssocs of
+                        [] ->
+                            ret(type(none));
+                        [_|_] ->
+                            {type(map, NewAssocs), constraints:combine(Css)}
+                    end;
+                _ ->
+                    ret(type(none))
+            end
+    end;
+glb_ty(?type(AssocTag1, [Key1, Val1]), ?type(AssocTag2, [Key2, Val2]), A, TEnv)
+  when AssocTag1 == map_field_assoc, AssocTag2 == map_field_assoc;
+       AssocTag1 == map_field_exact, AssocTag2 == map_field_exact;
+       AssocTag1 == map_field_exact, AssocTag2 == map_field_assoc;
+       AssocTag1 == map_field_assoc, AssocTag2 == map_field_exact ->
+
+    AssocTag = case {AssocTag1, AssocTag2} of
+                   {map_field_exact, map_field_exact} -> map_field_exact;
+                   {map_field_exact, map_field_assoc} -> map_field_exact;
+                   {map_field_assoc, map_field_exact} -> map_field_exact;
+                   {map_field_assoc, map_field_assoc} -> map_field_assoc
+               end,
+
+    {Key, Cs1} = case {Key1, AssocTag, Key2} of
+                     {?type(any), map_field_assoc, ?type(any)} -> ret(type(any));
+                     {_, map_field_exact, ?type(any)} -> ret(Key1);
+                     {?type(any), map_field_exact, _} -> ret(Key2);
+                     {_, _, _} -> glb(Key1, Key2, A, TEnv)
+                     %{_, _, _} -> ret(type(none))
+                 end,
+
+    {Val, Cs2} = case {Val1, AssocTag, Val2} of
+                     {?type(any), map_field_assoc, ?type(any)} -> ret(type(any));
+                     {_, map_field_exact, ?type(any)} -> ret(Val1);
+                     {?type(any), map_field_exact, _} -> ret(Val2);
+                     {_, _, _} -> glb(Val1, Val2, A, TEnv)
+                     %{_, _, _} -> ret(type(none))
+                 end,
+
+    case lists:any(fun(?type(none)) -> true; (_) -> false end, [Key, Val]) of
+        true ->
+            ret(type(none));
+        false ->
+            {type(AssocTag, [Key, Val]), constraints:combine(Cs1, Cs2)}
     end;
 
 %% Binary types. For now approximate this by returning the smallest type if
@@ -597,6 +679,16 @@ glb_ty({type, _, Name, Args1}, {type, _, Name, Args2}, A, TEnv)
 %% Incompatible
 glb_ty(_Ty1, _Ty2, _A, _TEnv) -> {type(none), constraints:empty()}.
 
+has_overlapping_keys({type, _, map, Assocs}, TEnv) ->
+    Cart = [ case {subtype(As1, As2, TEnv), subtype(As2, As1, TEnv)} of
+                 {false, false} ->
+                     false;
+                 {_R1, _R2} ->
+                     true
+             end
+             || As1 <- Assocs, As2 <- Assocs, As1 /= As2 ],
+    lists:any(fun(X) -> X end, Cart).
+
 %% Normalize
 %% ---------
 %%
@@ -645,6 +737,11 @@ normalize({op, _, _, _Arg1, _Arg2} = Op, _TEnv) ->
     erl_eval:partial_eval(Op);
 normalize({type, Ann, range, [T1, T2]}, TEnv) ->
     {type, Ann, range, [normalize(T1, TEnv), normalize(T2, TEnv)]};
+normalize({type, Ann, map, Assocs}, TEnv) when is_list(Assocs) ->
+    {type, Ann, map, [normalize(As, TEnv) || As <- Assocs]};
+normalize({type, Ann, Assoc, KeyVal}, TEnv)
+  when Assoc =:= map_field_assoc; Assoc =:= map_field_exact ->
+    {type, Ann, Assoc, [normalize(KV, TEnv) || KV <- KeyVal]};
 normalize(Type, _TEnv) ->
     expand_builtin_aliases(Type).
 
@@ -690,8 +787,11 @@ expand_builtin_aliases({type, Ann, iolist, []}) ->
             {type, Ann, binary, []}],
     {type, Ann, maybe_improper_list, [{type, Ann, union, Union},
                                       {type, Ann, union, Tail}]};
+expand_builtin_aliases({type, Ann, map, any}) ->
+    {type, Ann, map, [{type, Ann, map_field_assoc, [{type, Ann, any, []},
+                                                    {type, Ann, any, []}]}]};
 expand_builtin_aliases({type, Ann, function, []}) ->
-    {type, Ann, 'fun', [{type, Ann, any}, {type, Ann , any,[]}]};
+    {type, Ann, 'fun', [{type, Ann, any}, {type, Ann, any, []}]};
 expand_builtin_aliases({type, Ann, 'fun', []}) ->
     %% `fun()' is not a built-in alias per the erlang docs
     %% but it is equivalent with `fun((...) -> any())'
@@ -1457,11 +1557,16 @@ do_type_check_expr(#env{infer = true}, {float, _, _F}) ->
 
 %% Maps
 do_type_check_expr(Env, {map, _, Assocs}) ->
-    {_AssocTys, VB, Cs} = type_check_assocs(Env, Assocs),
+    {AssocTys, VB, Cs} = type_check_assocs(Env, Assocs),
     % TODO: When the --infer flag is set we should return the type of the map
-    {type(any), VB, Cs};
-do_type_check_expr(Env, {map, _, Expr, Assocs}) ->
-    {Ty, VBExpr, Cs1} = type_check_expr(Env, Expr),
+    case Env#env.infer of
+        true ->
+            {type(map, AssocTys), VB, Cs};
+        false ->
+            {type(any), VB, Cs}
+    end;
+do_type_check_expr(Env, {map, _, UpdateExpr, Assocs}) ->
+    {Ty, VBExpr, Cs1} = type_check_expr(Env, UpdateExpr),
     {AssocTys, VBAssocs, Cs2} = type_check_assocs(Env, Assocs),
     MapTy = update_map_type(Ty, AssocTys),
     % TODO: Check the type of the map.
@@ -2836,9 +2941,9 @@ type_check_assocs(Env, [{Assoc, _P, Key, Val}| Assocs])
 type_check_assocs(_Env, []) ->
     {[], #{}, constraints:empty()}.
 
-update_map_type({type, _, Ty, Arg}, AssocTys)
+update_map_type(?type(Ty, Arg), AssocTys)
     when Ty == map, Arg == any;
-	 Ty == any, Arg == [] ->
+         Ty == any, Arg == [] ->
     %% The original type could have any keys
     %% so we also need to include an optional any() => any() association
     %% in the updated map type.
@@ -2846,7 +2951,7 @@ update_map_type({type, _, Ty, Arg}, AssocTys)
     %% so let's append it as the last entry.
     UpdatedAssocs = update_assocs(AssocTys, []) ++ [type(map_field_assoc, [type(any), type(any)])],
     type(map, UpdatedAssocs);
-update_map_type({type, _, map, Assocs}, AssocTys) ->
+update_map_type(?type(map, Assocs), AssocTys) ->
     %% `AssocTys' come from a map creation or map update expr - after the expr is evaluated the map
     %% will contain the associations. Therefore in the resulting map type they
     %% cannot be optional - we rewrite optional assocs to non-optional ones.
@@ -2854,7 +2959,9 @@ update_map_type({type, _, map, Assocs}, AssocTys) ->
                                   lists:map(fun typelib:remove_pos/1, Assocs)),
     type(map, UpdatedAssocs);
 update_map_type({var, _, _Var}, _AssocTys) ->
-    type(any).
+    type(any);
+update_map_type(?type(union, MapTys), AssocTys) ->
+    type(union, [update_map_type(MapTy, AssocTys) || MapTy <- MapTys]).
 
 %% Override existing key's value types and append those key types
 %% which are not updated
@@ -3361,7 +3468,7 @@ refine_ty(Ty, ?type(union, UnionTys), TEnv) ->
                 end,
                 Ty,
                 UnionTys);
-refine_ty(?type(map, _Assocs), ?type(map, any), _Tenv) ->
+refine_ty(?type(map, _Assocs), ?type(map, [?any_assoc]), _Tenv) ->
     %% #{x => y} \ map() = none()
     type(none);
 refine_ty(?type(tuple, _Tys), ?type(tuple, any), _TEnv) ->

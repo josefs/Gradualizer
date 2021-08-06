@@ -1,4 +1,4 @@
--module(map_expr).
+-module(map_passing_expr).
 
 -export([foo/0]).
 
