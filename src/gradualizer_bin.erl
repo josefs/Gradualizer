@@ -118,5 +118,5 @@ gcd1(A, 0) -> A;
 gcd1(A, B) ->
   case A rem B of
     0 -> B;
-    X -> gcd1(B, X)
+    X when X > 0 -> gcd1(B, X)
   end.
