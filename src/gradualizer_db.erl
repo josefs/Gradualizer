@@ -298,7 +298,7 @@ import_prelude(State = #state{loaded = Loaded}) ->
     %% are loaded on demand
     State1#state{loaded = Loaded}.
 
--spec import_extra_specs(filelib:filename(), state()) -> state().
+-spec import_extra_specs(file:name(), state()) -> state().
 import_extra_specs(Dir, State = #state{loaded = Loaded}) ->
     FormsByModule = gradualizer_prelude_parse_trans:get_module_forms_tuples(Dir),
     %% Import forms each of the modules to override

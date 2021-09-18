@@ -9,9 +9,10 @@
 
 -type abstract_forms() :: [erl_parse:abstract_form() | erl_parse:form_info()].
 
--type parsed_file_error() :: {file_not_found, file:filename()} |
-                             {file_open_error, {file:posix() | badarg | system_limit, file:filename()}} |
-                             {forms_not_found, file:filename()} |
+-type parsed_file_error() :: {file_not_found, file:filename_all()} |
+                             {file_open_error, {file:posix() | badarg | system_limit,
+                                                file:filename_all()}} |
+                             {forms_not_found, file:filename_all()} |
                              {forms_error, Reason :: any()}.
 
 -type parsed_file() :: {ok, abstract_forms()} |
@@ -71,7 +72,7 @@ epp_open(File, Fd, StartLocation, Includes) ->
     end.
 
 %% Accepts a filename or the beam code as a binary
--spec get_forms_from_beam(file:filename() | binary()) -> parsed_file() | parsed_file_error().
+-spec get_forms_from_beam(file:filename_all()) -> parsed_file() | parsed_file_error().
 get_forms_from_beam(File) ->
     case beam_lib:chunks(File, [abstract_code]) of
         {ok, {_Module, [{abstract_code, {raw_abstract_v1, Forms}}]}} ->

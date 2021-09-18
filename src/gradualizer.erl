@@ -44,6 +44,8 @@
 %% This type is the top of the subtyping lattice.
 -opaque top() :: any().
 
+-include("gradualizer.hrl").
+
 %% API functions
 
 %% @doc Type check a source or beam file
@@ -98,7 +100,8 @@ type_check_dir(Dir) ->
 type_check_dir(Dir, Opts) ->
     case filelib:is_dir(Dir) of
         true ->
-            type_check_files(filelib:wildcard(filename:join(Dir, "*.{erl,beam}")), Opts);
+            Pattern = ?assert_type(filename:join(Dir, "*.{erl,beam}"), file:filename()),
+            type_check_files(filelib:wildcard(Pattern), Opts);
         false ->
             throw({dir_not_found, Dir})
     end.
