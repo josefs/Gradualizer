@@ -246,10 +246,16 @@ handle_call({import_beam_files, Files}, _From, State) ->
         Error = {_, _} -> {reply, Error, State}
     end;
 handle_call({import_app, App}, _From, State) ->
-    Pattern = code:lib_dir(App) ++ "/src/*.erl",
-    Files = filelib:wildcard(Pattern),
-    State1 = import_erl_files(Files, [], State),
-    {reply, ok, State1};
+    case code:lib_dir(App) of
+        {error, bad_name} ->
+            error_logger:warning_msg("Unknown app: ~p", [App]),
+            {reply, ok, State};
+        LibDir ->
+            Pattern = LibDir ++ "/src/*.erl",
+            Files = filelib:wildcard(Pattern),
+            State1 = import_erl_files(Files, [], State),
+            {reply, ok, State1}
+    end;
 handle_call(import_otp, _From, State) ->
     Pattern = code:lib_dir() ++ "/*/src/*.erl",
     Files = filelib:wildcard(Pattern),
