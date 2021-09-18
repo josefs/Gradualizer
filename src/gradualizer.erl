@@ -166,8 +166,9 @@ type_check_forms(Forms, Opts) ->
     type_check_forms(File, Forms, Opts).
 
 %% Helper
--spec type_check_forms(file:filename(), [erl_parse:abstract_form()], options()) ->
-                            ok | nok | [{file:filename(), any()}].
+-spec type_check_forms(file:filename(), Forms, options()) -> R when
+      Forms :: gradualizer_file_utils:abstract_forms(),
+      R :: ok | nok | [{file:filename(), any()}].
 type_check_forms(File, Forms, Opts) ->
     ReturnErrors = proplists:get_bool(return_errors, Opts),
     OptsForModule = options_from_forms(Forms) ++ Opts,
