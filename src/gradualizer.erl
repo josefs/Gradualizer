@@ -192,7 +192,7 @@ add_source_file_and_forms_to_opts(File, Forms, Opts) ->
     end.
 
 %% Extract -gradualizer(Options) from AST
--spec options_from_forms([erl_parse:abstract_form()]) -> options().
+-spec options_from_forms(gradualizer_file_utils:abstract_forms()) -> options().
 options_from_forms([{attribute, _L, gradualizer, Opts} | Fs]) when is_list(Opts) ->
     Opts ++ options_from_forms(Fs);
 options_from_forms([{attribute, _L, gradualizer, Opt} | Fs]) ->
