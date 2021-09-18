@@ -34,6 +34,8 @@
 %% Gen server local registered name
 -define(name, ?MODULE).
 
+-include("gradualizer.hrl").
+
 %% Internal data
 -record(typeinfo, {exported :: boolean(),
                    opaque   :: boolean(),
@@ -470,7 +472,8 @@ add_entries_to_map(Entries, Map) ->
                 Map,
                 Entries).
 
--spec collect_types(module(), Forms :: [tuple()]) -> [{mfa(), #typeinfo{}}].
+-spec collect_types(module(), Forms) -> [{mfa(), #typeinfo{}}] when
+      Forms :: gradualizer_file_utils:abstract_forms().
 %% Collect exported types, including opaques, record definitions,
 %% exported and unexported types
 collect_types(Module, Forms) ->
@@ -480,15 +483,17 @@ collect_types(Module, Forms) ->
 
     %% Now all type definitions are easy to extract.
     Types = [begin
-                 Id       = {Module, Name, length(Vars)},
-                 Exported = lists:member({Name, length(Vars)}, ExportedTypes),
+                 Arity = length(Vars),
+                 Arity >= 0 andalso Arity =< 255 orelse erlang:error({invalid_arity, Arity, Form}),
+                 Id       = {Module, Name, ?assert_type(Arity, arity())},
+                 Exported = lists:member({Name, Arity}, ExportedTypes),
                  Params   = [VarName || {var, _, VarName} <- Vars],
                  Info     = #typeinfo{exported = Exported,
                                       opaque   = (Attr == opaque),
                                       params   = Params,
                                       body     = Body},
                  {Id, Info}
-             end || {attribute, _, Attr, {Name, Body, Vars}} <- Forms,
+             end || Form = {attribute, _, Attr, {Name, Body, Vars}} <- Forms,
                     Attr == type orelse Attr == opaque,
                     is_atom(Name)],
     Types.
