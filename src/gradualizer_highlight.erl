@@ -177,7 +177,7 @@ highlight_line(Line, N, {L1, _C1}, {L2, C2}, Color) when L1 < N, N == L2 ->
     color_and_mark_line(Line, step_spaces(Line, 1), C2, Color);
 highlight_line(Line, N, {L1, _}, {L2, __}, Color) when L1 < N, N < L2 ->
     %% Internal line
-    color_and_mark_line(Line, step_spaces(Line, 1), length(Line) + 1, Color).
+    color_and_mark_line(Line, step_spaces(Line, 1), ?assert_type(length(Line) + 1, pos_integer()), Color).
 
 -spec step_spaces(string(), erl_anno:column()) -> erl_anno:column().
 step_spaces([$\t | Str], Col) -> step_spaces(Str, Col + 1);
@@ -190,18 +190,22 @@ blank("")          -> "".
 
 %% Color the string from column C1 to (not including) C2. Returns
 %% a list containing the colored line and a line with ^^^^ markers.
--spec color_and_mark_line(Line :: string(), StartCol :: erl_anno:column(),
-                          EndCol :: erl_anno:column(), Color :: boolean()) -> [string()].
-color_and_mark_line(Line, C1, C2, Color) ->
+-spec color_and_mark_line(Line, StartCol, EndCol, Color) -> [string()] when
+      Line :: string(),
+      StartCol :: erl_anno:column(),
+      EndCol :: erl_anno:column(),
+      Color :: boolean().
+color_and_mark_line(Line, C1, C2, Color) when C2 >= C1 ->
     {Pre, Rest} = lists:split(C1 - 1, Line),
-    {Mid, Post} = lists:split(C2 - C1, Rest),
+    HighlightLen = ?assert_type(C2 - C1, non_neg_integer()),
+    {Mid, Post} = lists:split(HighlightLen, Rest),
     {ColorText, ColorMarker, ColorEnd} =
         case Color of
             true  -> {?color_text, ?color_marker, ?color_end};
             false -> {"", "", ""}
         end,
     [Pre ++ ColorText ++ Mid ++ ColorEnd ++ Post,
-     blank(Pre) ++ ColorMarker ++ lists:duplicate(C2 - C1, ?marker_char) ++ ColorEnd].
+     blank(Pre) ++ ColorMarker ++ lists:duplicate(HighlightLen, ?marker_char) ++ ColorEnd].
 
 %% Finds a node in an AST and return its corresponding node in another AST.
 %% The AST is searched in depth first order.
