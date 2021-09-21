@@ -281,7 +281,14 @@ normalize_test_() ->
                     typechecker:normalize(?t( (bnot 3) *
                                               (( + 7 ) rem ( 5 div - 2 ) ) bxor
                                               (1 bsl 6 bsr 4) ),
-                                          gradualizer_lib:create_tenv(?MODULE, [], [])))}
+                                          gradualizer_lib:create_tenv(?MODULE, [], [])))},
+     {"normalize(boolean()) == normalize(normalize(boolean))",
+      ?_assertEqual(typechecker:normalize(?t( boolean() ),
+                                          gradualizer_lib:empty_tenv()),
+                    typechecker:normalize(typechecker:normalize(?t( boolean() ),
+                                                                gradualizer_lib:empty_tenv()),
+                                          gradualizer_lib:empty_tenv()))
+     }
     ].
 
 unfold_bounded_type_test() ->
@@ -373,7 +380,7 @@ propagate_types_test_() ->
                    type_check_expr(_Env = "-spec f() -> any().",
                                    _Expr = "not f()")),
      %% (returns a normalised type, in this case of boolean())
-     ?_assertMatch("true | false",
+     ?_assertMatch("false | true",
                    type_check_expr(_Env = "-spec f() -> boolean().",
                                    _Expr = "not f()")),
      ?_assertMatch("false",
