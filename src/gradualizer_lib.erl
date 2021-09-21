@@ -168,6 +168,12 @@ pick_value(?type(record, [{atom, _, RecordName} | Tys]), TEnv) ->
         || ?type(field_type, [{atom, _, FieldName}, Ty]) <- Tys
     ],
     {record, erl_anno:new(0), RecordName, MFields};
+pick_value(?type(map, Assocs), TEnv) ->
+    NewAssocs = [ {AssocTag, Anno, pick_value(KTy, TEnv), pick_value(VTy, TEnv)}
+                  || {type, Anno, AssocTag, [KTy, VTy]} <- Assocs ],
+    {map, erl_anno:new(0), NewAssocs};
+pick_value(?type(boolean), _TEnv) ->
+    {atom, erl_anno:new(0), false};
 pick_value(?type(list), _TEnv) ->
     {nil, erl_anno:new(0)};
 pick_value(?type(list,_), _TEnv) ->
