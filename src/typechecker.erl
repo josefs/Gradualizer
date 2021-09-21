@@ -765,9 +765,9 @@ expand_builtin_aliases({type, Ann, binary, []}) ->
 expand_builtin_aliases({type, Ann, bitstring, []}) ->
     {type, Ann, binary, [{integer, Ann, 0}, {integer, Ann, 1}]};
 expand_builtin_aliases({type, Ann, boolean, []}) ->
-    {type, Ann, union, [{atom, Ann, true}, {atom, Ann, false}]};
+    {type, Ann, union, [{atom, Ann, false}, {atom, Ann, true}]};
 expand_builtin_aliases({type, Ann, bool, []}) ->
-    {type, Ann, union, [{atom, Ann, true}, {atom, Ann, false}]};
+    {type, Ann, union, [{atom, Ann, false}, {atom, Ann, true}]};
 expand_builtin_aliases({type, Ann, byte, []}) ->
     {type, Ann, range, [{integer, Ann, 0}, {integer, Ann, 255}]};
 expand_builtin_aliases({type, Ann, char, []}) ->
@@ -3803,12 +3803,16 @@ add_types_pats([Pat | Pats], [Ty | Tys], TEnv, VEnv, PatTysAcc, UBoundsAcc, CsAc
         ?throw_orig_type(add_type_pat(Pat, NormTy, TEnv, VEnv),
                          Ty, NormTy),
     %% De-normalize the returned types if they are the type checked against.
-    PatTy  = case PatTyNorm  of NormTy -> Ty;
-                                _      -> PatTyNorm end,
-    UBound = case UBoundNorm of NormTy -> Ty;
-                                _      -> UBoundNorm end,
+    PatTy  = denormalize(Ty, PatTyNorm, NormTy),
+    UBound = denormalize(Ty, UBoundNorm, NormTy),
     add_types_pats(Pats, Tys, TEnv, VEnv2,
                    [PatTy|PatTysAcc], [UBound|UBoundsAcc], [Cs1|CsAcc]).
+
+denormalize(Ty, NormTy, OrigNormTy) ->
+    case NormTy of
+        OrigNormTy -> Ty;
+        _          -> NormTy
+    end.
 
 %% Type check a pattern against a normalized type and add variable bindings.
 %%
