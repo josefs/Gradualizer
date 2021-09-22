@@ -7,7 +7,7 @@
 -export_type([map_sum_t/0]).
 
 -type map_sum_t() :: #{field_one := integer()}
-                   | #{field_two := integer()}.
+                   | #{field_two := string()}.
 
 -spec map_variants(map_sum_t()) -> ok.
 map_variants(T) ->

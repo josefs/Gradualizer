@@ -3649,6 +3649,8 @@ refinable(?type(map, _) = Ty0, TEnv, Trace) ->
             %io:format("map ~p maybe refinable - checking assocs: ~p\n", [Ty, R]),
             length(Assocs) =/= 0 andalso R
     end;
+refinable(?type(list, [?type(char)]), _TEnv, _Trace) ->
+    true;
 refinable(?top(), _TEnv, _Trace) ->
     %% This clause prevents incorrect exhaustiveness warnings
     %% when `gradualizer:top()' is used explicitly.
