@@ -3309,7 +3309,7 @@ check_clauses(Env = #env{tenv = TEnv}, ArgsTy, ResTy, Clauses, Caps) ->
 
 check_exhaustiveness(Env = #env{tenv = TEnv}, ArgsTy, Clauses, RefinedArgsTy, VarBindsList, Css) ->
     case {Env#env.exhaust,
-          ArgsTy =/= any andalso lists:all(fun (Ty) -> refinable(normalize(Ty, TEnv), TEnv) end, ArgsTy),
+          ArgsTy =/= any andalso lists:all(fun (Ty) -> refinable(Ty, TEnv) end, ArgsTy),
           lists:all(fun no_guards/1, Clauses),
           is_list(RefinedArgsTy) andalso lists:any(fun (T) -> T =/= type(none) end, RefinedArgsTy)} of
         {true, true, true, true} ->
@@ -3634,8 +3634,8 @@ refinable(?type(tuple, Tys), TEnv, Trace) when is_list(Tys) ->
     lists:all(fun (Ty) -> refinable(Ty, TEnv, Trace) end, Tys);
 refinable(?type(record, [_ | Fields]), TEnv, Trace) ->
     lists:all(fun (Ty) -> refinable(Ty, TEnv, Trace) end, [X || ?type(field_type, X) <- Fields]);
-refinable(?type(map, Assocs) = Ty0, TEnv, Trace) ->
-    Ty = normalize(Ty0, TEnv),
+refinable(?type(map, _) = Ty0, TEnv, Trace) ->
+    ?type(map, Assocs) = Ty = normalize(Ty0, TEnv),
     case has_overlapping_keys(Ty, TEnv) of
         true ->
             %io:format("map ~p not refinable - overlapping keys\n", [Ty]),
