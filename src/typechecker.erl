@@ -4364,7 +4364,32 @@ type_check_forms(Forms, Opts) ->
     CrashOnError = proplists:get_bool(crash_on_error, Opts),
 
     {ok, _} = application:ensure_all_started(gradualizer),
-    proplists:get_bool(prelude, Opts) andalso gradualizer_db:import_prelude(),
+    io:format("before prelude:\n~ts\n\n", [typelib:pp_type(element(2, gradualizer_db:get_spec(lists, flatten, 2)))]),
+    %io:format("gradualizer_db state before prelude:\n~p\n\n", [sys:get_state(gradualizer_db)]),
+    %io:format("gradualizer_db state before prelude:\n~ts\n\n",
+              %[
+               %typelib:pp_type(hd(maps:get({lists,flatten,1},
+                                           %element(2, sys:get_state(gradualizer_db)))))
+              %]),
+    proplists:get_bool(prelude, Opts)
+    andalso begin
+                io:format("importing prelude\n", []),
+                gradualizer_db:import_prelude()
+            end,
+    %timer:sleep(3000),
+    %io:format("gradualizer_db state after prelude:\n~p\n\n", [sys:get_state(gradualizer_db)]),
+    %io:format("gradualizer_db state after prelude:\n~ts\n\n",
+    %          [
+    %           typelib:pp_type(hd(maps:get({lists,flatten,1},
+    %                                       element(2, sys:get_state(gradualizer_db)))))
+    %          ]),
+    %io:format("gradualizer_db state after post-prelude lookup:\n~p\n\n", [sys:get_state(gradualizer_db)]),
+    %io:format("after prelude:\n~ts\n\n", [typelib:pp_type(element(2, gradualizer_db:get_spec(lists, flatten, 2)))]),
+    %io:format("gradualizer_db state after post-prelude lookup:\n~ts\n\n",
+    %          [
+    %           typelib:pp_type(hd(maps:get({lists,flatten,1},
+    %                                       element(2, sys:get_state(gradualizer_db)))))
+    %          ]),
     gradualizer_db:import_extra_specs(proplists:get_all_values(specs_override, Opts)),
 
     ParseData =
