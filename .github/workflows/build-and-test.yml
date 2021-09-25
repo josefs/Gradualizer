@@ -12,7 +12,7 @@ jobs:
     name: Erlang ${{matrix.otp}}
     strategy:
       matrix:
-        otp: ['24.1']
+        otp: ['22.3.4.20', '23.3.4.7', '24.1']
     steps:
       - uses: actions/checkout@v2
       - uses: erlef/setup-beam@v1

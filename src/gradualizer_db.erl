@@ -43,7 +43,7 @@
 %% Public API functions
 
 start_link(Opts) ->
-    OptsMap1 = proplists:to_map(Opts),
+    OptsMap1 = maps:from_list(proplists:unfold(Opts)),
     OptsMap2 = OptsMap1#{specs_override => proplists:get_all_values(specs_override, Opts)},
     gen_server:start_link({local, ?name}, ?MODULE, OptsMap2, []).
 
