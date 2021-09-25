@@ -18,4 +18,18 @@ jobs:
       - uses: erlef/setup-beam@v1
         with:
           otp-version: ${{matrix.otp}}
-      - run: 'make && make tests'
+      - name: "Run tests"
+        run: "make && make tests"
+        continue-on-error: true
+      - name: "Print gradualizer_db state"
+        run: erl -eval 'application:ensure_all_started(gradualizer), io:format("~p\n", [ sys:get_state(gradualizer_db) ]), halt().' -pa ebin -noinput -noshell
+        continue-on-error: true
+      - name: "Print lists:deep_list() definition"
+        run: erl -eval 'application:ensure_all_started(gradualizer), io:format("~p\n", [gradualizer_lib:get_type_definition(typelib:remove_pos(typelib:parse_type("lists:deep_list()")), gradualizer_lib:empty_tenv(), [])]), halt().' -pa ebin -noinput -noshell
+        continue-on-error: true
+      - name: "Print prelude"
+        run: erl -pa ebin -noinput -noshell -eval 'io:format("~p\n", [gradualizer_prelude:get_modules_and_forms()]), halt().'
+        continue-on-error: true
+      - name: "Print code paths"
+        run: erl -pa ebin -noinput -noshell -eval 'io:format("~p\n", [code:get_path()]), halt().'
+        continue-on-error: true
