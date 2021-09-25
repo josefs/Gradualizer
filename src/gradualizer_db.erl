@@ -139,7 +139,7 @@ import_module(Module) ->
                   prelude := boolean(),
                   specs_override := [file:name()]}.
 -define(default_opts, #{autoimport => true,
-                        prelude => false,
+                        prelude => true,
                         specs_override => []}).
 
 -record(state, {specs   = #{} :: #{mfa() => [type()]},
