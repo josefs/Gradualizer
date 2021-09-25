@@ -92,10 +92,10 @@ remove_pos({Type, _, Value})
 remove_pos({user_type, Anno, Name, Params}) when is_list(Params) ->
     {user_type, anno_keep_only_filename(Anno), Name,
      lists:map(fun remove_pos/1, Params)};
-% Might need to bring this back but will need to support more params since the records can be refined now
-% One thing to be careful is that we can "redefine" some fields for a specific record instance as well
-% remove_pos({type, Anno, record, Params = [{atom, AtomAnno, Name}]}) ->	
-%     {type, anno_keep_only_filename(Anno), record, [{atom, anno_keep_only_filename(AtomAnno), Name}]};
+%% Might need to bring this back but will need to support more params since the records can be refined now
+%% One thing to be careful is that we can "redefine" some fields for a specific record instance as well
+remove_pos({type, Anno, record, Params = [{atom, AtomAnno, Name}]}) ->
+    {type, anno_keep_only_filename(Anno), record, [{atom, anno_keep_only_filename(AtomAnno), Name}]};
 remove_pos({type, _, bounded_fun, [FT, Cs]}) ->
     {type, erl_anno:new(0), bounded_fun, [remove_pos(FT)
                                          ,lists:map(fun remove_pos/1, Cs)]};
