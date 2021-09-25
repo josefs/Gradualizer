@@ -539,12 +539,20 @@ type_check_clause_test_() ->
                                    "    try 1",
                                    "    catch _ -> error",
                                    "    end."])),
-     %% The return type of the after clause is ignored
-     ?_assert(type_check_forms(["-spec f(gradualizer:top()) -> integer().",
-                                "f(X) ->",
-                                "    try throw(error)",
-                                "    after error",
-                                "    end."])),
+
+     %% erlang:throw/1 needs gradualizer_db to be started
+     {setup,
+      fun setup_app/0,
+      fun cleanup_app/1,
+      [
+       %% The return type of the after clause is ignored
+       ?_assert(type_check_forms(["-spec f(gradualizer:top()) -> integer().",
+                                  "f(X) ->",
+                                  "    try throw(error)",
+                                  "    after error",
+                                  "    end."]))
+      ]},
+
      %% Correct try without an after block
      ?_assert(type_check_forms(["-spec f(gradualizer:top()) -> atom().",
                                 "f(X) ->",
