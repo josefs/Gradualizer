@@ -147,7 +147,7 @@ pick_value(?type(pos_integer), _TEnv) ->
 pick_value(?type(neg_integer), _TEnv) ->
     {integer, erl_anno:new(0), -1};
 pick_value(?type(float), _TEnv) ->
-    {float, erl_anno:new(0), -1};
+    {float, erl_anno:new(0), -1.0};
 pick_value(?type(atom), _TEnv) ->
     {atom, erl_anno:new(0), a};
 pick_value({atom, _, A}, _TEnv) ->
