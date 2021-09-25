@@ -10,11 +10,21 @@ main(Args) ->
             io:format(standard_error, "~s~n", [Message]),
             halt(1);
         {ok, Files, Opts} ->
+            start_application(Opts),
             case gradualizer:type_check_files(Files, Opts) of
                 ok -> ok;
                 nok -> halt(1)
             end
     end.
+
+start_application(Opts) ->
+    %% An explicit load makes sure any options defined in a *.config file are set before
+    %% we call `application:set_env/3'.
+    %% A load after set_env overrides anything set with set_env.
+    %% If gradualizer is run as an escript this should not be necessary, but better safe than sorry.
+    ok = application:load(gradualizer),
+    application:set_env(gradualizer, cli_options, Opts),
+    {ok, _} = application:ensure_all_started(gradualizer).
 
 -spec handle_args([string()]) -> help | version | {error, string()} |
                                  {ok, [string()], gradualizer:options()}.
