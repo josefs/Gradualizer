@@ -18,9 +18,6 @@ jobs:
       - uses: erlef/setup-beam@v1
         with:
           otp-version: ${{matrix.otp}}
-      - name: "Run tests"
-        run: "make && make tests"
-        continue-on-error: true
       - name: "Print gradualizer_db state"
         run: erl -eval 'application:ensure_all_started(gradualizer), io:format("~p\n", [ sys:get_state(gradualizer_db) ]), halt().' -pa ebin -noinput -noshell
         continue-on-error: true
@@ -33,3 +30,5 @@ jobs:
       - name: "Print code paths"
         run: erl -pa ebin -noinput -noshell -eval 'io:format("~p\n", [code:get_path()]), halt().'
         continue-on-error: true
+      - name: "Run tests"
+        run: "make && make tests"
