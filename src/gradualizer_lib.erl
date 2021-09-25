@@ -104,10 +104,20 @@ get_type_definition({remote_type, _Anno, [{atom, _, Module}, {atom, _, Name}, Ar
     gradualizer_db:get_type(Module, Name, Args);
 get_type_definition({user_type, Anno, Name, Args}, TEnv, Opts) ->
     %% Let's check if the type is a known remote type.
-    case typelib:get_module_from_annotation(Anno) of
-        {ok, Module} ->
-            gradualizer_db:get_type(Module, Name, Args);
-        none ->
+    KnownTy = case typelib:get_module_from_annotation(Anno) of
+                  {ok, Module} ->
+                      gradualizer_db:get_type(Module, Name, Args);
+                  none ->
+                      no_module
+              end,
+    case KnownTy of
+        {ok, Ty} ->
+            %% gradualizer_db already did annotate_user_types
+            {ok, Ty};
+        opaque ->
+            opaque;
+        _ ->
+            %% _ = (no_module | not_found)
             %% Let's check if the type is defined in the context of this module.
             case maps:get({Name, length(Args)}, maps:get(types, TEnv), not_found) of
                 {Params, Type0} ->
