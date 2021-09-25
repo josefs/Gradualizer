@@ -184,6 +184,8 @@ pick_value(?type(map, Assocs), TEnv) ->
     {map, erl_anno:new(0), NewAssocs};
 pick_value(?type(boolean), _TEnv) ->
     {atom, erl_anno:new(0), false};
+pick_value(?type(string), _TEnv) ->
+    {nil, erl_anno:new(0)};
 pick_value(?type(list), _TEnv) ->
     {nil, erl_anno:new(0)};
 pick_value(?type(list,_), _TEnv) ->
