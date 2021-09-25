@@ -3619,6 +3619,8 @@ refinable(Ty, TEnv) ->
 
 refinable(?type(integer), _TEnv, _Trace) ->
     true;
+refinable(?type(float), _TEnv, _Trace) ->
+    true;
 refinable(?type(char), _TEnv, _Trace) ->
     true;
 refinable(?type(non_neg_integer), _TEnv, _Trace) ->
