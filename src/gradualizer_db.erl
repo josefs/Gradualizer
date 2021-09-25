@@ -155,6 +155,7 @@ import_module(Module) ->
 -spec init(opts()) -> {ok, state()}.
 init(Opts0) ->
     Opts = maps:merge(?default_opts, Opts0),
+    io:format("db opts: ~p\n", [Opts]),
     State1 = #state{opts = Opts},
     State2 = case Opts of
                  #{autoimport := true} ->
