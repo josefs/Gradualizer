@@ -4051,7 +4051,6 @@ add_type_pat(Nil = {nil, P}, Ty, TEnv, VEnv) ->
             throw({type_error, pattern, P, Nil, Ty})
     end;
 add_type_pat(CONS = {cons, P, PH, PT}, ListTy, TEnv, VEnv) ->
-    %% TODO: Return non-empty list type as upper bound.
     case expect_list_type(normalize(ListTy, TEnv), dont_allow_nil_type, TEnv) of
         any ->
             VEnv2 = add_any_types_pat(PH, VEnv),
