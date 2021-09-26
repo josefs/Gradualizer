@@ -3635,14 +3635,9 @@ refinable({atom, _, _}, _TEnv, _Trace) ->
     true;
 refinable(?type(nil), _TEnv, _Trace) ->
     true;
-refinable(?type(union, Tys) = Ty0, TEnv, Trace) when is_list(Tys) ->
-    case stop_refinable_recursion(Ty0, Trace) of
-        stop ->
-            true;
-        {proceed, NewTrace} ->
-            lists:all(fun (Ty) -> refinable(Ty, TEnv, NewTrace) end, Tys)
-    end;
-refinable(?type(tuple, Tys) = Ty0, TEnv, Trace) when is_list(Tys) ->
+refinable(?type(Name, Tys) = Ty0, TEnv, Trace)
+  when (tuple =:= Name orelse union =:= Name)
+   and is_list(Tys) ->
     case stop_refinable_recursion(Ty0, Trace) of
         stop ->
             true;
