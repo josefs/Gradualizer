@@ -747,7 +747,8 @@ normalize({op, _, _, _Arg1, _Arg2} = Op, _TEnv) ->
 normalize({type, Ann, range, [T1, T2]}, TEnv) ->
     {type, Ann, range, [normalize(T1, TEnv), normalize(T2, TEnv)]};
 normalize({type, Ann, map, Assocs}, TEnv) when is_list(Assocs) ->
-    {type, Ann, map, [normalize(As, TEnv) || As <- Assocs]};
+    MTy = {type, Ann, map, [normalize(As, TEnv) || As <- Assocs]},
+    typelib:remove_pos(MTy);
 normalize({type, Ann, Assoc, KeyVal}, TEnv)
   when Assoc =:= map_field_assoc; Assoc =:= map_field_exact ->
     {type, Ann, Assoc, [normalize(KV, TEnv) || KV <- KeyVal]};
