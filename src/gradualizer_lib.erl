@@ -190,6 +190,9 @@ pick_value(?type(list), _TEnv) ->
     {nil, erl_anno:new(0)};
 pick_value(?type(list,_), _TEnv) ->
     {nil, erl_anno:new(0)};
+pick_value(?type(nonempty_list, Ty), TEnv) ->
+    [H | _] = pick_value(Ty, TEnv),
+    {cons, erl_anno:new(0), H, {nil, erl_anno:new(0)}};
 pick_value(?type(nil), _TEnv) ->
     {nil, erl_anno:new(0)};
 %% The ?type(range) is a different case because the type range

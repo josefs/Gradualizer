@@ -1004,6 +1004,16 @@ expect_list_type({var, _, Var}, _, _) ->
 expect_list_type(Ty, _, _) ->
     {type_error, Ty}.
 
+rewrite_list_to_nonempty_list({type, Ann, T, [ElemTy]})
+  when T == list orelse T == nonempty_list ->
+    {type, Ann, nonempty_list, [ElemTy]};
+rewrite_list_to_nonempty_list({type, Ann, T, [ElemTy, SentinelTy]})
+  when T == maybe_improper_list orelse T == nonempty_improper_list ->
+    {type, Ann, nonempty_improper_list, [ElemTy, SentinelTy]};
+rewrite_list_to_nonempty_list({type, _, any, _} = Ty) ->
+    Ty;
+rewrite_list_to_nonempty_list(?top()) ->
+    top().
 
 expect_list_union([Ty|Tys], AccTy, AccCs, Any, N, TEnv) ->
     case expect_list_type(normalize(Ty, TEnv), N, TEnv) of
@@ -3518,6 +3528,8 @@ refine_ty({atom, _, _}, ?type(atom), _) ->
     type(none);
 refine_ty(?type(list, A), ?type(nil), _TEnv) ->
     type(nonempty_list, A);
+refine_ty(?type(list, A), ?type(nonempty_list, A), _TEnv) ->
+    type(nil);
 refine_ty(?type(nil), ?type(list, _), _TEnv) ->
     type(none);
 refine_ty(?type(nonempty_list, _), ?type(list, [?type(any)]), _TEnv) ->
@@ -3675,6 +3687,12 @@ refinable(?type(string), _TEnv, _Trace) ->
     true;
 refinable(?type(list, [?type(char)]), _TEnv, _Trace) ->
     true;
+refinable(?type(list, [ElemTy]) = Ty, TEnv, Trace) ->
+    case stop_refinable_recursion(Ty, Trace) of
+        stop -> true;
+        {proceed, NewTrace} ->
+            refinable(ElemTy, TEnv, NewTrace)
+    end;
 refinable(?top(), _TEnv, _Trace) ->
     %% This clause prevents incorrect exhaustiveness warnings
     %% when `gradualizer:top()' is used explicitly.
@@ -4037,13 +4055,15 @@ add_type_pat(CONS = {cons, P, PH, PT}, ListTy, TEnv, VEnv) ->
             VEnv2 = add_any_types_pat(PH, VEnv),
             TailTy = normalize(type(union, [ListTy, type(nil)]), TEnv),
             {_TailPatTy, _TauUBound, VEnv3, Cs} = add_type_pat(PT, TailTy, TEnv, VEnv2),
-            {type(none), ListTy, VEnv3, Cs};
+            NonEmptyTy = rewrite_list_to_nonempty_list(ListTy),
+            {NonEmptyTy, NonEmptyTy, VEnv3, Cs};
         {elem_ty, ElemTy, Cs1} ->
             {_PatTy1, _UBound1, VEnv2, Cs2} =
                 add_type_pat(PH, normalize(ElemTy, TEnv), TEnv, VEnv),
             TailTy = normalize(type(union, [ListTy, type(nil)]), TEnv),
             {_PatTy2, _Ubound2, VEnv3, Cs3} = add_type_pat(PT, TailTy, TEnv, VEnv2),
-            {type(none), ListTy, VEnv3, constraints:combine([Cs1, Cs2, Cs3])};
+            NonEmptyTy = rewrite_list_to_nonempty_list(ListTy),
+            {NonEmptyTy, NonEmptyTy, VEnv3, constraints:combine([Cs1, Cs2, Cs3])};
         {type_error, _Ty} ->
             throw({type_error, cons_pat, P, CONS, ListTy})
     end;

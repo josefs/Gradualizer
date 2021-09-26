@@ -11,8 +11,8 @@
 %% specifically in case of a string pattern VEnv was passed instead of
 %% TEnv.
 -spec f([mychar()]) -> any().
-f("foo") ->
-    ok.
+f("foo") -> ok;
+f(_) -> also_ok.
 
 -type ok_tuple() :: {ok}.
 
