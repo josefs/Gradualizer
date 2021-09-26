@@ -57,11 +57,15 @@ format_type_error({nonexhaustive, Anno, Example}, Opts) ->
             X -> erl_pp:expr(X)
         end,
     io_lib:format(
-      "~sNonexhaustive patterns~s~n"
-      "Example values which are not covered:~n\t~s~n",
+      "~sNonexhaustive patterns~s~s",
       [format_location(Anno, brief, Opts),
        format_location(Anno, verbose, Opts),
-       FormattedExample]);
+       case proplists:get_value(fmt_location, Opts, ?FMT_LOCATION_DEFAULT) of
+           brief ->
+               io_lib:format(": ~s\n", FormattedExample);
+           verbose ->
+               io_lib:format("\nExample values which are not covered:~n\t~s~n", [FormattedExample])
+       end]);
 format_type_error({call_undef, Anno, Func, Arity}, Opts) ->
     io_lib:format(
       "~sCall to undefined function ~p/~p~s~n",
