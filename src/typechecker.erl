@@ -1013,7 +1013,9 @@ rewrite_list_to_nonempty_list({type, Ann, T, [ElemTy, SentinelTy]})
 rewrite_list_to_nonempty_list({type, _, any, _} = Ty) ->
     Ty;
 rewrite_list_to_nonempty_list(?top()) ->
-    top().
+    top();
+rewrite_list_to_nonempty_list({var, _, _} = Var) ->
+    Var.
 
 expect_list_union([Ty|Tys], AccTy, AccCs, Any, N, TEnv) ->
     case expect_list_type(normalize(Ty, TEnv), N, TEnv) of
