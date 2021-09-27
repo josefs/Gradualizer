@@ -23,7 +23,7 @@ start_application(Opts) ->
     %% A load after set_env overrides anything set with set_env.
     %% If gradualizer is run as an escript this should not be necessary, but better safe than sorry.
     ok = application:load(gradualizer),
-    application:set_env(gradualizer, cli_options, Opts),
+    application:set_env(gradualizer, options, Opts),
     {ok, _} = application:ensure_all_started(gradualizer).
 
 -spec handle_args([string()]) -> help | version | {error, string()} |
