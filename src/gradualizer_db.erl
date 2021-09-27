@@ -5,7 +5,7 @@
 -module(gradualizer_db).
 
 %% API functions
--export([start_link/0,
+-export([start_link/1,
          get_spec/3,
          get_type/3, get_exported_type/3, get_opaque_type/3,
          get_record_type/2,
@@ -42,8 +42,10 @@
 
 %% Public API functions
 
-start_link() ->
-    gen_server:start_link({local, ?name}, ?MODULE, #{}, []).
+start_link(Opts) ->
+    OptsMap1 = maps:from_list(proplists:unfold(Opts)),
+    OptsMap2 = OptsMap1#{specs_override => proplists:get_all_values(specs_override, Opts)},
+    gen_server:start_link({local, ?name}, ?MODULE, OptsMap2, []).
 
 %% @doc Fetches the types of the clauses of an exported function. User-defined
 %%      types and record types are annotated with filename on the form
@@ -133,8 +135,12 @@ import_module(Module) ->
 
 %% Gen_server
 
--type opts() :: #{autoimport => boolean()}.
--define(default_opts, #{autoimport => true}).
+-type opts() :: #{autoimport := boolean(),
+                  prelude := boolean(),
+                  specs_override := [file:name()]}.
+-define(default_opts, #{autoimport => true,
+                        prelude => true,
+                        specs_override => []}).
 
 -record(state, {specs   = #{} :: #{mfa() => [type()]},
                 types   = #{} :: #{mfa() => #typeinfo{}},
@@ -156,6 +162,9 @@ init(Opts0) ->
                  _ ->
                     State1
              end,
+    Self = self(),
+    maps:get(prelude, Opts) andalso (Self ! import_prelude),
+    Self ! {import_extra_specs, maps:get(specs_override, Opts)},
     {ok, State2}.
 
 -spec handle_call(any(), {pid(), term()}, state()) -> {reply, term(), state()}.
@@ -252,6 +261,12 @@ handle_call({import_extra_specs, Dirs}, _From, State) ->
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
+handle_info(import_prelude, State) ->
+    State2 = import_prelude(State),
+    {noreply, State2};
+handle_info({import_extra_specs, Dirs}, State) ->
+    State2 = lists:foldl(fun import_extra_specs/2, State, Dirs),
+    {noreply, State2};
 handle_info(_Msg, State) ->
     {noreply, State}.
 

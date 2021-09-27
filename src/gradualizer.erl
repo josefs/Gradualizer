@@ -167,10 +167,7 @@ type_check_forms(Forms, Opts) ->
                             ok | nok | [{file:filename(), any()}].
 type_check_forms(File, Forms, Opts) ->
     ReturnErrors = proplists:get_bool(return_errors, Opts),
-    OptsForModule =
-	options_from_forms(Forms) ++
-	Opts ++
-	[prelude], % using prelude is the default if nothing else is specified
+    OptsForModule = options_from_forms(Forms) ++ Opts,
     Errors = typechecker:type_check_forms(Forms, OptsForModule),
     case {ReturnErrors, Errors} of
         {true, _ } ->

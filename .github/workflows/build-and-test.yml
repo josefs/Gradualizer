@@ -1,0 +1,24 @@
+name: Build and test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request: []
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Erlang ${{matrix.otp}}
+    strategy:
+      matrix:
+        otp: ['22.3.4.20', '23.3.4.7', '24.1']
+    steps:
+      - uses: actions/checkout@v2
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{matrix.otp}}
+      - name: "Build"
+        run: "make"
+      - name: "Run tests"
+        run: "make tests"

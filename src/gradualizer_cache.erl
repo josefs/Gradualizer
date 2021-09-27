@@ -9,7 +9,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/0,
+-export([start_link/1,
          get_glb/3,
          store_glb/4
         ]).
@@ -30,11 +30,13 @@
 %% API
 %%===================================================================
 
--spec start_link() -> {ok, Pid :: pid()} |
-                      {error, Error :: {already_started, pid()}} |
-                      {error, Error :: any()}.
-start_link() ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
+-spec start_link(Opts) -> R when
+      Opts :: list(),
+      R :: {ok, Pid :: pid()}
+         | {error, Error :: {already_started, pid()}}
+         | {error, Error :: any()}.
+start_link(Opts) ->
+    gen_server:start_link({local, ?SERVER}, ?MODULE, [Opts], []).
 
 %%
 %% GLB Cache
@@ -66,7 +68,7 @@ store_glb(Module, T1, T2, TyCs) ->
 %% gen_server callbacks
 %%===================================================================
 
-init([]) ->
+init([_Opts]) ->
     ets:new(?GLB_CACHE, [set, public, named_table]),
     {ok, #state{}}.
 

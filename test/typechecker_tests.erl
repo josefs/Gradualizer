@@ -470,7 +470,7 @@ type_check_call_test_() ->
                                    "f() -> g().",
                                    "-spec g() -> number()."])),
      %% Passing an incompatible type to a spec'ed function
-     ?_assertNot(type_check_forms(["-spec int_top() -> gradualier:top().",
+     ?_assertNot(type_check_forms(["-spec int_top() -> gradualizer:top().",
                                    "int_top() -> 5.",
                                    "-spec int_arg(integer()) -> integer().",
                                    "int_arg(I) -> I + 1.",
@@ -539,12 +539,20 @@ type_check_clause_test_() ->
                                    "    try 1",
                                    "    catch _ -> error",
                                    "    end."])),
-     %% The return type of the after clause is ignored
-     ?_assert(type_check_forms(["-spec f(gradualizer:top()) -> integer().",
-                                "f(X) ->",
-                                "    try throw(error)",
-                                "    after error",
-                                "    end."])),
+
+     %% erlang:throw/1 needs gradualizer_db to be started
+     {setup,
+      fun setup_app/0,
+      fun cleanup_app/1,
+      [
+       %% The return type of the after clause is ignored
+       ?_assert(type_check_forms(["-spec f(gradualizer:top()) -> integer().",
+                                  "f(X) ->",
+                                  "    try throw(error)",
+                                  "    after error",
+                                  "    end."]))
+      ]},
+
      %% Correct try without an after block
      ?_assert(type_check_forms(["-spec f(gradualizer:top()) -> atom().",
                                 "f(X) ->",
