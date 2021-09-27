@@ -1,11 +1,9 @@
 <h1 align="center">Gradualizer: A Gradual Type System for Erlang</h1>
 <h2 align="center">A type checker for Erlang</h2>
 <p align="center">
-  <a href="https://travis-ci.com/josefs/Gradualizer">
-    <img src="https://img.shields.io/travis/com/josefs/Gradualizer/master.svg?style=flat-square" alt="Travis CI" />
-  </a>
-  <a href="https://codecov.io/gh/josefs/Gradualizer">
-    <img src="https://img.shields.io/codecov/c/github/josefs/Gradualizer/master.svg?style=flat-square" alt="Codecov" />
+  <a href="https://github.com/josefs/Gradualizer/actions/workflows/build-and-test.yml">
+    <img src="https://github.com/josefs/Gradualizer/actions/workflows/build-and-test.yml/badge.svg"
+         alt="GitHub Actions Build and Test Status" />
   </a>
 </p>
 
