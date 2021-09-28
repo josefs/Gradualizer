@@ -3547,13 +3547,16 @@ refine_ty(Ty1, Ty2, TEnv) ->
     end.
 
 -spec refine_map_field_ty({_, _}) -> gradualizer_type:abstract_type().
-%% For the same key K in both M1 and M2 the diff over its field is:
-%% M1 \ M2 |  :=  |  =>
-%% --------+------+------
-%%    :=   | none |  =>
-%%    =>   |  #{} | none
+%% For the same key K in both M1 and M2 the diff over its field (ignoring other keys) is:
 %%
-%% However, we might also see disjoint K1 from M1 and K2 from M2.
+%% M1 \ M2    | #{K := V} | #{K => V}
+%% -----------+-----------+--------------
+%% #{K := V}  | none      | #{K => V}
+%% #{K => V}  | #{}       | none
+%%
+%% Please note that we're changing field optionality, but not the types of keys or values.
+%%
+%% We might also see disjoint K1 from M1 and K2 from M2.
 %% In such a case we just leave K1 and its field unmodified.
 refine_map_field_ty({?type(map_field_exact, KVTy), ?type(map_field_exact, KVTy)}) ->
     [];
