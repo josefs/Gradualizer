@@ -10,7 +10,7 @@
 -include("typelib.hrl").
 
 %% Performance hack: Unions larger than this value are replaced by any() in normalization.
--define(union_size_limit, 20).
+-define(union_size_limit, 50).
 
 -define(verbose(Env, Fmt, Args),
         case Env#env.verbose of
