@@ -11,7 +11,7 @@ f(A, B) ->
 g(A, Map) ->
     Map#{ A => any }.
 
--type mytuple() :: tuple().
+-type mytuple() :: {}.
 -spec h(Pat :: mytuple()) -> ok.
 h({}) ->
     ok.
