@@ -3325,6 +3325,7 @@ check_exhaustiveness(Env = #env{tenv = TEnv}, ArgsTy, Clauses, RefinedArgsTy, Va
           lists:all(fun no_guards/1, Clauses),
           is_list(RefinedArgsTy)
           andalso lists:any(fun
+                                ({var,_,_}) -> false;
                                 (?top()) -> false;
                                 (T) -> T =/= type(none) andalso T =/= type(any)
                             end, RefinedArgsTy)}
