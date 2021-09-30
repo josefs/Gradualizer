@@ -221,6 +221,8 @@ pick_value(Type, TEnv)
         not_found ->
             throw({undef, Kind, Anno, {Name, length(Args)}})
     end;
+pick_value({var, Anno, VName}, _TEnv) ->
+    {var, Anno, VName};
 pick_value(Ty, _TEnv) ->
     {string, erl_anno:new(0), io_lib:format("value of ~p", [typelib:pp_type(Ty)])}.
 
