@@ -44,8 +44,7 @@
 %% Pattern macros
 -define(type(T), {type, _, T, []}).
 -define(type(T, A), {type, _, T, A}).
--define(top(), {remote_type, _, [{atom,_,gradualizer}
-				,{atom,_,top},[]]}).
+-define(top(), {remote_type, _, [{atom,_,gradualizer}, {atom,_,top}, []]}).
 -define(record_field(Name), {record_field, _, {atom, _, Name}, _}).
 -define(record_field_expr(Expr), {record_field, _, _, Expr}).
 -define(typed_record_field(Name), {typed_record_field, ?record_field(Name), _}).
@@ -3324,9 +3323,11 @@ check_exhaustiveness(Env = #env{tenv = TEnv}, ArgsTy, Clauses, RefinedArgsTy, Va
     case {Env#env.exhaust,
           ArgsTy =/= any andalso lists:all(fun (Ty) -> refinable(Ty, TEnv) end, ArgsTy),
           lists:all(fun no_guards/1, Clauses),
-          is_list(RefinedArgsTy) andalso lists:any(fun (T) ->
-                                                           T =/= type(none) andalso T =/= type(any)
-                                                   end, RefinedArgsTy)}
+          is_list(RefinedArgsTy)
+          andalso lists:any(fun
+                                (?top()) -> false;
+                                (T) -> T =/= type(none) andalso T =/= type(any)
+                            end, RefinedArgsTy)}
     of
         {true, true, true, true} ->
             [{clause, P, _, _, _}|_] = Clauses,
