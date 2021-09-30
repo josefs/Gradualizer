@@ -3,10 +3,13 @@
 -compile([export_all, nowarn_export_all]).
 
 %% these exported types are used in remote_types module
--export_type([my_tuple/0, my_list/0, my_union/0, my_opaque/0, my_empty_record/0, my_generic/1]).
+-export_type([my_tuple/0, my_list/0, my_union/0, my_opaque/0,
+              my_empty_record/0, my_refined_record/0, my_generic/1]).
 
 -record(r, {}).
 -type my_empty_record() :: #r{}.
+-record(refined_r, {a, b}).
+-type my_refined_record() :: #refined_r{a :: integer(), b :: binary()}.
 -type my_atom() :: atom().
 -type my_tuple() :: {my_atom(), integer()}.
 -type my_list() :: list(my_atom()).
