@@ -220,7 +220,9 @@ pick_value(Type, TEnv)
             {var, Anno, UniqueOpaque};
         not_found ->
             throw({undef, Kind, Anno, {Name, length(Args)}})
-    end.
+    end;
+pick_value(Ty, _TEnv) ->
+    {string, erl_anno:new(0), io_lib:format("value of ~p", [typelib:pp_type(Ty)])}.
 
 
 %% ------------------------------------------------
