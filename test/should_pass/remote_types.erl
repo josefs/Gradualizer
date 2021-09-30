@@ -50,3 +50,6 @@ generic_remote_opaque() -> {ok, remote_types}.
 local_type_nested_generic('1') -> nested_generic;
 local_type_nested_generic('2') -> other_module;
 local_type_nested_generic(_) -> {ok, remote_types}.
+
+-spec remote_refined_record_type(user_types:my_refined_record()) -> ok.
+remote_refined_record_type(_) -> ok.
