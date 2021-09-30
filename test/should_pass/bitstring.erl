@@ -2,7 +2,15 @@
 
 -compile([export_all, nowarn_export_all]).
 
--spec bin1(binary()) -> any().
+%% TODO: I'm not sure binary() specs can be that specific...
+%-spec bin1(binary()) -> any().
+%% It seems they almost can - from https://erlang.org/doc/reference_manual/typespec.html:
+%%   Bitstring :: <<>>
+%%              | <<_:M>>          %% M is an Integer_Value that evaluates to a positive integer
+%%              | <<_:_*N>>        %% N is an Integer_Value that evaluates to a positive integer
+%%              | <<_:M, _:_*N>>
+%% So a variable length after the first 8 bits is not supported :/
+-spec bin1(<<_:8, _:_*10>>) -> any().
 bin1(<<A:4, B:4, _/binary>>) ->
     A+B.
 
