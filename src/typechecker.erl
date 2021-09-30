@@ -3320,6 +3320,19 @@ check_clauses(Env = #env{tenv = TEnv}, ArgsTy, ResTy, Clauses, Caps) ->
     check_exhaustiveness(Env, ArgsTy, Clauses, RefinedArgsTy, VarBindsList, Css).
 
 check_exhaustiveness(Env = #env{tenv = TEnv}, ArgsTy, Clauses, RefinedArgsTy, VarBindsList, Css) ->
+    %% temp debug
+    %io:format("refined args ty: ~p\n", [RefinedArgsTy]),
+    Cond = {Env#env.exhaust,
+            ArgsTy =/= any andalso lists:all(fun (Ty) -> refinable(Ty, TEnv) end, ArgsTy),
+            lists:all(fun no_guards/1, Clauses),
+            is_list(RefinedArgsTy)
+            andalso lists:any(fun
+                                  (?top()) -> false;
+                                  (T) -> T =/= type(none) andalso T =/= type(any)
+                              end, RefinedArgsTy)},
+    %io:format("cond: ~p\n\n", [Cond]),
+    %% end of temp debug
+
     case {Env#env.exhaust,
           ArgsTy =/= any andalso lists:all(fun (Ty) -> refinable(Ty, TEnv) end, ArgsTy),
           lists:all(fun no_guards/1, Clauses),
