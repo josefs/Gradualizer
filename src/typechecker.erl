@@ -3324,7 +3324,10 @@ check_exhaustiveness(Env = #env{tenv = TEnv}, ArgsTy, Clauses, RefinedArgsTy, Va
     case {Env#env.exhaust,
           ArgsTy =/= any andalso lists:all(fun (Ty) -> refinable(Ty, TEnv) end, ArgsTy),
           lists:all(fun no_guards/1, Clauses),
-          is_list(RefinedArgsTy) andalso lists:any(fun (T) -> T =/= type(none) end, RefinedArgsTy)} of
+          is_list(RefinedArgsTy) andalso lists:any(fun (T) ->
+                                                           T =/= type(none) andalso T =/= type(any)
+                                                   end, RefinedArgsTy)}
+    of
         {true, true, true, true} ->
             [{clause, P, _, _, _}|_] = Clauses,
             throw({nonexhaustive, P, gradualizer_lib:pick_value(RefinedArgsTy, TEnv)});
