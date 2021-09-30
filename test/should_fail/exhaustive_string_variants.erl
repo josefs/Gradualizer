@@ -8,5 +8,5 @@
 -spec string_variants(string_variant_t()) -> ok.
 string_variants(T) ->
     case T of
-        {string, _} -> ok
+        {non_string, _} -> ok
     end.
