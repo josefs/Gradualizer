@@ -228,8 +228,8 @@ handle_call({import_module, Mod}, _From, State) ->
         not_found ->
             {reply, not_found, State}
     end;
-handle_call({import_erl_files, Files, Inc}, _From, State) ->
-    State1 = import_erl_files(Files, Inc, State),
+handle_call({import_erl_files, Files, Includes}, _From, State) ->
+    State1 = import_erl_files(Files, Includes, State),
     {reply, ok, State1};
 handle_call({import_beam_files, Files}, _From, State) ->
     case import_beam_files(Files, State) of
@@ -367,13 +367,13 @@ import_module_from_erl(Mod, State) ->
     end.
 
 -spec import_erl_files([file:filename()], [file:filename()], state()) -> state().
-import_erl_files([File | Files], Inc, State) ->
-    EppOpts = [{includes, guess_include_dirs(File) ++ Inc}],
+import_erl_files([File | Files], Includes, State) ->
+    EppOpts = [{includes, guess_include_dirs(File) ++ Includes}],
     {ok, Forms} = epp:parse_file(File, EppOpts),
     {attribute, _, module, Module} = lists:keyfind(module, 3, Forms),
     check_epp_errors(File, Forms),
-    import_erl_files(Files, Inc, import_absform(Module, Forms, State));
-import_erl_files([], _, St) ->
+    import_erl_files(Files, Includes, import_absform(Module, Forms, State));
+import_erl_files([], _Includes, St) ->
     St.
 
 -spec import_beam_files([file:filename() | binary()], state()) -> {ok, state()} | gradualizer_file_utils:parsed_file_error().
