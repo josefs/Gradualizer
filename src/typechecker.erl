@@ -747,8 +747,7 @@ normalize({op, _, _, _Arg1, _Arg2} = Op, _TEnv) ->
 normalize({type, Ann, range, [T1, T2]}, TEnv) ->
     {type, Ann, range, [normalize(T1, TEnv), normalize(T2, TEnv)]};
 normalize({type, Ann, map, Assocs}, TEnv) when is_list(Assocs) ->
-    MTy = {type, Ann, map, [normalize(As, TEnv) || As <- Assocs]},
-    typelib:remove_pos(MTy);
+    {type, Ann, map, [normalize(As, TEnv) || As <- Assocs]};
 normalize({type, Ann, Assoc, KeyVal}, TEnv)
   when Assoc =:= map_field_assoc; Assoc =:= map_field_exact ->
     {type, Ann, Assoc, [normalize(KV, TEnv) || KV <- KeyVal]};
@@ -3667,7 +3666,10 @@ refinable(?type(record, [_ | Fields]) = Ty0, TEnv, Trace) ->
                       [X || ?type(field_type, X) <- Fields])
     end;
 refinable(?type(map, _) = Ty0, TEnv, Trace) ->
-    ?type(map, Assocs) = Ty = normalize(Ty0, TEnv),
+    %% TODO: We shouldn't really call remove_pos here, but somehow maps with position information
+    %%       still present sometimes slip through.
+    %%       This later causes an assertion failure in has_overlapping_keys -> ... -> compat.
+    ?type(map, Assocs) = Ty = typelib:remove_pos(normalize(Ty0, TEnv)),
     case stop_refinable_recursion(Ty, Trace) of
         stop -> true;
         {proceed, NewTrace} ->
