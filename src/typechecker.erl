@@ -10,7 +10,7 @@
 -include("typelib.hrl").
 
 %% Performance hack: Unions larger than this value are replaced by any() in normalization.
--define(union_size_limit, 50).
+-define(union_size_limit, persistent_term:get(gradualizer_union_size_limit, 30)).
 
 -define(verbose(Env, Fmt, Args),
         case Env#env.verbose of
@@ -709,11 +709,12 @@ normalize({type, _, record, [{atom, _, Name}|Fields]}, TEnv) when length(Fields)
         || ?type_field_type(FieldName, Type) <- Fields],
     type_record(Name, NormFields);
 normalize({type, _, union, Tys}, TEnv) ->
+    UnionSizeLimit = ?union_size_limit,
     Types = flatten_unions(Tys, TEnv),
     case merge_union_types(Types, TEnv) of
         []  -> type(none);
         [T] -> T;
-        Ts when length(Ts) > ?union_size_limit -> type(any); % performance hack
+        Ts when length(Ts) > UnionSizeLimit -> type(any); % performance hack
         Ts  -> type(union, Ts)
     end;
 normalize({user_type, P, Name, Args} = Type, TEnv) ->
