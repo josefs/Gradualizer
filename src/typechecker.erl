@@ -3561,7 +3561,7 @@ refine_ty(Ty1, Ty2, TEnv) ->
         _NotDisjoint -> throw(no_refinement) %% imprecision
     end.
 
--spec refine_map_field_ty({_, _}) -> gradualizer_type:abstract_type().
+-spec refine_map_field_ty({_, _}) -> [gradualizer_type:abstract_type()].
 %% For the same key K in both M1 and M2 the diff over its field (ignoring other keys) is:
 %%
 %% M1 \ M2    | #{K := V} | #{K => V}
