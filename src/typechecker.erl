@@ -1051,7 +1051,7 @@ expect_list_union([], AccTy, AccCs, _NoAny, _N, _TEnv) ->
 infer_literal_string("") ->
     type(nil);
 infer_literal_string(Str) ->
-    SortedChars = ?assert_type(lists:usort(Str), [A, ...]),
+    SortedChars = ?assert_type(lists:usort(Str), [char(), ...]),
     if length(SortedChars) =< 10 ->
             %% heuristics: if there are not more than 10 different characters
             %% list them explicitely as singleton types
