@@ -92,7 +92,7 @@ print_usage() ->
     io:format("       --fancy                   - Use fancy error messages when possible (on by default)~n"),
     io:format("       --no_fancy                - Don't use fancy error messages.~n"),
     io:format("       --union_size_limit        - Performance hack: Unions larger than this value~n"),
-    io:format("                                   are replaced by any() in normalization.").
+    io:format("                                   are replaced by any() in normalization (default: 30)~n").
 
 -spec parse_opts([string()], gradualizer:options()) -> {[string()], gradualizer:options()}.
 parse_opts([], Opts) ->
