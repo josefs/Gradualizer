@@ -23,3 +23,6 @@ jobs:
         run: "make"
       - name: "Run tests"
         run: "make tests"
+      - name: "Self-gradualize"
+        run: "make gradualize"
+        continue-on-error: true
