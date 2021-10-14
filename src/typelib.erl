@@ -155,6 +155,7 @@ annotate_user_types(Filename, Types) when is_list(Types) ->
 annotate_user_types(_Filename, Type) ->
     Type.
 
+-spec get_module_from_annotation(erl_anno:anno()) -> {ok, module()} | none.
 get_module_from_annotation(Anno) ->
     case erl_anno:file(Anno) of
         File when is_list(File) ->
