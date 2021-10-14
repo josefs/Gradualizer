@@ -759,10 +759,10 @@ normalize_rec({type, _, union, Tys}, Env, Unfolded) ->
         Ts  -> type(union, Ts)
     end;
 normalize_rec({user_type, P, Name, Args} = Type, Env, Unfolded) ->
-    case sets:is_element({P,Name}, Unfolded) of
+    case sets:is_element(mta(Type, Env), Unfolded) of
         true -> Type;
         false ->
-            UnfoldedNew = sets:add_element({P, Name}, Unfolded),
+            UnfoldedNew = sets:add_element(mta(Type, Env), Unfolded),
             case gradualizer_lib:get_type_definition(Type, Env, []) of
                 {ok, T} ->
                     normalize_rec(typelib:remove_pos(T), Env, UnfoldedNew);
