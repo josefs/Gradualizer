@@ -488,7 +488,7 @@ glb(T1, T2, A, Env) ->
                 false ->
                     Ty1 = typelib:remove_pos(normalize(T1, Env)),
                     Ty2 = typelib:remove_pos(normalize(T2, Env)),
-                    {Ty, Cs} = glb_ty(Ty1, Ty2, A#{ {Ty1, Ty2} => 0 }, Env),
+                    {Ty, Cs} = glb_ty(Ty1, Ty2, A#{ {T1, T2} => 0 }, Env),
                     NormTy = normalize(Ty, Env),
                     gradualizer_cache:store_glb(Module, T1, T2, {NormTy, Cs}),
                     {NormTy, Cs};
@@ -537,10 +537,10 @@ glb_ty(Ty1, Var = {var, _, _}, _A, _Env) ->
 
 %% Union types: glb distributes over unions
 glb_ty({type, Ann, union, Ty1s}, Ty2, A, Env) ->
-    {Tys, Css} = lists:unzip([ glb_ty(Ty1, Ty2, A, Env) || Ty1 <- Ty1s ]),
+    {Tys, Css} = lists:unzip([ glb(Ty1, Ty2, A, Env) || Ty1 <- Ty1s ]),
     {{type, Ann, union, Tys}, constraints:combine(Css)};
 glb_ty(Ty1, {type, Ann, union, Ty2s}, A, Env) ->
-    {Tys, Css} = lists:unzip([glb_ty(Ty1, Ty2, A, Env) || Ty2 <- Ty2s ]),
+    {Tys, Css} = lists:unzip([glb(Ty1, Ty2, A, Env) || Ty2 <- Ty2s ]),
     {{type, Ann, union, Tys}, constraints:combine(Css)};
 
 %% Atom types
@@ -705,10 +705,10 @@ glb_ty({type, _, 'fun', [{type, _, any} = Any, Res1]},
 
 glb_ty({type, _, 'fun', [{type, _, any}, Res1]},
        {type, _, 'fun', [{type, _, product, _} = TArgs2, _]} = T2, A, Env) ->
-    glb_ty(type('fun', [TArgs2, Res1]), T2, A, Env);
+    glb(type('fun', [TArgs2, Res1]), T2, A, Env);
 glb_ty({type, _, 'fun', [{type, _, product, _} = TArgs1, _]} = T1,
        {type, _, 'fun', [{type, _, any}, Res2]}, A, Env) ->
-    glb_ty(T1, type('fun', [TArgs1, Res2]), A, Env);
+    glb(T1, type('fun', [TArgs1, Res2]), A, Env);
 
 %% normalize and remove_pos only does the top layer
 glb_ty({type, _, Name, Args1}, {type, _, Name, Args2}, A, Env)
