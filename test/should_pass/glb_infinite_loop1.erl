@@ -1,5 +1,10 @@
 -module(glb_infinite_loop1).
 
+%% This module is a minimised version of src/gradualizer_fmt.erl.
+%% Self-gradualising the above triggered an infinite loop in typechecker:glb/4.
+%% This is a regression test against that.
+%% See https://github.com/josefs/Gradualizer/pull/356.
+
 %% The default is too low to trigger the problem,
 %% exactly to avoid the problem in everyday use.
 -gradualizer([{union_size_limit, 1000}]).
