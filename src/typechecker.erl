@@ -3734,14 +3734,14 @@ refinable(?type(nil), _Env, _Trace) ->
 refinable(?type(Name, Tys) = Ty0, Env, Trace)
   when (tuple =:= Name orelse union =:= Name)
    and is_list(Tys) ->
-    case stop_refinable_recursion(Ty0, Trace) of
+    case stop_refinable_recursion(Ty0, Env, Trace) of
         stop ->
             true;
         {proceed, NewTrace} ->
             lists:all(fun (Ty) -> refinable(Ty, Env, NewTrace) end, Tys)
     end;
 refinable(?type(record, [_ | Fields]) = Ty0, Env, Trace) ->
-    case stop_refinable_recursion(Ty0, Trace) of
+    case stop_refinable_recursion(Ty0, Env, Trace) of
         stop ->
             true;
         {proceed, NewTrace} ->
@@ -3753,7 +3753,7 @@ refinable(?type(map, _) = Ty0, Env, Trace) ->
     %%       still present sometimes slip through.
     %%       This later causes an assertion failure in has_overlapping_keys -> ... -> compat.
     ?type(map, Assocs) = Ty = typelib:remove_pos(normalize(Ty0, Env)),
-    case stop_refinable_recursion(Ty, Trace) of
+    case stop_refinable_recursion(Ty, Env, Trace) of
         stop -> true;
         {proceed, NewTrace} ->
             case has_overlapping_keys(Ty, Env) of
@@ -3775,7 +3775,7 @@ refinable(?type(string), _Env, _Trace) ->
 refinable(?type(list, [?type(char)]), _Env, _Trace) ->
     true;
 refinable(?type(list, [ElemTy]) = Ty, Env, Trace) ->
-    case stop_refinable_recursion(Ty, Trace) of
+    case stop_refinable_recursion(Ty, Env, Trace) of
         stop -> true;
         {proceed, NewTrace} ->
             refinable(ElemTy, Env, NewTrace)
@@ -3786,7 +3786,7 @@ refinable(?top(), _Env, _Trace) ->
     false;
 refinable(RefinableTy, Env, Trace)
   when element(1, RefinableTy) =:= remote_type; element(1, RefinableTy) =:= user_type ->
-    case stop_refinable_recursion(RefinableTy, Trace) of
+    case stop_refinable_recursion(RefinableTy, Env, Trace) of
         stop -> true;
         {proceed, NewTrace} ->
             case gradualizer_lib:get_type_definition(RefinableTy, Env, [annotate_user_types]) of
@@ -3802,12 +3802,23 @@ refinable(_, _, _) ->
 %% reached this recursive type again (that is, it's found in `Trace').
 %% We assume it's refinable to terminate recursion.
 %% Refinability will be determined by the variants which are not (mutually) recursive.
--spec stop_refinable_recursion(_, _) -> stop | {proceed, sets:set()}.
-stop_refinable_recursion(RefinableTy, Trace) ->
-    case sets:is_element(RefinableTy, Trace) of
+-spec stop_refinable_recursion(_, env(), _) -> stop | {proceed, sets:set()}.
+stop_refinable_recursion(RefinableTy, Env, Trace) ->
+    MTA = mta(RefinableTy, Env),
+    case sets:is_element(MTA, Trace) of
         true -> stop;
-        false -> {proceed, sets:add_element(RefinableTy, Trace)}
+        false -> {proceed, sets:add_element(MTA, Trace)}
     end.
+
+-spec mta(type(), env()) -> {module(), atom(), non_neg_integer()} | type().
+mta({user_type, Anno, Name, Args}, Env) ->
+    Module = case typelib:get_module_from_annotation(Anno) of
+                 none -> maps:get(module, Env#env.tenv);
+                 {ok, M} -> M
+             end,
+    {Module, Name, length(Args)};
+mta(Type, _Env) ->
+    Type.
 
 no_guards({clause, _, _, Guards, _}) ->
     Guards == [].
