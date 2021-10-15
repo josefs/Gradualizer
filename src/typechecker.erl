@@ -3356,7 +3356,7 @@ check_clauses(Env, any, ResTy, [{clause, _, Args, _, _} | _] = Clauses, Caps) ->
     %% 'any' is the ... in the type fun((...) -> ResTy)
     ArgsTy = lists:duplicate(length(Args), type(any)),
     check_clauses(Env, ArgsTy, ResTy, Clauses, Caps);
-check_clauses(Env = #env{tenv = TEnv}, ArgsTy, ResTy, Clauses, Caps) ->
+check_clauses(Env, ArgsTy, ResTy, Clauses, Caps) ->
     %% Clauses for if, case, functions, receive, etc.
     {VarBindsList, Css, RefinedArgsTy, _VEnvJunk} =
         lists:foldl(fun (Clause, {VBs, Css, RefinedArgsTy, VEnvIn}) ->
@@ -3372,14 +3372,14 @@ check_clauses(Env = #env{tenv = TEnv}, ArgsTy, ResTy, Clauses, Caps) ->
     % Checking for exhaustive pattern matching
     check_exhaustiveness(Env, ArgsTy, Clauses, RefinedArgsTy, VarBindsList, Css).
 
-check_exhaustiveness(Env = #env{tenv = TEnv}, ArgsTy, Clauses, RefinedArgsTy, VarBindsList, Css) ->
+check_exhaustiveness(Env, ArgsTy, Clauses, RefinedArgsTy, VarBindsList, Css) ->
     case {Env#env.exhaust,
           ArgsTy =/= any andalso lists:all(fun (Ty) -> refinable(Ty, Env) end, ArgsTy),
           lists:all(fun no_guards/1, Clauses),
           is_list(RefinedArgsTy) andalso lists:any(fun (T) -> T =/= type(none) end, RefinedArgsTy)} of
         {true, true, true, true} ->
             [{clause, P, _, _, _}|_] = Clauses,
-            throw({nonexhaustive, P, gradualizer_lib:pick_value(RefinedArgsTy, TEnv)});
+            throw({nonexhaustive, P, gradualizer_lib:pick_value(RefinedArgsTy, Env)});
         _ ->
             ok
     end,
