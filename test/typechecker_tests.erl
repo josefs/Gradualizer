@@ -305,8 +305,8 @@ unfold_bounded_type_test() ->
         "fun(([{A, B}]) -> {[A], [B]})",
 
     {attribute, _, spec, {{unzip, 1}, [BoundedFun]}} = merl:quote(OrigSpecStr),
-    TEnv = gradualizer_lib:create_tenv(?MODULE, [], []),
-    UnfoldedType = typechecker:unfold_bounded_type(TEnv, BoundedFun),
+    Env = #env{tenv = gradualizer_lib:create_tenv(?MODULE, [], [])},
+    UnfoldedType = typechecker:unfold_bounded_type(Env, BoundedFun),
     UnfoldedTypeStr = typelib:pp_type(UnfoldedType),
     ?assertEqual(ExpectedTypeStr, UnfoldedTypeStr).
 
