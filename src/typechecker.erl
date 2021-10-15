@@ -45,9 +45,11 @@
         end).
 
 -type tenv() :: gradualizer_lib:tenv().
+-type venv() :: map().
 
 -export_type([typed_record_field/0]).
 
+-type expr() :: gradualizer_type:abstract_expr().
 -type type() :: gradualizer_type:abstract_type().
 
 %% Pattern macros
@@ -936,7 +938,8 @@ negate_num_type({type, P, union, Tys}) ->
     %% The incoming union type must be already normalized so it shouldn't
     %% contain any unresolved types. So it is ok to normalize the result with an
     %% empty TEnv.
-    normalize({type, P, union, [negate_num_type(Ty)||Ty <- Tys]}, gradualizer_lib:empty_tenv());
+    normalize({type, P, union, [negate_num_type(Ty)||Ty <- Tys]},
+              #env{tenv = gradualizer_lib:empty_tenv()});
 negate_num_type(None = {type, _, none, []}) ->
     None;
 negate_num_type(RangeTy) ->
@@ -1185,16 +1188,18 @@ allow_empty_list(Ty) ->
 %% Categorizes a function type.
 %% Normalizes the type (expand user-def and remote types). Errors for non-fun
 %% types are returned with the original non-normalized type.
--spec expect_fun_type(#env{}, type()) -> fun_ty() | {type_error, type()}.
+%% TODO: move tenv to back
+-spec expect_fun_type(env(), type()) -> fun_ty() | {type_error, type()}.
 expect_fun_type(Env, Type) ->
-    case expect_fun_type1(Env, normalize(Type, Env#env.tenv)) of
+    case expect_fun_type1(Env, normalize(Type, Env)) of
         type_error -> {type_error, Type};
         Other -> Other
     end.
 
--spec expect_fun_type1(#env{}, type()) -> fun_ty() | type_error.
+%% TODO: move tenv to back
+-spec expect_fun_type1(env(), type()) -> fun_ty() | type_error.
 expect_fun_type1(Env, BTy = {type, _, bounded_fun, [Ft, _Fc]}) ->
-    Sub = bounded_type_subst(Env#env.tenv, BTy),
+    Sub = bounded_type_subst(Env, BTy),
     case expect_fun_type1(Env, Ft) of
         {fun_ty, ArgsTy, ResTy, Cs} ->
             {fun_ty, subst_ty(Sub, ArgsTy), subst_ty(Sub, ResTy), Cs};
@@ -1280,7 +1285,8 @@ expect_fun_type_union(Env, [Ty|Tys]) ->
     TypeError :: {type_error, type()}.
 expect_record_type({user_type, _, record, []}, _Record, _Env) ->
     any;
-expect_record_type({type, _, record, [{atom, _, Name}|RefinedTypes]}, Record, #{records := REnv}) when Name =:= Record ->
+expect_record_type({type, _, record, [{atom, _, Name}|RefinedTypes]}, Record, Env) when Name =:= Record ->
+    #env{tenv = #{records := REnv}} = Env,
     case REnv of
         #{Record := Fields} ->
             Tys =
@@ -1355,7 +1361,7 @@ bounded_type_list_to_type(Env, Types) ->
     end.
 
 %% TODO: move tenv to back
--spec unfold_bounded_type_list(env(), [type()]) -> type().
+-spec unfold_bounded_type_list(env(), [type()]) -> [type()].
 unfold_bounded_type_list(Env, Types) when is_list(Types) ->
     [ unfold_bounded_type(Env, Ty) || Ty <- Types ].
 
@@ -1383,22 +1389,22 @@ bounded_type_subst(Env, BTy = {type, P, bounded_fun, [_, Bounds]}) ->
 -spec solve_bounds(env(), [type()]) -> #{ atom() := type() }.
 solve_bounds(Env, Cs) ->
     Defs = [ {X, T} || {type, _, constraint, [{atom, _, is_subtype}, [{var, _, X}, T]]} <- Cs ],
-    Env  = lists:foldl(fun
-                           ({_, ?type(any)}, E) ->
-                               E; % Ignore constraint X :: any()
-                           ({_, ?type(term)}, E) ->
-                               E; % Ignore constraint X :: term()
-                           ({_, ?top()}, E) ->
-                               E; % Ignore constraint X :: gradualizer:top()
-                           ({X, T}, E) ->
-                               maps:update_with(X,
-                                                fun(Ts) -> [T | Ts] end,
-                                                [T],
-                                                E)
-                       end, #{}, Defs),
-    DepG = maps:map(fun(_, T) -> maps:keys(free_vars(T)) end, Env),
+    DefEnv  = lists:foldl(fun
+                              ({_, ?type(any)}, E) ->
+                                  E; % Ignore constraint X :: any()
+                              ({_, ?type(term)}, E) ->
+                                  E; % Ignore constraint X :: term()
+                              ({_, ?top()}, E) ->
+                                  E; % Ignore constraint X :: gradualizer:top()
+                              ({X, T}, E) ->
+                                  maps:update_with(X,
+                                                   fun(Ts) -> [T | Ts] end,
+                                                   [T],
+                                                   E)
+                          end, #{}, Defs),
+    DepG = maps:map(fun(_, T) -> maps:keys(free_vars(T)) end, DefEnv),
     SCCs = gradualizer_lib:top_sort(DepG),
-    solve_bounds(Env, Env, SCCs, #{}).
+    solve_bounds(Env, DefEnv, SCCs, #{}).
 
 %% TODO: move tenv to back
 -spec solve_bounds(env(), _, _, _) -> #{ atom() := type() }.
@@ -1460,13 +1466,15 @@ subst_ty(_, Ty) -> Ty.
 %% and the expression to type check.
 %% Returns the type of the expression, a collection of variables bound in
 %% the expression together with their type and constraints.
-%-spec type_check_expr(#env, any()) -> { any(), #{ any() => any()}, #{ any() => any()} }.
+-spec type_check_expr(env(), expr()) -> {any(), map(), constraints:constraints()}.
 type_check_expr(Env, Expr) ->
     Res = {Ty, _VarBinds, _Cs} = do_type_check_expr(Env, Expr),
     ?verbose(Env, "~sPropagated type of ~ts :: ~ts~n",
              [gradualizer_fmt:format_location(Expr, brief), erl_prettypr:format(Expr), typelib:pp_type(Ty)]),
     Res.
 
+%% TODO: move tenv to back
+-spec do_type_check_expr(env(), expr()) -> {any(), map(), constraints:constraints()}.
 do_type_check_expr(Env, {var, P, Var}) ->
     case Env#env.venv of
         #{Var := Ty} ->
@@ -1476,7 +1484,7 @@ do_type_check_expr(Env, {var, P, Var}) ->
     end;
 do_type_check_expr(Env, {match, _, Pat, Expr}) ->
     {Ty, VarBinds, Cs} = type_check_expr(Env, Expr),
-    NormTy = normalize(Ty, Env#env.tenv),
+    NormTy = normalize(Ty, Env),
     {[_PatTy], [UBoundNorm], Env2, Cs2} =
             ?throw_orig_type(add_types_pats([Pat], [NormTy], Env#env.tenv, VarBinds, capture_vars),
                              Ty, NormTy),
@@ -1831,6 +1839,7 @@ do_type_check_expr(Env, {'try', _, Block, CaseCs, CatchCs, AfterBlock}) ->
     ,constraints:combine([Cs1,Cs2,Cs3,Cs4])}.
 
 %% Helper for type_check_expr for funs
+-spec type_check_fun(env(), _) -> _.
 type_check_fun(Env, Clauses) ->
     %% TODO: Infer the types of the parameters in each clause. A potential way
     %% to improve the inference for function arguments would be to give them a
@@ -1862,9 +1871,13 @@ create_fun_type(Arity, RetTy) when is_integer(Arity) ->
     ParTys = lists:duplicate(Arity, type(any)),
     type('fun', [type(product, ParTys), RetTy]).
 
+%% TODO: move tenv to back
+-spec type_check_fields_for_update(env(), _, _) -> _.
 type_check_fields_for_update(Env, Rec, Fields) ->
     type_check_fields(Env, Rec, Fields, should_not_be_inspected).
 
+%% TODO: move tenv to back
+-spec type_check_fields(env(), _, _) -> _.
 type_check_fields(Env, Rec, Fields) ->
     UnAssignedFields = get_unassigned_fields(Fields, Rec),
     type_check_fields(Env, Rec, Fields, UnAssignedFields).
@@ -1877,12 +1890,14 @@ type_check_fields(Env, Rec, Fields) ->
 %%      In the case of having a default value: putting the default value
 %%      In the case of not having a default value: that it supports `undefined`
 %% 5. If case 2 was absent, we have type checked all the unassigned fields.
+%% TODO: move tenv to back
+-spec type_check_fields(env(), _, _, _) -> {venv(), constraints:constraints()}.
 type_check_fields(Env, TypedRecFields, [{record_field, _, {atom, _, _} = FieldWithAnno, Expr} | Fields]
                  ,UnAssignedFields) ->
     FieldTy = get_rec_field_type(FieldWithAnno, TypedRecFields),
     {VB1, Cs1} = type_check_expr_in(Env, FieldTy, Expr),
     {VB2, Cs2} = type_check_fields(Env, TypedRecFields, Fields, UnAssignedFields),
-    {union_var_binds(VB1, VB2, Env#env.tenv), constraints:combine(Cs1,Cs2)};
+    {union_var_binds(VB1, VB2, Env), constraints:combine(Cs1,Cs2)};
 type_check_fields(Env, TypedRecFields, [{record_field, _, {var, _, '_'}, Expr} | _Fields]
                  ,UnAssignedFields) ->
     {VB1, Cs1} = type_check_fields(Env, TypedRecFields
@@ -4341,15 +4356,15 @@ add_type_pat_map_key(_Key, [], _Env, _VEnv) ->
     %% Key is not defined in this map type.
     error.
 
--spec add_any_types_pats([gradualizer_type:abstract_pattern()], VEnv :: map()) ->
+-spec add_any_types_pats([gradualizer_type:abstract_pattern()], VEnv :: venv()) ->
                              NewVEnv :: map().
 add_any_types_pats([], VEnv) ->
     VEnv;
 add_any_types_pats([Pat|Pats], VEnv) ->
     add_any_types_pats(Pats, add_any_types_pat(Pat, VEnv)).
 
--spec add_any_types_pat(gradualizer_type:abstract_pattern(), VEnv :: map()) ->
-                            NewVEnv :: map().
+-spec add_any_types_pat(gradualizer_type:abstract_pattern(), VEnv :: venv()) ->
+                            NewVEnv :: venv().
 add_any_types_pat({atom, _, _}, VEnv) ->
     VEnv;
 add_any_types_pat({integer, _, _}, VEnv) ->
@@ -4615,14 +4630,14 @@ union_var_binds_symmetrical_help([VB1, VB2 | Rest], Lub) ->
     union_var_binds_symmetrical_help([VB | Rest], Lub);
 union_var_binds_symmetrical_help([VB], _) ->  VB.
 
--spec union_var_binds(_, _, env()) -> any().
+-spec union_var_binds(venv(), venv(), env()) -> venv().
 union_var_binds(VB1, VB2, Env) ->
     union_var_binds([VB1, VB2], Env).
 
 %% This function has been identified as a bottleneck.
 %% Without tail recursion, the gradualizer would hang when self-gradualizing
 %% when called from add_type_pat/4, the clause where the type is a union type.
--spec union_var_binds(_, env()) -> any().
+-spec union_var_binds([venv()], env()) -> venv().
 union_var_binds([], _) ->
     #{};
 union_var_binds(VarBindsList, Env) ->
@@ -4631,12 +4646,13 @@ union_var_binds(VarBindsList, Env) ->
     union_var_binds_help(VarBindsList, Glb).
 
 %% Tail recursive helper.
+-spec union_var_binds_help([venv()], _) -> venv().
 union_var_binds_help([VB1, VB2 | Rest], Glb) ->
     VB = gradualizer_lib:merge_with(Glb, VB1, VB2),
     union_var_binds_help([VB | Rest], Glb);
 union_var_binds_help([VB], _) -> VB.
 
--spec add_var_binds(_, _, env()) -> map().
+-spec add_var_binds(venv(), _, env()) -> venv().
 add_var_binds(VEnv, VarBinds, Env) ->
     % TODO: Don't drop the constraints
     Glb = fun(_K, Ty1, Ty2) -> {Ty, _C} = glb(Ty1, Ty2, Env), Ty end,
