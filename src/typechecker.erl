@@ -81,21 +81,26 @@
                                 Type :: type()}.
 
 %% The environment passed around during typechecking.
--record(env, { fenv     = #{}
-             , imported = #{}   :: #{{atom(), arity()} => module()}
-             , venv     = #{}
-             , tenv             :: tenv()
-             , infer    = false :: boolean()
-             , verbose  = false :: boolean()
-             , exhaust  = true  :: boolean()
-             %, tyvenv  = #{}
+-record(env, {fenv     = #{},
+              imported = #{}   :: #{{atom(), arity()} => module()},
+              venv     = #{},
+              tenv             :: tenv(),
+              infer    = false :: boolean(),
+              verbose  = false :: boolean(),
+              exhaust  = true  :: boolean()
+              %, tyvenv  = #{}
              }).
--type env() :: #env{ imported :: #{{atom(), arity()} => module()}
-                   , tenv     :: tenv()
-                   , infer    :: boolean()
-                   , verbose  :: boolean()
-                   , exhaust  :: boolean()
-                   }.
+%% TODO: this should be investigated:
+%%       Making the type def and record def have the same number of fields fixes a broken Gradualizer
+%%       diagnostic, which seems to assume the record only has the
+%%       fields annotated in the type, not all the fields from the definition.
+-type env() :: #env{ fenv     :: map(),
+                     imported :: #{{atom(), arity()} => module()},
+                     venv     :: map(),
+                     tenv     :: tenv(),
+                     infer    :: boolean(),
+                     verbose  :: boolean(),
+                     exhaust  :: boolean() }.
 
 -include("gradualizer.hrl").
 
