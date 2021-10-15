@@ -102,7 +102,7 @@
 -type compatible() :: {true, constraints:constraints()} | false.
 
 %% Two types are compatible if one is a subtype of the other, or both.
--spec compatible(type(), type(), tenv()) -> compatible().
+-spec compatible(type(), type(), env()) -> compatible().
 compatible(Ty1, Ty2, TEnv) ->
     case {subtype(Ty1, Ty2, TEnv), subtype(Ty2, Ty1, TEnv)} of
         {{true, C1}, {true, C2}} ->
@@ -121,7 +121,7 @@ compatible(Ty1, Ty2, TEnv) ->
 
 %% The first argument is a "compatible subtype" of the second.
 
--spec subtype(type(), type(), tenv()) -> compatible().
+-spec subtype(type(), type(), env()) -> compatible().
 subtype(Ty1, Ty2, TEnv) ->
     try compat(Ty1, Ty2, sets:new(), TEnv) of
         {_Memoization, Constraints} ->
@@ -133,7 +133,7 @@ subtype(Ty1, Ty2, TEnv) ->
 
 %% Check if at least on of the types in a list is a subtype of a type.
 %% Used when checking intersection types.
--spec any_subtype(_, _, tenv()) -> compatible().
+-spec any_subtype(_, _, env()) -> compatible().
 any_subtype([], _Ty, _TEnv) ->
     false;
 any_subtype([Ty1|Tys], Ty, TEnv) ->
@@ -154,7 +154,7 @@ any_subtype([Ty1|Tys], Ty, TEnv) ->
 %% The main entry point is compat and all recursive calls should go via compat.
 %% The function compat_ty is just a convenience function to be able to
 %% pattern match on types in a nice way.
--spec compat(type(), type(), sets:set(_), tenv()) -> compat_acc().
+-spec compat(type(), type(), sets:set(_), env()) -> compat_acc().
 compat(T1, T2, A, TEnv) ->
     ?assert_normalized_anno(T1),
     ?assert_normalized_anno(T2),
@@ -167,7 +167,7 @@ compat(T1, T2, A, TEnv) ->
             compat_ty(Ty1, Ty2, sets:add_element({Ty1, Ty2}, A), TEnv)
     end.
 
--spec compat_ty(type(), type(), sets:set(_), tenv()) -> compat_acc().
+-spec compat_ty(type(), type(), sets:set(_), env()) -> compat_acc().
 %% any() and term() are used as the unknown type in the gradual type system
 compat_ty({type, _, any, []}, _, A, _TEnv) ->
     ret(A);
@@ -347,7 +347,7 @@ compat_ty({user_type, Anno, Name, Args1}, {user_type, Anno, Name, Args2}, A, TEn
 compat_ty(_Ty1, _Ty2, _, _) ->
     throw(nomatch).
 
--spec compat_tys([type()], [type()], sets:set(_), tenv()) -> compat_acc().
+-spec compat_tys([type()], [type()], sets:set(_), env()) -> compat_acc().
 compat_tys([], [], A, _TEnv) ->
     ret(A);
 compat_tys([Ty1|Tys1], [Ty2|Tys2], A, TEnv) ->
@@ -359,7 +359,7 @@ compat_tys(_Tys1, _Tys2, _, _) ->
     throw(nomatch).
 
 
--spec compat_record_tys([type()], [type()], sets:set(_), tenv()) -> compat_acc().
+-spec compat_record_tys([type()], [type()], sets:set(_), env()) -> compat_acc().
 compat_record_tys([], [], A, _TEnv) ->
     ret(A);
 compat_record_tys([?type_field_type(Name, Field1)|Fields1], [?type_field_type(Name, Field2)|Fields2], A, TEnv) ->
@@ -372,7 +372,7 @@ compat_record_tys(_, _, _, _) ->
 
 %% Two records are compatible if they have the same name (defined in different
 %% modules) and they have the same number of fields and the field types match.
--spec compat_record_fields([_], [_], sets:set(_), tenv()) -> compat_acc().
+-spec compat_record_fields([_], [_], sets:set(_), env()) -> compat_acc().
 compat_record_fields([], [], A, _TEnv) ->
     ret(A);
 compat_record_fields([{typed_record_field, _NameAndDefaultValue1, T1} | Fs1],
@@ -392,7 +392,7 @@ compat_record_fields(_, _, _, _) ->
 ret(A) ->
     {A, constraints:empty()}.
 
--spec any_type(type(), [type()], sets:set(_), tenv()) -> compat_acc().
+-spec any_type(type(), [type()], sets:set(_), env()) -> compat_acc().
 any_type(_Ty, [], _A, _TEnv) ->
     throw(nomatch);
 any_type(Ty, [Ty1|Tys], A, TEnv) ->
@@ -406,11 +406,11 @@ any_type(Ty, [Ty1|Tys], A, TEnv) ->
 %% @doc All types in `Tys' must be compatible with `Ty'.
 %% Returns all the gather memoizations and constraints.
 %% Does not return (throws `nomatch') if any of the types is not compatible.
--spec all_type([type()], type(), sets:set(_), tenv()) -> compat_acc().
+-spec all_type([type()], type(), sets:set(_), env()) -> compat_acc().
 all_type(Tys, Ty, A, TEnv) ->
     all_type(Tys, Ty, A, [], TEnv).
 
--spec all_type([type()], type(), sets:set(_), [constraints:constraints()], tenv()) -> compat_acc().
+-spec all_type([type()], type(), sets:set(_), [constraints:constraints()], env()) -> compat_acc().
 all_type([], _Ty, A, Css, _TEnv) ->
     {A, constraints:combine(Css)};
 all_type([Ty1|Tys], Ty, AIn, Css, TEnv) ->
@@ -422,7 +422,7 @@ all_type([Ty1|Tys], Ty, AIn, Css, TEnv) ->
 %% it belongs if a filename is included in the Anno.
 -spec get_maybe_remote_record_fields(RecName :: atom(),
                                      Anno    :: erl_anno:anno(),
-                                     TEnv    :: tenv()) ->
+                                     TEnv    :: env()) ->
                                             [{typed_record_field, _, type()}].
 get_maybe_remote_record_fields(RecName, Anno, TEnv) ->
     case typelib:get_module_from_annotation(Anno) of
@@ -444,7 +444,7 @@ get_maybe_remote_record_fields(RecName, Anno, TEnv) ->
 %% fields.
 -spec get_record_fields(RecName :: atom(),
                         Anno    :: erl_anno:anno(),
-                        TEnv    :: tenv()) ->
+                        TEnv    :: env()) ->
                                [{typed_record_field, _, _}].
 get_record_fields(RecName, Anno, #{records := REnv}) ->
     case REnv of
@@ -462,11 +462,11 @@ get_record_fields(RecName, Anno, #{records := REnv}) ->
 
 -type glb_acc() :: acc(type()).
 
--spec glb(type(), type(), tenv()) -> glb_acc().
+-spec glb(type(), type(), env()) -> glb_acc().
 glb(T1, T2, TEnv) ->
     glb(T1, T2, #{}, TEnv).
 
--spec glb([type()], tenv()) -> glb_acc().
+-spec glb([type()], env()) -> glb_acc().
 glb(Ts, TEnv) ->
     lists:foldl(fun (T, {TyAcc, Cs1}) ->
                         {Ty, Cs2} = glb(T, TyAcc, TEnv),
@@ -475,7 +475,7 @@ glb(Ts, TEnv) ->
                 {top(), constraints:empty()},
                 Ts).
 
--spec glb(type(), type(), map(), tenv()) -> glb_acc().
+-spec glb(type(), type(), map(), env()) -> glb_acc().
 glb(T1, T2, A, TEnv) ->
     case maps:is_key({T1, T2}, A) of
         %% If we hit a recursive case we approximate with none(). Conceivably
@@ -498,7 +498,7 @@ glb(T1, T2, A, TEnv) ->
             end
     end.
 
--spec glb_ty(type(), type(), map(), tenv()) -> glb_acc().
+-spec glb_ty(type(), type(), map(), env()) -> glb_acc().
 %% none() is the bottom of the hierarchy
 glb_ty({type, _, none, []} = Ty1, _Ty2, _A, _TEnv) ->
     ret(Ty1);
@@ -719,7 +719,7 @@ glb_ty({type, _, Name, Args1}, {type, _, Name, Args2}, A, TEnv)
 %% Incompatible
 glb_ty(_Ty1, _Ty2, _A, _TEnv) -> {type(none), constraints:empty()}.
 
--spec has_overlapping_keys(type(), tenv()) -> boolean().
+-spec has_overlapping_keys(type(), env()) -> boolean().
 has_overlapping_keys({type, _, map, Assocs}, TEnv) ->
     Cart = [ case {subtype(As1, As2, TEnv), subtype(As2, As1, TEnv)} of
                  {false, false} ->
@@ -736,7 +736,7 @@ has_overlapping_keys({type, _, map, Assocs}, TEnv) ->
 %% * Expand user-defined and remote types on head level (except opaque types)
 %% * Replace built-in type synonyms
 %% * Flatten unions and merge overlapping types (e.g. ranges) in unions
--spec normalize(type(), tenv()) -> type().
+-spec normalize(type(), env()) -> type().
 normalize({type, _, record, [{atom, _, Name}|Fields]}, TEnv) when length(Fields) > 0 ->
     NormFields = [type_field_type(FieldName, normalize(Type, TEnv))
         || ?type_field_type(FieldName, Type) <- Fields],
@@ -871,11 +871,11 @@ expand_builtin_aliases(Type) ->
 %% * Remove subtypes of other types in the same union; keeping any() separate
 %% * Merge integer types, including singleton integers and ranges
 %%   1, 1..5, integer(), non_neg_integer(), pos_integer(), neg_integer()
--spec flatten_unions([type()], tenv()) -> [type()].
+-spec flatten_unions([type()], env()) -> [type()].
 flatten_unions(Tys, TEnv) ->
     [ FTy || Ty <- Tys, FTy <- flatten_type(normalize(Ty, TEnv), TEnv) ].
 
--spec flatten_type(type(), tenv()) -> [type()].
+-spec flatten_type(type(), env()) -> [type()].
 flatten_type({type, _, none, []}, _) ->
     [];
 flatten_type({type, _, union, Tys}, TEnv) ->
@@ -886,7 +886,7 @@ flatten_type(Ty, _TEnv) ->
 %% Merges overlapping integer types (including ranges and singletons).
 %% (TODO) Removes all types that are subtypes of other types in the same union.
 %% Retuns a list of disjoint types.
--spec merge_union_types([type()], tenv()) -> [type()].
+-spec merge_union_types([type()], env()) -> [type()].
 merge_union_types(Types, _TEnv) ->
     case lists:any(fun (?top()) -> true; (_) -> false end, Types) of
         true ->
@@ -996,7 +996,7 @@ from_list_view({Empty, Elem, Term}) ->
 %% its type parameter. One example is the list type, and there are
 %% cases where we need to get the type of the elements.
 
--spec expect_list_type(type(), allow_nil_type | dont_allow_nil_type, tenv()) ->
+-spec expect_list_type(type(), allow_nil_type | dont_allow_nil_type, env()) ->
           {elem_ty,  type(),   constraints:constraints()}    %% There is exactly one element type
         | {elem_tys, [type()], constraints:constraints()}  %% A union can give rise to multiple elem types
         | any                   %% If we don't know the element type
@@ -1050,7 +1050,7 @@ rewrite_list_to_nonempty_list(?top()) ->
 rewrite_list_to_nonempty_list({var, _, _} = Var) ->
     Var.
 
--spec expect_list_union([type()], _, constraints:constraints(), _, _, tenv()) -> any().
+-spec expect_list_union([type()], _, constraints:constraints(), _, _, env()) -> any().
 expect_list_union([Ty|Tys], AccTy, AccCs, Any, N, TEnv) ->
     case expect_list_type(normalize(Ty, TEnv), N, TEnv) of
         {type_error, _} ->
@@ -1268,7 +1268,7 @@ expect_fun_type_union(Env, [Ty|Tys]) ->
             [TyOut | expect_fun_type_union(Env, Tys)]
     end.
 
--spec expect_record_type(type(), atom(), tenv()) -> Any | FieldsTy | FieldsTys | TypeError when
+-spec expect_record_type(type(), atom(), env()) -> Any | FieldsTy | FieldsTys | TypeError when
     Any :: any,
     FieldsTy :: {fields_ty, [typed_record_field()], constraints:constraints()},
     FieldsTys :: {fields_tys, [[typed_record_field()]], constraints:constraints()},
@@ -1342,7 +1342,7 @@ new_type_var() ->
     "_TyVar" ++ integer_to_list(I).
 
 %% TODO: move tenv to back
--spec bounded_type_list_to_type(tenv(), [type()]) -> type().
+-spec bounded_type_list_to_type(env(), [type()]) -> type().
 bounded_type_list_to_type(TEnv, Types) ->
     case unfold_bounded_type_list(TEnv, Types) of
         [Ty] -> Ty;
@@ -1350,7 +1350,7 @@ bounded_type_list_to_type(TEnv, Types) ->
     end.
 
 %% TODO: move tenv to back
--spec unfold_bounded_type_list(tenv(), [type()]) -> type().
+-spec unfold_bounded_type_list(env(), [type()]) -> type().
 unfold_bounded_type_list(TEnv, Types) when is_list(Types) ->
     [ unfold_bounded_type(TEnv, Ty) || Ty <- Types ].
 
@@ -1358,14 +1358,14 @@ unfold_bounded_type_list(TEnv, Types) when is_list(Types) ->
 %% variables are left unchanged. Constraints on the form T :: any(), T :: term()
 %% and T :: gradualizer:top() are ignored. A "plain" fun type is returned.
 %% TODO: move tenv to back
--spec unfold_bounded_type(tenv(), type()) -> any().
+-spec unfold_bounded_type(env(), type()) -> any().
 unfold_bounded_type(TEnv, BTy = {type, _, bounded_fun, [Ty, _]}) ->
     Sub = bounded_type_subst(TEnv, BTy),
     subst_ty(Sub, Ty);
 unfold_bounded_type(_Env, Ty) -> Ty.
 
 %% TODO: move tenv to back
--spec bounded_type_subst(tenv(), {type, erl_anno:anno(), bounded_fun, [_]}) ->
+-spec bounded_type_subst(env(), {type, erl_anno:anno(), bounded_fun, [_]}) ->
         #{ atom() => type() }.
 bounded_type_subst(TEnv, BTy = {type, P, bounded_fun, [_, Bounds]}) ->
     try
@@ -1375,7 +1375,7 @@ bounded_type_subst(TEnv, BTy = {type, P, bounded_fun, [_, Bounds]}) ->
     end.
 
 %% TODO: move tenv to back
--spec solve_bounds(tenv(), [type()]) -> #{ atom() := type() }.
+-spec solve_bounds(env(), [type()]) -> #{ atom() := type() }.
 solve_bounds(TEnv, Cs) ->
     Defs = [ {X, T} || {type, _, constraint, [{atom, _, is_subtype}, [{var, _, X}, T]]} <- Cs ],
     Env  = lists:foldl(fun
@@ -1396,7 +1396,7 @@ solve_bounds(TEnv, Cs) ->
     solve_bounds(TEnv, Env, SCCs, #{}).
 
 %% TODO: move tenv to back
--spec solve_bounds(tenv(), _, _, _) -> #{ atom() := type() }.
+-spec solve_bounds(env(), _, _, _) -> #{ atom() := type() }.
 solve_bounds(TEnv, Defs, [{acyclic, X} | SCCs], Acc) ->
     %% TODO: Don't drop the constraints.
     {Ty1, _Cs} =
@@ -3414,7 +3414,7 @@ check_clause(_Env, _ArgsTy, _ResTy, Term, _) ->
 
 %% Refine types by matching clause. MatchedTys are the types exhausted by
 %% each pattern in the previous clause.
--spec refine_clause_arg_tys([type()], [type()], _Guards, tenv()) -> [type()].
+-spec refine_clause_arg_tys([type()], [type()], _Guards, env()) -> [type()].
 refine_clause_arg_tys(Tys, MatchedTys, [], TEnv) ->
     Ty        = type(tuple, Tys),
     MatchedTy = type(tuple, MatchedTys),
@@ -3430,7 +3430,7 @@ refine_clause_arg_tys(Tys, _MatchedTys, _Guards, _TEnv) ->
     Tys.
 
 %% Refine a list of types using a list of patterns and guards.
--spec refine_mismatch_using_guards([type()], _, _, tenv()) -> [type()].
+-spec refine_mismatch_using_guards([type()], _, _, env()) -> [type()].
 refine_mismatch_using_guards(PatTys,
                              {clause, _,
                               Pats,
@@ -3461,7 +3461,7 @@ refine_mismatch_using_guards(PatTys, {clause, _, _, _, _}, _VEnv, _TEnv) ->
 
 %% Type Difference as in set-difference Ty1 \ Ty2
 %% ----------------------------------------------
--spec type_diff(type(), type(), tenv()) -> type().
+-spec type_diff(type(), type(), env()) -> type().
 type_diff(Ty1, Ty2, TEnv) ->
     try
         refine(Ty1, Ty2, TEnv)
@@ -3479,7 +3479,7 @@ type_diff(Ty1, Ty2, TEnv) ->
 %% Helper for type_diff/3.
 %% Normalize, refine by OrigTy \ Ty, revert normalize if result is
 %% unchanged.  May throw no_refinement.
--spec refine(type(), type(), tenv()) -> type().
+-spec refine(type(), type(), env()) -> type().
 refine(OrigTy, Ty, TEnv) ->
     NormTy = normalize(OrigTy, TEnv),
     case refine_ty(NormTy, normalize(Ty, TEnv), TEnv) of
@@ -3487,17 +3487,17 @@ refine(OrigTy, Ty, TEnv) ->
         RefTy  -> RefTy
     end.
 
--spec get_record_fields_types(atom(), erl_anno:anno(), tenv()) -> [_].
+-spec get_record_fields_types(atom(), erl_anno:anno(), env()) -> [_].
 get_record_fields_types(Name, Anno, TEnv) ->
     RecordFields = get_maybe_remote_record_fields(Name, Anno, TEnv),
     [type_field_type(FieldName, Type) || ?typed_record_field(FieldName, Type) <- RecordFields].
 
--spec expand_record(atom(), erl_anno:anno(), tenv()) -> any().
+-spec expand_record(atom(), erl_anno:anno(), env()) -> any().
 expand_record(Name, Anno, TEnv) ->
     type_record(Name, get_record_fields_types(Name, Anno, TEnv)).
 
 %% May throw no_refinement.
--spec refine_ty(type(), type(), tenv()) -> type().
+-spec refine_ty(type(), type(), env()) -> type().
 refine_ty(_Ty, ?type(none), _TEnv) ->
     %% PatTy none() means the pattern can't be used for refinement,
     %% because there is imprecision.
@@ -3680,7 +3680,7 @@ pick_one_refinement_each([Ty|Tys], [RefTy|RefTys]) ->
     RefHeadCombinations ++ RefTailCombinations.
 
 %% Is a type refinable to the point that we do exhaustiveness checking on it?
--spec refinable(type(), tenv()) -> boolean().
+-spec refinable(type(), env()) -> boolean().
 refinable(Ty, TEnv) ->
     refinable(Ty, TEnv, sets:new()).
 
@@ -3784,7 +3784,7 @@ no_guards({clause, _, _, Guards, _}) ->
 
 %% Refines the types of bound variables using the assumption that a clause has
 %% mismatched.
--spec refine_vars_by_mismatching_clause(_Clause, VEnv, tenv()) -> VEnv.
+-spec refine_vars_by_mismatching_clause(_Clause, VEnv, env()) -> VEnv.
 refine_vars_by_mismatching_clause({clause, _, Pats, Guards, _Block}, VEnv, TEnv) ->
     PatternCantFail = are_patterns_matching_all_input(Pats, VEnv),
     case Guards of
@@ -3941,7 +3941,7 @@ type_check_function(Env, {function,_, Name, NArgs, Clauses}) ->
 
 -spec add_types_pats(Pats :: [gradualizer_type:abstract_pattern()],
                      Tys  :: [type()],
-                     TEnv :: tenv(),
+                     TEnv :: env(),
                      VEnv :: map(),
 		     Caps :: capture_vars | bind_vars
 		    )
@@ -3969,7 +3969,7 @@ add_types_pats(Pats, Tys, TEnv, VEnv, Caps) ->
 %% NB: Don't use this function directly. Use add_types_pats/5 instead.
 -spec do_add_types_pats(Pats :: [gradualizer_type:abstract_pattern()],
                         Tys  :: [type()],
-                        TEnv :: tenv(),
+                        TEnv :: env(),
                         VEnv :: map()
                        ) -> {PatTys      :: [type()],
                              UBounds     :: [type()],
@@ -3979,7 +3979,7 @@ do_add_types_pats(Pats, Tys, TEnv, VEnv) ->
     add_types_pats(Pats, Tys, TEnv, VEnv, [], [], []).
 
 %% TODO: move tenv to back
--spec add_types_pats(_, _, tenv(), _, _, _, _) -> any().
+-spec add_types_pats(_, _, env(), _, _, _, _) -> any().
 add_types_pats([], [], _TEnv, VEnv, PatTysAcc, UBoundsAcc, CsAcc) ->
     {lists:reverse(PatTysAcc), lists:reverse(UBoundsAcc),
      VEnv, constraints:combine(CsAcc)};
@@ -4009,7 +4009,7 @@ denormalize(Ty, NormTy, OrigNormTy) ->
 %% is normalized first.
 -spec add_type_pat(Pat  :: gradualizer_type:abstract_pattern(),
                    Type :: type(),
-                   TEnv :: tenv(),
+                   TEnv :: env(),
                    VEnv :: map()) ->
           {PatTy :: type(), UBound :: type(), NewVEnv :: map(),
            constraints:constraints()}.
@@ -4242,7 +4242,7 @@ rewrite_map_assocs_to_exacts(?type(map, Assocs)) ->
                         end, Assocs)).
 
 %% TODO: move tenv to back
--spec add_type_pat_var(_, _, type(), tenv(), _) -> any().
+-spec add_type_pat_var(_, _, type(), env(), _) -> any().
 add_type_pat_var(Pat, PatVar, Ty, TEnv, VEnv) ->
     %% Refine using Pat1 first to be able to bind Pat2 to a refined type.
     {PatTy1, Ty1, VEnv1, Cs2} = add_type_pat(Pat, Ty, TEnv, VEnv),
@@ -4251,7 +4251,7 @@ add_type_pat_var(Pat, PatVar, Ty, TEnv, VEnv) ->
     {GlbTy, Ty2, VEnv2, constraints:combine([Cs1, Cs2, Cs3])}.
 
 %% TODO: move tenv to back
--spec add_type_pat_literal(_, _, tenv(), _) -> any().
+-spec add_type_pat_literal(_, _, env(), _) -> any().
 add_type_pat_literal(Pat, Ty, TEnv, VEnv) ->
     case erl_eval:partial_eval(Pat) of
         Pat ->
@@ -4277,7 +4277,7 @@ find_field_default([{record_field, _, {var, _, '_'}, Exp}|_]) -> Exp;
 find_field_default([_|Fields]) -> find_field_default(Fields).
 
 %% TODO: move tenv to back
--spec add_type_pat_fields(_, _, tenv(), _) -> any().
+-spec add_type_pat_fields(_, _, env(), _) -> any().
 add_type_pat_fields([], _, _TEnv, VEnv) ->
     {[], [], VEnv, constraints:empty()};
 add_type_pat_fields(Fields, Tys, TEnv, VEnv) ->
@@ -4289,7 +4289,7 @@ add_type_pat_fields(Fields, Tys, TEnv, VEnv) ->
     add_type_pat_fields(AllFields, Tys, TEnv, VEnv, [], [], []).
 
 %% TODO: move tenv to back
--spec add_type_pat_fields(_, _, tenv(), _, _, _, _) -> any().
+-spec add_type_pat_fields(_, _, env(), _, _, _, _) -> any().
 add_type_pat_fields([], _, _TEnv, VEnv, PatTysAcc, UBoundsAcc, CsAcc) ->
     {lists:reverse(PatTysAcc), lists:reverse(UBoundsAcc),
      VEnv, constraints:combine(CsAcc)};
@@ -4316,7 +4316,7 @@ add_type_pat_fields([{record_field, _, {atom, _, Name} = FieldWithAnno, Pat}|Fie
                            MapTyAssocs :: [{type, erl_anno:anno(),
                                             map_field_exact | map_field_assoc,
                                             [type()]}] | any,
-                           TEnv        :: tenv(),
+                           TEnv        :: env(),
                            VEnv        :: #{atom() => type()}
                           ) -> {ok, ValueTy :: type(), constraints:constraints()} |
                                error.
@@ -4571,7 +4571,7 @@ is_power_of_two(N) when N rem 2 == 0 ->
     is_power_of_two(N div 2);
 is_power_of_two(_) -> false.
 
--spec union_var_binds_symmetrical(list(), tenv()) -> map().
+-spec union_var_binds_symmetrical(list(), env()) -> map().
 union_var_binds_symmetrical([], _TEnv) ->
     #{};
 union_var_binds_symmetrical(VarBindsList, TEnv) ->
@@ -4610,14 +4610,14 @@ union_var_binds_symmetrical_help([VB1, VB2 | Rest], Lub) ->
     union_var_binds_symmetrical_help([VB | Rest], Lub);
 union_var_binds_symmetrical_help([VB], _) ->  VB.
 
--spec union_var_binds(_, _, tenv()) -> any().
+-spec union_var_binds(_, _, env()) -> any().
 union_var_binds(VB1, VB2, TEnv) ->
     union_var_binds([VB1, VB2], TEnv).
 
 %% This function has been identified as a bottleneck.
 %% Without tail recursion, the gradualizer would hang when self-gradualizing
 %% when called from add_type_pat/4, the clause where the type is a union type.
--spec union_var_binds(_, tenv()) -> any().
+-spec union_var_binds(_, env()) -> any().
 union_var_binds([], _) ->
     #{};
 union_var_binds(VarBindsList, TEnv) ->
@@ -4631,7 +4631,7 @@ union_var_binds_help([VB1, VB2 | Rest], Glb) ->
     union_var_binds_help([VB | Rest], Glb);
 union_var_binds_help([VB], _) -> VB.
 
--spec add_var_binds(_, _, tenv()) -> map().
+-spec add_var_binds(_, _, env()) -> map().
 add_var_binds(VEnv, VarBinds, TEnv) ->
     % TODO: Don't drop the constraints
     Glb = fun(_K, Ty1, Ty2) -> {Ty, _C} = glb(Ty1, Ty2, TEnv), Ty end,
@@ -4667,7 +4667,7 @@ get_rec_field_index_and_type(FieldWithAnno, [], _) ->
     throw({undef, record_field, FieldWithAnno}).
 
 %% Helper for finding the return type of record_info/2
--spec get_record_info_type(erl_parse:abstract_expr(), tenv()) -> type().
+-spec get_record_info_type(erl_parse:abstract_expr(), env()) -> type().
 get_record_info_type({call, Anno, {atom, _, record_info},
                       [{atom, _, fields}, {atom, _, RecName}]}, TEnv) ->
     Fields = get_record_fields(RecName, Anno, TEnv),
