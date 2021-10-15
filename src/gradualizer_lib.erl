@@ -22,6 +22,7 @@
 
 %% merge_with for maps. Similar to merge_with for dicts.
 %% Arguably, this function should be in OTP.
+-spec merge_with(fun(), map(), map()) -> map().
 merge_with(F, M1, M2) ->
     case maps:size(M1) < maps:size(M2) of
         true ->

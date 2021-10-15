@@ -260,7 +260,9 @@
 
 -type af_type_union() :: {'type', anno(), 'union', [abstract_type()]}.
 
--type af_type_variable() :: {'var', anno(), atom()}. % except '_'
+%% TODO: atom() as the 3rd element conflicts with the definition of typechecker:new_type_var/0
+%%       which uses a string(). See typechecker:glb_ty({var, _, _}, ...) for a problematic use case.
+-type af_type_variable() :: {'var', anno(), atom() | string()}. % except '_'
 
 -type af_user_defined_type() ::
         {'user_type', anno(), type_name(),  [abstract_type()]}.
