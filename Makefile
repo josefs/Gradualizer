@@ -37,7 +37,7 @@ all: app escript
 erls = $(wildcard src/*.erl)
 beams = $(erls:src/%.erl=ebin/%.beam)
 
-ERLC_OPTS = -I include -pa ebin +debug_info
+ERLC_OPTS = -I include -I src -pa ebin +debug_info
 TEST_ERLC_OPTS = +debug_info
 
 app: $(beams) ebin/gradualizer.app

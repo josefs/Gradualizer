@@ -13,6 +13,8 @@
                                                           Body :: gradualizer_type:abstract_type()}},
                    records := #{Rec :: atom() => [typechecker:typed_record_field()]} }.
 
+-include("typechecker.hrl").
+
 %% Pattern macros
 -define(type(T), {type, _, T, []}).
 -define(type(T, A), {type, _, T, A}).
@@ -96,26 +98,27 @@ reverse_graph(G) ->
 %% first in `gradualizer_db', then, if not found, in provided `Types' map.
 %% `UserTy' is actually an unexported `gradualizer_type:af_user_defined_type()'.
 
--spec get_type_definition(UserTy, TEnv, Opts) -> {ok, Ty} | opaque | not_found when
+-spec get_type_definition(UserTy, Env, Opts) -> {ok, Ty} | opaque | not_found when
       UserTy :: gradualizer_type:abstract_type(),
-      TEnv :: tenv(),
+      Env :: typechecker:env(),
       Opts :: [annotate_user_types],
       Ty :: gradualizer_type:abstract_type().
-get_type_definition({remote_type, _Anno, [{atom, _, Module}, {atom, _, Name}, Args]}, _TEnv, _Opts) ->
+get_type_definition({remote_type, _Anno, [{atom, _, Module}, {atom, _, Name}, Args]}, _Env, _Opts) ->
     gradualizer_db:get_type(Module, Name, Args);
-get_type_definition({user_type, Anno, Name, Args}, TEnv, Opts) ->
+get_type_definition({user_type, Anno, Name, Args}, Env, Opts) ->
     %% Let's check if the type is a known remote type.
     case typelib:get_module_from_annotation(Anno) of
         {ok, Module} ->
             gradualizer_db:get_type(Module, Name, Args);
         none ->
             %% Let's check if the type is defined in the context of this module.
-            case maps:get({Name, length(Args)}, maps:get(types, TEnv), not_found) of
+            case maps:get({Name, length(Args)}, maps:get(types, Env#env.tenv), not_found) of
                 {Params, Type0} ->
                     VarMap = maps:from_list(lists:zip(Params, Args)),
                     Type2 = case proplists:is_defined(annotate_user_types, Opts) of
                                 true ->
-                                    Type1 = typelib:annotate_user_types(maps:get(module, TEnv), Type0),
+                                    Module = maps:get(module, Env#env.tenv),
+                                    Type1 = typelib:annotate_user_types(Module, Type0),
                                     typelib:substitute_type_vars(Type1, VarMap);
                                 false ->
                                     typelib:substitute_type_vars(Type0, VarMap)

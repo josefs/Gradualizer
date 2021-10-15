@@ -47,7 +47,8 @@
 -type tenv() :: gradualizer_lib:tenv().
 -type venv() :: map().
 
--export_type([typed_record_field/0]).
+-export_type([env/0,
+              typed_record_field/0]).
 
 -type expr() :: gradualizer_type:abstract_expr().
 -type type() :: gradualizer_type:abstract_type().
@@ -83,19 +84,11 @@
                                 Type :: type()}.
 
 %% The environment passed around during typechecking.
--record(env, {fenv     = #{},
-              imported = #{}   :: #{{atom(), arity()} => module()},
-              venv     = #{},
-              tenv             :: tenv(),
-              infer    = false :: boolean(),
-              verbose  = false :: boolean(),
-              exhaust  = true  :: boolean()
-              %, tyvenv  = #{}
-             }).
 %% TODO: this should be investigated:
 %%       Making the type def and record def have the same number of fields fixes a broken Gradualizer
 %%       diagnostic, which seems to assume the record only has the
 %%       fields annotated in the type, not all the fields from the definition.
+-include("typechecker.hrl").
 -type env() :: #env{ fenv     :: map(),
                      imported :: #{{atom(), arity()} => module()},
                      venv     :: map(),
