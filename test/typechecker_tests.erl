@@ -4,6 +4,8 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
+-include("typechecker.hrl").
+
 %% Macro to convert type to abstract form
 -define(t(T), t(??T)).
 t(T) -> typelib:remove_pos(typelib:parse_type(T)).
@@ -627,15 +629,6 @@ subtype(T1, T2) ->
         false ->
             false
     end.
-
-%% Copied 1-to-1 from typechecker.erl
--record(env, {fenv     = #{},
-              imported = #{},
-              venv     = #{},
-              tenv,
-              infer    = false,
-              verbose  = false,
-              exhaust  = true}).
 
 glb(T1, T2) ->
     glb(T1, T2, #env{tenv = gradualizer_lib:create_tenv(?MODULE, [], [])}).
