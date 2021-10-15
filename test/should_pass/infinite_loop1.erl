@@ -1,4 +1,4 @@
--module(glb_infinite_loop1).
+-module(infinite_loop1).
 
 %% This module is a minimised version of src/gradualizer_fmt.erl.
 %% Self-gradualising the above triggered an infinite loop in typechecker:glb/4.
