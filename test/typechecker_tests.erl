@@ -628,8 +628,17 @@ subtype(T1, T2) ->
             false
     end.
 
+%% Copied 1-to-1 from typechecker.erl
+-record(env, {fenv     = #{},
+              imported = #{},
+              venv     = #{},
+              tenv,
+              infer    = false,
+              verbose  = false,
+              exhaust  = true}).
+
 glb(T1, T2) ->
-    glb(T1, T2, gradualizer_lib:create_tenv(?MODULE, [], [])).
+    glb(T1, T2, #env{tenv = gradualizer_lib:create_tenv(?MODULE, [], [])}).
 
 glb(T1, T2, Env) ->
     typechecker:glb(T1, T2, Env).
