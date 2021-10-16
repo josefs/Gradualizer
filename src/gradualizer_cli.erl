@@ -167,7 +167,7 @@ handle_color(["never" |Args], Opts) -> parse_opts(Args, [{color, never}  | Opts]
 handle_color(["auto"  |Args], Opts) -> parse_opts(Args, [{color, auto}   | Opts]);
 handle_color(Args,            Opts) -> parse_opts(Args, [{color, always} | Opts]).
 
-handle_union_size_limit(_, [LimitS | Args], Opts) ->
+handle_union_size_limit(_, [LimitS | Args], _Opts) ->
     Limit = list_to_integer(LimitS),
     parse_opts(Args, [{union_size_limit, Limit}]);
 handle_union_size_limit(A, [], _Opts) ->
