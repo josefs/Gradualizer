@@ -4737,10 +4737,6 @@ type_check_forms(Forms, Opts) ->
           end, [], ParseData#parsedata.functions),
     lists:reverse(AllErrors).
 
--spec empty_env() -> env().
-empty_env() ->
-    #env{tenv = gradualizer_lib:empty_tenv()}.
-
 -spec create_env(#parsedata{}, proplists:proplist()) -> env().
 create_env(#parsedata{module    = Module
                      ,specs     = Specs
