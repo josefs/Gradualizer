@@ -1083,15 +1083,15 @@ expect_list_union([], AccTy, AccCs, any, _N, _Env) ->
 expect_list_union([], AccTy, AccCs, _NoAny, _N, _Env) ->
     {AccTy, AccCs}.
 
-infer_literal_string("") ->
+infer_literal_string("", _Env) ->
     type(nil);
-infer_literal_string(Str) ->
+infer_literal_string(Str, Env) ->
     SortedChars = ?assert_type(lists:usort(Str), [char(), ...]),
     if length(SortedChars) =< 10 ->
             %% heuristics: if there are not more than 10 different characters
             %% list them explicitely as singleton types
             CharTypes = [{char, erl_anno:new(0), C} || C <- SortedChars],
-            type(nonempty_list, [normalize(type(union, CharTypes), empty_env())]);
+            type(nonempty_list, [normalize(type(union, CharTypes), Env)]);
        true ->
             type(nonempty_list,
                  [type(range, [{char, erl_anno:new(0), hd(SortedChars)},
@@ -1614,8 +1614,8 @@ do_type_check_expr(#env{infer = false}, {char, _, _C}) ->
 
 %% When infer = true, we do propagate the types of literals,
 %% list cons, tuples, etc.
-do_type_check_expr(#env{infer = true}, {string, _, Chars}) ->
-    ActualyTy = infer_literal_string(Chars),
+do_type_check_expr(#env{infer = true} = Env, {string, _, Chars}) ->
+    ActualyTy = infer_literal_string(Chars, Env),
     return(ActualyTy);
 do_type_check_expr(#env{infer = true}, {nil, _}) ->
     return(type(nil));
@@ -2273,7 +2273,7 @@ do_type_check_expr_in(Env, Ty, {nil, _} = Nil) ->
             throw({type_error, Nil, type(nil), Ty})
     end;
 do_type_check_expr_in(Env, Ty, {string, _, Chars} = String) ->
-    ActualTy = infer_literal_string(Chars),
+    ActualTy = infer_literal_string(Chars, Env),
     case subtype(ActualTy, Ty, Env) of
       {true, Cs} ->
         {#{}, Cs};
