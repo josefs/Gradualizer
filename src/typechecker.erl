@@ -1979,7 +1979,7 @@ type_check_arith_op(Env, Op, P, Arg1, Arg2) ->
     {Ty1, VB1, Cs1} = type_check_expr(Env, Arg1),
     {Ty2, VB2, Cs2} = type_check_expr(Env, Arg2),
 
-    case compat_arith_type(Ty1,Ty2) of
+    case compat_arith_type(Ty1, Ty2, Env) of
         false ->
           throw({type_error, arith_error, Op, P, Ty1, Ty2});
         {Ty, Cs3} ->
@@ -1992,7 +1992,7 @@ type_check_int_op(Env, Op, P, Arg1, Arg2) ->
     {Ty1, VB1, Cs1} = type_check_expr(Env, Arg1),
     {Ty2, VB2, Cs2} = type_check_expr(Env, Arg2),
 
-    case compat_arith_type(Ty1,Ty2) of
+    case compat_arith_type(Ty1, Ty2, Env) of
         false ->
             throw({type_error, int_error, Op, P, Ty1, Ty2});
         {{type, _, Ty, []}, _} when Ty == float orelse Ty == number ->
@@ -2082,35 +2082,35 @@ type_check_call_ty_union(Env, Tys, Args, E) ->
      union_var_binds(VBs, Env),
      constraints:combine(Css)}.
 
-compat_arith_type(Any = {type, _, any, []}, {type, _, any, []}) ->
+compat_arith_type(Any = {type, _, any, []}, {type, _, any, []}, _Env) ->
     {Any, constraints:empty()};
-compat_arith_type(Any = {type, _, any, []}, Ty) ->
-    case subtype(Ty, type(number), empty_env()) of
+compat_arith_type(Any = {type, _, any, []}, Ty, Env) ->
+    case subtype(Ty, type(number), Env) of
         false ->
             false;
         _ ->
             {Any, constraints:empty()}
     end;
-compat_arith_type(Ty, Any = {type, _, any, []}) ->
-    case subtype(Ty, type(number), empty_env()) of
+compat_arith_type(Ty, Any = {type, _, any, []}, Env) ->
+    case subtype(Ty, type(number), Env) of
         false ->
             false;
         _ ->
             {Any, constraints:empty()}
     end;
-compat_arith_type(Ty1, Ty2) ->
+compat_arith_type(Ty1, Ty2, Env) ->
     TInteger = type(integer),
-    case {subtype(Ty1, TInteger, empty_env()), subtype(Ty2, TInteger, empty_env())} of
+    case {subtype(Ty1, TInteger, Env), subtype(Ty2, TInteger, Env)} of
         {{true, C1}, {true, C2}} ->
             {TInteger, constraints:combine(C1, C2)};
         _ ->
             TFloat = type(float),
-            case {subtype(Ty1, TFloat, empty_env()), subtype(Ty2, TFloat, empty_env())} of
+            case {subtype(Ty1, TFloat, Env), subtype(Ty2, TFloat, Env)} of
                 {{true, C1}, {true, C2}} ->
                     {TFloat, constraints:combine(C1, C2)};
                 _ ->
                     TNumber = type(number),
-                    case {subtype(Ty1, TNumber, empty_env()), subtype(Ty2, TNumber, empty_env())} of
+                    case {subtype(Ty1, TNumber, Env), subtype(Ty2, TNumber, Env)} of
                         {{true, C1}, {true, C2}} ->
                             {TNumber, constraints:combine(C1, C2)};
                         _ ->
