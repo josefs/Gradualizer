@@ -5,7 +5,7 @@
 
 %% Export all for easier testing and debugging while the project is
 %% still in an early stage
--compile([export_all]).
+-compile([export_all, nowarn_export_all]).
 
 -include("typelib.hrl").
 
@@ -311,7 +311,7 @@ compat_ty({type, _, AssocTag1, [Key1, Val1]},
     {A2, constraints:combine(Cs1, Cs2)};
 
 %% Opaque user types
-compat_ty({user_type, Anno, Name, Args}, {user_type, Anno, Name, Args}, A, TEnv) ->
+compat_ty({user_type, Anno, Name, Args}, {user_type, Anno, Name, Args}, A, _TEnv) ->
     ret(A);
 compat_ty({user_type, Anno, Name, Args1}, {user_type, Anno, Name, Args2}, A, TEnv)
   when length(Args1) == length(Args2) ->
@@ -3585,7 +3585,7 @@ refine_map_field_ty({?type(map_field_exact, KVTy), ?type(map_field_assoc, KVTy)}
     %% M2 = #{x => y}
     %% M1 \ M2 = #{x => y}
     [type(map_field_assoc, KVTy)];
-refine_map_field_ty({?type(AssocTag1, [KTy1, _]) = Assoc1, ?type(AssocTag2, [KTy2, _])})
+refine_map_field_ty({?type(AssocTag1, _) = Assoc1, ?type(AssocTag2, _)})
   when AssocTag1 == map_field_assoc, AssocTag2 == map_field_assoc;
        AssocTag1 == map_field_exact, AssocTag2 == map_field_exact;
        AssocTag1 == map_field_exact, AssocTag2 == map_field_assoc;

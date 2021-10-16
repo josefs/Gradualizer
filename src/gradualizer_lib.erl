@@ -197,10 +197,10 @@ pick_value(?type(range, [Lo = {_TagLo, _, _Lo}, {_TagHi, _, _Hi}]), _TEnv) ->
 pick_value(Type, TEnv)
   when element(1, Type) =:= remote_type; element(1, Type) =:= user_type ->
     {Kind, Anno, Name, Args} = case Type of
-                                   {remote_type, Anno, [_, {atom, _, Name}, Args]} ->
-                                       {remote_type, Anno, Name, Args};
-                                   {user_type, Anno, Name, Args} ->
-                                       {user_type, Anno, Name, Args}
+                                   {remote_type, Anno1, [_, {atom, _, Name1}, Args1]} ->
+                                       {remote_type, Anno1, Name1, Args1};
+                                   {user_type, Anno1, Name1, Args1} ->
+                                       {user_type, Anno1, Name1, Args1}
                                end,
     case get_type_definition(Type, TEnv, [annotate_user_types]) of
         {ok, Ty} ->
