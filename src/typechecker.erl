@@ -917,24 +917,25 @@ merge_atom_types(Types) ->
 
 
 
-%% Input arg must be already normalized
-negate_num_type({type, _, TyName, []} = Ty) when
+%% Input arg must be already normalized!
+%% That being said, we still accept Env in case of other options that might be stored there.
+negate_num_type({type, _, TyName, []} = Ty, _Env) when
       TyName =:= any;
       TyName =:= integer;
       TyName =:= float ->
     Ty;
-negate_num_type({integer, P, I}) ->
+negate_num_type({integer, P, I}, _Env) ->
     {integer, P, -I};
-negate_num_type({type, P, union, Tys}) ->
+negate_num_type({type, P, union, Tys}, Env) ->
     %% We normalize the result only to merge `0 | pos_integer()` =>
     %% `non_neg_integer()` and to have a nice increasing order of Tys.
     %% The incoming union type must be already normalized so it shouldn't
     %% contain any unresolved types. So it is ok to normalize the result with an
     %% empty TEnv.
-    normalize({type, P, union, [negate_num_type(Ty)||Ty <- Tys]}, empty_env());
-negate_num_type(None = {type, _, none, []}) ->
+    normalize({type, P, union, [negate_num_type(Ty, Env) || Ty <- Tys]}, Env);
+negate_num_type(None = {type, _, none, []}, _Env) ->
     None;
-negate_num_type(RangeTy) ->
+negate_num_type(RangeTy, _Env) ->
     %% some kind of range type like `1..3' or `neg_integer()'
     gradualizer_int:negate_int_type(RangeTy).
 
@@ -1781,7 +1782,7 @@ do_type_check_expr(Env, {op, P, '-', Arg}) ->
     case subtype(Ty, type(number), Env) of
         {true, Cs2} ->
             NormTy = normalize(Ty, Env),
-            {negate_num_type(NormTy), VB, constraints:combine(Cs1, Cs2)};
+            {negate_num_type(NormTy, Env), VB, constraints:combine(Cs1, Cs2)};
         false ->
             throw({type_error, non_number_argument_to_minus, P, Ty})
     end;
