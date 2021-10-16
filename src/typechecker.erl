@@ -1459,7 +1459,7 @@ subst_ty(_, Ty) -> Ty.
 %% and the expression to type check.
 %% Returns the type of the expression, a collection of variables bound in
 %% the expression together with their type and constraints.
--spec type_check_expr(env(), expr()) -> {any(), map(), constraints:constraints()}.
+-spec type_check_expr(env(), expr()) -> {any(), venv(), constraints:constraints()}.
 type_check_expr(Env, Expr) ->
     Res = {Ty, _VarBinds, _Cs} = do_type_check_expr(Env, Expr),
     ?verbose(Env, "~sPropagated type of ~ts :: ~ts~n",
@@ -1467,7 +1467,7 @@ type_check_expr(Env, Expr) ->
     Res.
 
 %% TODO: move tenv to back
--spec do_type_check_expr(env(), expr()) -> {any(), map(), constraints:constraints()}.
+-spec do_type_check_expr(env(), expr()) -> {any(), venv(), constraints:constraints()}.
 do_type_check_expr(Env, {var, P, Var}) ->
     case Env#env.venv of
         #{Var := Ty} ->
@@ -3920,17 +3920,17 @@ check_guard_expression(Env, Guard) ->
     VB.
 
 %% The different guards use glb
--spec check_guard(#env{}, list()) -> map().
+-spec check_guard(env(), list()) -> venv().
 check_guard(Env, GuardSeq) ->
     RefTys = union_var_binds(
-        lists:map(fun (Guard) ->
-            check_guard_expression(Env, Guard)
-                  end, GuardSeq),
-        Env),
+               lists:map(fun (Guard) ->
+                                 check_guard_expression(Env, Guard)
+                         end, GuardSeq),
+               Env),
     maps:merge(Env#env.venv, RefTys).
 
 %% TODO: implement proper checking of guards.
--spec check_guards(#env{}, list()) -> map().
+-spec check_guards(env(), list()) -> venv().
 check_guards(_Env, []) -> #{};
 check_guards(Env, Guards) ->
     VarBinds = lists:map(fun (Guard) ->
