@@ -48,7 +48,11 @@ pp_type(Type = {type, _, bounded_fun, _}) ->
     "fun(" ++ S ++ ")";
 pp_type({var, _, TyVar}) ->
     %% TODO: In type(), TyVar should be an atom but we use a string.
-    TyVar;
+    %% EDIT: Apparently, not everywhere :/
+    case TyVar of
+        _ when is_atom(TyVar) -> atom_to_list(TyVar);
+        _ when is_list(TyVar) -> TyVar
+    end;
 pp_type(Type) ->
     %% erl_pp can handle type definitions, so wrap Type in a type definition
     %% and then take the type from that.
