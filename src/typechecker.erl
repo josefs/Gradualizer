@@ -762,6 +762,8 @@ normalize_rec({type, _, union, Tys} = Type, Env, Unfolded) ->
                 Ts  -> type(union, Ts)
             end
     end;
+normalize_rec({type, _, list, [ElemTy]}, Env, Unfolded) ->
+    type(list, [normalize_rec(typelib:remove_pos(ElemTy), Env, Unfolded)]);
 normalize_rec({user_type, P, Name, Args} = Type, Env, Unfolded) ->
     case maps:get(mta(Type, Env), Unfolded, no_type) of
         {type, NormType} -> NormType;
