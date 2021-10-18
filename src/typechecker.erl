@@ -5,7 +5,16 @@
 
 %% Export all for easier testing and debugging while the project is
 %% still in an early stage
--compile([export_all, nowarn_export_all]).
+%% Functions used in unit tests.
+-export([type_check_expr/2,
+         create_env/2,
+         subtype/3,
+         normalize/2,
+         glb/3,
+         collect_specs_types_opaques_and_functions/1,
+         number_of_exported_functions/1,
+         bounded_type_list_to_type/2,
+         unfold_bounded_type/2]).
 
 -include("typelib.hrl").
 
