@@ -738,7 +738,7 @@ has_overlapping_keys({type, _, map, Assocs}, Env) ->
 %% * Flatten unions and merge overlapping types (e.g. ranges) in unions
 -spec normalize(type(), tenv()) -> type().
 normalize(Ty, Env) ->
-    normalize_rec(Ty, Env, sets:new()).
+    normalize_rec(Ty, Env, #{}).
 
 %% The third argument is a set of user types that we've already unfolded.
 %% It's important that we don't keep unfolding such types because it will
@@ -749,21 +749,25 @@ normalize_rec({type, _, record, [{atom, _, Name} | Fields]}, Env, Unfolded)
     NormFields = [type_field_type(FieldName, normalize_rec(Type, Env, Unfolded))
                   || ?type_field_type(FieldName, Type) <- Fields],
     type_record(Name, NormFields);
-normalize_rec({type, _, union, Tys}, Env, Unfolded) ->
-    UnionSizeLimit = Env#env.union_size_limit,
-    Types = flatten_unions(Tys, Env, Unfolded),
-    case merge_union_types(Types, Env) of
-        []  -> type(none);
-        [T] -> T;
-        %% Performance hack: Unions larger than this value are replaced by any().
-        Ts when length(Ts) > UnionSizeLimit -> type(any);
-        Ts  -> type(union, Ts)
+normalize_rec({type, _, union, Tys} = Type, Env, Unfolded) ->
+    case maps:get(mta(Type, Env), Unfolded, no_type) of
+        {type, NormType} -> NormType;
+        no_type ->
+            UnionSizeLimit = Env#env.union_size_limit,
+            Types = flatten_unions(Tys, Env, maps:put(Type, {type, Type}, Unfolded)),
+            case merge_union_types(Types, Env) of
+                []  -> type(none);
+                [T] -> T;
+                %% Performance hack: Unions larger than this value are replaced by any().
+                Ts when length(Ts) > UnionSizeLimit -> type(any);
+                Ts  -> type(union, Ts)
+            end
     end;
 normalize_rec({user_type, P, Name, Args} = Type, Env, Unfolded) ->
-    case sets:is_element(mta(Type, Env), Unfolded) of
-        true -> Type;
-        false ->
-            UnfoldedNew = sets:add_element(mta(Type, Env), Unfolded),
+    case maps:get(mta(Type, Env), Unfolded, no_type) of
+        {type, NormType} -> NormType;
+        no_type ->
+            UnfoldedNew = maps:put(mta(Type, Env), {type, Type}, Unfolded),
             case gradualizer_lib:get_type_definition(Type, Env, []) of
                 {ok, T} ->
                     normalize_rec(typelib:remove_pos(T), Env, UnfoldedNew);
@@ -886,14 +890,18 @@ expand_builtin_aliases(Type) ->
 %% * Remove subtypes of other types in the same union; keeping any() separate
 %% * Merge integer types, including singleton integers and ranges
 %%   1, 1..5, integer(), non_neg_integer(), pos_integer(), neg_integer()
--spec flatten_unions([type()], tenv(), sets:set()) -> [type()].
+-spec flatten_unions([type()], tenv(), map()) -> [type()].
 flatten_unions(Tys, Env, Unfolded) ->
     [ FTy || Ty <- Tys, FTy <- flatten_type(normalize_rec(Ty, Env, Unfolded), Env, Unfolded) ].
 
 flatten_type({type, _, none, []}, _Env, _Unfolded) ->
     [];
-flatten_type({type, _, union, Tys}, Env, Unfolded) ->
-    flatten_unions(Tys, Env, Unfolded);
+flatten_type({type, _, union, Tys} = Type, Env, Unfolded) ->
+    case maps:get(mta(Type, Env), Unfolded, no_type) of
+        {type, NormType} -> [NormType];
+        no_type ->
+            flatten_unions(Tys, Env, Unfolded)
+    end;
 flatten_type(Ty, _Env, _Unfolded) ->
     [Ty].
 
