@@ -149,7 +149,8 @@ int_range_to_types({I, J}) when is_integer(I) andalso
 				I < J ->
     [{type, erl_anno:new(0), range, [{integer, erl_anno:new(0), I}
                                     ,{integer, erl_anno:new(0), J}]}];
-int_range_to_types({I, J}) when I > J ->
+int_range_to_types({I, J})
+  when I > J; I == pos_inf; J == neg_inf ->
     [].
 
 %% Merges ranges and returns a single type (possibly a union).
