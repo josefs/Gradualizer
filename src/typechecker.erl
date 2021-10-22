@@ -720,6 +720,8 @@ glb_ty({type, _, Name, Args1}, {type, _, Name, Args2}, A, Env)
 glb_ty(_Ty1, _Ty2, _A, _Env) -> {type(none), constraints:empty()}.
 
 -spec has_overlapping_keys(type(), env()) -> boolean().
+has_overlapping_keys({type, _, map, any}, _Env) ->
+    true;
 has_overlapping_keys({type, _, map, Assocs}, Env) ->
     Cart = [ case {subtype(As1, As2, Env), subtype(As2, As1, Env)} of
                  {false, false} ->
