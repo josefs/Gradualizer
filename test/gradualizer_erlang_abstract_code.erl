@@ -65,13 +65,14 @@
 %%% compile(Abstr, Opts) ->
 %%%     compile:noenv_forms(Abstr, Opts).
 %%% '''
--module(proper_erlang_abstract_code).
+-module(gradualizer_erlang_abstract_code).
 
 -export([module/0, module/1, guard/0, guard/1, expr/0, expr/1]).
 
 -export([term/0, term/1]).
 
-%-compile(export_all). -compile(nowarn_export_all).
+-compile(export_all).
+-compile(nowarn_export_all).
 
 %-define(debug, true).
 -ifdef(debug).
