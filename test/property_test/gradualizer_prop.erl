@@ -2,7 +2,7 @@
 
 -compile([export_all]).
 
--include_lib("proper/include/proper.hrl").
+-include_lib("common_test/include/ct_property_test.hrl").
 
 abstract_type() ->
     gradualizer_type_gen:abstract_type().

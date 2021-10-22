@@ -81,7 +81,8 @@
 -define(DEBUG(F, AS), ok).
 -endif.
 
--include("proper_internal.hrl").
+-define(PROPER_NO_IMPORTS, true).
+-include_lib("common_test/include/ct_property_test.hrl").
 
 -type char_fun() :: fun(() -> proper_types:type()).
 %%% A function that generates characters. The default function
