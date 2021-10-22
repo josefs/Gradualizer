@@ -7,6 +7,12 @@
 abstract_type() ->
     gradualizer_type_gen:abstract_type().
 
+abstract_expr() ->
+    gradualizer_type_gen:expr().
+
+abstract_term() ->
+    gradualizer_erlang_abstract_code:term().
+
 prop_remove_pos_removes_pos() ->
     ?FORALL(Type, abstract_type(),
             ?WHENFAIL(ct:pal("~s failed:\n~p\n", [?FUNCTION_NAME, Type]),
@@ -120,8 +126,24 @@ prop_compatible_(Type1, Type2) ->
     %% we're only interested in termination / infinite recursion
     true.
 
+prop_type_check_expr() ->
+    %% TODO: use abstract_term() for now, since abstract_expr() gives very unpredictable
+    %% and problematic nestings of exprs, e.g. maps inside binaries o_O
+    ?FORALL(Expr, abstract_term(),
+            ?TIMEOUT(timer:seconds(1),
+                     prop_type_check_expr_(Expr))).
+
+prop_type_check_expr_(Expr) ->
+    Env = env([]),
+    case catch typechecker:type_check_expr(Env, Expr) of
+        {'EXIT', Reason} ->
+            ct:pal("failed with:\n~p\n~p\n", [Expr, Reason]),
+            false;
+        _ ->
+            true
+    end.
+
 %% TODO: prop_ add_type_pat - ultimately called from type_check_expr_in; requires a pattern() gen
-%% TODO: prop_ type_check_expr - requires an expr() generator
 %% TODO: prop_ type_check_expr_in, unless the last two are merged, requires an expr() gen,
 %%       ultimately type_check_expr_in is called from type_check_expr
 %% TODO: prop_ type_check_forms - this one will actually subsume all of the above if we devise a good
