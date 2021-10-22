@@ -3,7 +3,9 @@
 -export([abstract_type/0, abstract_type/1]).
 
 abstract_type() ->
-    DefaultOpts = [{weight, {remote_type, 0}},
+    DefaultOpts = [{weight, {binop, 0}},
+                   {weight, {unop, 0}},
+                   {weight, {remote_type, 0}},
                    {weight, {user_defined_type, 0}}],
     abstract_type(DefaultOpts).
 
