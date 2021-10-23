@@ -15,7 +15,7 @@ abstract_type(Opts) ->
     gradualizer_erlang_abstract_code:abstract_type(State).
 
 expr() ->
-    Exclude = [%% Due to some strange reason, maps or other full blown types get generated
+    Exclude = [%% TODO: Due to some strange reason, maps or other full blown types get generated
                %% as bitstring segments
                bitstring,
                %% Possibly remote function calls
