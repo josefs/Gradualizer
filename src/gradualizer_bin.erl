@@ -40,7 +40,7 @@ bin_element_view({bin_element, Anno, {Lit, _, _}, default, _Spec} = BinElem)
     %% Literal with default size, i.e. no variables to consider.
     %% Size is not allowed for utf8/utf16/utf32.
     Bin = {bin, Anno, [BinElem]},
-    {value, Value, []} = erl_eval:expr(Bin, []),
+    {value, Value, []} = safe_eval_expr(Anno, Bin, {on_error, throw}),
     {bit_size(?assert_type(Value, bitstring())), 0};
 bin_element_view({bin_element, Anno, {string, _, Chars}, Size, Spec}) ->
     %% Expand <<"ab":32/float>> to <<$a:32/float, $b:32/float>>
@@ -65,19 +65,33 @@ bin_element_view({bin_element, _Anno, _Expr, default, Specifiers}) ->
         utf16     -> {0, 16}; %% 2-4 bytes
         utf32     -> {32, 0}  %% 4 bytes, fixed
     end;
-bin_element_view({bin_element, _Anno, _Expr, SizeSpec, Specifiers}) ->
+bin_element_view({bin_element, Anno, _Expr, SizeSpec, Specifiers}) ->
     %% Non-default size, possibly a constant expression
-    try erl_eval:expr(SizeSpec, []) of
-        {value, Sz, _VarBinds} ->
-            {Sz * get_unit(Specifiers), 0}
-    catch
-        error:{unbound_var, _} ->
+    case safe_eval_expr(Anno, SizeSpec, {on_error, return}) of
+        {value, Sz, _VarBinds} when is_integer(Sz) ->
+            {Sz * get_unit(Specifiers), 0};
+        {error, {unbound_var, _}} ->
             %% Variable size
             U = get_unit(Specifiers),
             case get_type_specifier(Specifiers) of
                 float when U == 64 -> {64, 0};  %% size must be 1 in this case
                 float              -> {32, 32}; %% a float must be 32 or 64 bits
                 _OtherType         -> {0, U}    %% any multiple of the unit
+            end;
+        _ ->
+            throw({illegal_binary_segment, Anno, SizeSpec})
+    end.
+
+safe_eval_expr(Anno, Expr, {on_error, Action}) ->
+    try
+        erl_eval:expr(Expr, [])
+    catch
+        error:Reason ->
+            case Action of
+                throw ->
+                    throw({illegal_binary_segment, Anno, Expr});
+                return ->
+                    {error, Reason}
             end
     end.
 
