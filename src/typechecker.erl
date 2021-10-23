@@ -2894,7 +2894,7 @@ type_check_unary_op_in(Env, ResTy, Op, P, Arg) ->
         _ ->
             ArgTy = unary_op_arg_type(Op, ResTy1),
             {VB, Cs1} = type_check_expr_in(Env, ArgTy, Arg),
-	    {VB, constraints:combine(Cs, Cs1)}
+            {VB, constraints:combine(Cs, Cs1)}
     end.
 
 %% Which type should we check the argument against if we want the given type
@@ -2913,6 +2913,8 @@ unary_op_arg_type(Op, Ty) when ?is_int_type(Ty), Op == '-' orelse Op == 'bnot' -
              (N) when Op == 'bnot' -> bnot N end,
     gradualizer_int:int_range_to_type({Neg(Hi), Neg(Lo)});
 unary_op_arg_type('-', Ty = {type, _, float, []}) ->
+    Ty;
+unary_op_arg_type(_Op, Ty = {var, _, _}) ->
     Ty.
 
 %% Type check list comprehension or a binary comprehension
