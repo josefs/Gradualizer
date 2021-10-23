@@ -10,6 +10,9 @@ abstract_type() ->
 abstract_expr() ->
     gradualizer_type_gen:expr().
 
+abstract_forms() ->
+    gradualizer_erlang_abstract_code:module().
+
 abstract_term() ->
     gradualizer_erlang_abstract_code:term().
 
@@ -143,9 +146,41 @@ prop_type_check_expr_(Expr) ->
             true
     end.
 
+prop_type_check_expr_in() ->
+    %% TODO: use abstract_term() for now, since abstract_expr() gives very unpredictable
+    %% and problematic nestings of exprs, e.g. maps inside binaries o_O
+    ?FORALL({Type, Expr}, {abstract_type(), abstract_term()},
+            ?TIMEOUT(timer:seconds(1),
+                     prop_type_check_expr_in_(Type, Expr))).
+
+prop_type_check_expr_in_(Type, Expr) ->
+    Env = env([]),
+    case catch typechecker:type_check_expr_in(Env, Type, Expr) of
+        {'EXIT', Reason} ->
+            ct:pal("failed with:\n~p\n~p\n", [Expr, Reason]),
+            false;
+        _ ->
+            true
+    end.
+
+prop_type_check_forms() ->
+    %% TODO: use abstract_term() for now, since abstract_expr() gives very unpredictable
+    %% and problematic nestings of exprs, e.g. maps inside binaries o_O
+    ?FORALL(Forms, abstract_forms(),
+            ?TIMEOUT(timer:seconds(1),
+                     prop_type_check_forms_(Forms))).
+
+prop_type_check_forms_(Forms) ->
+    Opts = [],
+    case catch typechecker:type_check_forms(Forms, Opts) of
+        {'EXIT', Reason} ->
+            ct:pal("failed with:\n~p\n~p\n", [Forms, Reason]),
+            false;
+        _ ->
+            true
+    end.
+
 %% TODO: prop_ add_type_pat - ultimately called from type_check_expr_in; requires a pattern() gen
-%% TODO: prop_ type_check_expr_in, unless the last two are merged, requires an expr() gen,
-%%       ultimately type_check_expr_in is called from type_check_expr
 %% TODO: prop_ type_check_forms - this one will actually subsume all of the above if we devise a good
 %%       enough generator; requires a form() generator
 
