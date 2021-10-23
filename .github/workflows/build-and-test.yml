@@ -13,7 +13,7 @@ jobs:
     name: Erlang ${{matrix.otp}}
     strategy:
       matrix:
-        otp: ['22.3.4.20', '23.3.4.7', '24.1']
+        otp: ['23.3.4.7', '24.1']
     steps:
       - uses: actions/checkout@v2
       - uses: erlef/setup-beam@v1
@@ -23,6 +23,8 @@ jobs:
         run: "make"
       - name: "Run tests"
         run: "make tests"
+      - name: "Run property-based tests"
+        run: "PROP_NUMTESTS=25000 rebar3 ct --suite test/gradualizer_prop_SUITE.erl"
       - name: "Self-gradualize"
         run: "make gradualize"
         continue-on-error: true
