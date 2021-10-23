@@ -45,27 +45,25 @@ prop_normalize_type() ->
             abstract_type(),
             ?WHENFAIL(ct:pal("~s failed:\n~p\n", [?FUNCTION_NAME, Type]),
                       ?TIMEOUT(timer:seconds(1),
-                               begin
-                                   %mock_type_in_gradualizer_db(Type),
-                                   prop_normalize_type_(Type)
-                               end))).
-
-%% TODO: First, this only catches `user_type' on the top-level, not when it's generated
-%%       as a nested type.
-%%       Second, we should come up with something more clever to handle user type generation.
-%%       Maybe predefine the type in gradualizer_db in such a case?
-%is_not_user_type({user_type, _, _, _}) -> false;
-%is_not_user_type(_) -> true.
-
-%mock_type_in_gradualizer_db(Type) ->
-%    ct:pal("~p: not_implemented_yet\n", [?FUNCTION_NAME]),
-%    ok.
+                               prop_normalize_type_(Type)))).
 
 prop_normalize_type_(Type) ->
-    Env = test_lib:create_env([]),
+    UserTypes = gather_user_types(Type),
+    EnvExpr = [ declare_type(UserTy) || UserTy <- UserTypes ],
+    Env = test_lib:create_env(lists:flatten(EnvExpr), []),
     typechecker:normalize(Type, Env),
     %% we're only interested in normalize termination / infinite recursion
     true.
+
+gather_user_types(Type) ->
+    gradualizer_type:preorder(fun
+                                  ({user_type, _, _, _} = UserTy, Acc) -> [UserTy | Acc];
+                                  (_, Acc) -> Acc
+                              end, [], Type).
+
+declare_type({user_type, _, Name, Args} = Ty) ->
+    TArgs = string:join([ ["A", integer_to_list(I)] || I <- lists:seq(1, length(Args))], ", "),
+    io_lib:format("-type ~ts(~ts) :: {~ts}.\n", [Name, TArgs, TArgs]).
 
 prop_glb() ->
     ?FORALL({Type1, Type2},
