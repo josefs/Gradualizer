@@ -10,8 +10,8 @@ abstract_type() ->
 abstract_expr() ->
     gradualizer_type_gen:expr().
 
-abstract_forms() ->
-    gradualizer_erlang_abstract_code:module().
+abstract_module() ->
+    gradualizer_type_gen:module().
 
 abstract_term() ->
     gradualizer_erlang_abstract_code:term().
@@ -166,7 +166,7 @@ prop_type_check_expr_in_(Type, Expr) ->
 prop_type_check_forms() ->
     %% TODO: use abstract_term() for now, since abstract_expr() gives very unpredictable
     %% and problematic nestings of exprs, e.g. maps inside binaries o_O
-    ?FORALL(Forms, abstract_forms(),
+    ?FORALL(Forms, abstract_module(),
             ?TIMEOUT(timer:seconds(1),
                      prop_type_check_forms_(Forms))).
 

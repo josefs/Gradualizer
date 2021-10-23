@@ -1,7 +1,8 @@
 -module(gradualizer_type_gen).
 
 -export([abstract_type/0, abstract_type/1,
-         expr/0, expr/1]).
+         expr/0, expr/1,
+         module/0, module/1]).
 
 abstract_type() ->
     Opts = [{weight, {binop, 0}},
@@ -28,3 +29,19 @@ expr() ->
 
 expr(Opts) ->
     gradualizer_erlang_abstract_code:expr(Opts).
+
+module() ->
+    %% See expr() generator.
+    Exclude = [bitstring,
+               termcall, varcall, localcall, extcall,
+               ext_mfa, any_mfa],
+    ExcludeWeights = [ {weight, {Tag, 0}} || Tag <- Exclude ],
+    %% The generator might generate function clauses with different number of params.
+    %% This makes typechecking fail and is not expected in real world.
+    %% TODO: Limit to just one-clause functions.
+    Limits = [{limit, {function_clauses, 1}}],
+    Opts = ExcludeWeights ++ Limits,
+    module(Opts).
+
+module(Opts) ->
+    gradualizer_erlang_abstract_code:module(Opts).
