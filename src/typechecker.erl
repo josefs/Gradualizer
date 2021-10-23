@@ -3040,7 +3040,9 @@ update_map_type(?type(map, Assocs), AssocTys) ->
 update_map_type({var, _, _Var}, _AssocTys) ->
     type(any);
 update_map_type(?type(union, MapTys), AssocTys) ->
-    type(union, [update_map_type(MapTy, AssocTys) || MapTy <- MapTys]).
+    type(union, [update_map_type(MapTy, AssocTys) || MapTy <- MapTys]);
+update_map_type(Type, _AssocTys) ->
+    throw({illegal_map_type, Type}).
 
 %% Override existing key's value types and append those key types
 %% which are not updated

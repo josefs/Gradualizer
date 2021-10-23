@@ -135,6 +135,12 @@ format_type_error({illegal_record_info, Expr}, Opts) ->
       [format_location(Expr, brief, Opts),
        pp_expr(Expr, Opts),
        format_location(Expr, verbose, Opts)]);
+format_type_error({illegal_map_type, Type}, Opts) ->
+    io_lib:format(
+      "~sIllegal map type ~s~s~n",
+      [format_location(Type, brief, Opts),
+       pp_type(Type, Opts),
+       format_location(Type, verbose, Opts)]);
 format_type_error({illegal_binary_segment, Expr}, Opts) ->
     io_lib:format(
       "~sIllegal binary segment expression ~s~s~n",
