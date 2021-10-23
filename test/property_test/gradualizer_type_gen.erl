@@ -34,7 +34,9 @@ module() ->
     %% See expr() generator.
     Exclude = [bitstring,
                termcall, varcall, localcall, extcall,
-               ext_mfa, any_mfa],
+               ext_mfa, any_mfa,
+               record_field_access],
+    %% TODO: define records before enabling their generation again
     ExcludeWeights = [ {weight, {Tag, 0}} || Tag <- Exclude ],
     %% The generator might generate function clauses with different number of params.
     %% This makes typechecking fail and is not expected in real world.
