@@ -62,7 +62,7 @@ prop_normalize_type() ->
 %    ok.
 
 prop_normalize_type_(Type) ->
-    Env = env([]),
+    Env = test_lib:create_env([]),
     typechecker:normalize(Type, Env),
     %% we're only interested in normalize termination / infinite recursion
     true.
@@ -74,7 +74,7 @@ prop_glb() ->
                      prop_glb_(Type1, Type2))).
 
 prop_glb_(Type1, Type2) ->
-    Env = env([]),
+    Env = test_lib:create_env([]),
     Type1_ = typechecker:normalize(Type1, Env),
     Type2_ = typechecker:normalize(Type2, Env),
     typechecker:glb(Type1_, Type2_, Env),
@@ -110,7 +110,7 @@ prop_type_diff() ->
                      prop_type_diff_(Type1, Type2))).
 
 prop_type_diff_(Type1, Type2) ->
-    Env = env([]),
+    Env = test_lib:create_env([]),
     typechecker:type_diff(Type1, Type2, Env),
     %% we're only interested in termination / infinite recursion
     true.
@@ -124,7 +124,7 @@ prop_refinable() ->
                      prop_refinable_(Type))).
 
 prop_refinable_(Type) ->
-    Env = env([]),
+    Env = test_lib:create_env([]),
     typechecker:refinable(Type, Env),
     %% we're only interested in termination / infinite recursion
     true.
@@ -136,7 +136,7 @@ prop_compatible() ->
                      prop_compatible_(Type1, Type2))).
 
 prop_compatible_(Type1, Type2) ->
-    Env = env([]),
+    Env = test_lib:create_env([]),
     Type1_ = typelib:remove_pos(Type1),
     Type2_ = typelib:remove_pos(Type2),
     typechecker:compatible(Type1_, Type2_, Env),
@@ -151,7 +151,7 @@ prop_type_check_expr() ->
                      prop_type_check_expr_(Expr))).
 
 prop_type_check_expr_(Expr) ->
-    Env = env([]),
+    Env = test_lib:create_env([]),
     case catch typechecker:type_check_expr(Env, Expr) of
         {'EXIT', Reason} ->
             ct:pal("failed with:\n~p\n~p\n", [Expr, Reason]),
@@ -168,7 +168,7 @@ prop_type_check_expr_in() ->
                      prop_type_check_expr_in_(Type, Expr))).
 
 prop_type_check_expr_in_(Type, Expr) ->
-    Env = env([]),
+    Env = test_lib:create_env([]),
     case catch typechecker:type_check_expr_in(Env, Type, Expr) of
         {'EXIT', Reason} ->
             ct:pal("failed with:\n~p\n~p\n", [Expr, Reason]),
@@ -197,8 +197,3 @@ prop_type_check_forms_(Forms) ->
 %% TODO: prop_ add_type_pat - ultimately called from type_check_expr_in; requires a pattern() gen
 %% TODO: prop_ type_check_forms - this one will actually subsume all of the above if we devise a good
 %%       enough generator; requires a form() generator
-
-env(Opts) ->
-    Forms = [],
-    ParseData = typechecker:collect_specs_types_opaques_and_functions(Forms),
-    typechecker:create_env(ParseData, Opts).
