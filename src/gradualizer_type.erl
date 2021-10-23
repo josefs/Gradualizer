@@ -18,6 +18,9 @@
 
 -module(gradualizer_type).
 
+-export([preorder/3,
+         postorder/3]).
+
 -export_type([abstract_expr/0,
               abstract_clause/0,
               abstract_type/0]).
@@ -363,3 +366,85 @@
 -type type_name() :: atom().
 
 %% End of Abstract Format
+
+-type walkable_type() :: abstract_type() | {type, _, any} | pos_inf | neg_inf.
+
+-spec preorder(fun((walkable_type(), A) -> A), A, walkable_type()) -> A.
+preorder(Fun, Acc, {'ann_type', _Anno, Args} = Ty) ->
+    lists:foldl(fun (Arg, Acc1) ->
+                        preorder(Fun, Acc1, Arg)
+                end, Fun(Ty, Acc), Args);
+preorder(Fun, Acc, {'atom', _, _} = Ty) ->
+    Fun(Ty, Acc);
+preorder(Fun, Acc, {'type', _Anno, _Name, any} = Ty) ->
+    Fun(Ty, Acc);
+preorder(Fun, Acc, {'type', _Anno, _Name, Args} = Ty) ->
+    lists:foldl(fun (Arg, Acc1) ->
+                        preorder(Fun, Acc1, Arg)
+                end, Fun(Ty, Acc), Args);
+preorder(Fun, Acc, {'integer', _, _} = Ty) ->
+    Fun(Ty, Acc);
+preorder(Fun, Acc, {'char', _, _} = Ty) ->
+    Fun(Ty, Acc);
+preorder(Fun, Acc, {'op', _, _, Ty1} = Ty) ->
+    Fun(Ty1, Fun(Ty, Acc));
+preorder(Fun, Acc, {'op', _, _, Ty1, Ty2} = Ty) ->
+    lists:foldl(fun (Arg, Acc1) ->
+                        preorder(Fun, Acc1, Arg)
+                end, Fun(Ty, Acc), [Ty1, Ty2]);
+preorder(Fun, Acc, {'type', _Anno, any} = Ty) ->
+    Fun(Ty, Acc);
+preorder(Fun, Acc, pos_inf = Ty) ->
+    Fun(Ty, Acc);
+preorder(Fun, Acc, neg_inf = Ty) ->
+    Fun(Ty, Acc);
+preorder(Fun, Acc, {'remote_type', _Anno, Args} = Ty) ->
+    lists:foldl(fun (Arg, Acc1) ->
+                        preorder(Fun, Acc1, Arg)
+                end, Fun(Ty, Acc), Args);
+preorder(Fun, Acc, {var, _, _} = Ty) ->
+    Fun(Ty, Acc);
+preorder(Fun, Acc, {'user_type', _Anno, _Name, Args} = Ty) ->
+    lists:foldl(fun (Arg, Acc1) ->
+                        preorder(Fun, Acc1, Arg)
+                end, Fun(Ty, Acc), Args).
+
+-spec postorder(fun((walkable_type(), A) -> A), A, walkable_type()) -> A.
+postorder(Fun, Acc, {'ann_type', _Anno, Args} = Ty) ->
+    Fun(Ty, lists:foldr(fun (Arg, Acc1) ->
+                                postorder(Fun, Acc1, Arg)
+                        end, Acc, Args));
+postorder(Fun, Acc, {'atom', _, _} = Ty) ->
+    Fun(Ty, Acc);
+postorder(Fun, Acc, {'type', _Anno, _Name, any} = Ty) ->
+    Fun(Ty, Acc);
+postorder(Fun, Acc, {'type', _Anno, _Name, Args} = Ty) ->
+    Fun(Ty, lists:foldr(fun (Arg, Acc1) ->
+                                postorder(Fun, Acc1, Arg)
+                        end, Acc, Args));
+postorder(Fun, Acc, {'integer', _, _} = Ty) ->
+    Fun(Ty, Acc);
+postorder(Fun, Acc, {'char', _, _} = Ty) ->
+    Fun(Ty, Acc);
+postorder(Fun, Acc, {'op', _, _, Ty1} = Ty) ->
+    Fun(Ty, Fun(Ty1, Acc));
+postorder(Fun, Acc, {'op', _, _, Ty1, Ty2} = Ty) ->
+    Fun(Ty, lists:foldr(fun (Arg, Acc1) ->
+                                postorder(Fun, Acc1, Arg)
+                        end, Acc, [Ty1, Ty2]));
+postorder(Fun, Acc, {'type', _Anno, any} = Ty) ->
+    Fun(Ty, Acc);
+postorder(Fun, Acc, pos_inf = Ty) ->
+    Fun(Ty, Acc);
+postorder(Fun, Acc, neg_inf = Ty) ->
+    Fun(Ty, Acc);
+postorder(Fun, Acc, {'remote_type', _Anno, Args} = Ty) ->
+    Fun(Ty, lists:foldr(fun (Arg, Acc1) ->
+                                postorder(Fun, Acc1, Arg)
+                        end, Acc, Args));
+postorder(Fun, Acc, {var, _, _} = Ty) ->
+    Fun(Ty, Acc);
+postorder(Fun, Acc, {'user_type', _Anno, _Name, Args} = Ty) ->
+    Fun(Ty, lists:foldr(fun (Arg, Acc1) ->
+                                postorder(Fun, Acc1, Arg)
+                        end, Acc, Args)).

@@ -16,6 +16,20 @@ abstract_module() ->
 abstract_term() ->
     gradualizer_erlang_abstract_code:term().
 
+prop_preorder_walk_type() ->
+    ?FORALL(Type, abstract_type(),
+            prop_preorder_walk_type_(Type)).
+
+prop_preorder_walk_type_(Type) ->
+    gradualizer_type:preorder(fun (T, true) -> true end, true, Type).
+
+prop_postorder_walk_type() ->
+    ?FORALL(Type, abstract_type(),
+            prop_postorder_walk_type_(Type)).
+
+prop_postorder_walk_type_(Type) ->
+    gradualizer_type:postorder(fun (T, true) -> true end, true, Type).
+
 prop_remove_pos_removes_pos() ->
     ?FORALL(Type, abstract_type(),
             ?WHENFAIL(ct:pal("~s failed:\n~p\n", [?FUNCTION_NAME, Type]),
