@@ -7,7 +7,7 @@ create_env(Opts) ->
     create_env("", Opts).
 
 create_env(String, Opts) ->
-    Forms = ensure_form_list(merl:quote(String)),
+    Forms = ensure_form_list(merl:quote(lists:flatten(String))),
     ParseData = typechecker:collect_specs_types_opaques_and_functions(Forms),
     typechecker:create_env(ParseData, Opts).
 
