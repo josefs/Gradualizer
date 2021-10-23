@@ -95,10 +95,9 @@ function_name(F, _) -> F.
 mk_ct_return(true, _Tool) ->
     true;
 mk_ct_return(Other, Tool) ->
-    try lists:last(hd(Tool:counterexample()))
-    of
-        {set,{var,_},{call,M,F,Args}} ->
-            {fail, io_lib:format("~p:~tp/~p returned bad result",[M,F,length(Args)])}
+    try hd(Tool:counterexample()) of
+        Counterexample ->
+            {fail, Counterexample}
     catch
         _:_ ->
             {fail, Other}
