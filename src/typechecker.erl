@@ -1045,6 +1045,9 @@ expect_list_type(Ty, _, _) ->
 rewrite_list_to_nonempty_list({type, Ann, T, [ElemTy]})
   when T == list orelse T == nonempty_list ->
     {type, Ann, nonempty_list, [ElemTy]};
+rewrite_list_to_nonempty_list({type, Ann, T, []})
+  when T == string orelse T == nonempty_string ->
+    {type, Ann, nonempty_string, []};
 rewrite_list_to_nonempty_list({type, Ann, T, [ElemTy, SentinelTy]})
   when T == maybe_improper_list orelse T == nonempty_improper_list ->
     {type, Ann, nonempty_improper_list, [ElemTy, SentinelTy]};
