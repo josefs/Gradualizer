@@ -4409,7 +4409,11 @@ add_any_types_pat({op, _, _Op, _Pat1, _Pat2}, VEnv) ->
     VEnv;
 add_any_types_pat({op, _, _Op, _Pat}, VEnv) ->
     %% Cannot contain variables.
-    VEnv.
+    VEnv;
+add_any_types_pat({record_index,_,_RName,_FName} = Pat, _VEnv) ->
+    %% #<RName>.<FName>, for example #my_record.foo is not a valid pattern.
+    %% However, matching this and throwing (but NOT erroring) simplifies property based testing.
+    throw({illegal_pattern, Pat}).
 
 -spec assign_types_to_vars_bound_more_than_once(Pats :: [gradualizer_type:abstract_pattern()],
                                                 VEnv :: map(),
