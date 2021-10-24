@@ -4,6 +4,9 @@
 
 -include_lib("common_test/include/ct_property_test.hrl").
 
+%-define(debug(Label, Val), begin ct:pal("~ts:~n~p~n", [Label, Val]), Val end).
+-define(debug(Label, Val), Val).
+
 abstract_type() ->
     gradualizer_type_gen:abstract_type().
 
@@ -55,10 +58,13 @@ prop_normalize_type_(Type) ->
 
 create_env({user_type, _, _, _} = Type, Opts) ->
     EnvExpr = create_recursive_type_env_expr(Type),
-    Env = test_lib:create_env(EnvExpr, Opts);
+    ?debug("env expr", lists:flatten(EnvExpr)),
+    Env = test_lib:create_env(EnvExpr, Opts),
+    ?debug("env", Env);
 create_env(Type, Opts) ->
     EnvExpr = [ declare_type(UserTy) || UserTy <- gather_user_types(Type) ],
-    Env = test_lib:create_env(EnvExpr, Opts).
+    Env = test_lib:create_env(EnvExpr, Opts),
+    ?debug("env", Env).
 
 gather_user_types(Type) ->
     gradualizer_type:preorder(fun
@@ -103,7 +109,7 @@ create_recursive_type_env_expr({user_type, _, _, _} = Type) ->
               Body = typelib:parse_type("{}"), %% we could be more creative here, but there's likely no need to
               declare_type_with_body(Ty, Body);
           _ ->
-              Body = B,
+              Body = [ fix_type_body(B1) || B1 <- B ],
               declare_type_with_body(Ty, Body)
       end
       || {TA, {user_type, _, _, B} = Ty} <- maps:to_list(Defs) ].
@@ -116,6 +122,14 @@ find_user_types({user_type, _Anno, Name, Args} = Ty, Defs) ->
     end;
 find_user_types(_, Acc) ->
     Acc.
+
+%% Some constructs are not allowed in a type definition - let's make sure we don't use any of them.
+fix_type_body(Type) ->
+    Fix = fun
+              ({ann_type, _, [_TyVar, TyDef]}, _) -> TyDef;
+              (T, _) -> T
+          end,
+    gradualizer_type:postorder(Fix, none, Type).
 
 declare_type_with_body({user_type, _, Name, Args} = Ty, TyBody) ->
     ArgsSeq = string:join([ ["A", integer_to_list(I)] || I <- lists:seq(1, length(Args))], ", "),
