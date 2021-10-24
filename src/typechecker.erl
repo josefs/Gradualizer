@@ -84,7 +84,7 @@
                                 Type :: type()}.
 
 %% The environment passed around during typechecking.
-%% TODO: this should be investigated:
+%% TODO: See https://github.com/josefs/Gradualizer/issues/364 for details.
 %%       Making the type def and record def have the same number of fields fixes a broken Gradualizer
 %%       diagnostic, which seems to assume the record only has the
 %%       fields annotated in the type, not all the fields from the definition.
