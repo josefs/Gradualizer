@@ -271,25 +271,21 @@ normalize_test_() ->
     [
      {"Merge intervals",
       ?_assertEqual(?t( 1..6 ),
-                    typechecker:normalize(?t( 1..3|4..6 ),
-                                          gradualizer_lib:create_tenv(?MODULE, [], [])))},
+                    typechecker:normalize(?t( 1..3|4..6 ), test_lib:create_env([])))},
      {"Remove singleton atoms if atom() is present",
       ?_assertEqual(?t( atom() ),
-                    typechecker:normalize(?t( a | atom() | b ),
-                                          gradualizer_lib:create_tenv(?MODULE, [], [])))},
+                    typechecker:normalize(?t( a | atom() | b ), test_lib:create_env([])))},
      {"Evaluate numeric operators in types",
       %% ?t(-8) is parsed as {op,0,'-',{integer,0,8}}
       ?_assertEqual({integer, 0 , -8},
                     typechecker:normalize(?t( (bnot 3) *
                                               (( + 7 ) rem ( 5 div - 2 ) ) bxor
-                                              (1 bsl 6 bsr 4) ),
-                                          gradualizer_lib:create_tenv(?MODULE, [], [])))},
+                                              (1 bsl 6 bsr 4) ), test_lib:create_env([])))},
      {"normalize(boolean()) == normalize(normalize(boolean))",
-      ?_assertEqual(typechecker:normalize(?t( boolean() ),
-                                          gradualizer_lib:empty_tenv()),
+      ?_assertEqual(typechecker:normalize(?t( boolean() ), test_lib:create_env([])),
                     typechecker:normalize(typechecker:normalize(?t( boolean() ),
-                                                                gradualizer_lib:empty_tenv()),
-                                          gradualizer_lib:empty_tenv()))
+                                                                test_lib:create_env([])),
+                                          test_lib:create_env([])))
      }
     ].
 
@@ -305,7 +301,7 @@ unfold_bounded_type_test() ->
         "fun(([{A, B}]) -> {[A], [B]})",
 
     {attribute, _, spec, {{unzip, 1}, [BoundedFun]}} = merl:quote(OrigSpecStr),
-    Env = #env{tenv = gradualizer_lib:create_tenv(?MODULE, [], [])},
+    Env = test_lib:create_env([]),
     UnfoldedType = typechecker:unfold_bounded_type(Env, BoundedFun),
     UnfoldedTypeStr = typelib:pp_type(UnfoldedType),
     ?assertEqual(ExpectedTypeStr, UnfoldedTypeStr).
@@ -623,7 +619,7 @@ cleanup_app(Apps) ->
     ok.
 
 subtype(T1, T2) ->
-    case typechecker:subtype(T1, T2, gradualizer_lib:create_tenv(?MODULE, [], [])) of
+    case typechecker:subtype(T1, T2, test_lib:create_env([])) of
         {true, _} ->
             true;
         false ->
@@ -631,13 +627,13 @@ subtype(T1, T2) ->
     end.
 
 glb(T1, T2) ->
-    glb(T1, T2, #env{tenv = gradualizer_lib:create_tenv(?MODULE, [], [])}).
+    glb(T1, T2, test_lib:create_env([])).
 
 glb(T1, T2, Env) ->
     typechecker:glb(T1, T2, Env).
 
 deep_normalize(T) ->
-    deep_normalize(T, gradualizer_lib:create_tenv(?MODULE, [], [])).
+    deep_normalize(T, test_lib:create_env([])).
 
 deep_normalize(T, TEnv) ->
     case typechecker:normalize(T, TEnv) of
