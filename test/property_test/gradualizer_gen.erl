@@ -1,4 +1,4 @@
--module(gradualizer_type_gen).
+-module(gradualizer_gen).
 
 -export([abstract_type/0, abstract_type/1,
          expr/0, expr/1,

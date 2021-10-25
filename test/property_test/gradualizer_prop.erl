@@ -8,13 +8,13 @@
 -define(debug(Label, Val), Val).
 
 abstract_type() ->
-    gradualizer_type_gen:abstract_type().
+    gradualizer_gen:abstract_type().
 
 abstract_expr() ->
-    gradualizer_type_gen:expr().
+    gradualizer_gen:expr().
 
 abstract_module() ->
-    gradualizer_type_gen:module().
+    gradualizer_gen:module().
 
 abstract_term() ->
     gradualizer_erlang_abstract_code:term().
