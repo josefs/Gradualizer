@@ -25,7 +25,6 @@ jobs:
         run: "make tests"
       - name: "Run property-based tests"
         run: "PROP_NUMTESTS=5000 rebar3 ct --suite test/gradualizer_prop_SUITE.erl"
-        continue-on-error: true
       - name: "Self-gradualize"
         run: "make gradualize"
         continue-on-error: true
