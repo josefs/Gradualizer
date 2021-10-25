@@ -20,9 +20,6 @@
 
 -include("typelib.hrl").
 
-%% Performance hack: Unions larger than this value are replaced by any() in normalization.
--define(union_size_limit, persistent_term:get(gradualizer_union_size_limit, 30)).
-
 -define(verbose(Env, Fmt, Args),
         case Env#env.verbose of
             true -> io:format(Fmt, Args);
@@ -91,13 +88,14 @@
 %%       diagnostic, which seems to assume the record only has the
 %%       fields annotated in the type, not all the fields from the definition.
 -include("typechecker.hrl").
--type env() :: #env{ fenv     :: map(),
-                     imported :: #{{atom(), arity()} => module()},
-                     venv     :: map(),
-                     tenv     :: tenv(),
-                     infer    :: boolean(),
-                     verbose  :: boolean(),
-                     exhaust  :: boolean() }.
+-type env() :: #env{ fenv               :: map(),
+                     imported           :: #{{atom(), arity()} => module()},
+                     venv               :: map(),
+                     tenv               :: tenv(),
+                     infer              :: boolean(),
+                     verbose            :: boolean(),
+                     exhaust            :: boolean(),
+                     union_size_limit   :: non_neg_integer() }.
 
 -include("gradualizer.hrl").
 
@@ -744,12 +742,13 @@ normalize({type, _, record, [{atom, _, Name}|Fields]}, Env) when length(Fields) 
         || ?type_field_type(FieldName, Type) <- Fields],
     type_record(Name, NormFields);
 normalize({type, _, union, Tys}, Env) ->
-    UnionSizeLimit = ?union_size_limit,
+    UnionSizeLimit = Env#env.union_size_limit,
     Types = flatten_unions(Tys, Env),
     case merge_union_types(Types, Env) of
         []  -> type(none);
         [T] -> T;
-        Ts when length(Ts) > UnionSizeLimit -> type(any); % performance hack
+        %% Performance hack: Unions larger than this value are replaced by any().
+        Ts when length(Ts) > UnionSizeLimit -> type(any);
         Ts  -> type(union, Ts)
     end;
 normalize({user_type, P, Name, Args} = Type, Env) ->
@@ -4768,8 +4767,11 @@ create_env(#parsedata{module    = Module
          imported = Imported,
          %% Store some type checking options in the environment
          infer = proplists:get_bool(infer, Opts),
-         verbose = proplists:get_bool(verbose, Opts)}.
+         verbose = proplists:get_bool(verbose, Opts),
+         union_size_limit = proplists:get_value(union_size_limit, Opts,
+                                                default_union_size_limit())}.
 
+default_union_size_limit() -> 30.
 
 create_fenv(Specs, Funs) ->
 % We're taking advantage of the fact that if a key occurrs more than once
