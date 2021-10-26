@@ -12,6 +12,10 @@
 %% as it's very unlikely to take this long to typecheck a single file, type, or expression.
 -define(PROP_TIMEOUT, timer:seconds(3)).
 
+%%
+%%' Generators
+%%
+
 abstract_type() ->
     gradualizer_gen:abstract_type().
 
@@ -23,6 +27,10 @@ abstract_module() ->
 
 abstract_term() ->
     gradualizer_erlang_abstract_code:term().
+
+%%.
+%%' Properties
+%%
 
 prop_reduce_type() ->
     ?FORALL(Type, abstract_type(), prop_reduce_type_(Type)).
@@ -44,34 +52,17 @@ prop_remove_pos_removes_pos_(Type) ->
 prop_normalize_type() ->
     ?FORALL(Type,
             abstract_type(),
-            ?WHENFAIL(ct:pal("~s failed:\n~p\n", [?FUNCTION_NAME, Type]),
-                      ?TIMEOUT(?PROP_TIMEOUT,
-                               prop_normalize_type_(Type)))).
+            begin
+                {TextEnv, Env} = create_env(typelib:remove_pos(Type), [return_text_env]),
+                ?WHENFAIL(ct:pal("~s failed:\n~p\nwith type env:\n~ts\n",
+                                 [?FUNCTION_NAME, Type, TextEnv]),
+                          ?TIMEOUT(?PROP_TIMEOUT, prop_normalize_type_(Type, Env)))
+            end).
 
-prop_normalize_type_(Type) ->
-    Env = test_lib:create_env([]),
+prop_normalize_type_(Type, Env) ->
     typechecker:normalize(Type, Env),
     %% we're only interested in normalize termination / infinite recursion
     true.
-
-find_user_types({user_type, _Anno, Name, Args} = Ty, Defs) ->
-    TA = {Name, length(Args)},
-    case maps:is_key(TA, Defs) of
-        true -> Defs;
-        false -> Defs#{TA => Ty}
-    end;
-find_user_types(_, Acc) ->
-    Acc.
-
-declare_type_with_body({user_type, _, Name, Args} = Ty, TyBody) ->
-    ArgsSeq = string:join([ ["A", integer_to_list(I)] || I <- lists:seq(1, length(Args))], ", "),
-    ArgsAlt = string:join([ ["A", integer_to_list(I)] || I <- lists:seq(1, length(Args))], " | "),
-    io_lib:format("-type ~ts(~ts) :: ~ts~ts.~n",
-                  [Name, ArgsSeq, typelib:pp_type(TyBody), [ [" | ", ArgsAlt] || Args /= []] ]).
-
-declare_type({user_type, _, Name, Args} = Ty) ->
-    TArgs = string:join([ ["A", integer_to_list(I)] || I <- lists:seq(1, length(Args))], ", "),
-    io_lib:format("-type ~ts(~ts) :: {~ts}.\n", [Name, TArgs, TArgs]).
 
 prop_glb() ->
     ?FORALL({Type1, Type2},
@@ -204,3 +195,97 @@ prop_type_check_forms_(Forms) ->
 %% TODO: prop_ add_type_pat - ultimately called from type_check_expr_in; requires a pattern() gen
 %% TODO: prop_ type_check_forms - this one will actually subsume all of the above if we devise a good
 %%       enough generator; requires a form() generator
+
+%%.
+%%' Helpers
+%%
+
+create_env({user_type, _, _, _} = Type, Opts) ->
+    EnvExpr = create_recursive_type_env_expr(Type),
+    ?debug("env expr", lists:flatten(EnvExpr)),
+    Env = test_lib:create_env(EnvExpr, Opts),
+    ?debug("env", Env),
+    case proplists:get_value(return_text_env, Opts) of
+        false -> Env;
+        true -> {EnvExpr, Env}
+    end;
+create_env(Type, Opts) ->
+    EnvExpr = [ declare_trivial_user_type(UserTy) || UserTy <- gather_user_types(Type) ],
+    Env = test_lib:create_env(EnvExpr, Opts),
+    ?debug("env", Env),
+    case proplists:get_value(return_text_env, Opts) of
+        false -> Env;
+        true -> {EnvExpr, Env}
+    end.
+
+gather_user_types(Type) ->
+    {_, Tys} = typelib:reduce_type(fun
+                                       ({user_type, _, _, _} = UserTy, Acc) -> {UserTy, [UserTy | Acc]};
+                                       (Ty, Acc) -> {Ty, Acc}
+                                   end, [], Type),
+    Tys.
+
+%% @doc Generate a mutually recursive type env from an example user type.
+%%
+%% We want to test properties on recursive types, not just on simple types.
+%% This function creates an env of mutually recursive types with a somewhat arbitrarily chosen
+%% algorithm - the point is to generate complex enough types which might trigger infinite recursion
+%% in the typechecker.
+%% In other words, we use a generated type instance to generate an environment
+%% of possibly recursive types that refer to each other.
+%%
+%% The algorithm to get to a type env from a single "complex enough" type is roughly this:
+%% - find all user types in the input type term by going from top to bottom
+%% - user types with no args are defined as an empty tuple,
+%%   that is `t1()' generates `-type t1() :: {}.'
+%% - user types with args are defined as generic types with number of params equal to the number of
+%%   present args and the body equivalent to a union of all actual args and formal params,
+%%   that is `t2(t2(t2(t1())) | t2(t1()) | any_atom)'
+%%   generates `-type t2(A1) :: t2(t2(t1())) | t2(t1()) | any_atom | A1.'
+%%
+%% In other words, the following generated type:
+%%
+%% ```
+%% t2(t2(t2(t1())) | t2(t1()) | any_atom)
+%% '''
+%%
+%% Generates a type env equivalent to writing the following type definitions by hand:
+%%
+%% ```
+%% -type t1() :: {}.
+%% -type t2(A1) :: t2(t2(t1())) | t2(t1()) | any_atom | A1.
+%% '''
+create_recursive_type_env_expr({user_type, _, _, _} = Type) ->
+    {_, Defs} = typelib:reduce_type(fun find_user_types/2, #{}, Type),
+    [ case TA of
+          {_, 0} ->
+              %% we could be more creative here, but there's likely no need to
+              Body = typelib:parse_type("{}"),
+              declare_type_with_body(Ty, Body);
+          _ ->
+              Body = B,
+              declare_type_with_body(Ty, Body)
+      end
+      || {TA, {user_type, _, _, B} = Ty} <- maps:to_list(Defs) ].
+
+find_user_types({user_type, _Anno, Name, Args} = Ty, Defs) ->
+    TA = {Name, length(Args)},
+    case maps:is_key(TA, Defs) of
+        true -> {Ty, Defs};
+        false -> {Ty, Defs#{TA => Ty}}
+    end;
+find_user_types(Ty, Acc) ->
+    {Ty, Acc}.
+
+declare_type_with_body({user_type, _, Name, Args}, TyBody) ->
+    ArgsSeq = string:join([ ["A", integer_to_list(I)] || I <- lists:seq(1, length(Args))], ", "),
+    ArgsAlt = string:join([ ["A", integer_to_list(I)] || I <- lists:seq(1, length(Args))], " | "),
+    io_lib:format("-type ~ts(~ts) :: ~ts~ts.~n",
+                  [Name, ArgsSeq, typelib:pp_type(TyBody), [ [" | ", ArgsAlt] || Args /= []] ]).
+
+declare_trivial_user_type({user_type, _, Name, Args}) ->
+    TArgs = string:join([ ["A", integer_to_list(I)] || I <- lists:seq(1, length(Args))], ", "),
+    io_lib:format("-type ~ts(~ts) :: {~ts}.\n", [Name, TArgs, TArgs]).
+
+%%.
+%% vim: foldmethod=marker foldmarker=%%',%%.
