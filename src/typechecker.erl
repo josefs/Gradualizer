@@ -2917,8 +2917,12 @@ unary_op_arg_type(Op, Ty) when ?is_int_type(Ty), Op == '-' orelse Op == 'bnot' -
     gradualizer_int:int_range_to_type({Neg(Hi), Neg(Lo)});
 unary_op_arg_type('-', Ty = {type, _, float, []}) ->
     Ty;
-unary_op_arg_type(_Op, Ty = {var, _, _}) ->
-    Ty.
+unary_op_arg_type(_Op, {var, _, _}) ->
+    %% TODO: this should be more specific once we're able to solve constraints on type vars.
+    %%       Otherwise, we'll lose some feedback / precision.
+    %%       With contraint solving, if the type variable resolves to pos_integer()
+    %%       and _Op == '-' here, then we should have returned neg_integer().
+    type(any).
 
 %% Type check list comprehension or a binary comprehension
 -spec type_check_comprehension_in(Env        :: #env{},
