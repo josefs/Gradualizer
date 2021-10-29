@@ -722,8 +722,6 @@ glb_ty({type, _, Name, Args1}, {type, _, Name, Args2}, A, Env)
 glb_ty(_Ty1, _Ty2, _A, _Env) -> {type(none), constraints:empty()}.
 
 -spec has_overlapping_keys(type(), env()) -> boolean().
-has_overlapping_keys({type, _, map, any}, _Env) ->
-    true;
 has_overlapping_keys({type, _, map, Assocs}, Env) ->
     Cart = [ case {subtype(As1, As2, Env), subtype(As2, As1, Env)} of
                  {false, false} ->
@@ -782,6 +780,8 @@ normalize({op, _, _, _Arg} = Op, _Env) ->
     erl_eval:partial_eval(Op);
 normalize({op, _, _, _Arg1, _Arg2} = Op, _Env) ->
     erl_eval:partial_eval(Op);
+normalize({ann_type, Ann, [Var, Ty]}, Env) ->
+    {ann_type, Ann, [Var, normalize(Ty, Env)]};
 normalize({type, Ann, range, [T1, T2]}, Env) ->
     {type, Ann, range, [normalize(T1, Env), normalize(T2, Env)]};
 normalize({type, Ann, map, Assocs}, Env) when is_list(Assocs) ->
