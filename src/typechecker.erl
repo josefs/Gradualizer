@@ -1045,9 +1045,6 @@ expect_list_type(Ty, _, _) ->
 rewrite_list_to_nonempty_list({type, Ann, T, [ElemTy]})
   when T == list orelse T == nonempty_list ->
     {type, Ann, nonempty_list, [ElemTy]};
-rewrite_list_to_nonempty_list({type, Ann, T, []})
-  when T == string orelse T == nonempty_string ->
-    {type, Ann, nonempty_string, []};
 rewrite_list_to_nonempty_list({type, Ann, T, [ElemTy, SentinelTy]})
   when T == maybe_improper_list orelse T == nonempty_improper_list ->
     {type, Ann, nonempty_improper_list, [ElemTy, SentinelTy]};
@@ -4154,7 +4151,7 @@ add_type_pat(CONS = {cons, P, PH, PT}, ListTy, Env, VEnv) ->
 add_type_pat(String = {string, P, _}, Ty, Env, VEnv) ->
     case subtype(type(string), Ty, Env) of
         {true, Cs} ->
-            {type(none), type(string), VEnv, Cs};
+            {type(none), normalize(type(string), Env), VEnv, Cs};
         false ->
             throw({type_error, pattern, P, String, Ty})
     end;
