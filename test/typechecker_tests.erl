@@ -650,24 +650,13 @@ type_check_forms(String) ->
     type_check_forms(String, []).
 
 type_check_forms(String, Opts) ->
-    [] =:= typechecker:type_check_forms(ensure_form_list(merl:quote(String)),
-                                        Opts).
-
-ensure_form_list(List) when is_list(List) ->
-    List;
-ensure_form_list(Other) ->
-    [Other].
+    [] =:= typechecker:type_check_forms(test_lib:ensure_form_list(merl:quote(String)), Opts).
 
 type_check_expr(EnvStr, ExprString) ->
     type_check_expr(EnvStr, ExprString, []).
 
 type_check_expr(EnvStr, ExprString, Opts) ->
-    Env = create_env(EnvStr, Opts),
+    Env = test_lib:create_env(EnvStr, Opts),
     Expr = merl:quote(ExprString),
     {Ty, _VarBinds, _Cs} = typechecker:type_check_expr(Env, Expr),
     typelib:pp_type(Ty).
-
-create_env(String, Opts) ->
-    Forms = ensure_form_list(merl:quote(String)),
-    ParseData = typechecker:collect_specs_types_opaques_and_functions(Forms),
-    typechecker:create_env(ParseData, Opts).

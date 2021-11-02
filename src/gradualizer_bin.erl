@@ -40,8 +40,15 @@ bin_element_view({bin_element, Anno, {Lit, _, _}, default, _Spec} = BinElem)
     %% Literal with default size, i.e. no variables to consider.
     %% Size is not allowed for utf8/utf16/utf32.
     Bin = {bin, Anno, [BinElem]},
-    {value, Value, []} = erl_eval:expr(Bin, []),
-    {bit_size(?assert_type(Value, bitstring())), 0};
+    try
+        case erl_eval:expr(Bin, []) of
+            {value, Value, []} ->
+                {bit_size(?assert_type(Value, bitstring())), 0}
+        end
+    catch
+        error:_ ->
+            throw({illegal_binary_segment, Bin})
+    end;
 bin_element_view({bin_element, Anno, {string, _, Chars}, Size, Spec}) ->
     %% Expand <<"ab":32/float>> to <<$a:32/float, $b:32/float>>
     %% FIXME: Not true for float, integer
@@ -65,11 +72,13 @@ bin_element_view({bin_element, _Anno, _Expr, default, Specifiers}) ->
         utf16     -> {0, 16}; %% 2-4 bytes
         utf32     -> {32, 0}  %% 4 bytes, fixed
     end;
-bin_element_view({bin_element, _Anno, _Expr, SizeSpec, Specifiers}) ->
+bin_element_view({bin_element, Anno, _Expr, SizeSpec, Specifiers} = BinElem) ->
     %% Non-default size, possibly a constant expression
-    try erl_eval:expr(SizeSpec, []) of
-        {value, Sz, _VarBinds} ->
-            {Sz * get_unit(Specifiers), 0}
+    try
+        case erl_eval:expr(SizeSpec, []) of
+            {value, Sz, _VarBinds} when is_integer(Sz) ->
+                {Sz * get_unit(Specifiers), 0}
+        end
     catch
         error:{unbound_var, _} ->
             %% Variable size
@@ -78,7 +87,9 @@ bin_element_view({bin_element, _Anno, _Expr, SizeSpec, Specifiers}) ->
                 float when U == 64 -> {64, 0};  %% size must be 1 in this case
                 float              -> {32, 32}; %% a float must be 32 or 64 bits
                 _OtherType         -> {0, U}    %% any multiple of the unit
-            end
+            end;
+        error:_ ->
+            throw({illegal_binary_segment, {bin, Anno, [BinElem]}})
     end.
 
 -spec get_type_specifier(Specifiers :: [atom() | {unit, non_neg_integer()}] |

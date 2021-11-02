@@ -135,6 +135,18 @@ format_type_error({illegal_record_info, Expr}, Opts) ->
       [format_location(Expr, brief, Opts),
        pp_expr(Expr, Opts),
        format_location(Expr, verbose, Opts)]);
+format_type_error({illegal_map_type, Type}, Opts) ->
+    io_lib:format(
+      "~sIllegal map type ~s~s~n",
+      [format_location(Type, brief, Opts),
+       pp_type(Type, Opts),
+       format_location(Type, verbose, Opts)]);
+format_type_error({illegal_binary_segment, Expr}, Opts) ->
+    io_lib:format(
+      "~sIllegal binary segment expression ~s~s~n",
+      [format_location(Expr, brief, Opts),
+       pp_expr(Expr, Opts),
+       format_location(Expr, verbose, Opts)]);
 format_type_error({type_error, list, _Anno, Ty1, Ty}, Opts) ->
     io_lib:format(
       "~sThe type ~s cannot be an element of a list of type ~s~n",

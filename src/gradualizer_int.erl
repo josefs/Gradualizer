@@ -149,6 +149,8 @@ int_range_to_types({I, J}) when is_integer(I) andalso
 				I < J ->
     [{type, erl_anno:new(0), range, [{integer, erl_anno:new(0), I}
                                     ,{integer, erl_anno:new(0), J}]}];
+int_range_to_types({pos_inf, _}) -> [];
+int_range_to_types({_, neg_inf}) -> [];
 int_range_to_types({I, J}) when I > J ->
     [].
 

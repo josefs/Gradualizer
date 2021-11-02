@@ -3,14 +3,16 @@
 %% API used by gradualizer.erl
 -export([type_check_forms/2]).
 
-%% Export all for easier testing and debugging while the project is
-%% still in an early stage
 %% Functions used in unit tests.
 -export([type_check_expr/2,
+         type_check_expr_in/3,
          create_env/2,
          subtype/3,
          normalize/2,
          glb/3,
+         type_diff/3,
+         refinable/2,
+         compatible/3,
          collect_specs_types_opaques_and_functions/1,
          number_of_exported_functions/1,
          bounded_type_list_to_type/2,
@@ -2890,7 +2892,7 @@ type_check_unary_op_in(Env, ResTy, Op, P, Arg) ->
         _ ->
             ArgTy = unary_op_arg_type(Op, ResTy1),
             {VB, Cs1} = type_check_expr_in(Env, ArgTy, Arg),
-	    {VB, constraints:combine(Cs, Cs1)}
+            {VB, constraints:combine(Cs, Cs1)}
     end.
 
 %% Which type should we check the argument against if we want the given type
@@ -2909,7 +2911,13 @@ unary_op_arg_type(Op, Ty) when ?is_int_type(Ty), Op == '-' orelse Op == 'bnot' -
              (N) when Op == 'bnot' -> bnot N end,
     gradualizer_int:int_range_to_type({Neg(Hi), Neg(Lo)});
 unary_op_arg_type('-', Ty = {type, _, float, []}) ->
-    Ty.
+    Ty;
+unary_op_arg_type(_Op, {var, _, _}) ->
+    %% TODO: this should be more specific once we're able to solve constraints on type vars.
+    %%       Otherwise, we'll lose some feedback / precision.
+    %%       With contraint solving, if the type variable resolves to pos_integer()
+    %%       and _Op == '-' here, then we should have returned neg_integer().
+    type(any).
 
 %% Type check list comprehension or a binary comprehension
 -spec type_check_comprehension_in(Env        :: #env{},
@@ -3036,7 +3044,9 @@ update_map_type(?type(map, Assocs), AssocTys) ->
 update_map_type({var, _, _Var}, _AssocTys) ->
     type(any);
 update_map_type(?type(union, MapTys), AssocTys) ->
-    type(union, [update_map_type(MapTy, AssocTys) || MapTy <- MapTys]).
+    type(union, [update_map_type(MapTy, AssocTys) || MapTy <- MapTys]);
+update_map_type(Type, _AssocTys) ->
+    throw({illegal_map_type, Type}).
 
 %% Override existing key's value types and append those key types
 %% which are not updated
@@ -4139,7 +4149,7 @@ add_type_pat(CONS = {cons, P, PH, PT}, ListTy, Env, VEnv) ->
 add_type_pat(String = {string, P, _}, Ty, Env, VEnv) ->
     case subtype(type(string), Ty, Env) of
         {true, Cs} ->
-            {type(none), type(string), VEnv, Cs};
+            {type(none), normalize(type(string), Env), VEnv, Cs};
         false ->
             throw({type_error, pattern, P, String, Ty})
     end;
@@ -4405,7 +4415,10 @@ add_any_types_pat({op, _, _Op, _Pat1, _Pat2}, VEnv) ->
     VEnv;
 add_any_types_pat({op, _, _Op, _Pat}, VEnv) ->
     %% Cannot contain variables.
-    VEnv.
+    VEnv;
+add_any_types_pat(Pat, _VEnv) ->
+    %% Matching other patterns and throwing (but NOT erroring) simplifies property based testing.
+    throw({illegal_pattern, Pat}).
 
 -spec assign_types_to_vars_bound_more_than_once(Pats :: [gradualizer_type:abstract_pattern()],
                                                 VEnv :: map(),
