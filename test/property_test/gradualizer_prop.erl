@@ -175,8 +175,6 @@ prop_type_check_expr_in_(Type, Expr) ->
     end.
 
 prop_type_check_forms() ->
-    %% TODO: use abstract_term() for now, since abstract_expr() gives very unpredictable
-    %% and problematic nestings of exprs, e.g. maps inside binaries o_O
     ?FORALL(Forms, abstract_module(),
             ?TIMEOUT(timer:seconds(2),
                      prop_type_check_forms_(Forms))).
