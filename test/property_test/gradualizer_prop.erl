@@ -69,8 +69,8 @@ prop_glb() ->
 
 prop_glb_(Type1, Type2) ->
     Env = test_lib:create_env([]),
-    Type1_ = typechecker:normalize(Type1, Env),
-    Type2_ = typechecker:normalize(Type2, Env),
+    Type1_ = typechecker:normalize(typelib:remove_pos(Type1), Env),
+    Type2_ = typechecker:normalize(typelib:remove_pos(Type2), Env),
     typechecker:glb(Type1_, Type2_, Env),
     %% we're only interested in termination / infinite recursion
     true.
@@ -105,7 +105,9 @@ prop_type_diff() ->
 
 prop_type_diff_(Type1, Type2) ->
     Env = test_lib:create_env([]),
-    typechecker:type_diff(Type1, Type2, Env),
+    Type1_ = typelib:remove_pos(Type1),
+    Type2_ = typelib:remove_pos(Type2),
+    typechecker:type_diff(Type1_, Type2_, Env),
     %% we're only interested in termination / infinite recursion
     true.
 
@@ -113,13 +115,14 @@ prop_type_diff_(Type1, Type2) ->
 %%       since it's called from type_check_expr_in that we should have a prop for anyway.
 prop_refinable() ->
     ?FORALL(Type,
-            {abstract_type(), abstract_type()},
+            abstract_type(),
             ?TIMEOUT(timer:seconds(1),
                      prop_refinable_(Type))).
 
 prop_refinable_(Type) ->
     Env = test_lib:create_env([]),
-    typechecker:refinable(Type, Env),
+    Type_ = typelib:remove_pos(Type),
+    typechecker:refinable(Type_, Env),
     %% we're only interested in termination / infinite recursion
     true.
 

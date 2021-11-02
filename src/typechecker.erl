@@ -780,8 +780,6 @@ normalize({op, _, _, _Arg} = Op, _Env) ->
     erl_eval:partial_eval(Op);
 normalize({op, _, _, _Arg1, _Arg2} = Op, _Env) ->
     erl_eval:partial_eval(Op);
-normalize({ann_type, Ann, [Var, Ty]}, Env) ->
-    {ann_type, Ann, [Var, normalize(Ty, Env)]};
 normalize({type, Ann, range, [T1, T2]}, Env) ->
     {type, Ann, range, [normalize(T1, Env), normalize(T2, Env)]};
 normalize({type, Ann, map, Assocs}, Env) when is_list(Assocs) ->
