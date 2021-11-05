@@ -785,7 +785,7 @@ normalize_rec({remote_type, P, [{atom, _, M}, {atom, _, N}, Args]}, Env, Unfolde
         {ok, T} ->
             normalize_rec(typelib:remove_pos(T), Env, Unfolded);
         opaque ->
-            NormalizedArgs = lists:map(fun (Ty) -> normalize(Ty, Env) end, Args),
+            NormalizedArgs = lists:map(fun (Ty) -> normalize_rec(Ty, Env, Unfolded) end, Args),
             typelib:annotate_user_types(M, {user_type, P, N, NormalizedArgs});
         not_exported ->
             throw({not_exported, remote_type, P, {M, N, length(Args)}});
@@ -799,11 +799,11 @@ normalize_rec({op, _, _, _Arg1, _Arg2} = Op, _Env, _Unfolded) ->
 normalize_rec({type, Ann, range, [T1, T2]}, Env, Unfolded) ->
     {type, Ann, range, [normalize_rec(T1, Env, Unfolded),
                         normalize_rec(T2, Env, Unfolded)]};
-normalize_rec({type, Ann, map, Assocs}, Env, _Unfolded) when is_list(Assocs) ->
-    {type, Ann, map, [normalize(As, Env) || As <- Assocs]};
-normalize_rec({type, Ann, Assoc, KeyVal}, Env, _Unfolded)
+normalize_rec({type, Ann, map, Assocs}, Env, Unfolded) when is_list(Assocs) ->
+    {type, Ann, map, [normalize_rec(As, Env, Unfolded) || As <- Assocs]};
+normalize_rec({type, Ann, Assoc, KeyVal}, Env, Unfolded)
   when Assoc =:= map_field_assoc; Assoc =:= map_field_exact ->
-    {type, Ann, Assoc, [normalize(KV, Env) || KV <- KeyVal]};
+    {type, Ann, Assoc, [normalize_rec(KV, Env, Unfolded) || KV <- KeyVal]};
 normalize_rec(Type, _Env, _Unfolded) ->
     expand_builtin_aliases(Type).
 
