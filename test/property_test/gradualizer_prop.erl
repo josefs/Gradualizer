@@ -54,7 +54,7 @@ prop_normalize_type() ->
             abstract_type(),
             begin
                 {TextEnv, Env} = create_env(typelib:remove_pos(Type), [return_text_env]),
-                ?WHENFAIL(ct:pal("~s failed:\n~p\nwith type env:\n~ts\n",
+                ?WHENFAIL(ct:pal("~s failed:\n~p\n\nwith type env:\n~ts\n",
                                  [?FUNCTION_NAME, Type, TextEnv]),
                           ?TIMEOUT(?PROP_TIMEOUT, prop_normalize_type_(Type, Env)))
             end).
@@ -67,11 +67,15 @@ prop_normalize_type_(Type, Env) ->
 prop_glb() ->
     ?FORALL({Type1, Type2},
             {abstract_type(), abstract_type()},
-            ?TIMEOUT(?PROP_TIMEOUT,
-                     prop_glb_(Type1, Type2))).
+            begin
+                {TextEnv, Env} = create_env(typelib:remove_pos(type_union([Type1, Type2])),
+                                            [return_text_env]),
+                ?WHENFAIL(ct:pal("~s failed:\n~p\n~p\n\nwith type env:\n~ts\n",
+                                 [?FUNCTION_NAME, Type1, Type2, TextEnv]),
+                          ?TIMEOUT(?PROP_TIMEOUT, prop_glb_(Type1, Type2, Env)))
+            end).
 
-prop_glb_(Type1, Type2) ->
-    Env = test_lib:create_env([]),
+prop_glb_(Type1, Type2, Env) ->
     Type1_ = typechecker:normalize(typelib:remove_pos(Type1), Env),
     Type2_ = typechecker:normalize(typelib:remove_pos(Type2), Env),
     typechecker:glb(Type1_, Type2_, Env),
@@ -103,11 +107,15 @@ is_valid_int_range(_) -> false.
 prop_type_diff() ->
     ?FORALL({Type1, Type2},
             {abstract_type(), abstract_type()},
-            ?TIMEOUT(?PROP_TIMEOUT,
-                     prop_type_diff_(Type1, Type2))).
+            begin
+                {TextEnv, Env} = create_env(typelib:remove_pos(type_union([Type1, Type2])),
+                                            [return_text_env]),
+                ?WHENFAIL(ct:pal("~s failed:\n~p\n~p\n\nwith type env:\n~ts\n",
+                                 [?FUNCTION_NAME, Type1, Type2, TextEnv]),
+                          ?TIMEOUT(?PROP_TIMEOUT, prop_type_diff_(Type1, Type2, Env)))
+            end).
 
-prop_type_diff_(Type1, Type2) ->
-    Env = test_lib:create_env([]),
+prop_type_diff_(Type1, Type2, Env) ->
     Type1_ = typelib:remove_pos(Type1),
     Type2_ = typelib:remove_pos(Type2),
     typechecker:type_diff(Type1_, Type2_, Env),
@@ -119,11 +127,14 @@ prop_type_diff_(Type1, Type2) ->
 prop_refinable() ->
     ?FORALL(Type,
             abstract_type(),
-            ?TIMEOUT(?PROP_TIMEOUT,
-                     prop_refinable_(Type))).
+            begin
+                {TextEnv, Env} = create_env(typelib:remove_pos(Type), [return_text_env]),
+                ?WHENFAIL(ct:pal("~s failed:\n~p\n\nwith type env:\n~ts\n",
+                                 [?FUNCTION_NAME, Type, TextEnv]),
+                          ?TIMEOUT(?PROP_TIMEOUT, prop_refinable_(Type, Env)))
+            end).
 
-prop_refinable_(Type) ->
-    Env = test_lib:create_env([]),
+prop_refinable_(Type, Env) ->
     Type_ = typelib:remove_pos(Type),
     typechecker:refinable(Type_, Env),
     %% we're only interested in termination / infinite recursion
@@ -132,11 +143,15 @@ prop_refinable_(Type) ->
 prop_compatible() ->
     ?FORALL({Type1, Type2},
             {abstract_type(), abstract_type()},
-            ?TIMEOUT(?PROP_TIMEOUT,
-                     prop_compatible_(Type1, Type2))).
+            begin
+                {TextEnv, Env} = create_env(typelib:remove_pos(type_union([Type1, Type2])),
+                                            [return_text_env]),
+                ?WHENFAIL(ct:pal("~s failed:\n~p\n~p\n\nwith type env:\n~ts\n",
+                                 [?FUNCTION_NAME, Type1, Type2, TextEnv]),
+                          ?TIMEOUT(?PROP_TIMEOUT, prop_compatible_(Type1, Type2, Env)))
+            end).
 
-prop_compatible_(Type1, Type2) ->
-    Env = test_lib:create_env([]),
+prop_compatible_(Type1, Type2, Env) ->
     Type1_ = typelib:remove_pos(Type1),
     Type2_ = typelib:remove_pos(Type2),
     typechecker:compatible(Type1_, Type2_, Env),
@@ -200,30 +215,15 @@ prop_type_check_forms_(Forms) ->
 %%' Helpers
 %%
 
-create_env({user_type, _, _, _} = Type, Opts) ->
-    EnvExpr = create_recursive_type_env_expr(Type),
+create_env(Type, Opts) ->
+    EnvExpr = create_type_env_expr(Type),
     ?debug("env expr", lists:flatten(EnvExpr)),
     Env = test_lib:create_env(EnvExpr, Opts),
     ?debug("env", Env),
     case proplists:get_value(return_text_env, Opts) of
         false -> Env;
         true -> {EnvExpr, Env}
-    end;
-create_env(Type, Opts) ->
-    EnvExpr = [ declare_trivial_user_type(UserTy) || UserTy <- gather_user_types(Type) ],
-    Env = test_lib:create_env(EnvExpr, Opts),
-    ?debug("env", Env),
-    case proplists:get_value(return_text_env, Opts) of
-        false -> Env;
-        true -> {EnvExpr, Env}
     end.
-
-gather_user_types(Type) ->
-    {_, Tys} = typelib:reduce_type(fun
-                                       ({user_type, _, _, _} = UserTy, Acc) -> {UserTy, [UserTy | Acc]};
-                                       (Ty, Acc) -> {Ty, Acc}
-                                   end, [], Type),
-    Tys.
 
 %% @doc Generate a mutually recursive type env from an example user type.
 %%
@@ -255,7 +255,7 @@ gather_user_types(Type) ->
 %% -type t1() :: {}.
 %% -type t2(A1) :: t2(t2(t1())) | t2(t1()) | any_atom | A1.
 %% '''
-create_recursive_type_env_expr({user_type, _, _, _} = Type) ->
+create_type_env_expr(Type) ->
     {_, Defs} = typelib:reduce_type(fun find_user_types/2, #{}, Type),
     [ case TA of
           {_, 0} ->
@@ -263,7 +263,7 @@ create_recursive_type_env_expr({user_type, _, _, _} = Type) ->
               Body = typelib:parse_type("{}"),
               declare_type_with_body(Ty, Body);
           _ ->
-              Body = B,
+              Body = type_union(B),
               declare_type_with_body(Ty, Body)
       end
       || {TA, {user_type, _, _, B} = Ty} <- maps:to_list(Defs) ].
@@ -283,9 +283,8 @@ declare_type_with_body({user_type, _, Name, Args}, TyBody) ->
     io_lib:format("-type ~ts(~ts) :: ~ts~ts.~n",
                   [Name, ArgsSeq, typelib:pp_type(TyBody), [ [" | ", ArgsAlt] || Args /= []] ]).
 
-declare_trivial_user_type({user_type, _, Name, Args}) ->
-    TArgs = string:join([ ["A", integer_to_list(I)] || I <- lists:seq(1, length(Args))], ", "),
-    io_lib:format("-type ~ts(~ts) :: {~ts}.\n", [Name, TArgs, TArgs]).
+type_union(Tys) ->
+    {type, 0, union, Tys}.
 
 %%.
 %% vim: foldmethod=marker foldmarker=%%',%%.
