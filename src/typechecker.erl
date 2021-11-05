@@ -477,7 +477,7 @@ glb(Ts, Env) ->
 
 -spec glb(type(), type(), map(), env()) -> glb_acc().
 glb(T1, T2, A, Env) ->
-    case maps:is_key({T1, T2}, A) of
+    case stop_glb_recursion(T1, T2, A) of
         %% If we hit a recursive case we approximate with none(). Conceivably
         %% you could do some fixed point iteration here, but let's wait for an
         %% actual use case.
@@ -497,6 +497,10 @@ glb(T1, T2, A, Env) ->
                     TyCs
             end
     end.
+
+%% A standalone function is easier to debug / trace.
+stop_glb_recursion(T1, T2, A) ->
+    maps:is_key({T1, T2}, A).
 
 -spec glb_ty(type(), type(), map(), env()) -> glb_acc().
 %% none() is the bottom of the hierarchy
