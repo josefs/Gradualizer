@@ -12,6 +12,8 @@
 %% as it's very unlikely to take this long to typecheck a single file, type, or expression.
 -define(PROP_TIMEOUT, timer:seconds(3)).
 
+-define(pp(Ty), typelib:pp_type(Ty)).
+
 %%
 %%' Generators
 %%
@@ -54,8 +56,8 @@ prop_normalize_type() ->
             abstract_type(),
             begin
                 {TextEnv, Env} = create_env(typelib:remove_pos(Type), [return_text_env]),
-                ?WHENFAIL(ct:pal("~s failed:\n~p\n\nwith type env:\n~ts\n",
-                                 [?FUNCTION_NAME, Type, TextEnv]),
+                ?WHENFAIL(ct:pal("~s failed:\n~ts\n\nwith type env:\n~ts\n",
+                                 [?FUNCTION_NAME, ?pp(Type), TextEnv]),
                           ?TIMEOUT(?PROP_TIMEOUT, prop_normalize_type_(Type, Env)))
             end).
 
@@ -70,8 +72,8 @@ prop_glb() ->
             begin
                 {TextEnv, Env} = create_env(typelib:remove_pos(type_union([Type1, Type2])),
                                             [return_text_env]),
-                ?WHENFAIL(ct:pal("~s failed:\n~p\n~p\n\nwith type env:\n~ts\n",
-                                 [?FUNCTION_NAME, Type1, Type2, TextEnv]),
+                ?WHENFAIL(ct:pal("~s failed:\n~ts\n~ts\n\nwith type env:\n~ts\n",
+                                 [?FUNCTION_NAME, ?pp(Type1), ?pp(Type2), TextEnv]),
                           ?TIMEOUT(?PROP_TIMEOUT, prop_glb_(Type1, Type2, Env)))
             end).
 
@@ -110,8 +112,8 @@ prop_type_diff() ->
             begin
                 {TextEnv, Env} = create_env(typelib:remove_pos(type_union([Type1, Type2])),
                                             [return_text_env]),
-                ?WHENFAIL(ct:pal("~s failed:\n~p\n~p\n\nwith type env:\n~ts\n",
-                                 [?FUNCTION_NAME, Type1, Type2, TextEnv]),
+                ?WHENFAIL(ct:pal("~s failed:\n~ts\n~ts\n\nwith type env:\n~ts\n",
+                                 [?FUNCTION_NAME, ?pp(Type1), ?pp(Type2), TextEnv]),
                           ?TIMEOUT(?PROP_TIMEOUT, prop_type_diff_(Type1, Type2, Env)))
             end).
 
@@ -129,8 +131,8 @@ prop_refinable() ->
             abstract_type(),
             begin
                 {TextEnv, Env} = create_env(typelib:remove_pos(Type), [return_text_env]),
-                ?WHENFAIL(ct:pal("~s failed:\n~p\n\nwith type env:\n~ts\n",
-                                 [?FUNCTION_NAME, Type, TextEnv]),
+                ?WHENFAIL(ct:pal("~s failed:\n~ts\n\nwith type env:\n~ts\n",
+                                 [?FUNCTION_NAME, ?pp(Type), TextEnv]),
                           ?TIMEOUT(?PROP_TIMEOUT, prop_refinable_(Type, Env)))
             end).
 
@@ -146,8 +148,8 @@ prop_compatible() ->
             begin
                 {TextEnv, Env} = create_env(typelib:remove_pos(type_union([Type1, Type2])),
                                             [return_text_env]),
-                ?WHENFAIL(ct:pal("~s failed:\n~p\n~p\n\nwith type env:\n~ts\n",
-                                 [?FUNCTION_NAME, Type1, Type2, TextEnv]),
+                ?WHENFAIL(ct:pal("~s failed:\n~ts\n~ts\n\nwith type env:\n~ts\n",
+                                 [?FUNCTION_NAME, ?pp(Type1), ?pp(Type2), TextEnv]),
                           ?TIMEOUT(?PROP_TIMEOUT, prop_compatible_(Type1, Type2, Env)))
             end).
 
