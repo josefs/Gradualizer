@@ -3,7 +3,8 @@
 
 -export([remove_pos/1, annotate_user_types/2, get_module_from_annotation/1,
          substitute_type_vars/2,
-         pp_type/1, debug_type/3, parse_type/1]).
+         pp_type/1, debug_type/3, parse_type/1,
+         reduce_type/3]).
 -export_type([constraint/0, function_type/0, extended_type/0]).
 
 -type type() :: gradualizer_type:abstract_type().
@@ -195,3 +196,66 @@ substitute_type_vars(Other = {op, _, _Op, _Arg1, _Arg2}, _) ->
 substitute_type_vars(Other = {T, _, _}, _)
   when T == atom; T == integer; T == char ->
     Other.
+
+-type walkable_type() :: gradualizer_type:abstract_type() | {type, _, any} | pos_inf | neg_inf.
+%% `gradualizer_type:abstract_type()' defines the abstract representation of a type.
+%% The type is a tree of nodes. However, there are more node kinds in the tree,
+%% than might appear at the top-level (as the root node).
+%% In order to specify a function which can traverse all nodes, not just the top-level nodes,
+%% we have to include all possible node kinds in the type definition.
+
+%% @doc `reduce_type/3' enables reducing an asbtract type to a single value.
+%%
+%% Example 1 - gather all singleton atoms occuring in a type:
+%%
+%% > F = fun
+%% >         ({atom, _, _} = At, Acc) -> {At, [At | Acc]};
+%% >         (Ty, Acc) -> {Ty, Acc}
+%% >     end,
+%% > {_, [{atom, _, my_atom}]} = typelib:reduce_type(F, [], typelib:parse_type("A :: {my_atom}")).
+%%
+%% `Fun' can skip traversing parts of the type tree by matching on it
+%% and returning `none()' instead of the actual subtree.
+%%
+%% Example 2 - gather singleton atoms, but skip a particular branch of a union type:
+%%
+%% > ComplexTy = typelib:parse_type("atom1 | atom2 | "
+%% >                                "{complex, integer(), [{atom() | string(), number()}]}"),
+%% > F = fun
+%% >          ({type, _, tuple, [{atom, _, complex} | _]}, Acc) -> { {type, 0, none, []}, Acc };
+%% >          ({atom, _, Name} = Ty, Acc) -> {Ty, [Name | Acc]};
+%% >          (Ty, Acc) -> {Ty, Acc}
+%% >      end,
+%% > {_, [atom2, atom1]} = reduce(F, [], ComplexTy).
+-spec reduce_type(Fun, Acc, walkable_type()) -> R when
+      Fun :: fun((walkable_type(), Acc) -> {walkable_type(), Acc}),
+      R :: {walkable_type(), Acc}.
+reduce_type(Fun, Acc, Type) ->
+    reduce(Fun, apply, Acc, Type).
+
+-spec reduce(Fun, Action, Acc, walkable_type()) -> R when
+      Fun :: fun((walkable_type(), Acc) -> {walkable_type(), Acc}),
+      Action :: apply | recurse,
+      R :: {walkable_type(), Acc}.
+reduce(Fun, _, Acc, {'atom', _, _} = Ty)              -> Fun(Ty, Acc);
+reduce(Fun, _, Acc, {'type', _Anno, _Name, any} = Ty) -> Fun(Ty, Acc);
+reduce(Fun, _, Acc, {'integer', _, _} = Ty)           -> Fun(Ty, Acc);
+reduce(Fun, _, Acc, {'char', _, _} = Ty)              -> Fun(Ty, Acc);
+reduce(Fun, _, Acc, {'type', _Anno, any} = Ty)        -> Fun(Ty, Acc);
+reduce(Fun, _, Acc, pos_inf = Ty)                     -> Fun(Ty, Acc);
+reduce(Fun, _, Acc, neg_inf = Ty)                     -> Fun(Ty, Acc);
+reduce(Fun, _, Acc, {var, _, _} = Ty)                 -> Fun(Ty, Acc);
+reduce(Fun, apply, Acc, Ty) ->
+    {NewTy, Acc1} = Fun(Ty, Acc),
+    reduce(Fun, recurse, Acc1, NewTy);
+reduce(Fun, recurse, Acc, {'op', _, _, Ty1})                  -> reduce_rec(Fun, Acc, [Ty1]);
+reduce(Fun, recurse, Acc, {'op', _, _, Ty1, Ty2})             -> reduce_rec(Fun, Acc, [Ty1, Ty2]);
+reduce(Fun, recurse, Acc, {'ann_type', _Anno, Args})          -> reduce_rec(Fun, Acc, Args);
+reduce(Fun, recurse, Acc, {'type', _Anno, _Name, Args})       -> reduce_rec(Fun, Acc, Args);
+reduce(Fun, recurse, Acc, {'remote_type', _Anno, [M, T, As]}) -> reduce_rec(Fun, Acc, [M, T | As]);
+reduce(Fun, recurse, Acc, {'user_type', _Anno, _Name, Args})  -> reduce_rec(Fun, Acc, Args).
+
+reduce_rec(Fun, Acc, Args) ->
+    lists:foldl(fun (Arg, {_, Acc1}) ->
+                        reduce(Fun, apply, Acc1, Arg)
+                end, {ok, Acc}, Args).
