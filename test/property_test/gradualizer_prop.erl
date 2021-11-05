@@ -208,8 +208,6 @@ prop_type_check_forms_(Forms) ->
     end.
 
 %% TODO: prop_ add_type_pat - ultimately called from type_check_expr_in; requires a pattern() gen
-%% TODO: prop_ type_check_forms - this one will actually subsume all of the above if we devise a good
-%%       enough generator; requires a form() generator
 
 %%.
 %%' Helpers
