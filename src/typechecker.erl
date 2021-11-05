@@ -20,9 +20,6 @@
 
 -include("typelib.hrl").
 
-%% Performance hack: Unions larger than this value are replaced by any() in normalization.
--define(union_size_limit, persistent_term:get(gradualizer_union_size_limit, 30)).
-
 -define(verbose(Env, Fmt, Args),
         case Env#env.verbose of
             true -> io:format(Fmt, Args);
@@ -91,13 +88,14 @@
 %%       diagnostic, which seems to assume the record only has the
 %%       fields annotated in the type, not all the fields from the definition.
 -include("typechecker.hrl").
--type env() :: #env{ fenv     :: map(),
-                     imported :: #{{atom(), arity()} => module()},
-                     venv     :: map(),
-                     tenv     :: tenv(),
-                     infer    :: boolean(),
-                     verbose  :: boolean(),
-                     exhaust  :: boolean() }.
+-type env() :: #env{ fenv               :: map(),
+                     imported           :: #{{atom(), arity()} => module()},
+                     venv               :: map(),
+                     tenv               :: tenv(),
+                     infer              :: boolean(),
+                     verbose            :: boolean(),
+                     exhaust            :: boolean(),
+                     union_size_limit   :: non_neg_integer() }.
 
 -include("gradualizer.hrl").
 
@@ -539,10 +537,10 @@ glb_ty(Ty1, Var = {var, _, _}, _A, _Env) ->
 
 %% Union types: glb distributes over unions
 glb_ty({type, Ann, union, Ty1s}, Ty2, A, Env) ->
-    {Tys, Css} = lists:unzip([ glb_ty(Ty1, Ty2, A, Env) || Ty1 <- Ty1s ]),
+    {Tys, Css} = lists:unzip([ glb(Ty1, Ty2, A, Env) || Ty1 <- Ty1s ]),
     {{type, Ann, union, Tys}, constraints:combine(Css)};
 glb_ty(Ty1, {type, Ann, union, Ty2s}, A, Env) ->
-    {Tys, Css} = lists:unzip([glb_ty(Ty1, Ty2, A, Env) || Ty2 <- Ty2s ]),
+    {Tys, Css} = lists:unzip([glb(Ty1, Ty2, A, Env) || Ty2 <- Ty2s ]),
     {{type, Ann, union, Tys}, constraints:combine(Css)};
 
 %% Atom types
@@ -707,10 +705,10 @@ glb_ty({type, _, 'fun', [{type, _, any} = Any, Res1]},
 
 glb_ty({type, _, 'fun', [{type, _, any}, Res1]},
        {type, _, 'fun', [{type, _, product, _} = TArgs2, _]} = T2, A, Env) ->
-    glb_ty(type('fun', [TArgs2, Res1]), T2, A, Env);
+    glb(type('fun', [TArgs2, Res1]), T2, A, Env);
 glb_ty({type, _, 'fun', [{type, _, product, _} = TArgs1, _]} = T1,
        {type, _, 'fun', [{type, _, any}, Res2]}, A, Env) ->
-    glb_ty(T1, type('fun', [TArgs1, Res2]), A, Env);
+    glb(T1, type('fun', [TArgs1, Res2]), A, Env);
 
 %% normalize and remove_pos only does the top layer
 glb_ty({type, _, Name, Args1}, {type, _, Name, Args2}, A, Env)
@@ -738,36 +736,54 @@ has_overlapping_keys({type, _, map, Assocs}, Env) ->
 %% * Expand user-defined and remote types on head level (except opaque types)
 %% * Replace built-in type synonyms
 %% * Flatten unions and merge overlapping types (e.g. ranges) in unions
--spec normalize(type(), env()) -> type().
-normalize({type, _, record, [{atom, _, Name}|Fields]}, Env) when length(Fields) > 0 ->
-    NormFields = [type_field_type(FieldName, normalize(Type, Env))
-        || ?type_field_type(FieldName, Type) <- Fields],
+-spec normalize(type(), tenv()) -> type().
+normalize(Ty, Env) ->
+    normalize_rec(Ty, Env, #{}).
+
+%% The third argument is a set of user types that we've already unfolded.
+%% It's important that we don't keep unfolding such types because it will
+%% lead to infinite recursion.
+%% TODO: shouldn't {type, _, tuple, Elems} also be normalized?
+normalize_rec({type, _, record, [{atom, _, Name} | Fields]}, Env, Unfolded)
+  when length(Fields) > 0 ->
+    NormFields = [type_field_type(FieldName, normalize_rec(Type, Env, Unfolded))
+                  || ?type_field_type(FieldName, Type) <- Fields],
     type_record(Name, NormFields);
-normalize({type, _, union, Tys}, Env) ->
-    UnionSizeLimit = ?union_size_limit,
-    Types = flatten_unions(Tys, Env),
-    case merge_union_types(Types, Env) of
-        []  -> type(none);
-        [T] -> T;
-        Ts when length(Ts) > UnionSizeLimit -> type(any); % performance hack
-        Ts  -> type(union, Ts)
+normalize_rec({type, _, union, Tys} = Type, Env, Unfolded) ->
+    case maps:get(mta(Type, Env), Unfolded, no_type) of
+        {type, NormType} -> NormType;
+        no_type ->
+            UnionSizeLimit = Env#env.union_size_limit,
+            Types = flatten_unions(Tys, Env, maps:put(Type, {type, Type}, Unfolded)),
+            case merge_union_types(Types, Env) of
+                []  -> type(none);
+                [T] -> T;
+                %% Performance hack: Unions larger than this value are replaced by any().
+                Ts when length(Ts) > UnionSizeLimit -> type(any);
+                Ts  -> type(union, Ts)
+            end
     end;
-normalize({user_type, P, Name, Args} = Type, Env) ->
-    case gradualizer_lib:get_type_definition(Type, Env, []) of
-        {ok, T} ->
-            normalize(typelib:remove_pos(T), Env);
-        opaque ->
-            Type;
-        not_found ->
-            throw({undef, user_type, P, {Name, length(Args)}})
+normalize_rec({user_type, P, Name, Args} = Type, Env, Unfolded) ->
+    case maps:get(mta(Type, Env), Unfolded, no_type) of
+        {type, NormType} -> NormType;
+        no_type ->
+            UnfoldedNew = maps:put(mta(Type, Env), {type, Type}, Unfolded),
+            case gradualizer_lib:get_type_definition(Type, Env, []) of
+                {ok, T} ->
+                    normalize_rec(typelib:remove_pos(T), Env, UnfoldedNew);
+                opaque ->
+                    Type;
+                not_found ->
+                    throw({undef, user_type, P, {Name, length(Args)}})
+            end
     end;
-normalize(T = ?top(), _Env) ->
+normalize_rec(T = ?top(), _Env, _Unfolded) ->
     %% Don't normalize gradualizer:top().
     T;
-normalize({remote_type, P, [{atom, _, M}, {atom, _, N}, Args]}, Env) ->
+normalize_rec({remote_type, P, [{atom, _, M}, {atom, _, N}, Args]}, Env, Unfolded) ->
     case gradualizer_db:get_exported_type(M, N, Args) of
         {ok, T} ->
-            normalize(typelib:remove_pos(T), Env);
+            normalize_rec(typelib:remove_pos(T), Env, Unfolded);
         opaque ->
             NormalizedArgs = lists:map(fun (Ty) -> normalize(Ty, Env) end, Args),
             typelib:annotate_user_types(M, {user_type, P, N, NormalizedArgs});
@@ -776,18 +792,19 @@ normalize({remote_type, P, [{atom, _, M}, {atom, _, N}, Args]}, Env) ->
         not_found ->
             throw({undef, remote_type, P, {M, N, length(Args)}})
     end;
-normalize({op, _, _, _Arg} = Op, _Env) ->
+normalize_rec({op, _, _, _Arg} = Op, _Env, _Unfolded) ->
     erl_eval:partial_eval(Op);
-normalize({op, _, _, _Arg1, _Arg2} = Op, _Env) ->
+normalize_rec({op, _, _, _Arg1, _Arg2} = Op, _Env, _Unfolded) ->
     erl_eval:partial_eval(Op);
-normalize({type, Ann, range, [T1, T2]}, Env) ->
-    {type, Ann, range, [normalize(T1, Env), normalize(T2, Env)]};
-normalize({type, Ann, map, Assocs}, Env) when is_list(Assocs) ->
+normalize_rec({type, Ann, range, [T1, T2]}, Env, Unfolded) ->
+    {type, Ann, range, [normalize_rec(T1, Env, Unfolded),
+                        normalize_rec(T2, Env, Unfolded)]};
+normalize_rec({type, Ann, map, Assocs}, Env, _Unfolded) when is_list(Assocs) ->
     {type, Ann, map, [normalize(As, Env) || As <- Assocs]};
-normalize({type, Ann, Assoc, KeyVal}, Env)
+normalize_rec({type, Ann, Assoc, KeyVal}, Env, _Unfolded)
   when Assoc =:= map_field_assoc; Assoc =:= map_field_exact ->
     {type, Ann, Assoc, [normalize(KV, Env) || KV <- KeyVal]};
-normalize(Type, _Env) ->
+normalize_rec(Type, _Env, _Unfolded) ->
     expand_builtin_aliases(Type).
 
 %% Replace built-in type aliases
@@ -873,16 +890,19 @@ expand_builtin_aliases(Type) ->
 %% * Remove subtypes of other types in the same union; keeping any() separate
 %% * Merge integer types, including singleton integers and ranges
 %%   1, 1..5, integer(), non_neg_integer(), pos_integer(), neg_integer()
--spec flatten_unions([type()], env()) -> [type()].
-flatten_unions(Tys, Env) ->
-    [ FTy || Ty <- Tys, FTy <- flatten_type(normalize(Ty, Env), Env) ].
+-spec flatten_unions([type()], tenv(), map()) -> [type()].
+flatten_unions(Tys, Env, Unfolded) ->
+    [ FTy || Ty <- Tys, FTy <- flatten_type(normalize_rec(Ty, Env, Unfolded), Env, Unfolded) ].
 
--spec flatten_type(type(), env()) -> [type()].
-flatten_type({type, _, none, []}, _) ->
+flatten_type({type, _, none, []}, _Env, _Unfolded) ->
     [];
-flatten_type({type, _, union, Tys}, Env) ->
-    flatten_unions(Tys, Env);
-flatten_type(Ty, _Env) ->
+flatten_type({type, _, union, Tys} = Type, Env, Unfolded) ->
+    case maps:get(mta(Type, Env), Unfolded, no_type) of
+        {type, NormType} -> [NormType];
+        no_type ->
+            flatten_unions(Tys, Env, Unfolded)
+    end;
+flatten_type(Ty, _Env, _Unfolded) ->
     [Ty].
 
 %% Merges overlapping integer types (including ranges and singletons).
@@ -3483,7 +3503,7 @@ refine_mismatch_using_guards(PatTys, {clause, _, _, _, _}, _VEnv, _Env) ->
 -spec type_diff(type(), type(), env()) -> type().
 type_diff(Ty1, Ty2, Env) ->
     try
-        refine(Ty1, Ty2, Env)
+        refine(Ty1, Ty2, #{}, Env)
     catch
         no_refinement ->
             %% Imprecision prevents refinement
@@ -3498,12 +3518,19 @@ type_diff(Ty1, Ty2, Env) ->
 %% Helper for type_diff/3.
 %% Normalize, refine by OrigTy \ Ty, revert normalize if result is
 %% unchanged.  May throw no_refinement.
--spec refine(type(), type(), env()) -> type().
-refine(OrigTy, Ty, Env) ->
-    NormTy = normalize(OrigTy, Env),
-    case refine_ty(NormTy, normalize(Ty, Env), Env) of
-        NormTy -> OrigTy;
-        RefTy  -> RefTy
+refine(OrigTy, Ty, Trace, Env) ->
+    %% If we're being called recursively and see OrigTy again throw no_refinement.
+    %% This is a safeguard similar to the mutual recurson of glb/glb_ty,
+    %% or to the stop_refinable_recursion loop breaker.
+    case maps:is_key(OrigTy, Trace) of
+        true ->
+            throw(no_refinement);
+        false ->
+            NormTy = normalize(OrigTy, Env),
+            case refine_ty(NormTy, normalize(Ty, Env), maps:put(OrigTy, {}, Trace), Env) of
+                NormTy -> OrigTy;
+                RefTy  -> RefTy
+            end
     end.
 
 -spec get_record_fields_types(atom(), erl_anno:anno(), env()) -> [_].
@@ -3516,31 +3543,31 @@ expand_record(Name, Anno, Env) ->
     type_record(Name, get_record_fields_types(Name, Anno, Env)).
 
 %% May throw no_refinement.
--spec refine_ty(type(), type(), env()) -> type().
-refine_ty(_Ty, ?type(none), _Env) ->
+-spec refine_ty(type(), type(), #{type() := {}}, env()) -> type().
+refine_ty(_Ty, ?type(none), Trace, _Env) ->
     %% PatTy none() means the pattern can't be used for refinement,
     %% because there is imprecision.
     throw(no_refinement);
-refine_ty(?type(T, A), ?type(T, A), _) ->
+refine_ty(?type(T, Args), ?type(T, Args), Trace, _) ->
     type(none);
-refine_ty(?type(record, [{atom, _, Name} | _]), ?type(record, [{atom, _, Name}]), _Env) ->
+refine_ty(?type(record, [{atom, _, Name} | _]), ?type(record, [{atom, _, Name}]), Trace, _Env) ->
     type(none);
-refine_ty(?type(record, [{atom, Anno, Name}]), Refined = ?type(record, [{atom, _, Name} | _]), Env) ->
-    refine_ty(expand_record(Name, Anno, Env), Refined, Env);
-refine_ty(?type(record, [Name|FieldTys1]), ?type(record, [Name|FieldTys2]), Env)
+refine_ty(?type(record, [{atom, Anno, Name}]), Refined = ?type(record, [{atom, _, Name} | _]), Trace, Env) ->
+    refine_ty(expand_record(Name, Anno, Env), Refined, Trace, Env);
+refine_ty(?type(record, [Name|FieldTys1]), ?type(record, [Name|FieldTys2]), Trace, Env)
   when length(FieldTys1) > 0, length(FieldTys1) == length(FieldTys2) ->
     % Record without just the name
     Tys1 = [Ty || ?type_field_type(_, Ty) <- FieldTys1],
     Tys2 = [Ty || ?type_field_type(_, Ty) <- FieldTys2],
-    RefTys = [refine(Ty1, Ty2, Env) || {Ty1, Ty2} <- lists:zip(Tys1, Tys2)],
+    RefTys = [refine(Ty1, Ty2, Trace, Env) || {Ty1, Ty2} <- lists:zip(Tys1, Tys2)],
     RecordsTys = pick_one_refinement_each(Tys1, RefTys),
     RecordsElems = [ [ type_field_type(FieldName, RecordTy) || {?type_field_type(FieldName, _), RecordTy} <- lists:zip(FieldTys1, RecordTys)]
         || RecordTys <- RecordsTys],
     Records = [type(record, [Name|RecordElems]) || RecordElems <- RecordsElems],
     normalize(type(union, Records), Env);
-refine_ty(?type(union, UnionTys), Ty, Env) ->
+refine_ty(?type(union, UnionTys), Ty, Trace, Env) ->
     RefTys = lists:foldr(fun (UnionTy, Acc) ->
-                             try refine(UnionTy, Ty, Env) of
+                             try refine(UnionTy, Ty, Trace, Env) of
                                  RefTy -> [RefTy|Acc]
                              catch
                                  disjoint -> [UnionTy|Acc]
@@ -3548,11 +3575,11 @@ refine_ty(?type(union, UnionTys), Ty, Env) ->
                           end,
                           [], UnionTys),
     normalize(type(union, RefTys), Env);
-refine_ty(Ty, ?type(union, UnionTys), Env) ->
+refine_ty(Ty, ?type(union, UnionTys), Trace, Env) ->
     %% Union e.g. integer() | float() from an is_number(X) guard.
     %% Refine Ty with each type in the union.
     lists:foldl(fun (UnionTy, AccTy) ->
-                        try refine(AccTy, UnionTy, Env) of
+                        try refine(AccTy, UnionTy, Trace, Env) of
                             RefTy -> RefTy
                         catch
                             disjoint -> AccTy
@@ -3560,10 +3587,10 @@ refine_ty(Ty, ?type(union, UnionTys), Env) ->
                 end,
                 Ty,
                 UnionTys);
-refine_ty(?type(map, _Assocs), ?type(map, [?any_assoc]), _Tenv) ->
+refine_ty(?type(map, _Assocs), ?type(map, [?any_assoc]), Trace, _Env) ->
     %% #{x => y} \ map() = none()
     type(none);
-refine_ty(?type(map, Assocs1) = Ty1, ?type(map, Assocs2) = Ty2, Env) ->
+refine_ty(?type(map, Assocs1) = Ty1, ?type(map, Assocs2) = Ty2, Trace, Env) ->
     case {has_overlapping_keys(Ty1, Env), has_overlapping_keys(Ty2, Env)} of
         {false, false} ->
             FieldTys = lists:flatmap(fun refine_map_field_ty/1,
@@ -3583,52 +3610,52 @@ refine_ty(?type(map, Assocs1) = Ty1, ?type(map, Assocs2) = Ty2, Env) ->
         _ ->
             throw(no_refinement)
     end;
-refine_ty(?type(tuple, _Tys), ?type(tuple, any), _Env) ->
+refine_ty(?type(tuple, _Tys), ?type(tuple, any), Trace, _Env) ->
     %% {x,y,z} \ tuple() = none()
     type(none);
-refine_ty(?type(tuple, Tys1), ?type(tuple, Tys2), Env)
+refine_ty(?type(tuple, Tys1), ?type(tuple, Tys2), Trace, Env)
   when length(Tys1) > 0, length(Tys1) == length(Tys2) ->
     %% Non-empty tuple
-    RefTys = [refine(Ty1, Ty2, Env) || {Ty1, Ty2} <- lists:zip(Tys1, Tys2)],
+    RefTys = [refine(Ty1, Ty2, Trace, Env) || {Ty1, Ty2} <- lists:zip(Tys1, Tys2)],
     %% {a|b, a|b} \ {a,a} => {b, a|b}, {a|b, b}
     TuplesElems = pick_one_refinement_each(Tys1, RefTys),
     Tuples = [type(tuple, TupleElems) || TupleElems <- TuplesElems],
     normalize(type(union, Tuples), Env);
-refine_ty({atom, _, A}, {atom, _, A}, _) ->
+refine_ty({atom, _, At}, {atom, _, At}, _, _) ->
     type(none);
-refine_ty({atom, _, _}, ?type(atom), _) ->
+refine_ty({atom, _, _}, ?type(atom), _, _) ->
     type(none);
-refine_ty(?type(list, A), ?type(nil), _Env) ->
-    type(nonempty_list, A);
-refine_ty(?type(list, A), ?type(nonempty_list, A), _Env) ->
+refine_ty(?type(list, E), ?type(nil), _, _Env) ->
+    type(nonempty_list, E);
+refine_ty(?type(list, E), ?type(nonempty_list, E), _, _Env) ->
     type(nil);
-refine_ty(?type(nil), ?type(list, _), _Env) ->
+refine_ty(?type(nil), ?type(list, _), _, _Env) ->
     type(none);
-refine_ty(?type(nonempty_list, _), ?type(list, [?type(any)]), _Env) ->
+refine_ty(?type(nonempty_list, _), ?type(list, [?type(any)]), _, _Env) ->
     %% The guard is_list/1 catches every nonempty list
     type(none);
 refine_ty(?type(binary, [_,_]),
-          ?type(binary, [{integer, _, 0}, {integer, _, 1}]), _Env) ->
+          ?type(binary, [{integer, _, 0}, {integer, _, 1}]), _, _Env) ->
     %% B \ bitstring() => none()
     %% where B is any binary or bitstring type
     type(none);
-refine_ty({Tag1, _, M}, {Tag2, _, N}, _Env)
+refine_ty({Tag1, _, M}, {Tag2, _, N}, _, _Env)
     when Tag1 == integer orelse Tag1 == char,
          Tag2 == integer orelse Tag2 == char ->
     if M == N -> type(none);
        M /= N -> throw(disjoint)
     end;
-refine_ty(Ty1, Ty2, _Env) when ?is_int_type(Ty1),
-                                ?is_int_type(Ty2) ->
+refine_ty(Ty1, Ty2, _, _Env) when ?is_int_type(Ty1),
+                                   ?is_int_type(Ty2) ->
     gradualizer_int:int_type_diff(Ty1, Ty2);
-refine_ty({user_type, Anno, Name, Args}, {user_type, Anno, Name, Args}, _Env) ->
+refine_ty({user_type, Anno, Name, Args}, {user_type, Anno, Name, Args}, _, _Env) ->
     % After being normalized, it's because it's defined as opaque.
     % If it has the same annotation, name and args, it's the same.
     type(none);
-refine_ty(Ty1, Ty2, Env) ->
+refine_ty(Ty1, Ty2, _, Env) ->
     case glb(Ty1, Ty2, Env) of
-        {?type(none), _}  -> throw(disjoint);     %% disjoint
-        _NotDisjoint -> throw(no_refinement) %% imprecision
+        {?type(none), _} -> throw(disjoint);  %% disjoint
+        _NotDisjoint -> throw(no_refinement)  %% imprecision
     end.
 
 -spec refine_map_field_ty({_, _}) -> [gradualizer_type:abstract_type()].
@@ -3723,14 +3750,14 @@ refinable(?type(nil), _Env, _Trace) ->
 refinable(?type(Name, Tys) = Ty0, Env, Trace)
   when (tuple =:= Name orelse union =:= Name)
    and is_list(Tys) ->
-    case stop_refinable_recursion(Ty0, Trace) of
+    case stop_refinable_recursion(Ty0, Env, Trace) of
         stop ->
             true;
         {proceed, NewTrace} ->
             lists:all(fun (Ty) -> refinable(Ty, Env, NewTrace) end, Tys)
     end;
 refinable(?type(record, [_ | Fields]) = Ty0, Env, Trace) ->
-    case stop_refinable_recursion(Ty0, Trace) of
+    case stop_refinable_recursion(Ty0, Env, Trace) of
         stop ->
             true;
         {proceed, NewTrace} ->
@@ -3742,7 +3769,7 @@ refinable(?type(map, _) = Ty0, Env, Trace) ->
     %%       still present sometimes slip through.
     %%       This later causes an assertion failure in has_overlapping_keys -> ... -> compat.
     ?type(map, Assocs) = Ty = typelib:remove_pos(normalize(Ty0, Env)),
-    case stop_refinable_recursion(Ty, Trace) of
+    case stop_refinable_recursion(Ty, Env, Trace) of
         stop -> true;
         {proceed, NewTrace} ->
             case has_overlapping_keys(Ty, Env) of
@@ -3764,7 +3791,7 @@ refinable(?type(string), _Env, _Trace) ->
 refinable(?type(list, [?type(char)]), _Env, _Trace) ->
     true;
 refinable(?type(list, [ElemTy]) = Ty, Env, Trace) ->
-    case stop_refinable_recursion(Ty, Trace) of
+    case stop_refinable_recursion(Ty, Env, Trace) of
         stop -> true;
         {proceed, NewTrace} ->
             refinable(ElemTy, Env, NewTrace)
@@ -3775,7 +3802,7 @@ refinable(?top(), _Env, _Trace) ->
     false;
 refinable(RefinableTy, Env, Trace)
   when element(1, RefinableTy) =:= remote_type; element(1, RefinableTy) =:= user_type ->
-    case stop_refinable_recursion(RefinableTy, Trace) of
+    case stop_refinable_recursion(RefinableTy, Env, Trace) of
         stop -> true;
         {proceed, NewTrace} ->
             case gradualizer_lib:get_type_definition(RefinableTy, Env, [annotate_user_types]) of
@@ -3791,12 +3818,23 @@ refinable(_, _, _) ->
 %% reached this recursive type again (that is, it's found in `Trace').
 %% We assume it's refinable to terminate recursion.
 %% Refinability will be determined by the variants which are not (mutually) recursive.
--spec stop_refinable_recursion(_, _) -> stop | {proceed, sets:set()}.
-stop_refinable_recursion(RefinableTy, Trace) ->
-    case sets:is_element(RefinableTy, Trace) of
+-spec stop_refinable_recursion(_, env(), _) -> stop | {proceed, sets:set()}.
+stop_refinable_recursion(RefinableTy, Env, Trace) ->
+    MTA = mta(RefinableTy, Env),
+    case sets:is_element(MTA, Trace) of
         true -> stop;
-        false -> {proceed, sets:add_element(RefinableTy, Trace)}
+        false -> {proceed, sets:add_element(MTA, Trace)}
     end.
+
+-spec mta(type(), env()) -> {module(), atom(), non_neg_integer()} | type().
+mta({user_type, Anno, Name, Args}, Env) ->
+    Module = case typelib:get_module_from_annotation(Anno) of
+                 none -> maps:get(module, Env#env.tenv);
+                 {ok, M} -> M
+             end,
+    {Module, Name, length(Args)};
+mta(Type, _Env) ->
+    Type.
 
 no_guards({clause, _, _, Guards, _}) ->
     Guards == [].
@@ -4768,8 +4806,11 @@ create_env(#parsedata{module    = Module
          imported = Imported,
          %% Store some type checking options in the environment
          infer = proplists:get_bool(infer, Opts),
-         verbose = proplists:get_bool(verbose, Opts)}.
+         verbose = proplists:get_bool(verbose, Opts),
+         union_size_limit = proplists:get_value(union_size_limit, Opts,
+                                                default_union_size_limit())}.
 
+default_union_size_limit() -> 30.
 
 create_fenv(Specs, Funs) ->
 % We're taking advantage of the fact that if a key occurrs more than once

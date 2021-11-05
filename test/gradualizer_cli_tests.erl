@@ -112,3 +112,9 @@ fancy_test() ->
     ?assertEqual(true, proplists:get_value(fancy, Opts1)),
     {ok, _Files, Opts2} = gradualizer_cli:handle_args(["--no_fancy", "file.erl"]),
     ?assertEqual(false, proplists:get_value(fancy, Opts2)).
+
+union_size_limit_test() ->
+    {ok, _Files, Opts1} = gradualizer_cli:handle_args(["--union_size_limit", "60", "file.erl"]),
+    ?assertEqual(60, proplists:get_value(union_size_limit, Opts1)),
+    {ok, _Files, Opts2} = gradualizer_cli:handle_args(["--union_size_limit", "10", "file.erl"]),
+    ?assertEqual(10, proplists:get_value(union_size_limit, Opts2)).
