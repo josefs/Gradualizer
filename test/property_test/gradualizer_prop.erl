@@ -7,6 +7,11 @@
 %-define(debug(Label, Val), begin ct:pal("~ts:~n~p~n", [Label, Val]), Val end).
 -define(debug(Label, Val), Val).
 
+%% Timeout value of a single run of a property.
+%% If we exceed this value, we've most likely encountered an infinite loop,
+%% as it's very unlikely to take this long to typecheck a single file, type, or expression.
+-define(PROP_TIMEOUT, timer:seconds(3)).
+
 abstract_type() ->
     gradualizer_gen:abstract_type().
 
@@ -40,7 +45,7 @@ prop_normalize_type() ->
     ?FORALL(Type,
             abstract_type(),
             ?WHENFAIL(ct:pal("~s failed:\n~p\n", [?FUNCTION_NAME, Type]),
-                      ?TIMEOUT(timer:seconds(1),
+                      ?TIMEOUT(?PROP_TIMEOUT,
                                prop_normalize_type_(Type)))).
 
 prop_normalize_type_(Type) ->
@@ -71,7 +76,7 @@ declare_type({user_type, _, Name, Args} = Ty) ->
 prop_glb() ->
     ?FORALL({Type1, Type2},
             {abstract_type(), abstract_type()},
-            ?TIMEOUT(timer:seconds(1),
+            ?TIMEOUT(?PROP_TIMEOUT,
                      prop_glb_(Type1, Type2))).
 
 prop_glb_(Type1, Type2) ->
@@ -107,7 +112,7 @@ is_valid_int_range(_) -> false.
 prop_type_diff() ->
     ?FORALL({Type1, Type2},
             {abstract_type(), abstract_type()},
-            ?TIMEOUT(timer:seconds(1),
+            ?TIMEOUT(?PROP_TIMEOUT,
                      prop_type_diff_(Type1, Type2))).
 
 prop_type_diff_(Type1, Type2) ->
@@ -123,7 +128,7 @@ prop_type_diff_(Type1, Type2) ->
 prop_refinable() ->
     ?FORALL(Type,
             abstract_type(),
-            ?TIMEOUT(timer:seconds(1),
+            ?TIMEOUT(?PROP_TIMEOUT,
                      prop_refinable_(Type))).
 
 prop_refinable_(Type) ->
@@ -136,7 +141,7 @@ prop_refinable_(Type) ->
 prop_compatible() ->
     ?FORALL({Type1, Type2},
             {abstract_type(), abstract_type()},
-            ?TIMEOUT(timer:seconds(1),
+            ?TIMEOUT(?PROP_TIMEOUT,
                      prop_compatible_(Type1, Type2))).
 
 prop_compatible_(Type1, Type2) ->
@@ -151,7 +156,7 @@ prop_type_check_expr() ->
     %% TODO: use abstract_term() for now, since abstract_expr() gives very unpredictable
     %% and problematic nestings of exprs, e.g. maps inside binaries o_O
     ?FORALL(Expr, abstract_term(),
-            ?TIMEOUT(timer:seconds(1),
+            ?TIMEOUT(?PROP_TIMEOUT,
                      prop_type_check_expr_(Expr))).
 
 prop_type_check_expr_(Expr) ->
@@ -168,7 +173,7 @@ prop_type_check_expr_in() ->
     %% TODO: use abstract_term() for now, since abstract_expr() gives very unpredictable
     %% and problematic nestings of exprs, e.g. maps inside binaries o_O
     ?FORALL({Type, Expr}, {abstract_type(), abstract_term()},
-            ?TIMEOUT(timer:seconds(1),
+            ?TIMEOUT(?PROP_TIMEOUT,
                      prop_type_check_expr_in_(Type, Expr))).
 
 prop_type_check_expr_in_(Type, Expr) ->
@@ -183,7 +188,7 @@ prop_type_check_expr_in_(Type, Expr) ->
 
 prop_type_check_forms() ->
     ?FORALL(Forms, abstract_module(),
-            ?TIMEOUT(timer:seconds(2),
+            ?TIMEOUT(?PROP_TIMEOUT,
                      prop_type_check_forms_(Forms))).
 
 prop_type_check_forms_(Forms) ->
