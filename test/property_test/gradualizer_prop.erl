@@ -19,6 +19,13 @@ abstract_module() ->
 abstract_term() ->
     gradualizer_erlang_abstract_code:term().
 
+prop_reduce_type() ->
+    ?FORALL(Type, abstract_type(), prop_reduce_type_(Type)).
+
+prop_reduce_type_(Type) ->
+    {_, Acc} = typelib:reduce_type(fun (T, true) -> {T, true} end, true, Type),
+    Acc.
+
 prop_remove_pos_removes_pos() ->
     ?FORALL(Type, abstract_type(),
             ?WHENFAIL(ct:pal("~s failed:\n~p\n", [?FUNCTION_NAME, Type]),
