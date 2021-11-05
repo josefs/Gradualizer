@@ -900,7 +900,8 @@ flatten_type({type, _, union, Tys} = Type, Env, Unfolded) ->
     case maps:get(mta(Type, Env), Unfolded, no_type) of
         {type, NormType} -> [NormType];
         no_type ->
-            flatten_unions(Tys, Env, Unfolded)
+            UnfoldedNew = maps:put(mta(Type, Env), {type, Type}, Unfolded),
+            flatten_unions(Tys, Env, UnfoldedNew)
     end;
 flatten_type(Ty, _Env, _Unfolded) ->
     [Ty].
