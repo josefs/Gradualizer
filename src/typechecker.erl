@@ -488,7 +488,7 @@ glb(T1, T2, A, Env) ->
                 false ->
                     Ty1 = typelib:remove_pos(normalize(T1, Env)),
                     Ty2 = typelib:remove_pos(normalize(T2, Env)),
-                    {Ty, Cs} = glb_ty(Ty1, Ty2, A#{ {Ty1, Ty2} => 0 }, Env),
+                    {Ty, Cs} = glb_ty(Ty1, Ty2, A#{ {T1, T2} => 0 }, Env),
                     NormTy = normalize(Ty, Env),
                     gradualizer_cache:store_glb(Module, T1, T2, {NormTy, Cs}),
                     {NormTy, Cs};
