@@ -220,7 +220,7 @@ create_env(Type, Opts) ->
     ?debug("env expr", lists:flatten(EnvExpr)),
     Env = test_lib:create_env(EnvExpr, Opts),
     ?debug("env", Env),
-    case proplists:get_value(return_text_env, Opts) of
+    case proplists:get_bool(return_text_env, Opts) of
         false -> Env;
         true -> {EnvExpr, Env}
     end.
