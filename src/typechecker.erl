@@ -3810,7 +3810,11 @@ refinable(RefinableTy, Env, Trace)
     case stop_refinable_recursion(RefinableTy, Env, Trace) of
         stop -> true;
         {proceed, NewTrace} ->
-            case gradualizer_lib:get_type_definition(RefinableTy, Env, [annotate_user_types]) of
+            Opts = case element(1, RefinableTy) of
+                       remote_type -> [annotate_user_types];
+                       user_type -> []
+                   end,
+            case gradualizer_lib:get_type_definition(RefinableTy, Env, Opts) of
                 {ok, Ty} -> refinable(Ty, Env, NewTrace);
                 opaque -> true;
                 not_found -> false
