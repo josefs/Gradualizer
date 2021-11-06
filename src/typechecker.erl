@@ -3549,13 +3549,13 @@ expand_record(Name, Anno, Env) ->
 
 %% May throw no_refinement.
 -spec refine_ty(type(), type(), #{type() := {}}, env()) -> type().
-refine_ty(_Ty, ?type(none), Trace, _Env) ->
+refine_ty(_Ty, ?type(none), _Trace, _Env) ->
     %% PatTy none() means the pattern can't be used for refinement,
     %% because there is imprecision.
     throw(no_refinement);
-refine_ty(?type(T, Args), ?type(T, Args), Trace, _) ->
+refine_ty(?type(T, Args), ?type(T, Args), _Trace, _) ->
     type(none);
-refine_ty(?type(record, [{atom, _, Name} | _]), ?type(record, [{atom, _, Name}]), Trace, _Env) ->
+refine_ty(?type(record, [{atom, _, Name} | _]), ?type(record, [{atom, _, Name}]), _Trace, _Env) ->
     type(none);
 refine_ty(?type(record, [{atom, Anno, Name}]), Refined = ?type(record, [{atom, _, Name} | _]), Trace, Env) ->
     refine_ty(expand_record(Name, Anno, Env), Refined, Trace, Env);
@@ -3592,10 +3592,10 @@ refine_ty(Ty, ?type(union, UnionTys), Trace, Env) ->
                 end,
                 Ty,
                 UnionTys);
-refine_ty(?type(map, _Assocs), ?type(map, [?any_assoc]), Trace, _Env) ->
+refine_ty(?type(map, _Assocs), ?type(map, [?any_assoc]), _Trace, _Env) ->
     %% #{x => y} \ map() = none()
     type(none);
-refine_ty(?type(map, Assocs1) = Ty1, ?type(map, Assocs2) = Ty2, Trace, Env) ->
+refine_ty(?type(map, Assocs1) = Ty1, ?type(map, Assocs2) = Ty2, _Trace, Env) ->
     case {has_overlapping_keys(Ty1, Env), has_overlapping_keys(Ty2, Env)} of
         {false, false} ->
             FieldTys = lists:flatmap(fun refine_map_field_ty/1,
@@ -3615,7 +3615,7 @@ refine_ty(?type(map, Assocs1) = Ty1, ?type(map, Assocs2) = Ty2, Trace, Env) ->
         _ ->
             throw(no_refinement)
     end;
-refine_ty(?type(tuple, _Tys), ?type(tuple, any), Trace, _Env) ->
+refine_ty(?type(tuple, _Tys), ?type(tuple, any), _Trace, _Env) ->
     %% {x,y,z} \ tuple() = none()
     type(none);
 refine_ty(?type(tuple, Tys1), ?type(tuple, Tys2), Trace, Env)
