@@ -88,14 +88,15 @@
 %%       diagnostic, which seems to assume the record only has the
 %%       fields annotated in the type, not all the fields from the definition.
 -include("typechecker.hrl").
--type env() :: #env{ fenv               :: map(),
-                     imported           :: #{{atom(), arity()} => module()},
-                     venv               :: map(),
-                     tenv               :: tenv(),
-                     infer              :: boolean(),
-                     verbose            :: boolean(),
-                     exhaust            :: boolean(),
-                     union_size_limit   :: non_neg_integer() }.
+-type env() :: #env{ fenv                   :: map(),
+                     imported               :: #{{atom(), arity()} => module()},
+                     venv                   :: map(),
+                     tenv                   :: tenv(),
+                     infer                  :: boolean(),
+                     verbose                :: boolean(),
+                     exhaust                :: boolean(),
+                     union_size_limit       :: non_neg_integer(),
+                     normalize_user_type    :: boolean() }.
 
 -include("gradualizer.hrl").
 
@@ -768,9 +769,12 @@ normalize_rec({type, _, union, Tys} = Type, Env, Unfolded) ->
             end
     end;
 normalize_rec({user_type, P, Name, Args} = Type, Env, Unfolded) ->
-    case maps:get(mta(Type, Env), Unfolded, no_type) of
-        {type, NormType} -> NormType;
-        no_type ->
+    case {Env#env.normalize_user_type, maps:get(mta(Type, Env), Unfolded, no_type)} of
+        {false, _} ->
+            Type;
+        {true, {type, NormType}} ->
+            NormType;
+        {true, no_type} ->
             UnfoldedNew = maps:put(mta(Type, Env), {type, Type}, Unfolded),
             case gradualizer_lib:get_type_definition(Type, Env, []) of
                 {ok, T} ->
@@ -4817,7 +4821,8 @@ create_env(#parsedata{module    = Module
          infer = proplists:get_bool(infer, Opts),
          verbose = proplists:get_bool(verbose, Opts),
          union_size_limit = proplists:get_value(union_size_limit, Opts,
-                                                default_union_size_limit())}.
+                                                default_union_size_limit()),
+         normalize_user_type = true}.
 
 default_union_size_limit() -> 30.
 
