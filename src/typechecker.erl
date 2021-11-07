@@ -464,7 +464,9 @@ get_record_fields(RecName, Anno, #env{tenv = #{records := REnv}}) ->
 
 -spec glb(type(), type(), env()) -> glb_acc().
 glb(T1, T2, Env) ->
-    glb(T1, T2, #{}, Env).
+    Ty1 = typelib:remove_pos(normalize(T1, Env)),
+    Ty2 = typelib:remove_pos(normalize(T2, Env)),
+    glb(Ty1, Ty2, #{}, Env).
 
 -spec glb([type()], env()) -> glb_acc().
 glb(Ts, Env) ->
@@ -486,9 +488,7 @@ glb(T1, T2, A, Env) ->
             Module = maps:get(module, Env#env.tenv),
             case gradualizer_cache:get_glb(Module, T1, T2) of
                 false ->
-                    Ty1 = typelib:remove_pos(normalize(T1, Env)),
-                    Ty2 = typelib:remove_pos(normalize(T2, Env)),
-                    {Ty, Cs} = glb_ty(Ty1, Ty2, A#{ {T1, T2} => 0 }, Env),
+                    {Ty, Cs} = glb_ty(T1, T2, A#{ {T1, T2} => 0 }, Env),
                     NormTy = normalize(Ty, Env),
                     gradualizer_cache:store_glb(Module, T1, T2, {NormTy, Cs}),
                     {NormTy, Cs};
