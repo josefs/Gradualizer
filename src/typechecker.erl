@@ -123,8 +123,12 @@ compatible(Ty1, Ty2, Env) ->
 %% The first argument is a "compatible subtype" of the second.
 
 -spec subtype(type(), type(), env()) -> compatible().
-subtype(Ty1, Ty2, Env) ->
-    try compat(Ty1, Ty2, sets:new(), Env) of
+subtype(T1, T2, Env) ->
+    ?assert_normalized_anno(T1),
+    ?assert_normalized_anno(T2),
+    Ty1 = normalize(T1, Env),
+    Ty2 = normalize(T2, Env),
+    try compat(Ty1, Ty2, sets:new(), Env#env{normalize_user_type = false}) of
         {_Memoization, Constraints} ->
             {true, Constraints}
     catch
