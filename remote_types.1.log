@@ -1,0 +1,317 @@
+80> dbg:stop_clear().ok
+81> rr(typechecker).
+[env,parsedata]
+82> TF = fun (Trace, ok) -> rp(Trace) end.
+#Fun<erl_eval.43.40011524>
+83> dbg:tracer(process, {TF, ok}).
+{ok,<0.309.0>}
+84> dbg:p(all, [call]).
+{ok,[{matched,nonode@nohost,82}]}
+85> dbg:tpl(typechecker, normalize, x).
+{ok,[{matched,nonode@nohost,1},{saved,x}]}
+86> dbg:tpl(typechecker, subtype, x).
+{ok,[{matched,nonode@nohost,1},{saved,x}]}
+87> %dbg:tpl(typechecker, glb, x).
+87>
+87> code:add_path("test_data").
+true
+88> application:ensure_all_started(gradualizer).
+{ok,[]}
+89> gradualizer:type_check_file("test/should_pass/remote_types.erl", []).
+{trace,<0.190.0>,call,
+    {typechecker,normalize,
+        [[{type,0,bounded_fun,
+              [{type,0,'fun',
+                   [{type,0,product,[{user_type,0,local_tuple,[]}]},
+                    {remote_type,0,
+                        [{atom,{8,27},user_types},{atom,{8,38},my_tuple},[]]}]},
+               []]}],
+         #env{
+             fenv =
+                 #{{f,1} =>
+                       [{type,0,bounded_fun,
+                            [{type,0,'fun',
+                                 [{type,0,product,[{user_type,0,local_tuple,[]}]},
+                                  {remote_type,0,
+                                      [{atom,{8,27},user_types},{atom,{8,38},my_tuple},[]]}]},
+                             []]}]},
+             imported = #{},venv = #{},
+             tenv =
+                 #{module => remote_types,records => #{},
+                   types =>
+                       #{{local_tuple,0} =>
+                             {[],{type,0,tuple,[{type,0,atom,[]},{type,0,integer,[]}]}}}},
+             infer = false,verbose = false,exhaust = true,
+             union_size_limit = 30,normalize_user_type = true}]}}
+{trace,<0.190.0>,return_from,
+       {typechecker,normalize,2},
+       [{type,0,bounded_fun,
+              [{type,0,'fun',
+                     [{type,0,product,[{user_type,0,local_tuple,[]}]},
+                      {remote_type,0,
+                                   [{atom,{8,27},user_types},{atom,{8,38},my_tuple},[]]}]},
+               []]}]}
+{trace,<0.190.0>,call,
+    {typechecker,normalize,
+        [{user_type,0,local_tuple,[]},
+         #env{
+             fenv =
+                 #{{f,1} =>
+                       [{type,0,bounded_fun,
+                            [{type,0,'fun',
+                                 [{type,0,product,[{user_type,0,local_tuple,[]}]},
+                                  {remote_type,0,
+                                      [{atom,{8,27},user_types},{atom,{8,38},my_tuple},[]]}]},
+                             []]}]},
+             imported = #{},venv = #{},
+             tenv =
+                 #{module => remote_types,records => #{},
+                   types =>
+                       #{{local_tuple,0} =>
+                             {[],{type,0,tuple,[{type,0,atom,[]},{type,0,integer,[]}]}}}},
+             infer = false,verbose = false,exhaust = true,
+             union_size_limit = 30,normalize_user_type = true}]}}
+{trace,<0.190.0>,return_from,
+       {typechecker,normalize,2},
+       {type,0,tuple,[{type,0,atom,[]},{type,0,integer,[]}]}}
+{trace,<0.190.0>,call,
+    {typechecker,normalize,
+        [{remote_type,0,
+             [{atom,{8,27},user_types},{atom,{8,38},my_tuple},[]]},
+         #env{
+             fenv =
+                 #{{f,1} =>
+                       [{type,0,bounded_fun,
+                            [{type,0,'fun',
+                                 [{type,0,product,[{user_type,0,local_tuple,[]}]},
+                                  {remote_type,0,
+                                      [{atom,{8,27},user_types},{atom,{8,38},my_tuple},[]]}]},
+                             []]}]},
+             imported = #{},
+             venv =
+                 #{'A' =>
+                       {type,0,tuple,[{type,0,atom,[]},{type,0,integer,[]}]}},
+             tenv =
+                 #{module => remote_types,records => #{},
+                   types =>
+                       #{{local_tuple,0} =>
+                             {[],{type,0,tuple,[{type,0,atom,[]},{type,0,integer,[]}]}}}},
+             infer = false,verbose = false,exhaust = true,
+             union_size_limit = 30,normalize_user_type = true}]}}
+{trace,<0.190.0>,return_from,
+       {typechecker,normalize,2},
+       {type,0,tuple,
+             [{user_type,[{file,"user_types.erl"},{location,0}],
+                         my_atom,[]},
+              {type,0,integer,[]}]}}
+{trace,<0.190.0>,call,
+    {typechecker,subtype,
+        [{type,0,tuple,[{type,0,atom,[]},{type,0,integer,[]}]},
+         {type,0,tuple,
+             [{user_type,
+                  [{file,"user_types.erl"},{location,0}],
+                  my_atom,[]},
+              {type,0,integer,[]}]},
+         #env{
+             fenv =
+                 #{{f,1} =>
+                       [{type,0,bounded_fun,
+                            [{type,0,'fun',
+                                 [{type,0,product,[{user_type,0,local_tuple,[]}]},
+                                  {remote_type,0,
+                                      [{atom,{8,27},user_types},{atom,{8,38},my_tuple},[]]}]},
+                             []]}]},
+             imported = #{},
+             venv =
+                 #{'A' =>
+                       {type,0,tuple,[{type,0,atom,[]},{type,0,integer,[]}]}},
+             tenv =
+                 #{module => remote_types,records => #{},
+                   types =>
+                       #{{local_tuple,0} =>
+                             {[],{type,0,tuple,[{type,0,atom,[]},{type,0,integer,[]}]}}}},
+             infer = false,verbose = false,exhaust = true,
+             union_size_limit = 30,normalize_user_type = true}]}}
+{trace,<0.190.0>,call,
+    {typechecker,normalize,
+        [{type,0,tuple,[{type,0,atom,[]},{type,0,integer,[]}]},
+         #env{
+             fenv =
+                 #{{f,1} =>
+                       [{type,0,bounded_fun,
+                            [{type,0,'fun',
+                                 [{type,0,product,[{user_type,0,local_tuple,[]}]},
+                                  {remote_type,0,
+                                      [{atom,{8,27},user_types},{atom,{8,38},my_tuple},[]]}]},
+                             []]}]},
+             imported = #{},
+             venv =
+                 #{'A' =>
+                       {type,0,tuple,[{type,0,atom,[]},{type,0,integer,[]}]}},
+             tenv =
+                 #{module => remote_types,records => #{},
+                   types =>
+                       #{{local_tuple,0} =>
+                             {[],{type,0,tuple,[{type,0,atom,[]},{type,0,integer,[]}]}}}},
+             infer = false,verbose = false,exhaust = true,
+             union_size_limit = 30,normalize_user_type = true}]}}
+{trace,<0.190.0>,return_from,
+       {typechecker,normalize,2},
+       {type,0,tuple,[{type,0,atom,[]},{type,0,integer,[]}]}}
+{trace,<0.190.0>,call,
+    {typechecker,normalize,
+        [{type,0,tuple,
+             [{user_type,
+                  [{file,"user_types.erl"},{location,0}],
+                  my_atom,[]},
+              {type,0,integer,[]}]},
+         #env{
+             fenv =
+                 #{{f,1} =>
+                       [{type,0,bounded_fun,
+                            [{type,0,'fun',
+                                 [{type,0,product,[{user_type,0,local_tuple,[]}]},
+                                  {remote_type,0,
+                                      [{atom,{8,27},user_types},{atom,{8,38},my_tuple},[]]}]},
+                             []]}]},
+             imported = #{},
+             venv =
+                 #{'A' =>
+                       {type,0,tuple,[{type,0,atom,[]},{type,0,integer,[]}]}},
+             tenv =
+                 #{module => remote_types,records => #{},
+                   types =>
+                       #{{local_tuple,0} =>
+                             {[],{type,0,tuple,[{type,0,atom,[]},{type,0,integer,[]}]}}}},
+             infer = false,verbose = false,exhaust = true,
+             union_size_limit = 30,normalize_user_type = true}]}}
+{trace,<0.190.0>,return_from,
+       {typechecker,normalize,2},
+       {type,0,tuple,
+             [{user_type,[{file,"user_types.erl"},{location,0}],
+                         my_atom,[]},
+              {type,0,integer,[]}]}}
+{trace,<0.190.0>,call,
+    {typechecker,normalize,
+        [{type,0,tuple,[{type,0,atom,[]},{type,0,integer,[]}]},
+         #env{
+             fenv =
+                 #{{f,1} =>
+                       [{type,0,bounded_fun,
+                            [{type,0,'fun',
+                                 [{type,0,product,[{user_type,0,local_tuple,[]}]},
+                                  {remote_type,0,
+                                      [{atom,{8,27},user_types},{atom,{8,38},my_tuple},[]]}]},
+                             []]}]},
+             imported = #{},
+             venv =
+                 #{'A' =>
+                       {type,0,tuple,[{type,0,atom,[]},{type,0,integer,[]}]}},
+             tenv =
+                 #{module => remote_types,records => #{},
+                   types =>
+                       #{{local_tuple,0} =>
+                             {[],{type,0,tuple,[{type,0,atom,[]},{type,0,integer,[]}]}}}},
+             infer = false,verbose = false,exhaust = true,
+             union_size_limit = 30,normalize_user_type = false}]}}
+{trace,<0.190.0>,return_from,
+       {typechecker,normalize,2},
+       {type,0,tuple,[{type,0,atom,[]},{type,0,integer,[]}]}}
+{trace,<0.190.0>,call,
+    {typechecker,normalize,
+        [{type,0,tuple,
+             [{user_type,
+                  [{file,"user_types.erl"},{location,0}],
+                  my_atom,[]},
+              {type,0,integer,[]}]},
+         #env{
+             fenv =
+                 #{{f,1} =>
+                       [{type,0,bounded_fun,
+                            [{type,0,'fun',
+                                 [{type,0,product,[{user_type,0,local_tuple,[]}]},
+                                  {remote_type,0,
+                                      [{atom,{8,27},user_types},{atom,{8,38},my_tuple},[]]}]},
+                             []]}]},
+             imported = #{},
+             venv =
+                 #{'A' =>
+                       {type,0,tuple,[{type,0,atom,[]},{type,0,integer,[]}]}},
+             tenv =
+                 #{module => remote_types,records => #{},
+                   types =>
+                       #{{local_tuple,0} =>
+                             {[],{type,0,tuple,[{type,0,atom,[]},{type,0,integer,[]}]}}}},
+             infer = false,verbose = false,exhaust = true,
+             union_size_limit = 30,normalize_user_type = false}]}}
+{trace,<0.190.0>,return_from,
+       {typechecker,normalize,2},
+       {type,0,tuple,
+             [{user_type,[{file,"user_types.erl"},{location,0}],
+                         my_atom,[]},
+              {type,0,integer,[]}]}}
+{trace,<0.190.0>,call,
+    {typechecker,normalize,
+        [{type,0,atom,[]},
+         #env{
+             fenv =
+                 #{{f,1} =>
+                       [{type,0,bounded_fun,
+                            [{type,0,'fun',
+                                 [{type,0,product,[{user_type,0,local_tuple,[]}]},
+                                  {remote_type,0,
+                                      [{atom,{8,27},user_types},{atom,{8,38},my_tuple},[]]}]},
+                             []]}]},
+             imported = #{},
+             venv =
+                 #{'A' =>
+                       {type,0,tuple,[{type,0,atom,[]},{type,0,integer,[]}]}},
+             tenv =
+                 #{module => remote_types,records => #{},
+                   types =>
+                       #{{local_tuple,0} =>
+                             {[],{type,0,tuple,[{type,0,atom,[]},{type,0,integer,[]}]}}}},
+             infer = false,verbose = false,exhaust = true,
+             union_size_limit = 30,normalize_user_type = false}]}}
+{trace,<0.190.0>,return_from,
+       {typechecker,normalize,2},
+       {type,0,atom,[]}}
+{trace,<0.190.0>,call,
+    {typechecker,normalize,
+        [{user_type,
+             [{file,"user_types.erl"},{location,0}],
+             my_atom,[]},
+         #env{
+             fenv =
+                 #{{f,1} =>
+                       [{type,0,bounded_fun,
+                            [{type,0,'fun',
+                                 [{type,0,product,[{user_type,0,local_tuple,[]}]},
+                                  {remote_type,0,
+                                      [{atom,{8,27},user_types},{atom,{8,38},my_tuple},[]]}]},
+                             []]}]},
+             imported = #{},
+             venv =
+                 #{'A' =>
+                       {type,0,tuple,[{type,0,atom,[]},{type,0,integer,[]}]}},
+             tenv =
+                 #{module => remote_types,records => #{},
+                   types =>
+                       #{{local_tuple,0} =>
+                             {[],{type,0,tuple,[{type,0,atom,[]},{type,0,integer,[]}]}}}},
+             infer = false,verbose = false,exhaust = true,
+             union_size_limit = 30,normalize_user_type = false}]}}
+{trace,<0.190.0>,return_from,
+       {typechecker,normalize,2},
+       {user_type,[{file,"user_types.erl"},{location,0}],
+                  my_atom,[]}}
+{trace,<0.190.0>,return_from,{typechecker,subtype,3},false}
+test/should_pass/remote_types.erl: The variable on line 9 at column 9 is expected to have type user_types:my_tuple() but it has type {atom(), integer()}
+
+%% test resolving remote tuple referencing a user type in the remote module
+-spec f(local_tuple()) -> user_types:my_tuple().
+f(A) -> A.
+        ^
+
+nok
+90>

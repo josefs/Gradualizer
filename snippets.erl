@@ -172,3 +172,16 @@ Type = fun (T) -> typelib:remove_pos(typelib:parse_type(T)) end.
 T1 = Type("{number(), a | c}").
 T2 = Type("{float() | x, a | b}").
 typechecker:glb(T1, T2, test_lib:create_env([])).
+
+dbg:stop_clear().
+rr(typechecker).
+TF = fun (Trace, ok) -> rp(Trace) end.
+dbg:tracer(process, {TF, ok}).
+dbg:p(all, [call]).
+dbg:tpl(typechecker, normalize, x).
+dbg:tpl(typechecker, subtype, x).
+%dbg:tpl(typechecker, glb, x).
+
+code:add_path("test_data").
+application:ensure_all_started(gradualizer).
+gradualizer:type_check_file("test/should_pass/remote_types.erl", []).
