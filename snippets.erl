@@ -5,8 +5,8 @@ dbg:tracer(process, {TF, ok}).
 dbg:p(all, [call]).
 %dbg:tpl(typechecker, add_type_pat, x).
 %dbg:tpl(typechecker, subtype, x).
-%dbg:tpl(typechecker, glb, x).
-dbg:tpl(typechecker, []).
+dbg:tpl(typechecker, glb, x).
+%dbg:tpl(typechecker, []).
 
 application:ensure_all_started(gradualizer).
 {ok, [Forms]} = file:consult("infinite-loop-forms.1.erl").
@@ -156,3 +156,19 @@ io:format("~ts\n", [typelib:pp_type(Ty1Norm3)]).
 %% the second call expands t2 contained in the part expanded in the previous call, ...
 %% This means we have to decouple managing the trace in GLB from normalising the params.
 %% What about compatible, though? Maybe it's possible to do the same.
+
+
+TF = fun (Trace, ok) -> io:format("~p\n", [Trace]) end.
+dbg:stop_clear().
+dbg:tracer(process, {TF, ok}).
+%dbg:p(all, [call, return_to]).
+dbg:p(all, [call]).
+%dbg:tpl(typechecker, add_type_pat, x).
+%dbg:tpl(typechecker, subtype, x).
+dbg:tpl(typechecker, glb, x).
+%dbg:tpl(typechecker, []).
+
+Type = fun (T) -> typelib:remove_pos(typelib:parse_type(T)) end.
+T1 = Type("{number(), a | c}").
+T2 = Type("{float() | x, a | b}").
+typechecker:glb(T1, T2, test_lib:create_env([])).
