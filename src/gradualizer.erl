@@ -56,21 +56,47 @@ type_check_file(File) ->
 %% @doc Type check a source or beam file
 -spec type_check_file(file:filename(), options()) -> ok | nok | [{file:filename(), any()}].
 type_check_file(File, Opts) ->
-    ParsedFile =
-        case filename:extension(File) of
-            ".erl" ->
-                Includes = proplists:get_all_values(i, Opts),
-                gradualizer_file_utils:get_forms_from_erl(File, Includes);
-            ".beam" ->
-                gradualizer_file_utils:get_forms_from_beam(File);
-            Ext ->
-                throw({unknown_file_extension, Ext})
-        end,
-    case ParsedFile of
-        {ok, Forms} ->
+    case filename:extension(File) of
+        ".erl" ->
+            Includes = proplists:get_all_values(i, Opts),
+            case gradualizer_file_utils:get_forms_from_erl(File, Includes) of
+                {ok, Forms} ->
+                    lint_and_check_forms(Forms, File, Opts);
+                Error ->
+                    throw(Error)
+            end;
+        ".beam" ->
+            case gradualizer_file_utils:get_forms_from_beam(File) of
+                {ok, Forms} ->
+                    type_check_forms(File, Forms, Opts);
+                Error ->
+                    throw(Error)
+            end;
+        Ext ->
+            throw({unknown_file_extension, Ext})
+    end.
+
+%% @doc Runs an erl_lint pass, to check if the forms can be compiled at all,
+%% before running the type checker.
+-spec lint_and_check_forms([erl_parse:abstract_form()], file:filename(), options()) ->
+          ok | nok | [{file:filename(), any()}].
+lint_and_check_forms(Forms, File, Opts) ->
+    case erl_lint:module(Forms, File, [return_errors]) of
+        {ok, _Warnings} ->
             type_check_forms(File, Forms, Opts);
-        Error ->
-            throw(Error)
+        {error, Errors, _Warnings} ->
+            %% If there are lint errors (i.e. compile errors like undefined
+            %% variables) we don't even try to type check.
+            case proplists:get_bool(return_errors, Opts) of
+                true ->
+                    [{Filename, ErrorInfo} || {Filename, ErrorInfos} <- Errors,
+                                              ErrorInfo <- ErrorInfos];
+                false ->
+                    [gradualizer_fmt:print_errors(ErrorInfos,
+                                                  [{filename, Filename} | Opts])
+                     || {Filename, ErrorInfos} <- Errors],
+                    nok
+            end
     end.
 
 %% @doc Type check a module
