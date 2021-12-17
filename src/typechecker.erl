@@ -3283,11 +3283,10 @@ get_bounded_fun_type_list(Name, Arity, Env, P) ->
                     {ok, Types} = gradualizer_db:get_spec(erlang, Name, Arity),
                     lists:map(fun typelib:remove_pos/1, Types);
                 false ->
+                    %% If it's not imported, the file doesn't compile.
                     case get_imported_bounded_fun_type_list(Name, Arity, Env, P) of
                         {ok, Types} ->
-                            Types;
-                        error ->
-                            throw({call_undef, P, Name, Arity})
+                            Types
                     end
             end
     end.

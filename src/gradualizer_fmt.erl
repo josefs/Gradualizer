@@ -377,6 +377,19 @@ format_type_error({bad_type_annotation, TypeLit}, Opts) ->
       [format_location(TypeLit, brief, Opts),
        pp_expr(TypeLit, Opts),
        format_location(TypeLit, verbose, Opts)]);
+format_type_error({Location, Module, ErrorDescription}, Opts)
+  when is_integer(Location) orelse is_tuple(Location),
+       is_atom(Module) ->
+    %% OTP compiler style error descriptor
+    io_lib:format(
+      "~s~s~s~n",
+      [format_location(Location, brief, Opts),
+       Module:format_error(ErrorDescription),
+       format_location(Location, verbose, Opts)]);
+format_type_error({none, Module, ErrorDescription}, _Opts)
+  when is_atom(Module) ->
+    %% OTP compiler style error descriptor, without location
+    io_lib:format("~s~n", [Module:format_error(ErrorDescription)]);
 format_type_error(type_error, _) ->
     io_lib:format("TYPE ERROR~n", []).
 
