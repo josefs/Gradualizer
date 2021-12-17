@@ -426,13 +426,14 @@ type_check_in_test_() ->
      ?_assertNot(type_check_forms(["-spec f(foo) -> ok.",
                                    "g() -> f(3.14)."])),
      %% Although there is no spec for f/1 - inferred type is `fun((any()) -> any())'
-     ?_assert(type_check_forms(["f(_) -> ok.",
+     ?_assert(type_check_forms(["f(_) -> 42.",
                                 "-spec g() -> fun((integer()) -> integer()).",
                                 "g() -> fun f/1."],
                                [infer])),
      %% Although there is not spec for f/1 - inferred arity does not match
      ?_assertNot(type_check_forms(["-spec g() -> fun(() -> integer()).",
-                                   "g() -> fun f/1."],
+                                   "g() -> fun f/1.",
+                                   "f(_) -> ok."],
                                   [infer]))
     ].
 
@@ -586,24 +587,6 @@ add_type_pat_test_() ->
      {"Pattern matching record against any()",
       ?_assert(type_check_forms(["-record(r, {f}).",
                                  "f(#r{f = F}) -> F."]))}
-    ].
-
-%% it is the responsibility of the compiler to catch semantically
-%% invalid programs (such as one with undefined records)
-%% but to improve code coverage we test them quickly.
-%% Gradualizer should not crash but return error nicely
-illegal_forms_test_() ->
-    [%% undefined records
-     ?_assertNot(type_check_forms(["-spec f() -> gradualizer:top().",
-                                   "f() -> #r{f = 1}."])),
-     ?_assertNot(type_check_forms(["-record(r, {f1}).",
-                                   "-spec f() -> gradualizer:top().",
-                                   "f() -> #r{f2 = 1}."])),
-     %% invalid record_info
-     ?_assertNot(type_check_forms(["f() -> record_info(foo, bar)."])),
-     %% illegal pattern
-     ?_assertNot(type_check_forms(["-spec f(gradualizer:top()) -> gradualizer:top().",
-                                   "f(1 + A) -> ok."]))
     ].
 
 %%
