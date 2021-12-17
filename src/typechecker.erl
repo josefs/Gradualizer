@@ -446,13 +446,8 @@ get_maybe_remote_record_fields(RecName, Anno, Env) ->
                         Anno    :: erl_anno:anno(),
                         Env     :: env()) ->
                                [{typed_record_field, _, _}].
-get_record_fields(RecName, Anno, #env{tenv = #{records := REnv}}) ->
-    case REnv of
-        #{RecName := Fields} ->
-            Fields;
-        _NotFound ->
-            throw({undef, record, Anno, RecName})
-    end.
+get_record_fields(RecName, _Anno, #env{tenv = #{records := REnv}}) ->
+    maps:get(RecName, REnv). % It must exist. Otherwise it's a compile error.
 
 %% Greatest lower bound
 %% --------------------
@@ -1495,12 +1490,10 @@ type_check_expr(Env, Expr) ->
 
 %% TODO: move tenv to back
 -spec do_type_check_expr(env(), expr()) -> {any(), venv(), constraints:constraints()}.
-do_type_check_expr(Env, {var, P, Var}) ->
+do_type_check_expr(Env, {var, _P, Var}) ->
     case Env#env.venv of
         #{Var := Ty} ->
-            return(Ty);
-        #{} ->
-            throw({unknown_variable, P, Var})
+            return(Ty)
     end;
 do_type_check_expr(Env, {match, _, Pat, Expr}) ->
     {Ty, VarBinds, Cs} = type_check_expr(Env, Expr),
@@ -4319,11 +4312,9 @@ add_type_pat_var(Pat, PatVar, Ty, Env, VEnv) ->
 -spec add_type_pat_literal(_, _, env(), _) -> any().
 add_type_pat_literal(Pat, Ty, Env, VEnv) ->
     case erl_eval:partial_eval(Pat) of
-        Pat ->
-            %% illegal, non-constant pattern
-            %% should not appear in compilable code
-            throw({illegal_pattern, Pat});
-        Literal ->
+        Literal when Literal =/= Pat ->
+            %% If Pat is returned, it's an illegal, non-constant pattern that
+            %% should not appear in compilable code, i.e. caught by linter.
             try
                 add_type_pat(Literal, Ty, Env, VEnv)
             catch
@@ -4746,9 +4737,7 @@ get_record_info_type({call, Anno, {atom, _, record_info},
 get_record_info_type({call, Anno, {atom, _, record_info},
                       [{atom, _, size}, {atom, _, RecName}]}, Env) ->
     Fields = get_record_fields(RecName, Anno, Env),
-    {integer, erl_anno:new(0), length(Fields) + 1};
-get_record_info_type(Expr, _Env) ->
-    throw({illegal_record_info, Expr}).
+    {integer, erl_anno:new(0), length(Fields) + 1}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% Main entry point
