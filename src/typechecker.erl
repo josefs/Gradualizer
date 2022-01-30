@@ -836,9 +836,9 @@ expand_builtin_aliases({type, Ann, maybe_improper_list, []}) ->
 expand_builtin_aliases({type, Ann, nonempty_list, []}) ->
     {type, Ann, nonempty_list, [{type, Ann, any, []}]};
 expand_builtin_aliases({type, Ann, string, []}) ->
-    {type, Ann, list, [{type, Ann, char, []}]};
+    {type, Ann, list, [expand_builtin_aliases({type, Ann, char, []})]};
 expand_builtin_aliases({type, Ann, nonempty_string, []}) ->
-    {type, Ann, nonempty_list, [{type, Ann, char, []}]};
+    {type, Ann, nonempty_list, [expand_builtin_aliases({type, Ann, char, []})]};
 expand_builtin_aliases({type, Ann, iodata, []}) ->
     {type, Ann, union, [{type, Ann, iolist, []}, {type, Ann, binary, []}]};
 expand_builtin_aliases({type, Ann, iolist, []}) ->
@@ -3828,6 +3828,8 @@ refinable(RefinableTy, Env, Trace)
                 not_found -> false
             end
     end;
+refinable(?type(range, _), _Env, _Trace) ->
+    true;
 refinable(_, _, _) ->
     false.
 
