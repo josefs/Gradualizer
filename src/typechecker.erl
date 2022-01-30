@@ -3403,17 +3403,31 @@ check_clauses(Env, ArgsTy, ResTy, Clauses, Caps) ->
     check_exhaustiveness(Env, ArgsTy, Clauses, RefinedArgsTy, VarBindsList, Css).
 
 check_exhaustiveness(Env, ArgsTy, Clauses, RefinedArgsTy, VarBindsList, Css) ->
-    case {Env#env.exhaust,
-          ArgsTy =/= any andalso lists:all(fun (Ty) -> refinable(Ty, Env) end, ArgsTy),
-          lists:all(fun no_guards/1, Clauses),
-          is_list(RefinedArgsTy) andalso lists:any(fun (T) -> T =/= type(none) end, RefinedArgsTy)} of
-        {true, true, true, true} ->
+    case is_non_exhaustive(Env#env.exhaust,
+
+                           ArgsTy =/= any
+                           andalso lists:all(fun (Ty) -> refinable(Ty, Env) end, ArgsTy),
+
+                           lists:all(fun no_guards/1, Clauses),
+
+                           is_list(RefinedArgsTy)
+                           andalso lists:any(fun (T) -> T =/= type(none) end, RefinedArgsTy))
+    of
+        true ->
             [{clause, P, _, _, _}|_] = Clauses,
             throw({nonexhaustive, P, gradualizer_lib:pick_value(RefinedArgsTy, Env)});
         _ ->
             ok
     end,
     {union_var_binds(VarBindsList, Env), constraints:combine(Css)}.
+
+is_non_exhaustive(_CheckExhaustiveness = true,
+                  _ArgsRefinable = true,
+                  _NoGuards = true,
+                  _RefinedArgsNotNone = true) ->
+    true;
+is_non_exhaustive(_, _, _, _) ->
+    false.
 
 %% This function checks clauses.
 %% * If clauses have 0 arguments;
