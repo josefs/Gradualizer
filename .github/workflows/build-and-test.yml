@@ -24,5 +24,5 @@ jobs:
       - name: "Run tests"
         run: "make tests"
       - name: "Self-gradualize"
-        run: "make gradualize"
+        run: "timeout 60 make gradualize"
         continue-on-error: true
