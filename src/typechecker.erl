@@ -4808,6 +4808,7 @@ type_check_forms(Forms, Opts) ->
               (_Function, Errors) ->
                   Errors
           end, [], ParseData#parsedata.functions),
+    timer:sleep(timer:seconds(2)),
     lists:reverse(AllErrors).
 
 -spec create_env(#parsedata{}, proplists:proplist()) -> env().
