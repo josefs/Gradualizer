@@ -4,7 +4,8 @@
 
 -export([merge_with/3, top_sort/1, get_type_definition/3,
          pick_value/2, fold_ast/3, get_ast_children/1,
-         empty_tenv/0, create_tenv/3]).
+         empty_tenv/0, create_tenv/3,
+         remove_pos_typed_record_field/1]).
 -export_type([graph/1, tenv/0]).
 
 %% Type environment, passed around while comparing compatible subtypes.
@@ -104,12 +105,12 @@ reverse_graph(G) ->
       Opts :: [annotate_user_types],
       Ty :: gradualizer_type:abstract_type().
 get_type_definition({remote_type, _Anno, [{atom, _, Module}, {atom, _, Name}, Args]}, _Env, _Opts) ->
-    gradualizer_db:get_type(Module, Name, Args);
+    remove_pos(gradualizer_db:get_type(Module, Name, Args));
 get_type_definition({user_type, Anno, Name, Args}, Env, Opts) ->
     %% Let's check if the type is a known remote type.
     case typelib:get_module_from_annotation(Anno) of
         {ok, Module} ->
-            gradualizer_db:get_type(Module, Name, Args);
+            remove_pos(gradualizer_db:get_type(Module, Name, Args));
         none ->
             %% Let's check if the type is defined in the context of this module.
             case maps:get({Name, length(Args)}, maps:get(types, Env#env.tenv), not_found) of
@@ -129,6 +130,10 @@ get_type_definition({user_type, Anno, Name, Args}, Env, Opts) ->
             end
     end.
 
+remove_pos({ok, T}) ->
+    {ok, typelib:remove_pos(T)};
+remove_pos(Error) ->
+    Error.
 
 %% Given a type `Ty', pick a value of that type.
 %% Used in exhaustiveness checking to show an example value
@@ -270,11 +275,21 @@ create_tenv(Module, TypeDefs, RecordDefs) when is_atom(Module) ->
                             {Id, {Params, typelib:remove_pos(Body)}}
                         end || {Name, Body, Vars} <- TypeDefs]),
     RecordMap =
-        maps:from_list([{Name, [{typed_record_field, Field, typelib:remove_pos(Type)}
-                                || {typed_record_field, Field, Type}
-                                       <- lists:map(fun absform:normalize_record_field/1,
-                                                    Fields)]}
+        maps:from_list([{Name, [remove_pos_typed_record_field(
+                                  absform:normalize_record_field(Field))
+                                || Field <- Fields]}
                          || {Name, Fields} <- RecordDefs]),
     #{module => Module,
       types => TypeMap,
       records => RecordMap}.
+
+%% Removes the position annotation from a list of record fields normalized using
+%% absform:normalize_record_field/1.
+%%
+%% Note: The field name (atom) is sometimes used as a type.
+remove_pos_typed_record_field({typed_record_field,
+                               {record_field, _, Name, Default},
+                               Type}) ->
+    {typed_record_field,
+     {record_field, 0, typelib:remove_pos(Name), Default},
+     typelib:remove_pos(Type)}.

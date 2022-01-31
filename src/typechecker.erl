@@ -80,7 +80,7 @@
 -type typed_record_field() :: {typed_record_field,
                                {record_field, erl_anno:anno(), Name :: {atom, erl_anno:anno(), atom()},
                                 DefaultValue :: gradualizer_type:abstract_expr()},
-                                Type :: type()}.
+                               Type :: type()}.
 
 %% The environment passed around during typechecking.
 %% TODO: See https://github.com/josefs/Gradualizer/issues/364 for details.
@@ -430,8 +430,8 @@ get_maybe_remote_record_fields(RecName, Anno, Env) ->
             %% A record type in another module, from an expanded remote type
             case gradualizer_db:get_record_type(Module, RecName) of
                 {ok, TypedRecordFields} ->
-                    [{typed_record_field, Field, typelib:remove_pos(Type)}
-                     || {typed_record_field, Field, Type} <- TypedRecordFields];
+                    lists:map(fun gradualizer_lib:remove_pos_typed_record_field/1,
+                              TypedRecordFields);
                 not_found ->
                     throw({undef, record, Anno, {Module, RecName}})
             end;
@@ -481,8 +481,8 @@ glb(T1, T2, A, Env) ->
             Module = maps:get(module, Env#env.tenv),
             case gradualizer_cache:get_glb(Module, T1, T2) of
                 false ->
-                    Ty1 = typelib:remove_pos(normalize(T1, Env)),
-                    Ty2 = typelib:remove_pos(normalize(T2, Env)),
+                    Ty1 = normalize(T1, Env),
+                    Ty2 = normalize(T2, Env),
                     {Ty, Cs} = glb_ty(Ty1, Ty2, A#{ {T1, T2} => 0 }, Env),
                     NormTy = normalize(Ty, Env),
                     gradualizer_cache:store_glb(Module, T1, T2, {NormTy, Cs}),
@@ -3762,10 +3762,8 @@ refinable(?type(record, [_ | Fields]) = Ty0, Env, Trace) ->
                       [X || ?type(field_type, X) <- Fields])
     end;
 refinable(?type(map, _) = Ty0, Env, Trace) ->
-    %% TODO: We shouldn't really call remove_pos here, but somehow maps with position information
-    %%       still present sometimes slip through.
-    %%       This later causes an assertion failure in has_overlapping_keys -> ... -> compat.
-    ?type(map, Assocs) = Ty = typelib:remove_pos(normalize(Ty0, Env)),
+    ?assert_normalized_anno(Ty0),
+    ?type(map, Assocs) = Ty = normalize(Ty0, Env),
     case stop_refinable_recursion(Ty, Env, Trace) of
         stop -> true;
         {proceed, NewTrace} ->
@@ -4731,7 +4729,7 @@ get_rec_field_index_and_type(FieldWithAnno, [], _) ->
 get_record_info_type({call, Anno, {atom, _, record_info},
                       [{atom, _, fields}, {atom, _, RecName}]}, Env) ->
     Fields = get_record_fields(RecName, Anno, Env),
-    Names = [typelib:remove_pos(Name)
+    Names = [Name
              || {typed_record_field, {record_field, _, Name, _}, _Ty} <- Fields],
     type(list, [type(union, Names)]);
 get_record_info_type({call, Anno, {atom, _, record_info},
