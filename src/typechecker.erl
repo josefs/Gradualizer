@@ -735,6 +735,10 @@ has_overlapping_keys({type, _, map, Assocs}, Env) ->
 %% * Expand user-defined and remote types on head level (except opaque types)
 %% * Replace built-in type synonyms
 %% * Flatten unions and merge overlapping types (e.g. ranges) in unions
+%%
+%% This function only normalizes the head level type or union of types to
+%% compute the Head Normal Form. In particular, it doesn't normalize the element
+%% types of a list, tuple, map or record type.
 -spec normalize(type(), tenv()) -> type().
 normalize(Ty, Env) ->
     normalize_rec(Ty, Env, #{}).
@@ -742,12 +746,6 @@ normalize(Ty, Env) ->
 %% The third argument is a set of user types that we've already unfolded.
 %% It's important that we don't keep unfolding such types because it will
 %% lead to infinite recursion.
-%% TODO: shouldn't {type, _, tuple, Elems} also be normalized?
-normalize_rec({type, _, record, [{atom, _, Name} | Fields]}, Env, Unfolded)
-  when length(Fields) > 0 ->
-    NormFields = [type_field_type(FieldName, normalize_rec(Type, Env, Unfolded))
-                  || ?type_field_type(FieldName, Type) <- Fields],
-    type_record(Name, NormFields);
 normalize_rec({type, _, union, Tys} = Type, Env, Unfolded) ->
     case maps:get(mta(Type, Env), Unfolded, no_type) of
         {type, NormType} -> NormType;
