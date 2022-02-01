@@ -769,7 +769,7 @@ normalize_rec({user_type, P, Name, Args} = Type, Env, Unfolded) ->
             UnfoldedNew = maps:put(mta(Type, Env), {type, Type}, Unfolded),
             case gradualizer_lib:get_type_definition(Type, Env, []) of
                 {ok, T} ->
-                    normalize_rec(typelib:remove_pos(T), Env, UnfoldedNew);
+                    normalize_rec(T, Env, UnfoldedNew);
                 opaque ->
                     Type;
                 not_found ->
@@ -3056,8 +3056,7 @@ update_map_type(?type(map, Assocs), AssocTys) ->
     %% `AssocTys' come from a map creation or map update expr - after the expr is evaluated the map
     %% will contain the associations. Therefore in the resulting map type they
     %% cannot be optional - we rewrite optional assocs to non-optional ones.
-    UpdatedAssocs = update_assocs(AssocTys,
-                                  lists:map(fun typelib:remove_pos/1, Assocs)),
+    UpdatedAssocs = update_assocs(AssocTys, Assocs),
     type(map, UpdatedAssocs);
 update_map_type({var, _, _Var}, _AssocTys) ->
     type(any);
@@ -3071,7 +3070,7 @@ update_map_type(Type, _AssocTys) ->
 update_assocs([{type, _, _Assoc, [Key, ValueType]} | AssocTys],
 	      Assocs) ->
     [type(map_field_exact, [Key, ValueType]) |
-     case take_assoc(typelib:remove_pos(Key), Assocs, []) of
+     case take_assoc(Key, Assocs, []) of
          {value, _, RestAssocs} ->
              update_assocs(AssocTys, RestAssocs);
          false ->
