@@ -430,8 +430,7 @@ get_maybe_remote_record_fields(RecName, Anno, Env) ->
             %% A record type in another module, from an expanded remote type
             case gradualizer_db:get_record_type(Module, RecName) of
                 {ok, TypedRecordFields} ->
-                    lists:map(fun gradualizer_lib:remove_pos_typed_record_field/1,
-                              TypedRecordFields);
+                    TypedRecordFields;
                 not_found ->
                     throw({undef, record, Anno, {Module, RecName}})
             end;
@@ -709,7 +708,7 @@ glb_ty({type, _, 'fun', [{type, _, product, _} = TArgs1, _]} = T1,
        {type, _, 'fun', [{type, _, any}, Res2]}, A, Env) ->
     glb(T1, type('fun', [TArgs1, Res2]), A, Env);
 
-%% normalize and remove_pos only does the top layer
+%% normalize only does the top layer
 glb_ty({type, _, Name, Args1}, {type, _, Name, Args2}, A, Env)
         when length(Args1) == length(Args2) ->
     {Args, Css} = lists:unzip([ glb(Arg1, Arg2, A, Env) || {Arg1, Arg2} <- lists:zip(Args1, Args2) ]),
@@ -782,7 +781,7 @@ normalize_rec(T = ?top(), _Env, _Unfolded) ->
 normalize_rec({remote_type, P, [{atom, _, M}, {atom, _, N}, Args]}, Env, Unfolded) ->
     case gradualizer_db:get_exported_type(M, N, Args) of
         {ok, T} ->
-            normalize_rec(typelib:remove_pos(T), Env, Unfolded);
+            normalize_rec(T, Env, Unfolded);
         opaque ->
             NormalizedArgs = lists:map(fun (Ty) -> normalize_rec(Ty, Env, Unfolded) end, Args),
             typelib:annotate_user_types(M, {user_type, P, N, NormalizedArgs});
@@ -1725,9 +1724,7 @@ do_type_check_expr(Env, {'fun', P, {function, M, F, A}}) ->
         {{atom, _, Module}, {atom, _, Function}, {integer, _, Arity}} ->
             case gradualizer_db:get_spec(Module, Function, Arity) of
                 {ok, BoundedFunTypeList} ->
-                    BoundedFunTypeListNoPos = lists:map(fun typelib:remove_pos/1,
-                                                        BoundedFunTypeList),
-                    Ty = bounded_type_list_to_type(Env, BoundedFunTypeListNoPos),
+                    Ty = bounded_type_list_to_type(Env, BoundedFunTypeList),
                     {Ty, #{}, constraints:empty()};
                 not_found ->
                     throw({call_undef, P, M, F, A})
@@ -2529,10 +2526,8 @@ do_type_check_expr_in(Env, ResTy, Expr = {'fun', P, {function, M, F, A}}) ->
         {{atom, _, Module}, {atom, _, Function}, {integer, _,Arity}} ->
             case gradualizer_db:get_spec(Module, Function, Arity) of
                 {ok, BoundedFunTypeList} ->
-                    BoundedFunTypeListNoPos = lists:map(fun typelib:remove_pos/1,
-                                                        BoundedFunTypeList),
                     FunTypeList =
-                        unfold_bounded_type_list(Env, BoundedFunTypeListNoPos),
+                        unfold_bounded_type_list(Env, BoundedFunTypeList),
                     case any_subtype(FunTypeList, ResTy, Env) of
                         {true, Cs} -> {#{}, Cs};
                         false -> throw({type_error, Expr, FunTypeList, ResTy})
@@ -3094,10 +3089,7 @@ type_check_fun(Env, {atom, P, Name}, Arity) ->
 type_check_fun(_Env, {remote, P, {atom,_,Module}, {atom,_,Fun}}, Arity) ->
     % Module:function call
     case gradualizer_db:get_spec(Module, Fun, Arity) of
-        {ok, Types} ->
-            Types1 = [typelib:annotate_user_types(Module, typelib:remove_pos(T))
-                      || T <- Types],
-            {Types1, #{}, constraints:empty()};
+        {ok, Types} -> {Types, #{}, constraints:empty()};
         not_found   -> throw({call_undef, P, Module, Fun, Arity})
     end;
 type_check_fun(_Env, {remote, _, _Expr, _}, Arity)->
@@ -3273,7 +3265,7 @@ get_bounded_fun_type_list(Name, Arity, Env, P) ->
             case erl_internal:bif(Name, Arity) of
                 true ->
                     {ok, Types} = gradualizer_db:get_spec(erlang, Name, Arity),
-                    lists:map(fun typelib:remove_pos/1, Types);
+                    Types;
                 false ->
                     %% If it's not imported, the file doesn't compile.
                     case get_imported_bounded_fun_type_list(Name, Arity, Env, P) of
@@ -3288,8 +3280,7 @@ get_imported_bounded_fun_type_list(Name, Arity, Env, P) ->
         {ok, Module} ->
             case gradualizer_db:get_spec(Module, Name, Arity) of
                 {ok, BoundedFunTypeList} ->
-                    {ok, lists:map(fun typelib:remove_pos/1,
-                                   BoundedFunTypeList)};
+                    {ok, BoundedFunTypeList};
                 not_found ->
                     throw({call_undef, P, Module, Name, Arity})
             end;

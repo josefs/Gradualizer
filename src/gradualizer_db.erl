@@ -491,7 +491,7 @@ collect_types(Module, Forms) ->
                  Info     = #typeinfo{exported = Exported,
                                       opaque   = (Attr == opaque),
                                       params   = Params,
-                                      body     = Body},
+                                      body     = typelib:remove_pos(Body)},
                  {Id, Info}
              end || Form = {attribute, _, Attr, {Name, Body, Vars}} <- Forms,
                     Attr == type orelse Attr == opaque,
@@ -513,17 +513,19 @@ collect_records(Module, Forms) ->
 %% forms, create one from the untyped one and normalize so that they
 %% all have a default value.
 %%
+%% Location in field names and types are set to zero to allow comparison using
+%% equality and pattern matching. This is not done for the default value (which
+%% is an expression, not a type).
 -spec extract_record_defs(Forms :: [tuple()]) -> Typedefs :: [{atom(), [type()]}].
 extract_record_defs([{attribute, L, record, {Name, _UntypedFields}},
                      {attribute, L, type, {{record, Name}, Fields, []}} |
                      Rest]) ->
     %% This representation is only used in OTP < 19
-    TypedFields = lists:map(fun absform:normalize_record_field/1, Fields),
-    R = {Name, TypedFields},
-    [R | extract_record_defs(Rest)];
+    extract_record_defs([{attribute, L, record, {Name, Fields}} | Rest]);
 extract_record_defs([{attribute, _L, record, {Name, Fields}} | Rest]) ->
-    %% Convert type typed record
-    TypedFields = lists:map(fun absform:normalize_record_field/1, Fields),
+    TypedFields = [gradualizer_lib:remove_pos_typed_record_field(
+                     absform:normalize_record_field(Field))
+                   || Field <- Fields],
     R = {Name, TypedFields},
     [R | extract_record_defs(Rest)];
 extract_record_defs([_ | Rest]) ->
@@ -560,7 +562,8 @@ collect_specs(Module, Forms) ->
             {F, A} <- Exports,
             not sets:is_element({F, A},
                         SpecedFunsSet)],
-    [{Key, absform:normalize_function_type_list(Types)}
+    [{Key, lists:map(fun typelib:remove_pos/1,
+                     absform:normalize_function_type_list(Types))}
      || {Key, Types} <- Specs ++ ImplicitSpecs].
 
 normalize_spec({{Func, Arity}, Types}, Module) ->

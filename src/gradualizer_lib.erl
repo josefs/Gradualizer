@@ -105,12 +105,12 @@ reverse_graph(G) ->
       Opts :: [annotate_user_types],
       Ty :: gradualizer_type:abstract_type().
 get_type_definition({remote_type, _Anno, [{atom, _, Module}, {atom, _, Name}, Args]}, _Env, _Opts) ->
-    remove_pos(gradualizer_db:get_type(Module, Name, Args));
+    gradualizer_db:get_type(Module, Name, Args);
 get_type_definition({user_type, Anno, Name, Args}, Env, Opts) ->
     %% Let's check if the type is a known remote type.
     case typelib:get_module_from_annotation(Anno) of
         {ok, Module} ->
-            remove_pos(gradualizer_db:get_type(Module, Name, Args));
+            gradualizer_db:get_type(Module, Name, Args);
         none ->
             %% Let's check if the type is defined in the context of this module.
             case maps:get({Name, length(Args)}, maps:get(types, Env#env.tenv), not_found) of
@@ -129,11 +129,6 @@ get_type_definition({user_type, Anno, Name, Args}, Env, Opts) ->
                     not_found
             end
     end.
-
-remove_pos({ok, T}) ->
-    {ok, typelib:remove_pos(T)};
-remove_pos(Error) ->
-    Error.
 
 %% Given a type `Ty', pick a value of that type.
 %% Used in exhaustiveness checking to show an example value
