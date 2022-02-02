@@ -497,6 +497,12 @@ glb(T1, T2, A, Env) ->
 stop_glb_recursion(T1, T2, A) ->
     maps:is_key({T1, T2}, A).
 
+helper1(Elem1, Elem2, A, Env) ->
+    glb(Elem1, Elem2, A, Env).
+
+helper2(Elem1, Elem2, A, Env) ->
+    glb(Elem1, Elem2, A, Env).
+
 -spec glb_ty(type(), type(), map(), env()) -> glb_acc().
 %% none() is the bottom of the hierarchy
 glb_ty({type, _, none, []} = Ty1, _Ty2, _A, _Env) ->
@@ -565,8 +571,10 @@ glb_ty(Ty1, Ty2, A, Env) when ?is_list_type(Ty1), ?is_list_type(Ty2) ->
             {empty, nonempty} -> none;
             {nonempty, empty} -> none
         end,
-    {Elem, Cs1} = glb(Elem1, Elem2, A, Env),
-    {Term, Cs2} = glb(Term1, Term2, A, Env),
+    %{Elem, Cs1} = glb(Elem1, Elem2, A, Env),
+    {Elem, Cs1} = helper1(Elem1, Elem2, A, Env),
+    %{Term, Cs2} = glb(Term1, Term2, A, Env),
+    {Term, Cs2} = helper2(Term1, Term2, A, Env),
     {from_list_view({Empty, Elem, Term}), constraints:combine(Cs1, Cs2)};
 
 %% Tuple types
