@@ -80,7 +80,7 @@
 -type typed_record_field() :: {typed_record_field,
                                {record_field, erl_anno:anno(), Name :: {atom, erl_anno:anno(), atom()},
                                 DefaultValue :: gradualizer_type:abstract_expr()},
-                                Type :: type()}.
+                               Type :: type()}.
 
 %% The environment passed around during typechecking.
 %% TODO: See https://github.com/josefs/Gradualizer/issues/364 for details.
@@ -430,8 +430,7 @@ get_maybe_remote_record_fields(RecName, Anno, Env) ->
             %% A record type in another module, from an expanded remote type
             case gradualizer_db:get_record_type(Module, RecName) of
                 {ok, TypedRecordFields} ->
-                    [{typed_record_field, Field, typelib:remove_pos(Type)}
-                     || {typed_record_field, Field, Type} <- TypedRecordFields];
+                    TypedRecordFields;
                 not_found ->
                     throw({undef, record, Anno, {Module, RecName}})
             end;
@@ -481,8 +480,8 @@ glb(T1, T2, A, Env) ->
             Module = maps:get(module, Env#env.tenv),
             case gradualizer_cache:get_glb(Module, T1, T2) of
                 false ->
-                    Ty1 = typelib:remove_pos(normalize(T1, Env)),
-                    Ty2 = typelib:remove_pos(normalize(T2, Env)),
+                    Ty1 = normalize(T1, Env),
+                    Ty2 = normalize(T2, Env),
                     {Ty, Cs} = glb_ty(Ty1, Ty2, A#{ {T1, T2} => 0 }, Env),
                     NormTy = normalize(Ty, Env),
                     gradualizer_cache:store_glb(Module, T1, T2, {NormTy, Cs}),
@@ -709,7 +708,7 @@ glb_ty({type, _, 'fun', [{type, _, product, _} = TArgs1, _]} = T1,
        {type, _, 'fun', [{type, _, any}, Res2]}, A, Env) ->
     glb(T1, type('fun', [TArgs1, Res2]), A, Env);
 
-%% normalize and remove_pos only does the top layer
+%% normalize only does the top layer
 glb_ty({type, _, Name, Args1}, {type, _, Name, Args2}, A, Env)
         when length(Args1) == length(Args2) ->
     {Args, Css} = lists:unzip([ glb(Arg1, Arg2, A, Env) || {Arg1, Arg2} <- lists:zip(Args1, Args2) ]),
@@ -769,7 +768,7 @@ normalize_rec({user_type, P, Name, Args} = Type, Env, Unfolded) ->
             UnfoldedNew = maps:put(mta(Type, Env), {type, Type}, Unfolded),
             case gradualizer_lib:get_type_definition(Type, Env, []) of
                 {ok, T} ->
-                    normalize_rec(typelib:remove_pos(T), Env, UnfoldedNew);
+                    normalize_rec(T, Env, UnfoldedNew);
                 opaque ->
                     Type;
                 not_found ->
@@ -782,7 +781,7 @@ normalize_rec(T = ?top(), _Env, _Unfolded) ->
 normalize_rec({remote_type, P, [{atom, _, M}, {atom, _, N}, Args]}, Env, Unfolded) ->
     case gradualizer_db:get_exported_type(M, N, Args) of
         {ok, T} ->
-            normalize_rec(typelib:remove_pos(T), Env, Unfolded);
+            normalize_rec(T, Env, Unfolded);
         opaque ->
             NormalizedArgs = lists:map(fun (Ty) -> normalize_rec(Ty, Env, Unfolded) end, Args),
             typelib:annotate_user_types(M, {user_type, P, N, NormalizedArgs});
@@ -1725,9 +1724,7 @@ do_type_check_expr(Env, {'fun', P, {function, M, F, A}}) ->
         {{atom, _, Module}, {atom, _, Function}, {integer, _, Arity}} ->
             case gradualizer_db:get_spec(Module, Function, Arity) of
                 {ok, BoundedFunTypeList} ->
-                    BoundedFunTypeListNoPos = lists:map(fun typelib:remove_pos/1,
-                                                        BoundedFunTypeList),
-                    Ty = bounded_type_list_to_type(Env, BoundedFunTypeListNoPos),
+                    Ty = bounded_type_list_to_type(Env, BoundedFunTypeList),
                     {Ty, #{}, constraints:empty()};
                 not_found ->
                     throw({call_undef, P, M, F, A})
@@ -2529,10 +2526,8 @@ do_type_check_expr_in(Env, ResTy, Expr = {'fun', P, {function, M, F, A}}) ->
         {{atom, _, Module}, {atom, _, Function}, {integer, _,Arity}} ->
             case gradualizer_db:get_spec(Module, Function, Arity) of
                 {ok, BoundedFunTypeList} ->
-                    BoundedFunTypeListNoPos = lists:map(fun typelib:remove_pos/1,
-                                                        BoundedFunTypeList),
                     FunTypeList =
-                        unfold_bounded_type_list(Env, BoundedFunTypeListNoPos),
+                        unfold_bounded_type_list(Env, BoundedFunTypeList),
                     case any_subtype(FunTypeList, ResTy, Env) of
                         {true, Cs} -> {#{}, Cs};
                         false -> throw({type_error, Expr, FunTypeList, ResTy})
@@ -3056,8 +3051,7 @@ update_map_type(?type(map, Assocs), AssocTys) ->
     %% `AssocTys' come from a map creation or map update expr - after the expr is evaluated the map
     %% will contain the associations. Therefore in the resulting map type they
     %% cannot be optional - we rewrite optional assocs to non-optional ones.
-    UpdatedAssocs = update_assocs(AssocTys,
-                                  lists:map(fun typelib:remove_pos/1, Assocs)),
+    UpdatedAssocs = update_assocs(AssocTys, Assocs),
     type(map, UpdatedAssocs);
 update_map_type({var, _, _Var}, _AssocTys) ->
     type(any);
@@ -3071,7 +3065,7 @@ update_map_type(Type, _AssocTys) ->
 update_assocs([{type, _, _Assoc, [Key, ValueType]} | AssocTys],
 	      Assocs) ->
     [type(map_field_exact, [Key, ValueType]) |
-     case take_assoc(typelib:remove_pos(Key), Assocs, []) of
+     case take_assoc(Key, Assocs, []) of
          {value, _, RestAssocs} ->
              update_assocs(AssocTys, RestAssocs);
          false ->
@@ -3095,10 +3089,7 @@ type_check_fun(Env, {atom, P, Name}, Arity) ->
 type_check_fun(_Env, {remote, P, {atom,_,Module}, {atom,_,Fun}}, Arity) ->
     % Module:function call
     case gradualizer_db:get_spec(Module, Fun, Arity) of
-        {ok, Types} ->
-            Types1 = [typelib:annotate_user_types(Module, typelib:remove_pos(T))
-                      || T <- Types],
-            {Types1, #{}, constraints:empty()};
+        {ok, Types} -> {Types, #{}, constraints:empty()};
         not_found   -> throw({call_undef, P, Module, Fun, Arity})
     end;
 type_check_fun(_Env, {remote, _, _Expr, _}, Arity)->
@@ -3274,7 +3265,7 @@ get_bounded_fun_type_list(Name, Arity, Env, P) ->
             case erl_internal:bif(Name, Arity) of
                 true ->
                     {ok, Types} = gradualizer_db:get_spec(erlang, Name, Arity),
-                    lists:map(fun typelib:remove_pos/1, Types);
+                    Types;
                 false ->
                     %% If it's not imported, the file doesn't compile.
                     case get_imported_bounded_fun_type_list(Name, Arity, Env, P) of
@@ -3289,8 +3280,7 @@ get_imported_bounded_fun_type_list(Name, Arity, Env, P) ->
         {ok, Module} ->
             case gradualizer_db:get_spec(Module, Name, Arity) of
                 {ok, BoundedFunTypeList} ->
-                    {ok, lists:map(fun typelib:remove_pos/1,
-                                   BoundedFunTypeList)};
+                    {ok, BoundedFunTypeList};
                 not_found ->
                     throw({call_undef, P, Module, Name, Arity})
             end;
@@ -3762,10 +3752,8 @@ refinable(?type(record, [_ | Fields]) = Ty0, Env, Trace) ->
                       [X || ?type(field_type, X) <- Fields])
     end;
 refinable(?type(map, _) = Ty0, Env, Trace) ->
-    %% TODO: We shouldn't really call remove_pos here, but somehow maps with position information
-    %%       still present sometimes slip through.
-    %%       This later causes an assertion failure in has_overlapping_keys -> ... -> compat.
-    ?type(map, Assocs) = Ty = typelib:remove_pos(normalize(Ty0, Env)),
+    ?assert_normalized_anno(Ty0),
+    ?type(map, Assocs) = Ty = normalize(Ty0, Env),
     case stop_refinable_recursion(Ty, Env, Trace) of
         stop -> true;
         {proceed, NewTrace} ->
@@ -4731,7 +4719,7 @@ get_rec_field_index_and_type(FieldWithAnno, [], _) ->
 get_record_info_type({call, Anno, {atom, _, record_info},
                       [{atom, _, fields}, {atom, _, RecName}]}, Env) ->
     Fields = get_record_fields(RecName, Anno, Env),
-    Names = [typelib:remove_pos(Name)
+    Names = [Name
              || {typed_record_field, {record_field, _, Name, _}, _Ty} <- Fields],
     type(list, [type(union, Names)]);
 get_record_info_type({call, Anno, {atom, _, record_info},
