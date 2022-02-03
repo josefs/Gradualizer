@@ -47,8 +47,7 @@ pp_type(Type = {type, _, bounded_fun, _}) ->
                           [{capture, all_but_first, list}, dotall]),
     "fun(" ++ S ++ ")";
 pp_type({var, _, TyVar}) ->
-    %% TODO: In type(), TyVar should be an atom but we use a string.
-    %% EDIT: Apparently, not everywhere :/
+    %% See gradualizer_type:type_var/0 and typechecker:new_type_var/0
     case TyVar of
         _ when is_atom(TyVar) -> atom_to_list(TyVar);
         _ when is_list(TyVar) -> TyVar
