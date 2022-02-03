@@ -3416,15 +3416,10 @@ check_clauses(Env, ArgsTy, ResTy, Clauses, Caps) ->
     check_exhaustiveness(Env, ArgsTy, Clauses, RefinedArgsTy, VarBindsList, Css).
 
 check_exhaustiveness(Env, ArgsTy, Clauses, RefinedArgsTy, VarBindsList, Css) ->
-    case is_non_exhaustive(Env#env.exhaust,
-
-                           ArgsTy =/= any
-                           andalso lists:all(fun (Ty) -> refinable(Ty, Env) end, ArgsTy),
-
-                           lists:all(fun no_guards/1, Clauses),
-
-                           is_list(RefinedArgsTy)
-                           andalso lists:any(fun (T) -> T =/= type(none) end, RefinedArgsTy))
+    case exhaustiveness_checking(Env) andalso
+         all_refinable(ArgTys, Env) andalso
+         no_clause_has_guards(Clauses) andalso
+         some_type_not_none(RefinedArgTys)
     of
         true ->
             [{clause, P, _, _, _}|_] = Clauses,
@@ -3434,13 +3429,16 @@ check_exhaustiveness(Env, ArgsTy, Clauses, RefinedArgsTy, VarBindsList, Css) ->
     end,
     {union_var_binds(VarBindsList, Env), constraints:combine(Css)}.
 
-is_non_exhaustive(_CheckExhaustiveness = true,
-                  _ArgsRefinable = true,
-                  _NoGuards = true,
-                  _RefinedArgsNotNone = true) ->
-    true;
-is_non_exhaustive(_, _, _, _) ->
-    false.
+exhaustiveness_checking(#env{} = Env) -> Env#env.exhaust.
+
+all_refinable(any, _Env) -> false;
+all_refinable(Types, Env) -> lists:all(fun (Ty) -> refinable(Ty, Env) end, Types).
+
+no_clause_has_guards(Clauses) ->
+    lists:all(fun no_guards/1, Clauses).
+
+some_type_not_none(Types) when is_list(Types) ->
+    lists:any(fun (T) -> T =/= type(none) end, Types).
 
 %% This function checks clauses.
 %% * If clauses have 0 arguments;
