@@ -1067,11 +1067,9 @@ expect_list_type(Union = {type, _, union, UnionTys}, N, Env) ->
     end;
 expect_list_type({var, _, Var}, _, _) ->
     TyVar = new_type_var(),
-    {elem_ty
-    ,{var, erl_anno:new(0), TyVar}
-    ,constraints:add_var(TyVar,
-      constraints:upper(Var, {type, erl_anno:new(0), list, [TyVar]}))
-    };
+    {elem_ty,
+     {var, erl_anno:new(0), TyVar},
+     constraints:add_var(TyVar, constraints:upper(Var, {type, erl_anno:new(0), list, [TyVar]}))};
 expect_list_type(Ty, _, _) ->
     {type_error, Ty}.
 
@@ -4213,20 +4211,34 @@ add_type_pat(Nil = {nil, P}, Ty, Env, VEnv) ->
             throw({type_error, pattern, P, Nil, Ty})
     end;
 add_type_pat(CONS = {cons, P, PH, PT}, ListTy, Env, VEnv) ->
+    %% P - position
+    %% PH, PT - list pattern head, list pattern tail
+    %% ListTy - expected list type
     case expect_list_type(normalize(ListTy, Env), dont_allow_nil_type, Env) of
         any ->
+            %% We don't know the expected list type.
             VEnv2 = add_any_types_pat(PH, VEnv),
             TailTy = normalize(type(union, [ListTy, type(nil)]), Env),
             {_TailPatTy, _TauUBound, VEnv3, Cs} = add_type_pat(PT, TailTy, Env, VEnv2),
+            %% We explicitly don't allow nil type (`dont_allow_nil_type' above),
+            %% so `ListTy' cannot be an empty list here.
             NonEmptyTy = rewrite_list_to_nonempty_list(ListTy),
             {type(none), NonEmptyTy, VEnv3, Cs};
         {elem_ty, ElemTy, Cs1} ->
-            {PatTy1, _UBound1, VEnv2, Cs2} =
+            %% We know the expected list type and use that information.
+            %% HeadPatTy is the type exhausted by the list pattern head (PH).
+            {HeadPatTy, _UBound1, VEnv2, Cs2} =
                 add_type_pat(PH, normalize(ElemTy, Env), Env, VEnv),
             TailTy = normalize(type(union, [ListTy, type(nil)]), Env),
-            {_PatTy2, _Ubound2, VEnv3, Cs3} = add_type_pat(PT, TailTy, Env, VEnv2),
-            PatTy = type(nonempty_list, [PatTy1]),
+            %% _TailPatTy is the type exhausted by the list pattern tail (PT),
+            %% which is the same as ListTy.
+            %% We're only interested in new bindings in the env and new constraints.
+            {_TailPatTy, _Ubound2, VEnv3, Cs3} = add_type_pat(PT, TailTy, Env, VEnv2),
+            PatTy = type(nonempty_list, [HeadPatTy]),
+            %% We explicitly don't allow nil type (`dont_allow_nil_type' above),
+            %% so `ListTy' cannot be an empty list here.
             NonEmptyTy = rewrite_list_to_nonempty_list(ListTy),
+            %% PatTy is the type exhausted by the cons pattern.
             {PatTy, NonEmptyTy, VEnv3, constraints:combine([Cs1, Cs2, Cs3])};
         {type_error, _Ty} ->
             throw({type_error, cons_pat, P, CONS, ListTy})
