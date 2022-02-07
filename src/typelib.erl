@@ -106,7 +106,7 @@ remove_pos({type, _, constraint, [{atom, _, is_subtype}, [V, T]]}) ->
                                         ,[remove_pos(V), remove_pos(T)]]};
 remove_pos({type, _, 'fun', [{type, _, any}, RetTy]}) ->
     %% special case for `fun((...) -> R)`,
-    %% the only place where `{type, _, any}` can occure
+    %% the only place where `{type, _, any}` can occur
     {type, erl_anno:new(0), 'fun', [{type, erl_anno:new(0), any}
                                    ,remove_pos(RetTy)]};
 remove_pos({type, _, Type, Params}) when is_list(Params) ->
@@ -170,7 +170,7 @@ get_module_from_annotation(Anno) ->
                            #{atom() => type()}) -> type().
 substitute_type_vars({type, L, 'fun', [Any = {type, _, any}, RetTy]}, TVars) ->
     %% special case for `fun((...) -> R)`,
-    %% the only place where `{type, _, any}` can occure
+    %% the only place where `{type, _, any}` can occur
     {type, L, 'fun', [Any, substitute_type_vars(RetTy, TVars)]};
 substitute_type_vars({Tag, L, T, Params}, TVars) when Tag == type orelse
                                                       Tag == user_type,
@@ -205,9 +205,9 @@ substitute_type_vars(Other = {T, _, _}, _)
 %% In order to specify a function which can traverse all nodes, not just the top-level nodes,
 %% we have to include all possible node kinds in the type definition.
 
-%% @doc `reduce_type/3' enables reducing an asbtract type to a single value.
+%% @doc `reduce_type/3' enables reducing an abstract type to a single value.
 %%
-%% Example 1 - gather all singleton atoms occuring in a type:
+%% Example 1 - gather all singleton atoms occurring in a type:
 %%
 %% > F = fun
 %% >         ({atom, _, _} = At, Acc) -> {At, [At | Acc]};

@@ -247,7 +247,7 @@ compat_ty({type, _, binary, [{integer, _, M1}, {integer, _, N1}]},
        (M1 - M2) rem N2 == 0 ->
     ret(A);
 
-%% Records with the same name, defined in differend modules
+%% Records with the same name, defined in different modules
 %% TODO: Record equivallend on tuple form
 compat_ty({type, P1, record, [{atom, _, Name}]},
           {type, P2, record, [{atom, _, Name}]}, A, Env) ->
@@ -906,7 +906,7 @@ flatten_type(Ty, _Env, _Unfolded) ->
 
 %% Merges overlapping integer types (including ranges and singletons).
 %% (TODO) Removes all types that are subtypes of other types in the same union.
-%% Retuns a list of disjoint types.
+%% Returns a list of disjoint types.
 -spec merge_union_types([type()], env()) -> [type()].
 merge_union_types(Types, _Env) ->
     case lists:any(fun (?top()) -> true; (_) -> false end, Types) of
@@ -1110,7 +1110,7 @@ infer_literal_string(Str, Env) ->
     SortedChars = ?assert_type(lists:usort(Str), [char(), ...]),
     if length(SortedChars) =< 10 ->
             %% heuristics: if there are not more than 10 different characters
-            %% list them explicitely as singleton types
+            %% list them explicitly as singleton types
             CharTypes = [{char, erl_anno:new(0), C} || C <- SortedChars],
             type(nonempty_list, [normalize(type(union, CharTypes), Env)]);
        true ->
@@ -2928,7 +2928,7 @@ unary_op_arg_type('-', Ty = {type, _, float, []}) ->
 unary_op_arg_type(_Op, {var, _, _}) ->
     %% TODO: this should be more specific once we're able to solve constraints on type vars.
     %%       Otherwise, we'll lose some feedback / precision.
-    %%       With contraint solving, if the type variable resolves to pos_integer()
+    %%       With constraint solving, if the type variable resolves to pos_integer()
     %%       and _Op == '-' here, then we should have returned neg_integer().
     type(any).
 
@@ -4221,7 +4221,7 @@ add_type_pat({record, P, Record, Fields}, Ty, Env, VEnv) ->
 add_type_pat({map, _, _} = MapPat, {var, _, Var} = TyVar, _Env, VEnv) ->
     %% FIXME this is a quite rudimentary implementation
     %% - variables from the map pattern become any()
-    %% - the contraint could contain the map keys
+    %% - the constraint could contain the map keys
     Cs = constraints:add_var(
            Var, constraints:upper(Var, type(map, any))),
     {type(none), TyVar, add_any_types_pat(MapPat, VEnv), Cs};
@@ -4798,7 +4798,7 @@ create_env(#parsedata{module    = Module
 default_union_size_limit() -> 30.
 
 create_fenv(Specs, Funs) ->
-% We're taking advantage of the fact that if a key occurrs more than once
+% We're taking advantage of the fact that if a key occurs more than once
 % in the list then it right-most occurrence will take precedence. In this
 % case it will mean that if there is a spec, then that will take precedence
 % over the default type any().

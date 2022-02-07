@@ -20,7 +20,7 @@
 #   check       Run all checks (tests, dialyze, gradualize)
 #   clean       Delete all generated files
 #
-# Capitalized variables can be overriden on the command line.
+# Capitalized variables can be overridden on the command line.
 # Example:
 #
 #   make tests EUNIT_OPTS=verbose

@@ -179,7 +179,7 @@ type_check_file_or_dir(File, Opts) ->
 %% @doc Type check an abstract syntax tree of a module. This can be useful
 %% for tools where the abstract forms are generated in memory.
 %%
-%% If the first form is a file attribute (as in forms retuned by e.g.
+%% If the first form is a file attribute (as in forms returned by e.g.
 %% epp:parse_file/1,2), that filename will be used in error messages.
 %% The second form is typically the module attribute.
 -spec type_check_forms([erl_parse:abstract_form()], options()) ->
