@@ -357,7 +357,7 @@ autoimport(M, #state{opts = #{autoimport := true},
                      loaded = Loaded} = State) ->
     case Loaded of
         #{M := _} ->
-            %% Alrady loaded or attempted
+            %% Already loaded or attempted
             State;
         _ ->
             %io:format("Loading types from ~p~n", [M]),
@@ -428,7 +428,7 @@ import_absform(Module, Forms1, State) ->
     }.
 
 %% Include dirs for OTP apps are given in makefiles. We can never
-%% guarrantee to get them right without extracting the types during
+%% guarantee to get them right without extracting the types during
 %% compilation.
 guess_include_dirs(File) ->
     Dir = filename:dirname(File),

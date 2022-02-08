@@ -115,7 +115,7 @@ file or inferred.
 
 * Cross-process blame. It'd be interesting to develop a blame calculus that
   can be used as a compilation target on top of erlang. Blame can be sent
-  as messages. That will go agains the open world assumption and requires
+  as messages. That will go against the open world assumption and requires
   that all nodes be compiled via the blame calculus.
 
   This will be an interesting alternative to session types.

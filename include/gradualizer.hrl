@@ -21,7 +21,7 @@
 %%
 %%     N = '::'(Message, "non_neg_integer()")
 %%
-%% Gradualizer detects occurences of the functions '::'/2 and ':::'/2 and
+%% Gradualizer detects occurrences of the functions '::'/2 and ':::'/2 and
 %% adjusts type checking accordingly.  The macros are supplied only for
 %% convenience.
 %%

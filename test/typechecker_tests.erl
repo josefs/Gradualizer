@@ -385,7 +385,7 @@ propagate_types_test_() ->
                    type_check_expr(_Env = "-spec f() -> true.",
                                    _Expr = "not f()")),
 
-     %% infered type of number negation
+     %% inferred type of number negation
      ?_assertMatch("any()",
                    type_check_expr(_Env = "-spec f() -> any().",
                                    _Expr = "- f()")),
@@ -575,7 +575,7 @@ type_check_clause_test_() ->
                                 "    catch _ -> error",
                                 "    end."])),
 
-     %% should emmit: "The clause on line 3 is expected to have 1 argument(s) but it has 0
+     %% should emit: "The clause on line 3 is expected to have 1 argument(s) but it has 0
      ?_assertNot(type_check_forms(["-spec h() -> fun((integer()) -> atom()).",
                                    "h() ->",
                                    "    fun() -> ok end."]))
