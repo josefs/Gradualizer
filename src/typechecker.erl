@@ -786,8 +786,10 @@ normalize_rec({remote_type, P, [{atom, _, M}, {atom, _, N}, Args]}, Env, Unfolde
             NormalizedArgs = lists:map(fun (Ty) -> normalize_rec(Ty, Env, Unfolded) end, Args),
             typelib:annotate_user_types(M, {user_type, P, N, NormalizedArgs});
         not_exported ->
+            %% See check_undefined_types/1 for handling of these cases.
             throw({not_exported, remote_type, P, {M, N, length(Args)}});
         not_found ->
+            %% See check_undefined_types/1 for handling of these cases.
             throw({undef, remote_type, P, {M, N, length(Args)}})
     end;
 normalize_rec({op, _, _, _Arg} = Op, _Env, _Unfolded) ->
@@ -4740,7 +4742,8 @@ type_check_forms(Forms, Opts) ->
         collect_specs_types_opaques_and_functions(Forms),
     Env = create_env(ParseData, Opts),
     ?verbose(Env, "Checking module ~p~n", [ParseData#parsedata.module]),
-    AllErrors =
+    UndefinedTypeErrors = check_undefined_types(Forms),
+    TypeCheckErrors =
         lists:foldr(
           fun (Function, Errors) when Errors =:= [];
                                       not StopOnFirstError ->
@@ -4772,6 +4775,7 @@ type_check_forms(Forms, Opts) ->
               (_Function, Errors) ->
                   Errors
           end, [], ParseData#parsedata.functions),
+    AllErrors = filter_undefined_type_errors(TypeCheckErrors) ++ UndefinedTypeErrors,
     lists:reverse(AllErrors).
 
 -spec create_env(#parsedata{}, proplists:proplist()) -> env().
@@ -4811,6 +4815,36 @@ create_fenv(Specs, Funs) ->
         || {{Name, NArgs}, Types} <- Specs
       ]
      ).
+
+check_undefined_types(Forms) ->
+    gradualizer_lib:fold_ast(fun check_remote_type/2, [], Forms).
+
+check_remote_type({attribute, _, SpecType, {_, Forms}}, Acc)
+  when SpecType =:= spec;
+       SpecType =:= type ->
+    gradualizer_lib:fold_ast(fun check_remote_type/2, Acc, Forms);
+check_remote_type(?top(), Acc) ->
+    Acc;
+check_remote_type({remote_type, P, [{atom, _, M}, {atom, _, N}, Args]}, Acc) ->
+    case gradualizer_db:get_exported_type(M, N, Args) of
+        {ok, _} ->
+            Acc;
+        opaque ->
+            Acc;
+        not_exported ->
+            [{not_exported, remote_type, P, {M, N, length(Args)}} | Acc];
+        not_found ->
+            [{undef, remote_type, P, {M, N, length(Args)}} | Acc]
+    end;
+check_remote_type(_, Acc) ->
+    Acc.
+
+filter_undefined_type_errors(Errors) ->
+    lists:filter(fun
+                     ({not_exported, remote_type, _, _}) -> false;
+                     ({undef, remote_type, _, _}) -> false;
+                     (_) -> true
+                 end, Errors).
 
 %% Collect the top level parse tree stuff returned by epp:parse_file/2.
 -spec collect_specs_types_opaques_and_functions(Forms :: list()) -> #parsedata{}.
