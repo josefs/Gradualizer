@@ -4834,8 +4834,8 @@ check_remote_type({call, _, {remote, _, {atom, _, Module}, {atom, _, Fun}}, Args
     end;
 check_remote_type({remote_type, P, [{atom, _, M}, {atom, _, N}, Args]}, Acc) ->
     case gradualizer_db:get_exported_type(M, N, Args) of
-        {ok, _} ->
-            Acc;
+        {ok, Type} ->
+            check_undefined_types([Type]) ++ Acc;
         opaque ->
             Acc;
         not_exported ->
