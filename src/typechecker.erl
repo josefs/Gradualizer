@@ -4775,7 +4775,7 @@ type_check_forms(Forms, Opts) ->
               (_Function, Errors) ->
                   Errors
           end, [], ParseData#parsedata.functions),
-    AllErrors = filter_undefined_type_errors(TypeCheckErrors) ++ UndefinedTypeErrors,
+    AllErrors = filter_undefined_type_errors(Env, TypeCheckErrors) ++ UndefinedTypeErrors,
     lists:reverse(AllErrors).
 
 -spec create_env(#parsedata{}, proplists:proplist()) -> env().
@@ -4822,9 +4822,16 @@ check_undefined_types(Forms) ->
 check_remote_type({attribute, _, SpecType, {_, Forms}}, Acc)
   when SpecType =:= spec;
        SpecType =:= type ->
-    gradualizer_lib:fold_ast(fun check_remote_type/2, Acc, Forms);
+    check_undefined_types(Forms) ++ Acc;
 check_remote_type(?top(), Acc) ->
     Acc;
+check_remote_type({call, _, {remote, _, {atom, _, Module}, {atom, _, Fun}}, Args}, Acc) ->
+    case gradualizer_db:get_spec(Module, Fun, length(Args)) of
+        {ok, Types} ->
+            check_undefined_types(Types) ++ Acc;
+        not_found ->
+            Acc
+    end;
 check_remote_type({remote_type, P, [{atom, _, M}, {atom, _, N}, Args]}, Acc) ->
     case gradualizer_db:get_exported_type(M, N, Args) of
         {ok, _} ->
@@ -4836,15 +4843,17 @@ check_remote_type({remote_type, P, [{atom, _, M}, {atom, _, N}, Args]}, Acc) ->
         not_found ->
             [{undef, remote_type, P, {M, N, length(Args)}} | Acc]
     end;
-check_remote_type(_, Acc) ->
+check_remote_type(_Form, Acc) ->
     Acc.
 
-filter_undefined_type_errors(Errors) ->
-    lists:filter(fun
-                     ({not_exported, remote_type, _, _}) -> false;
-                     ({undef, remote_type, _, _}) -> false;
-                     (_) -> true
-                 end, Errors).
+filter_undefined_type_errors(Env, Errors) ->
+    {Discard, Keep} = lists:partition(fun
+                                          ({not_exported, remote_type, _, _}) -> true;
+                                          ({undef, remote_type, _, _}) -> true;
+                                          (_) -> false
+                                      end, Errors),
+    verbose(Env, "Discarding errors: ~p\n", [Discard]),
+    Keep.
 
 %% Collect the top level parse tree stuff returned by epp:parse_file/2.
 -spec collect_specs_types_opaques_and_functions(Forms :: list()) -> #parsedata{}.
