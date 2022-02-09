@@ -4775,6 +4775,9 @@ type_check_forms(Forms, Opts) ->
               (_Function, Errors) ->
                   Errors
           end, [], ParseData#parsedata.functions),
+    %% `TypeCheckErrors' will contain undefined remote type errors missing position information.
+    %% We don't want to report them, as they're not useful to the user - we report
+    %% `UndefinedTypeErrors' instead.
     AllErrors = filter_undefined_type_errors(Env, TypeCheckErrors) ++ UndefinedTypeErrors,
     lists:reverse(AllErrors).
 
@@ -4816,6 +4819,26 @@ create_fenv(Specs, Funs) ->
       ]
      ).
 
+%% @doc Check for undefined remote types in a separate pass over `Forms'.
+%%
+%% The main typechecker pass defined in `type_check_forms/2' removes position information from types
+%% as soon as they're encountered. It's done to make types occuring on different source
+%% lines represented the same, therefore easy to compare.
+%%
+%% However, in case of references to undefined types (that is, programmer mistakes) it means that
+%% an error which ought to carry this position information to point the user at the source line
+%% to fix is missing.
+%%
+%% This pass over the AST does not remove position information, so invalid remote type references
+%% can be reported properly.
+%%
+%% See https://github.com/josefs/Gradualizer/issues/379 for more information.
+%% @end
+-spec check_undefined_types(Forms) -> Errors when
+      Forms :: gradualizer_file_utils:abstract_forms(),
+      Errors :: [ Error ],
+      Error :: {not_exported, remote_type, erl_anno:anno(), {module(), atom(), non_neg_integer()}}
+             | {undef, remote_type, erl_anno:anno(), {module(), atom(), non_neg_integer()}}.
 check_undefined_types(Forms) ->
     gradualizer_lib:fold_ast(fun check_remote_type/2, [], Forms).
 
@@ -4825,6 +4848,7 @@ check_remote_type({attribute, _, SpecType, {_, Forms}}, Acc)
     check_undefined_types(Forms) ++ Acc;
 check_remote_type(?top(), Acc) ->
     Acc;
+%% Check remote calls, as the remote function specs can also refer to undefined remote types.
 check_remote_type({call, _, {remote, _, {atom, _, Module}, {atom, _, Fun}}, Args}, Acc) ->
     case gradualizer_db:get_spec(Module, Fun, length(Args)) of
         {ok, Types} ->
@@ -4835,6 +4859,7 @@ check_remote_type({call, _, {remote, _, {atom, _, Module}, {atom, _, Fun}}, Args
 check_remote_type({remote_type, P, [{atom, _, M}, {atom, _, N}, Args]}, Acc) ->
     case gradualizer_db:get_exported_type(M, N, Args) of
         {ok, Type} ->
+            %% A remote type might expand to another remote type, so let's check that, too.
             check_undefined_types([Type]) ++ Acc;
         opaque ->
             Acc;
