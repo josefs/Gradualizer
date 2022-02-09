@@ -1,9 +1,10 @@
 -module(undefined_errors_helper).
 -export([und_rec/0, und_ty/0, not_exp_ty/0]).
--export_type([j/0]).
+-export_type([j/0, expands_to_undefined_remote/0]).
 
 -type j() :: undefined_type().
 -type not_exported() :: ok.
+-type expands_to_undefined_remote() :: undefined_errors:undefined_type().
 
 -spec und_rec() -> #undefined_record{}.
 und_rec() -> ok.
