@@ -3,6 +3,7 @@
          remote_remote_type/0,
          remote_struct_with_remote_type/0,
          remote_struct_with_local_type/0,
+         remote_struct_with_record/0,
          remote_call/0,
          remote_record/0,
          normalize_remote_type/0,
@@ -19,6 +20,9 @@ remote_struct_with_remote_type() -> {struct, ok}.
 
 -spec remote_struct_with_local_type() -> undefined_errors_helper:expands_to_struct_with_undefined_local().
 remote_struct_with_local_type() -> ok.
+
+-spec remote_struct_with_record() -> undefined_errors_helper:expands_to_struct_with_undefined_record().
+remote_struct_with_record() -> ok.
 
 -spec remote_call() -> ok.
 remote_call() -> undefined_errors_helper:undefined_call().
