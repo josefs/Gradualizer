@@ -342,6 +342,20 @@ format_type_error({bad_type_annotation, TypeLit}, Opts) ->
       [format_location(TypeLit, brief, Opts),
        pp_expr(TypeLit, Opts),
        format_location(TypeLit, verbose, Opts)]);
+format_type_error({internal_error, form_check_timeout, Form}, Opts) ->
+    io_lib:format(
+      "~sTimeout checking form~s~n",
+      [format_location(Form, brief, Opts),
+       case proplists:get_value(fmt_location, Opts, ?FMT_LOCATION_DEFAULT) of
+           brief ->
+               "";
+           verbose ->
+               io_lib:format("~s~n~p~n"
+                             "This is most likely a bug in Gradualizer.~n"
+                             "Please report it at https://github.com/josefs/Gradualizer/issues",
+                             [format_location(Form, verbose, Opts),
+                              Form])
+       end]);
 format_type_error({Location, Module, ErrorDescription}, Opts)
   when is_integer(Location) orelse is_tuple(Location),
        is_atom(Module) ->
