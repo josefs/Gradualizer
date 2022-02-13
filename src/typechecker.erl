@@ -4734,45 +4734,46 @@ get_record_info_type({call, Anno, {atom, _, record_info},
 -spec type_check_forms(list(), proplists:proplist()) -> list().
 type_check_forms(Forms, Opts) ->
     StopOnFirstError = proplists:get_bool(stop_on_first_error, Opts),
-    CrashOnError = proplists:get_bool(crash_on_error, Opts),
-
-    ParseData =
-        collect_specs_types_opaques_and_functions(Forms),
+    ParseData = collect_specs_types_opaques_and_functions(Forms),
     Env = create_env(ParseData, Opts),
     ?verbose(Env, "Checking module ~p~n", [ParseData#parsedata.module]),
-    AllErrors =
-        lists:foldr(
-          fun (Function, Errors) when Errors =:= [];
-                                      not StopOnFirstError ->
-                        try type_check_function(Env, Function) of
-                            {_VarBinds, _Cs} ->
-                                Errors
-                        catch
-                            throw:Throw:ST ->
-                                % Useful for debugging
-                                % io:format("~p~n", [erlang:get_stacktrace()]),
-                                if
-                                    CrashOnError ->
-                                        io:format("Crashing...~n"),
-                                        erlang:raise(throw, Throw, ST);
-                                    not CrashOnError ->
-                                        [Throw | Errors]
-                                end;
-                            error:Error:ST ->
-                                %% A hack to hide the (very large) #env{} in
-                                %% error stacktraces. TODO: Add an opt for this.
-                                Trace = case ST of
-                                    [{M, F, [#env{}|Args], Pos} | RestTrace] ->
-                                        [{M, F, ['*environment excluded*'|Args], Pos} | RestTrace];
-                                    Trace0 ->
-                                        Trace0
-                                end,
-                                erlang:raise(error, Error, Trace)
-                        end;
-              (_Function, Errors) ->
-                  Errors
-          end, [], ParseData#parsedata.functions),
+    AllErrors = lists:foldr(fun (Function, Errors) ->
+                                    type_check_form(Function, Errors, StopOnFirstError, Env, Opts)
+                            end, [], ParseData#parsedata.functions),
     lists:reverse(AllErrors).
+
+type_check_form(Function, Errors, StopOnFirstError, Env, Opts)
+  when Errors =:= [];
+       not StopOnFirstError ->
+    CrashOnError = proplists:get_bool(crash_on_error, Opts),
+
+    try type_check_function(Env, Function) of
+        {_VarBinds, _Cs} ->
+            Errors
+    catch
+        throw:Throw:ST ->
+            % Useful for debugging
+            % io:format("~p~n", [erlang:get_stacktrace()]),
+            if
+                CrashOnError ->
+                    io:format("Crashing...~n"),
+                    erlang:raise(throw, Throw, ST);
+                not CrashOnError ->
+                    [Throw | Errors]
+            end;
+        error:Error:ST ->
+            %% A hack to hide the (very large) #env{} in
+            %% error stacktraces. TODO: Add an opt for this.
+            Trace = case ST of
+                        [{M, F, [#env{}|Args], Pos} | RestTrace] ->
+                            [{M, F, ['*environment excluded*'|Args], Pos} | RestTrace];
+                        Trace0 ->
+                            Trace0
+                    end,
+            erlang:raise(error, Error, Trace)
+    end;
+type_check_form(_Function, Errors, _StopOnFirstError, _Env, _Opts) ->
+    Errors.
 
 -spec create_env(#parsedata{}, proplists:proplist()) -> env().
 create_env(#parsedata{module    = Module
