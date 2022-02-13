@@ -44,7 +44,7 @@
         end).
 
 %% This is the maximum time that typechecking a single form may take.
--define(form_check_timeout_ms, 5000).
+-define(form_check_timeout_ms, 500).
 
 -type tenv() :: gradualizer_lib:tenv().
 -type venv() :: map().
