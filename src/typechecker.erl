@@ -43,6 +43,9 @@
             _ -> error({position_not_removed, Tuple})
         end).
 
+%% This is the maximum time that typechecking a single form may take.
+-define(form_check_timeout_ms, 5000).
+
 -type tenv() :: gradualizer_lib:tenv().
 -type venv() :: map().
 
@@ -4738,9 +4741,40 @@ type_check_forms(Forms, Opts) ->
     Env = create_env(ParseData, Opts),
     ?verbose(Env, "Checking module ~p~n", [ParseData#parsedata.module]),
     AllErrors = lists:foldr(fun (Function, Errors) ->
-                                    type_check_form(Function, Errors, StopOnFirstError, Env, Opts)
+                                    type_check_form_with_timeout(Function, Errors, StopOnFirstError, Env, Opts)
                             end, [], ParseData#parsedata.functions),
     lists:reverse(AllErrors).
+
+
+%% @doc `type_check_form_with_timeout' is a workaround meant to improve usability in the
+%% presence of known infinite loops in the typechecker.
+%%
+%% When Gradualizer is run interactively or in the foreground,
+%% detection of an infinite loop is unavoidable by the user seeing that the tool is stuck.
+%%
+%% However, when Gradualizer is run in the background (as an integration with editor / IDE)
+%% we might not realise it's stuck in an infinite loop at all or do so only after the machine's fan
+%% starts up. Moreover, in this case we'll not receive feedback from the tool.
+%%
+%% To avoid the user experience problem, it's better to opportunistically try performing the check,
+%% but in the light of it taking too long, just forcibly break the infinite loop and report
+%% a Gradualizer (NOT the checked program!) error.
+type_check_form_with_timeout(Function, Errors, StopOnFirstError, Env, Opts) ->
+    Task = gradualizer_task:async(fun () ->
+                                          type_check_form(Function, Errors, StopOnFirstError,
+                                                          Env, Opts)
+                                  end),
+    case gradualizer_task:safe_await(Task, timeout, ?form_check_timeout_ms) of
+        timeout ->
+            [{internal_error, form_check_timeout, Function} | Errors];
+        {crash, Crash, St} ->
+            io:format("Crashing...~n"),
+            erlang:raise(throw, Crash, St);
+        {error_trace, Error, Trace} ->
+            erlang:raise(error, Error, Trace);
+        Other ->
+            Other
+    end.
 
 type_check_form(Function, Errors, StopOnFirstError, Env, Opts)
   when Errors =:= [];
@@ -4751,13 +4785,12 @@ type_check_form(Function, Errors, StopOnFirstError, Env, Opts)
         {_VarBinds, _Cs} ->
             Errors
     catch
-        throw:Throw:ST ->
+        throw:Throw:St ->
             % Useful for debugging
             % io:format("~p~n", [erlang:get_stacktrace()]),
             if
                 CrashOnError ->
-                    io:format("Crashing...~n"),
-                    erlang:raise(throw, Throw, ST);
+                    {crash, Throw, St};
                 not CrashOnError ->
                     [Throw | Errors]
             end;
@@ -4770,7 +4803,7 @@ type_check_form(Function, Errors, StopOnFirstError, Env, Opts)
                         Trace0 ->
                             Trace0
                     end,
-            erlang:raise(error, Error, Trace)
+            {error_trace, Error, Trace}
     end;
 type_check_form(_Function, Errors, _StopOnFirstError, _Env, _Opts) ->
     Errors.
