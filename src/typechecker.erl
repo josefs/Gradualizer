@@ -4760,19 +4760,28 @@ type_check_forms(Forms, Opts) ->
 %% but in the light of it taking too long, just forcibly break the infinite loop and report
 %% a Gradualizer (NOT the checked program!) error.
 type_check_form_with_timeout(Function, Errors, StopOnFirstError, Env, Opts) ->
+    ?verbose(Env, "Spawning async task...~n", []),
     Task = gradualizer_task:async(fun () ->
                                           type_check_form(Function, Errors, StopOnFirstError,
                                                           Env, Opts)
                                   end),
     case gradualizer_task:safe_await(Task, timeout, ?form_check_timeout_ms) of
         timeout ->
+            ?verbose(Env, "Form check timeout on ~s~n",
+                     [gradualizer_fmt:form_info(Function)]),
             [{internal_error, form_check_timeout, Function} | Errors];
         {crash, Crash, St} ->
+            ?verbose(Env, "Task reported crash on ~s~n",
+                     [gradualizer_fmt:form_info(Function)]),
             io:format("Crashing...~n"),
             erlang:raise(throw, Crash, St);
         {error_trace, Error, Trace} ->
+            ?verbose(Env, "Task reported error with trace from ~s~n",
+                     [gradualizer_fmt:form_info(Function)]),
             erlang:raise(error, Error, Trace);
         Other ->
+            ?verbose(Env, "Task returned from ~s with ~p~n",
+                     [gradualizer_fmt:form_info(Function), Other]),
             Other
     end.
 

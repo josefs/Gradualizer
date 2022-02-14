@@ -1,5 +1,9 @@
 -module(gradualizer_fmt).
--export([format_location/2, format_type_error/2, print_errors/2, handle_type_error/2]).
+-export([format_location/2,
+         format_type_error/2,
+         print_errors/2,
+         handle_type_error/2,
+         form_info/1]).
 
 -include("typelib.hrl").
 
