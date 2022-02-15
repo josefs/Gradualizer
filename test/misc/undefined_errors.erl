@@ -19,10 +19,10 @@ remote_remote_type() -> ok.
 remote_struct_with_remote_type() -> {struct, ok}.
 
 -spec remote_struct_with_local_type() -> undefined_errors_helper:expands_to_struct_with_undefined_local().
-remote_struct_with_local_type() -> ok.
+remote_struct_with_local_type() -> {struct, ok}.
 
 -spec remote_struct_with_record() -> undefined_errors_helper:expands_to_struct_with_undefined_record().
-remote_struct_with_record() -> ok.
+remote_struct_with_record() -> {struct, ok}.
 
 -spec remote_call() -> ok.
 remote_call() -> undefined_errors_helper:undefined_call().
