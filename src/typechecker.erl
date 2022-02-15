@@ -761,7 +761,7 @@ normalize_rec({type, _, union, Tys} = Type, Env, Unfolded) ->
                 Ts  -> type(union, Ts)
             end
     end;
-normalize_rec({user_type, P, Name, Args} = Type, Env, Unfolded) ->
+normalize_rec({user_type, _, Name, Args} = Type, Env, Unfolded) ->
     case maps:get(mta(Type, Env), Unfolded, no_type) of
         {type, NormType} -> NormType;
         no_type ->
@@ -772,19 +772,21 @@ normalize_rec({user_type, P, Name, Args} = Type, Env, Unfolded) ->
                 opaque ->
                     Type;
                 not_found ->
+                    P = position_info_from_spec(Env#env.current_spec),
                     throw({undef, user_type, P, {Name, length(Args)}})
             end
     end;
 normalize_rec(T = ?top(), _Env, _Unfolded) ->
     %% Don't normalize gradualizer:top().
     T;
-normalize_rec({remote_type, P, [{atom, _, M}, {atom, _, N}, Args]}, Env, Unfolded) ->
+normalize_rec({remote_type, _, [{atom, _, M}, {atom, _, N}, Args]}, Env, Unfolded) ->
+    P = position_info_from_spec(Env#env.current_spec),
     case gradualizer_db:get_exported_type(M, N, Args) of
         {ok, T} ->
             normalize_rec(T, Env, Unfolded);
         opaque ->
             NormalizedArgs = lists:map(fun (Ty) -> normalize_rec(Ty, Env, Unfolded) end, Args),
-            typelib:annotate_user_types(M, {user_type, P, N, NormalizedArgs});
+            typelib:annotate_user_types(M, {user_type, 0, N, NormalizedArgs});
         not_exported ->
             throw({not_exported, remote_type, P, {M, N, length(Args)}});
         not_found ->
@@ -3976,34 +3978,27 @@ check_guards(Env, Guards) ->
     VB = union_var_binds_symmetrical(VarBinds, Env),
     VB.
 
-type_check_function(Env, {function,_, Name, NArgs, Clauses}) ->
+type_check_function(Env, {function, _, Name, NArgs, Clauses}) ->
     ?verbose(Env, "Checking function ~p/~p~n", [Name, NArgs]),
     case maps:find({Name, NArgs}, Env#env.fenv) of
         {ok, FunTy} ->
+            NewEnv = Env#env{current_spec = FunTy},
             FunTyNoPos = typelib:remove_pos(FunTy),
-            F = fun () ->
-                        check_clauses_fun(Env, expect_fun_type(Env, FunTyNoPos), Clauses)
-                end,
-            recover_position_info(FunTy, F);
+            check_clauses_fun(NewEnv, expect_fun_type(NewEnv, FunTyNoPos), Clauses);
         error ->
             throw({internal_error, missing_type_spec, Name, NArgs})
     end.
 
--spec recover_position_info(gradualizer_file_utils:abstract_forms(), fun(() -> any())) -> any().
-recover_position_info([_|_] = Forms, F) ->
-    recover_position_info(hd(Forms), F);
-recover_position_info(Form, F) ->
-    P = element(2, Form),
-    try
-        F()
-    catch
-        throw:{not_exported, Type, _, MFA} ->
-            throw({not_exported, Type, P, MFA});
-        throw:{undef, Type, _, MFA} ->
-            throw({undef, Type, P, MFA});
-        C:R:St ->
-            erlang:raise(C, R, St)
-    end.
+-spec position_info_from_spec(gradualizer_file_utils:abstract_forms()) -> erl_anno:anno().
+position_info_from_spec(none) ->
+    %% This simplifies testing internal functions.
+    %% In these cases we don't go through type_check_function,
+    %% but call deeper into the typechecker directly.
+    0;
+position_info_from_spec([_|_] = Forms) ->
+    position_info_from_spec(hd(Forms));
+position_info_from_spec(Form) ->
+    element(2, Form).
 
 -spec add_types_pats(Pats :: [gradualizer_type:abstract_pattern()],
                      Tys  :: [type()],
