@@ -6,8 +6,8 @@
 
 %% API functions
 -export([start_link/1,
-         get_spec/3,
-         get_type/3, get_exported_type/3, get_opaque_type/3,
+         get_spec/4,
+         get_type/4, get_exported_type/4, get_opaque_type/4,
          get_record_type/2,
          get_modules/0, get_types/1,
          save/1, load/1,
@@ -54,32 +54,36 @@ start_link(Opts) ->
 %%      "module.erl"
 -spec get_spec(M :: module(),
                F :: atom(),
-               A :: arity()) -> {ok, [type()]} | not_found.
-get_spec(M, F, A) ->
-    call({get_spec, M, F, A}).
+               A :: arity(),
+               Opts :: [remove_pos]) -> {ok, [type()]} | not_found.
+get_spec(M, F, A, Opts) ->
+    call({get_spec, M, F, A, Opts}).
 
 %% @doc Fetches an exported or unexported user-defined type. Does not expand
 %%      opaque types.
 -spec get_type(Module :: module(),
                Type :: atom(),
-               Params :: [type()]) -> {ok, type()} | opaque | not_found.
-get_type(M, T, A) ->
-    call({get_type, M, T, A}).
+               Params :: [type()],
+               Opts :: [remove_pos]) -> {ok, type()} | opaque | not_found.
+get_type(M, T, A, Opts) ->
+    call({get_type, M, T, A, Opts}).
 
 %% @doc Fetches an exported type. Does not expand opaque types.
 -spec get_exported_type(Module :: module(),
                         Type :: atom(),
-                        Params :: [type()]) -> {ok, type()} | opaque |
-                                               not_exported | not_found.
-get_exported_type(M, T, A) ->
-    call({get_exported_type, M, T, A}).
+                        Params :: [type()],
+                        Opts :: [remove_pos]) -> {ok, type()} | opaque |
+                                                 not_exported | not_found.
+get_exported_type(M, T, A, Opts) ->
+    call({get_exported_type, M, T, A, Opts}).
 
 %% @doc Like get_type/3 but also expands opaque types.
 -spec get_opaque_type(Module :: module(),
                       Type :: atom(),
-                      Params :: [type()]) -> {ok, type()} | not_found.
-get_opaque_type(M, T, A) ->
-    call({get_opaque_type, M, T, A}).
+                      Params :: [type()],
+                      Opts :: [remove_pos]) -> {ok, type()} | not_found.
+get_opaque_type(M, T, A, Opts) ->
+    call({get_opaque_type, M, T, A, Opts}).
 
 %% @doc Fetches a record type defined in the module.
 -spec get_record_type(Module :: module(),
@@ -174,25 +178,27 @@ init(Opts0) ->
     {ok, State2}.
 
 -spec handle_call(any(), {pid(), term()}, state()) -> {reply, term(), state()}.
-handle_call({get_spec, M, F, A}, _From, State) ->
+handle_call({get_spec, M, F, A, Opts}, _From, State) ->
+    RemovePos = proplists:get_bool(remove_pos, Opts),
     State1 = autoimport(M, State),
     K = {M, F, A},
     case State1#state.specs of
         #{K := Types} ->
-            Types1 = [typelib:annotate_user_types(M, Type) || Type <- Types],
+            Types1 = [ typelib:annotate_user_types(M, remove_pos(RemovePos, Type))
+                       || Type <- Types ],
             {reply, {ok, Types1}, State1};
         _NoMatch ->
             {reply, not_found, State1}
     end;
-handle_call({get_exported_type, M, T, Args}, _From, State) ->
+handle_call({get_exported_type, M, T, Args, Opts}, _From, State) ->
     State1 = autoimport(M, State),
-    handle_get_type(M, T, Args, true, false, State1);
-handle_call({get_type, M, T, Args}, _From, State) ->
+    handle_get_type(M, T, Args, true, false, Opts, State1);
+handle_call({get_type, M, T, Args, Opts}, _From, State) ->
     State1 = autoimport(M, State),
-    handle_get_type(M, T, Args, false, false, State1);
-handle_call({get_opaque_type, M, T, Args}, _From, State) ->
+    handle_get_type(M, T, Args, false, false, Opts, State1);
+handle_call({get_opaque_type, M, T, Args, Opts}, _From, State) ->
     State1 = autoimport(M, State),
-    handle_get_type(M, T, Args, false, true, State1);
+    handle_get_type(M, T, Args, false, true, Opts, State1);
 handle_call({get_record_type, M, Name}, _From, State) ->
     State1 = autoimport(M, State),
     K = {M, Name},
@@ -327,10 +333,17 @@ call(Request, Timeout) ->
     gen_server:call(?name, Request, Timeout).
 
 %% helper for handle_call for get_type, get_exported_type, get_opaque_type.
--spec handle_get_type(module(), Name :: atom(), Params :: [type()],
-                      RequireExported :: boolean(), ExpandOpaque :: boolean(),
-                      state()) -> {reply, {ok, type()} | atom(), state()}.
-handle_get_type(M, T, Args, RequireExported, ExpandOpaque, State) ->
+-spec handle_get_type(M, T, Args, RequireExported, ExpandOpaque, Opts, State) -> R  when
+      M :: module(),
+      T :: atom(),
+      Args :: [type()],
+      RequireExported :: boolean(),
+      ExpandOpaque :: boolean(),
+      Opts :: [remove_pos],
+      State :: state(),
+      R :: {reply, {ok, type()} | atom(), state()}.
+handle_get_type(M, T, Args, RequireExported, ExpandOpaque, Opts, State) ->
+    RemovePos = proplists:get_bool(remove_pos, Opts),
     K = {M, T, length(Args)},
     case State#state.types of
         #{K := TypeInfo} ->
@@ -342,7 +355,7 @@ handle_get_type(M, T, Args, RequireExported, ExpandOpaque, State) ->
                  #typeinfo{params = Vars,
                            body = Type0} ->
                      VarMap = maps:from_list(lists:zip(Vars, Args)),
-                     Type1 = typelib:annotate_user_types(M, Type0),
+                     Type1 = typelib:annotate_user_types(M, remove_pos(RemovePos, Type0)),
                      Type2 = typelib:substitute_type_vars(Type1, VarMap),
                      {reply, {ok, Type2}, State}
              end;
@@ -491,7 +504,7 @@ collect_types(Module, Forms) ->
                  Info     = #typeinfo{exported = Exported,
                                       opaque   = (Attr == opaque),
                                       params   = Params,
-                                      body     = typelib:remove_pos(Body)},
+                                      body     = Body},
                  {Id, Info}
              end || Form = {attribute, _, Attr, {Name, Body, Vars}} <- Forms,
                     Attr == type orelse Attr == opaque,
@@ -523,9 +536,8 @@ extract_record_defs([{attribute, L, record, {Name, _UntypedFields}},
     %% This representation is only used in OTP < 19
     extract_record_defs([{attribute, L, record, {Name, Fields}} | Rest]);
 extract_record_defs([{attribute, _L, record, {Name, Fields}} | Rest]) ->
-    TypedFields = [gradualizer_lib:remove_pos_typed_record_field(
-                     absform:normalize_record_field(Field))
-                   || Field <- Fields],
+    TypedFields = [ absform:normalize_record_field(Field)
+                    || Field <- Fields ],
     R = {Name, TypedFields},
     [R | extract_record_defs(Rest)];
 extract_record_defs([_ | Rest]) ->
@@ -562,8 +574,7 @@ collect_specs(Module, Forms) ->
             {F, A} <- Exports,
             not sets:is_element({F, A},
                         SpecedFunsSet)],
-    [{Key, lists:map(fun typelib:remove_pos/1,
-                     absform:normalize_function_type_list(Types))}
+    [{Key, absform:normalize_function_type_list(Types)}
      || {Key, Types} <- Specs ++ ImplicitSpecs].
 
 normalize_spec({{Func, Arity}, Types}, Module) ->
@@ -623,3 +634,7 @@ beam_file_regexp() ->
 erl_file_regexp() ->
     {ok, RE} = re:compile(<<"([^/.]*)\.erl$">>),
     RE.
+
+-spec remove_pos(boolean(), type()) -> type().
+remove_pos(true, Type) -> typelib:remove_pos(Type);
+remove_pos(   _, Type) -> Type.

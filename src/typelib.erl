@@ -66,7 +66,7 @@ pp_type(Type) ->
 
 %% Looks up and prints the type M:N(P1, ..., Pn).
 debug_type(M, N, P) ->
-    case gradualizer_db:get_type(M, N, P) of
+    case gradualizer_db:get_type(M, N, P, _RemovePosOff = []) of
         {ok, T} ->
             Params = lists:join($,, lists:map(fun pp_type/1, P)),
             io:format("~w:~w(~s) :: ~s.~n",

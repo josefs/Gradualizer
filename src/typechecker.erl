@@ -766,7 +766,7 @@ normalize_rec({user_type, P, Name, Args} = Type, Env, Unfolded) ->
         {type, NormType} -> NormType;
         no_type ->
             UnfoldedNew = maps:put(mta(Type, Env), {type, Type}, Unfolded),
-            case gradualizer_lib:get_type_definition(Type, Env, []) of
+            case gradualizer_lib:get_type_definition(Type, Env, [remove_pos]) of
                 {ok, T} ->
                     normalize_rec(T, Env, UnfoldedNew);
                 opaque ->
@@ -779,7 +779,7 @@ normalize_rec(T = ?top(), _Env, _Unfolded) ->
     %% Don't normalize gradualizer:top().
     T;
 normalize_rec({remote_type, P, [{atom, _, M}, {atom, _, N}, Args]}, Env, Unfolded) ->
-    case gradualizer_db:get_exported_type(M, N, Args) of
+    case gradualizer_db:get_exported_type(M, N, Args, [remove_pos]) of
         {ok, T} ->
             normalize_rec(T, Env, Unfolded);
         opaque ->
@@ -1724,7 +1724,7 @@ do_type_check_expr(Env, {'fun', P, {function, Name, Arity}}) ->
 do_type_check_expr(Env, {'fun', P, {function, M, F, A}}) ->
     case {get_atom(Env, M), get_atom(Env, F), A} of
         {{atom, _, Module}, {atom, _, Function}, {integer, _, Arity}} ->
-            case gradualizer_db:get_spec(Module, Function, Arity) of
+            case gradualizer_db:get_spec(Module, Function, Arity, [remove_pos]) of
                 {ok, BoundedFunTypeList} ->
                     Ty = bounded_type_list_to_type(Env, BoundedFunTypeList),
                     {Ty, #{}, constraints:empty()};
@@ -2526,7 +2526,7 @@ do_type_check_expr_in(Env, ResTy, Expr = {'fun', P, {function, Name, Arity}}) ->
 do_type_check_expr_in(Env, ResTy, Expr = {'fun', P, {function, M, F, A}}) ->
     case {get_atom(Env, M), get_atom(Env, F), A} of
         {{atom, _, Module}, {atom, _, Function}, {integer, _,Arity}} ->
-            case gradualizer_db:get_spec(Module, Function, Arity) of
+            case gradualizer_db:get_spec(Module, Function, Arity, [remove_pos]) of
                 {ok, BoundedFunTypeList} ->
                     FunTypeList =
                         unfold_bounded_type_list(Env, BoundedFunTypeList),
@@ -3090,7 +3090,7 @@ type_check_fun(Env, {atom, P, Name}, Arity) ->
     {Types, #{}, constraints:empty()};
 type_check_fun(_Env, {remote, P, {atom,_,Module}, {atom,_,Fun}}, Arity) ->
     % Module:function call
-    case gradualizer_db:get_spec(Module, Fun, Arity) of
+    case gradualizer_db:get_spec(Module, Fun, Arity, [remove_pos]) of
         {ok, Types} -> {Types, #{}, constraints:empty()};
         not_found   -> throw({call_undef, P, Module, Fun, Arity})
     end;
@@ -3266,7 +3266,7 @@ get_bounded_fun_type_list(Name, Arity, Env, P) ->
         error ->
             case erl_internal:bif(Name, Arity) of
                 true ->
-                    {ok, Types} = gradualizer_db:get_spec(erlang, Name, Arity),
+                    {ok, Types} = gradualizer_db:get_spec(erlang, Name, Arity, [remove_pos]),
                     Types;
                 false ->
                     %% If it's not imported, the file doesn't compile.
@@ -3280,7 +3280,7 @@ get_bounded_fun_type_list(Name, Arity, Env, P) ->
 get_imported_bounded_fun_type_list(Name, Arity, Env, P) ->
     case maps:find({Name, Arity}, Env#env.imported) of
         {ok, Module} ->
-            case gradualizer_db:get_spec(Module, Name, Arity) of
+            case gradualizer_db:get_spec(Module, Name, Arity, [remove_pos]) of
                 {ok, BoundedFunTypeList} ->
                     {ok, BoundedFunTypeList};
                 not_found ->
@@ -4850,14 +4850,16 @@ check_remote_type(?top(), Acc) ->
     Acc;
 %% Check remote calls, as the remote function specs can also refer to undefined remote types.
 check_remote_type({call, _, {remote, _, {atom, _, Module}, {atom, _, Fun}}, Args}, Acc) ->
-    case gradualizer_db:get_spec(Module, Fun, length(Args)) of
+    RemovePosOff = [],
+    case gradualizer_db:get_spec(Module, Fun, length(Args), RemovePosOff) of
         {ok, Types} ->
             check_undefined_types(Types) ++ Acc;
         not_found ->
             Acc
     end;
 check_remote_type({remote_type, P, [{atom, _, M}, {atom, _, N}, Args]}, Acc) ->
-    case gradualizer_db:get_exported_type(M, N, Args) of
+    RemovePosOff = [],
+    case gradualizer_db:get_exported_type(M, N, Args, RemovePosOff) of
         {ok, Type} ->
             %% A remote type might expand to another remote type, so let's check that, too.
             check_undefined_types([Type]) ++ Acc;

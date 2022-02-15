@@ -102,15 +102,16 @@ reverse_graph(G) ->
 -spec get_type_definition(UserTy, Env, Opts) -> {ok, Ty} | opaque | not_found when
       UserTy :: gradualizer_type:abstract_type(),
       Env :: typechecker:env(),
-      Opts :: [annotate_user_types],
+      Opts :: [Opt],
+      Opt :: annotate_user_types | remove_pos,
       Ty :: gradualizer_type:abstract_type().
-get_type_definition({remote_type, _Anno, [{atom, _, Module}, {atom, _, Name}, Args]}, _Env, _Opts) ->
-    gradualizer_db:get_type(Module, Name, Args);
+get_type_definition({remote_type, _Anno, [{atom, _, Module}, {atom, _, Name}, Args]}, _Env, Opts) ->
+    gradualizer_db:get_type(Module, Name, Args, Opts);
 get_type_definition({user_type, Anno, Name, Args}, Env, Opts) ->
     %% Let's check if the type is a known remote type.
     case typelib:get_module_from_annotation(Anno) of
         {ok, Module} ->
-            gradualizer_db:get_type(Module, Name, Args);
+            gradualizer_db:get_type(Module, Name, Args, Opts);
         none ->
             %% Let's check if the type is defined in the context of this module.
             case maps:get({Name, length(Args)}, maps:get(types, Env#env.tenv), not_found) of
