@@ -3260,7 +3260,7 @@ type_check_cons_union(Env, [_ | Tys], H, T) ->
 get_bounded_fun_type_list(Name, Arity, Env, P) ->
     case maps:find({Name, Arity}, Env#env.fenv) of
         {ok, Types} ->
-            Types;
+            typelib:remove_pos(Types);
         error ->
             case erl_internal:bif(Name, Arity) of
                 true ->
@@ -3980,9 +3980,29 @@ type_check_function(Env, {function,_, Name, NArgs, Clauses}) ->
     ?verbose(Env, "Checking function ~p/~p~n", [Name, NArgs]),
     case maps:find({Name, NArgs}, Env#env.fenv) of
         {ok, FunTy} ->
-            check_clauses_fun(Env, expect_fun_type(Env, FunTy), Clauses);
+            FunTyNoPos = typelib:remove_pos(FunTy),
+            F = fun () ->
+                        check_clauses_fun(Env, expect_fun_type(Env, FunTyNoPos), Clauses)
+                end,
+            recover_position_info(FunTy, F);
         error ->
             throw({internal_error, missing_type_spec, Name, NArgs})
+    end.
+
+-spec recover_position_info(gradualizer_file_utils:abstract_forms(), fun(() -> any())) -> any().
+recover_position_info([_|_] = Forms, F) ->
+    recover_position_info(hd(Forms), F);
+recover_position_info(Form, F) ->
+    P = element(2, Form),
+    try
+        F()
+    catch
+        throw:{not_exported, Type, _, MFA} ->
+            throw({not_exported, Type, P, MFA});
+        throw:{undef, Type, _, MFA} ->
+            throw({undef, Type, P, MFA});
+        C:R:St ->
+            erlang:raise(C, R, St)
     end.
 
 -spec add_types_pats(Pats :: [gradualizer_type:abstract_pattern()],
@@ -4806,8 +4826,7 @@ create_fenv(Specs, Funs) ->
       [ {{Name, NArgs}, type(any)}
         || {function,_, Name, NArgs, _Clauses} <- Funs
       ] ++
-      [ {{Name, NArgs}, lists:map(fun typelib:remove_pos/1,
-                                  absform:normalize_function_type_list(Types))}
+      [ {{Name, NArgs}, absform:normalize_function_type_list(Types)}
         || {{Name, NArgs}, Types} <- Specs
       ]
      ).

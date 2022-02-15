@@ -86,7 +86,9 @@ parse_type(Src) ->
 %% kept for user-defined types and record types. Filename is used to
 %% disambiguate between types with the same name from different modules.
 %% Annotated types as in Name :: Type are also removed.
--spec remove_pos(type()) -> type().
+-spec remove_pos(type() | [type()]) -> type().
+remove_pos(Types) when is_list(Types) ->
+    [ remove_pos(Ty) || Ty <- Types ];
 remove_pos({Type, _, Value})
   when Type == atom; Type == integer; Type == char; Type == var ->
     {Type, erl_anno:new(0), Value};
