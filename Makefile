@@ -56,7 +56,7 @@ ebin/gradualizer_fmt.beam: src/typelib.hrl
 
 # .app file
 ebin/gradualizer.app: src/gradualizer.app.src | ebin
-	sed s/git/`git describe --tags --always`/ $< > $@
+	sed -e "s/{vsn, *\"git\"}/{vsn, \"`git describe --tags --always`\"}/" $< > $@
 
 .PHONY: shell
 shell: app
