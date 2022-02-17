@@ -55,10 +55,8 @@ ebin/typechecker.beam: src/typelib.hrl
 ebin/gradualizer_fmt.beam: src/typelib.hrl
 
 # .app file
-# TODO When we start using git tags, insert version from
-# `git describe --tags`
 ebin/gradualizer.app: src/gradualizer.app.src | ebin
-	cp $< $@
+	sed -e "s/{vsn, *\"git\"}/{vsn, \"`git describe --tags --always`\"}/" $< > $@
 
 .PHONY: shell
 shell: app
