@@ -4760,12 +4760,14 @@ type_check_forms(Forms, Opts) ->
 %% but in the light of it taking too long, just forcibly break the infinite loop and report
 %% a Gradualizer (NOT the checked program!) error.
 type_check_form_with_timeout(Function, Errors, StopOnFirstError, Env, Opts) ->
+    %% TODO: make FormCheckTimeOut configurable
+    FormCheckTimeOut = ?form_check_timeout_ms,
     ?verbose(Env, "Spawning async task...~n", []),
-    Task = gradualizer_task:async(fun () ->
-                                          type_check_form(Function, Errors, StopOnFirstError,
-                                                          Env, Opts)
-                                  end),
-    case gradualizer_task:safe_await(Task, timeout, ?form_check_timeout_ms) of
+    TaskF = fun () ->
+                    type_check_form(Function, Errors, StopOnFirstError,
+                                    Env, Opts)
+            end,
+    case async(TaskF, FormCheckTimeOut, fun (Down) -> {error_trace, Down, []} end) of
         timeout ->
             ?verbose(Env, "Form check timeout on ~s~n",
                      [gradualizer_fmt:form_info(Function)]),
@@ -4779,12 +4781,32 @@ type_check_form_with_timeout(Function, Errors, StopOnFirstError, Env, Opts) ->
             ?verbose(Env, "Task reported error with trace from ~s~n",
                      [gradualizer_fmt:form_info(Function)]),
             erlang:raise(error, Error, Trace);
-        Other ->
+        {errors, Errors1} ->
             ?verbose(Env, "Task returned from ~s with ~p~n",
-                     [gradualizer_fmt:form_info(Function), Other]),
-            Other
+                     [gradualizer_fmt:form_info(Function), Errors1]),
+            Errors1
     end.
 
+-spec async(fun(() -> any()), non_neg_integer(), fun(({'DOWN', _, _, _, _}) -> any())) -> any().
+async(TaskF, Timeout, DownF) ->
+    Self = self(),
+    {Pid, MRef} = spawn_monitor(fun () -> Self ! TaskF() end),
+    Result = receive
+                 {'DOWN', MRef, _, _, _} = Down ->
+                     DownF(Down);
+                 Other ->
+                     Other
+                 after Timeout ->
+                     erlang:exit(Pid, kill),
+                     timeout
+             end,
+    erlang:demonitor(MRef, [flush]),
+    Result.
+
+-spec type_check_form(_, _, _, _, _) -> R when
+      R :: {errors, list()}
+         | {crash, any(), list()}
+         | {error_trace, any(), list()}.
 type_check_form(Function, Errors, StopOnFirstError, Env, Opts)
   when Errors =:= [];
        not StopOnFirstError ->
@@ -4792,7 +4814,7 @@ type_check_form(Function, Errors, StopOnFirstError, Env, Opts)
 
     try type_check_function(Env, Function) of
         {_VarBinds, _Cs} ->
-            Errors
+            {errors, Errors}
     catch
         throw:Throw:St ->
             % Useful for debugging
@@ -4801,7 +4823,7 @@ type_check_form(Function, Errors, StopOnFirstError, Env, Opts)
                 CrashOnError ->
                     {crash, Throw, St};
                 not CrashOnError ->
-                    [Throw | Errors]
+                    {errors, [Throw | Errors]}
             end;
         error:Error:ST ->
             %% A hack to hide the (very large) #env{} in
