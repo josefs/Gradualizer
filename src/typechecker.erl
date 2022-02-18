@@ -4747,7 +4747,7 @@ type_check_forms(Forms, Opts) ->
 
 
 %% @doc `type_check_form_with_timeout' is a workaround meant to improve usability in the
-%% presence of known infinite loops in the typechecker.
+%% presence of possible infinite loops or bugs in the typechecker.
 %%
 %% When Gradualizer is run interactively or in the foreground,
 %% detection of an infinite loop is unavoidable by the user seeing that the tool is stuck.
@@ -4767,7 +4767,11 @@ type_check_form_with_timeout(Function, Errors, StopOnFirstError, Env, Opts) ->
                     type_check_form(Function, Errors, StopOnFirstError,
                                     Env, Opts)
             end,
-    case async(TaskF, FormCheckTimeOut, fun (Down) -> {error_trace, Down, []} end) of
+    %% We could tweak this to log and proceed with the next form instead of crashing...
+    DownF = fun (Down) ->
+                    {error_trace, Down, []}
+            end,
+    case timeout(TaskF, FormCheckTimeOut, DownF) of
         timeout ->
             ?verbose(Env, "Form check timeout on ~s~n",
                      [gradualizer_fmt:form_info(Function)]),
@@ -4787,8 +4791,8 @@ type_check_form_with_timeout(Function, Errors, StopOnFirstError, Env, Opts) ->
             Errors1
     end.
 
--spec async(fun(() -> any()), non_neg_integer(), fun(({'DOWN', _, _, _, _}) -> any())) -> any().
-async(TaskF, Timeout, DownF) ->
+-spec timeout(fun(() -> any()), non_neg_integer(), fun(({'DOWN', _, _, _, _}) -> any())) -> any().
+timeout(TaskF, Timeout, DownF) ->
     Self = self(),
     {Pid, MRef} = spawn_monitor(fun () -> Self ! TaskF() end),
     Result = receive
