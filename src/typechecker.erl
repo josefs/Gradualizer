@@ -52,6 +52,9 @@
 -type expr() :: gradualizer_type:abstract_expr().
 -type type() :: gradualizer_type:abstract_type().
 
+-type form() :: erl_parse:abstract_form().
+-type forms() :: gradualizer_file_utils:abstract_forms().
+
 %% Pattern macros
 -define(type(T), {type, _, T, []}).
 -define(type(T, A), {type, _, T, A}).
@@ -761,7 +764,7 @@ normalize_rec({type, _, union, Tys} = Type, Env, Unfolded) ->
                 Ts  -> type(union, Ts)
             end
     end;
-normalize_rec({user_type, P, Name, Args} = Type, Env, Unfolded) ->
+normalize_rec({user_type, _, Name, Args} = Type, Env, Unfolded) ->
     case maps:get(mta(Type, Env), Unfolded, no_type) of
         {type, NormType} -> NormType;
         no_type ->
@@ -772,19 +775,21 @@ normalize_rec({user_type, P, Name, Args} = Type, Env, Unfolded) ->
                 opaque ->
                     Type;
                 not_found ->
+                    P = position_info_from_spec(Env#env.current_spec),
                     throw({undef, user_type, P, {Name, length(Args)}})
             end
     end;
 normalize_rec(T = ?top(), _Env, _Unfolded) ->
     %% Don't normalize gradualizer:top().
     T;
-normalize_rec({remote_type, P, [{atom, _, M}, {atom, _, N}, Args]}, Env, Unfolded) ->
+normalize_rec({remote_type, _, [{atom, _, M}, {atom, _, N}, Args]}, Env, Unfolded) ->
+    P = position_info_from_spec(Env#env.current_spec),
     case gradualizer_db:get_exported_type(M, N, Args) of
         {ok, T} ->
             normalize_rec(T, Env, Unfolded);
         opaque ->
             NormalizedArgs = lists:map(fun (Ty) -> normalize_rec(Ty, Env, Unfolded) end, Args),
-            typelib:annotate_user_types(M, {user_type, P, N, NormalizedArgs});
+            typelib:annotate_user_types(M, {user_type, 0, N, NormalizedArgs});
         not_exported ->
             throw({not_exported, remote_type, P, {M, N, length(Args)}});
         not_found ->
@@ -3259,8 +3264,11 @@ type_check_cons_union(Env, [_ | Tys], H, T) ->
 
 get_bounded_fun_type_list(Name, Arity, Env, P) ->
     case maps:find({Name, Arity}, Env#env.fenv) of
-        {ok, Types} ->
-            Types;
+        %% TODO: https://github.com/josefs/Gradualizer/issues/388
+        {ok, Types} when is_list(Types) ->
+            [ typelib:remove_pos(Ty) || Ty <- Types ];
+        {ok, Type} ->
+            typelib:remove_pos(Type);
         error ->
             case erl_internal:bif(Name, Arity) of
                 true ->
@@ -3976,14 +3984,34 @@ check_guards(Env, Guards) ->
     VB = union_var_binds_symmetrical(VarBinds, Env),
     VB.
 
-type_check_function(Env, {function,_, Name, NArgs, Clauses}) ->
+type_check_function(Env, {function, _, Name, NArgs, Clauses}) ->
     ?verbose(Env, "Checking function ~p/~p~n", [Name, NArgs]),
     case maps:find({Name, NArgs}, Env#env.fenv) of
         {ok, FunTy} ->
-            check_clauses_fun(Env, expect_fun_type(Env, FunTy), Clauses);
+            NewEnv = Env#env{current_spec = FunTy},
+            %% TODO: https://github.com/josefs/Gradualizer/issues/388
+            FunTyNoPos = case FunTy of
+                             _ when is_list(FunTy) ->
+                                 [ typelib:remove_pos(Ty) || Ty <- FunTy ];
+                             _ ->
+                                 typelib:remove_pos(FunTy)
+                         end,
+            check_clauses_fun(NewEnv, expect_fun_type(NewEnv, FunTyNoPos), Clauses);
         error ->
             throw({internal_error, missing_type_spec, Name, NArgs})
     end.
+
+-spec position_info_from_spec(form() | forms() | none) -> erl_anno:anno().
+position_info_from_spec(none) ->
+    %% This simplifies testing internal functions.
+    %% In these cases we don't go through type_check_function,
+    %% but call deeper into the typechecker directly.
+    erl_anno:new(0);
+position_info_from_spec([_|_] = Forms) ->
+    %% TODO: https://github.com/josefs/Gradualizer/issues/388
+    position_info_from_spec(hd(Forms));
+position_info_from_spec(Form) ->
+    element(2, Form).
 
 -spec add_types_pats(Pats :: [gradualizer_type:abstract_pattern()],
                      Tys  :: [type()],
@@ -4806,8 +4834,7 @@ create_fenv(Specs, Funs) ->
       [ {{Name, NArgs}, type(any)}
         || {function,_, Name, NArgs, _Clauses} <- Funs
       ] ++
-      [ {{Name, NArgs}, lists:map(fun typelib:remove_pos/1,
-                                  absform:normalize_function_type_list(Types))}
+      [ {{Name, NArgs}, absform:normalize_function_type_list(Types)}
         || {{Name, NArgs}, Types} <- Specs
       ]
      ).
