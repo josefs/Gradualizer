@@ -352,7 +352,7 @@ format_type_error({form_check_timeout, Form}, Opts) ->
       [format_location(Form, brief, Opts),
        case proplists:get_value(fmt_location, Opts, ?FMT_LOCATION_DEFAULT) of
            brief ->
-               "form";
+               "form - please report on GitHub";
            verbose ->
                io_lib:format("~s~s~n"
                              "This is most likely a bug in Gradualizer.~n"
