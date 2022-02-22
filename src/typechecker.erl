@@ -4767,42 +4767,31 @@ type_check_form_with_timeout(Function, Errors, StopOnFirstError, Env, Opts) ->
                     type_check_form(Function, Errors, StopOnFirstError,
                                     Env, Opts)
             end,
-    %% We could tweak this to log and proceed with the next form instead of crashing...
-    DownF = fun (Down) ->
-                    {error_trace, Down, []}
-            end,
-    case timeout(TaskF, FormCheckTimeOut, DownF) of
-        timeout ->
-            ?verbose(Env, "Form check timeout on ~s~n",
-                     [gradualizer_fmt:form_info(Function)]),
-            [{internal_error, form_check_timeout, Function} | Errors];
-        {crash, Crash, St} ->
-            ?verbose(Env, "Task reported crash on ~s~n",
-                     [gradualizer_fmt:form_info(Function)]),
-            io:format("Crashing...~n"),
-            erlang:raise(throw, Crash, St);
-        {error_trace, Error, Trace} ->
-            ?verbose(Env, "Task reported error with trace from ~s~n",
-                     [gradualizer_fmt:form_info(Function)]),
-            erlang:raise(error, Error, Trace);
-        {errors, Errors1} ->
-            ?verbose(Env, "Task returned from ~s with ~p~n",
-                     [gradualizer_fmt:form_info(Function), Errors1]),
-            Errors1
-    end.
-
--spec timeout(fun(() -> any()), non_neg_integer(), fun(({'DOWN', _, _, _, _}) -> any())) -> any().
-timeout(TaskF, Timeout, DownF) ->
     Self = self(),
     {Pid, MRef} = spawn_monitor(fun () -> Self ! TaskF() end),
     Result = receive
-                 {'DOWN', MRef, _, _, _} = Down ->
-                     DownF(Down);
-                 Other ->
-                     Other
-                 after Timeout ->
+                 {crash, Crash, St} ->
+                     ?verbose(Env, "Task reported crash on ~s~n",
+                              [gradualizer_fmt:form_info(Function)]),
+                     io:format("Crashing...~n"),
+                     erlang:raise(throw, Crash, St);
+                 {error_trace, Error, Trace} ->
+                     ?verbose(Env, "Task reported error with trace from ~s~n",
+                              [gradualizer_fmt:form_info(Function)]),
+                     erlang:raise(error, Error, Trace);
+                 {errors, Errors1} ->
+                     ?verbose(Env, "Task returned from ~s with ~p~n",
+                              [gradualizer_fmt:form_info(Function), Errors1]),
+                     Errors1;
+                 {'DOWN', MRef, _, _, Info} ->
+                     ?verbose(Env, "Task crashed on form ~s~n",
+                              [gradualizer_fmt:form_info(Function)]),
+                     erlang:error(Info, [Function, Errors, StopOnFirstError, Env, Opts])
+                 after FormCheckTimeOut ->
                      erlang:exit(Pid, kill),
-                     timeout
+                     ?verbose(Env, "Form check timeout on ~s~n",
+                              [gradualizer_fmt:form_info(Function)]),
+                     [{internal_error, form_check_timeout, Function} | Errors]
              end,
     erlang:demonitor(MRef, [flush]),
     Result.
