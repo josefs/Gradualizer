@@ -1,5 +1,9 @@
 -module(gradualizer_fmt).
--export([format_location/2, format_type_error/2, print_errors/2, handle_type_error/2]).
+-export([format_location/2,
+         format_type_error/2,
+         print_errors/2,
+         handle_type_error/2,
+         form_info/1]).
 
 -include("typelib.hrl").
 
@@ -342,6 +346,20 @@ format_type_error({bad_type_annotation, TypeLit}, Opts) ->
       [format_location(TypeLit, brief, Opts),
        pp_expr(TypeLit, Opts),
        format_location(TypeLit, verbose, Opts)]);
+format_type_error({form_check_timeout, Form}, Opts) ->
+    io_lib:format(
+      "~sTimeout checking ~s~n",
+      [format_location(Form, brief, Opts),
+       case proplists:get_value(fmt_location, Opts, ?FMT_LOCATION_DEFAULT) of
+           brief ->
+               "form - please report on GitHub";
+           verbose ->
+               io_lib:format("~s~s~n"
+                             "This is most likely a bug in Gradualizer.~n"
+                             "Please report it at https://github.com/josefs/Gradualizer/issues",
+                             [form_info(Form),
+                              format_location(Form, verbose, Opts)])
+       end]);
 format_type_error({Location, Module, ErrorDescription}, Opts)
   when is_integer(Location) orelse is_tuple(Location),
        is_atom(Module) ->
@@ -357,6 +375,9 @@ format_type_error({none, Module, ErrorDescription}, _Opts)
     io_lib:format("~s~n", [Module:format_error(ErrorDescription)]);
 format_type_error(type_error, _) ->
     io_lib:format("TYPE ERROR~n", []).
+
+form_info({function, _, Name, Arity, _}) ->
+    io_lib:format("function ~s/~p", [Name, Arity]).
 
 -spec format_expr_type_error(gradualizer_type:abstract_expr(),
 			typelib:extended_type(),

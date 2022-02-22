@@ -43,6 +43,9 @@
             _ -> error({position_not_removed, Tuple})
         end).
 
+%% This is the maximum time that typechecking a single form may take.
+-define(form_check_timeout_ms, 500).
+
 -type tenv() :: gradualizer_lib:tenv().
 -type venv() :: map().
 
@@ -4762,45 +4765,100 @@ get_record_info_type({call, Anno, {atom, _, record_info},
 -spec type_check_forms(list(), proplists:proplist()) -> list().
 type_check_forms(Forms, Opts) ->
     StopOnFirstError = proplists:get_bool(stop_on_first_error, Opts),
-    CrashOnError = proplists:get_bool(crash_on_error, Opts),
-
-    ParseData =
-        collect_specs_types_opaques_and_functions(Forms),
+    ParseData = collect_specs_types_opaques_and_functions(Forms),
     Env = create_env(ParseData, Opts),
     ?verbose(Env, "Checking module ~p~n", [ParseData#parsedata.module]),
-    AllErrors =
-        lists:foldr(
-          fun (Function, Errors) when Errors =:= [];
-                                      not StopOnFirstError ->
-                        try type_check_function(Env, Function) of
-                            {_VarBinds, _Cs} ->
-                                Errors
-                        catch
-                            throw:Throw:ST ->
-                                % Useful for debugging
-                                % io:format("~p~n", [erlang:get_stacktrace()]),
-                                if
-                                    CrashOnError ->
-                                        io:format("Crashing...~n"),
-                                        erlang:raise(throw, Throw, ST);
-                                    not CrashOnError ->
-                                        [Throw | Errors]
-                                end;
-                            error:Error:ST ->
-                                %% A hack to hide the (very large) #env{} in
-                                %% error stacktraces. TODO: Add an opt for this.
-                                Trace = case ST of
-                                    [{M, F, [#env{}|Args], Pos} | RestTrace] ->
-                                        [{M, F, ['*environment excluded*'|Args], Pos} | RestTrace];
-                                    Trace0 ->
-                                        Trace0
-                                end,
-                                erlang:raise(error, Error, Trace)
-                        end;
-              (_Function, Errors) ->
-                  Errors
-          end, [], ParseData#parsedata.functions),
+    AllErrors = lists:foldr(fun (Function, Errors) ->
+                                    type_check_form_with_timeout(Function, Errors, StopOnFirstError, Env, Opts)
+                            end, [], ParseData#parsedata.functions),
     lists:reverse(AllErrors).
+
+
+%% @doc `type_check_form_with_timeout' is a workaround meant to improve usability in the
+%% presence of possible infinite loops or bugs in the typechecker.
+%%
+%% When Gradualizer is run interactively or in the foreground,
+%% detection of an infinite loop is unavoidable by the user seeing that the tool is stuck.
+%%
+%% However, when Gradualizer is run in the background (as an integration with editor / IDE)
+%% we might not realise it's stuck in an infinite loop at all or do so only after the machine's fan
+%% starts up. Moreover, in this case we'll not receive feedback from the tool.
+%%
+%% To avoid the user experience problem, it's better to opportunistically try performing the check,
+%% but in the light of it taking too long, just forcibly break the infinite loop and report
+%% a Gradualizer (NOT the checked program!) error.
+type_check_form_with_timeout(Function, Errors, StopOnFirstError, Env, Opts) ->
+    %% TODO: make FormCheckTimeOut configurable
+    FormCheckTimeOut = ?form_check_timeout_ms,
+    ?verbose(Env, "Spawning async task...~n", []),
+    Self = self(),
+    Task = fun () ->
+                   Self ! type_check_form(Function, Errors, StopOnFirstError,
+                                          Env, Opts)
+           end,
+    {Pid, MRef} = spawn_monitor(Task),
+    Result = receive
+                 {crash, Crash, St} ->
+                     ?verbose(Env, "Task reported crash on ~s~n",
+                              [gradualizer_fmt:form_info(Function)]),
+                     io:format("Crashing...~n"),
+                     erlang:raise(throw, Crash, St);
+                 {error_trace, Error, Trace} ->
+                     ?verbose(Env, "Task reported error with trace from ~s~n",
+                              [gradualizer_fmt:form_info(Function)]),
+                     erlang:raise(error, Error, Trace);
+                 {errors, Errors1} ->
+                     ?verbose(Env, "Task returned from ~s with ~p~n",
+                              [gradualizer_fmt:form_info(Function), Errors1]),
+                     Errors1;
+                 {'DOWN', MRef, _, _, Info} ->
+                     ?verbose(Env, "Task crashed on form ~s~n",
+                              [gradualizer_fmt:form_info(Function)]),
+                     erlang:error(Info, [Function, Errors, StopOnFirstError, Env, Opts])
+                 after FormCheckTimeOut ->
+                     erlang:exit(Pid, kill),
+                     ?verbose(Env, "Form check timeout on ~s~n",
+                              [gradualizer_fmt:form_info(Function)]),
+                     [{form_check_timeout, Function} | Errors]
+             end,
+    erlang:demonitor(MRef, [flush]),
+    Result.
+
+-spec type_check_form(_, _, _, _, _) -> R when
+      R :: {errors, list()}
+         | {crash, any(), list()}
+         | {error_trace, any(), list()}.
+type_check_form(Function, Errors, StopOnFirstError, Env, Opts)
+  when Errors =:= [];
+       not StopOnFirstError ->
+    CrashOnError = proplists:get_bool(crash_on_error, Opts),
+
+    try type_check_function(Env, Function) of
+        {_VarBinds, _Cs} ->
+            {errors, Errors}
+    catch
+        throw:Throw:St ->
+            % Useful for debugging
+            % io:format("~p~n", [erlang:get_stacktrace()]),
+            if
+                CrashOnError ->
+                    {crash, Throw, St};
+                not CrashOnError ->
+                    {errors, [Throw | Errors]}
+            end;
+        error:Error:ST ->
+            %% A hack to hide the (very large) #env{} in
+            %% error stacktraces. TODO: Add an opt for this.
+            Trace = case ST of
+                        [{M, F, [#env{}|Args], Pos} | RestTrace] ->
+                            [{M, F, ['*environment excluded*'|Args], Pos} | RestTrace];
+                        Trace0 ->
+                            Trace0
+                    end,
+            {error_trace, Error, Trace}
+    end;
+type_check_form(_Function, Errors, _StopOnFirstError, _Env, _Opts) ->
+    Errors.
 
 -spec create_env(#parsedata{}, proplists:proplist()) -> env().
 create_env(#parsedata{module    = Module
