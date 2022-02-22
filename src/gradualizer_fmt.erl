@@ -346,7 +346,7 @@ format_type_error({bad_type_annotation, TypeLit}, Opts) ->
       [format_location(TypeLit, brief, Opts),
        pp_expr(TypeLit, Opts),
        format_location(TypeLit, verbose, Opts)]);
-format_type_error({internal_error, form_check_timeout, Form}, Opts) ->
+format_type_error({form_check_timeout, Form}, Opts) ->
     io_lib:format(
       "~sTimeout checking ~s~n",
       [format_location(Form, brief, Opts),
