@@ -4763,12 +4763,12 @@ type_check_form_with_timeout(Function, Errors, StopOnFirstError, Env, Opts) ->
     %% TODO: make FormCheckTimeOut configurable
     FormCheckTimeOut = ?form_check_timeout_ms,
     ?verbose(Env, "Spawning async task...~n", []),
-    TaskF = fun () ->
-                    type_check_form(Function, Errors, StopOnFirstError,
-                                    Env, Opts)
-            end,
     Self = self(),
-    {Pid, MRef} = spawn_monitor(fun () -> Self ! TaskF() end),
+    Task = fun () ->
+                   Self ! type_check_form(Function, Errors, StopOnFirstError,
+                                          Env, Opts)
+           end,
+    {Pid, MRef} = spawn_monitor(Task),
     Result = receive
                  {crash, Crash, St} ->
                      ?verbose(Env, "Task reported crash on ~s~n",
