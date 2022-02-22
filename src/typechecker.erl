@@ -52,6 +52,9 @@
 -type expr() :: gradualizer_type:abstract_expr().
 -type type() :: gradualizer_type:abstract_type().
 
+-type form() :: erl_parse:abstract_form().
+-type forms() :: gradualizer_file_utils:abstract_forms().
+
 %% Pattern macros
 -define(type(T), {type, _, T, []}).
 -define(type(T, A), {type, _, T, A}).
@@ -3261,8 +3264,11 @@ type_check_cons_union(Env, [_ | Tys], H, T) ->
 
 get_bounded_fun_type_list(Name, Arity, Env, P) ->
     case maps:find({Name, Arity}, Env#env.fenv) of
-        {ok, Types} ->
-            typelib:remove_pos(Types);
+        %% TODO: https://github.com/josefs/Gradualizer/issues/388
+        {ok, Types} when is_list(Types) ->
+            [ typelib:remove_pos(Ty) || Ty <- Types ];
+        {ok, Type} ->
+            typelib:remove_pos(Type);
         error ->
             case erl_internal:bif(Name, Arity) of
                 true ->
@@ -3983,19 +3989,26 @@ type_check_function(Env, {function, _, Name, NArgs, Clauses}) ->
     case maps:find({Name, NArgs}, Env#env.fenv) of
         {ok, FunTy} ->
             NewEnv = Env#env{current_spec = FunTy},
-            FunTyNoPos = typelib:remove_pos(FunTy),
+            %% TODO: https://github.com/josefs/Gradualizer/issues/388
+            FunTyNoPos = case FunTy of
+                             _ when is_list(FunTy) ->
+                                 [ typelib:remove_pos(Ty) || Ty <- FunTy ];
+                             _ ->
+                                 typelib:remove_pos(FunTy)
+                         end,
             check_clauses_fun(NewEnv, expect_fun_type(NewEnv, FunTyNoPos), Clauses);
         error ->
             throw({internal_error, missing_type_spec, Name, NArgs})
     end.
 
--spec position_info_from_spec(gradualizer_file_utils:abstract_forms()) -> erl_anno:anno().
+-spec position_info_from_spec(form() | forms() | none) -> erl_anno:anno().
 position_info_from_spec(none) ->
     %% This simplifies testing internal functions.
     %% In these cases we don't go through type_check_function,
     %% but call deeper into the typechecker directly.
-    0;
+    erl_anno:new(0);
 position_info_from_spec([_|_] = Forms) ->
+    %% TODO: https://github.com/josefs/Gradualizer/issues/388
     position_info_from_spec(hd(Forms));
 position_info_from_spec(Form) ->
     element(2, Form).
