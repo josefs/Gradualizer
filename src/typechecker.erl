@@ -4249,6 +4249,13 @@ add_type_pat({record, P, Record, Fields}, Ty, Env, VEnv) ->
         {type_error, _Type} ->
             throw({type_error, record_pattern, P, Record, Ty})
     end;
+%% TODO implement expect_list_type
+%add_type_pat({map, _, _} = MapPat, MapTy, _Env, VEnv) ->
+%    case expect_map_type(normalize(ListTy, Env), Env) of
+%    end;
+%% this is just a workaround:
+add_type_pat({map, _, _} = MapPat, ?type(any), _Env, VEnv) ->
+    {type(none), type(any), add_any_types_pat(MapPat, VEnv), constraints:empty()};
 add_type_pat({map, _, _} = MapPat, {var, _, Var} = TyVar, _Env, VEnv) ->
     %% FIXME this is a quite rudimentary implementation
     %% - variables from the map pattern become any()
