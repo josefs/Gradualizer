@@ -33,3 +33,4 @@ map_type_var(L) ->
             Int
     end.
 
+map_pattern_no_spec(#{} = _Map) -> ok.
