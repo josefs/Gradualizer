@@ -4805,11 +4805,11 @@ type_check_form_with_timeout(Function, Errors, StopOnFirstError, Env, Opts) ->
            end,
     {Pid, MRef} = spawn_monitor(Task),
     Result = receive
-                 {crash, Crash, St} ->
+                 {crash, Crash, STrace} ->
                      ?verbose(Env, "Task reported crash on ~s~n",
                               [gradualizer_fmt:form_info(Function)]),
                      io:format("Crashing...~n"),
-                     erlang:raise(throw, Crash, St);
+                     erlang:raise(throw, Crash, STrace);
                  {error_trace, Error, Trace} ->
                      ?verbose(Env, "Task reported error with trace from ~s~n",
                               [gradualizer_fmt:form_info(Function)]),
@@ -4844,19 +4844,14 @@ type_check_form(Function, Errors, StopOnFirstError, Env, Opts)
         {_VarBinds, _Cs} ->
             {errors, Errors}
     catch
-        throw:Throw:St ->
-            % Useful for debugging
-            % io:format("~p~n", [erlang:get_stacktrace()]),
-            if
-                CrashOnError ->
-                    {crash, Throw, St};
-                not CrashOnError ->
-                    {errors, [Throw | Errors]}
-            end;
-        error:Error:ST ->
+        throw:Throw:STrace when CrashOnError ->
+            {crash, Throw, STrace};
+        throw:Throw ->
+            {errors, [Throw | Errors]};
+        error:Error:STrace ->
             %% A hack to hide the (very large) #env{} in
             %% error stacktraces. TODO: Add an opt for this.
-            Trace = case ST of
+            Trace = case STrace of
                         [{M, F, [#env{}|Args], Pos} | RestTrace] ->
                             [{M, F, ['*environment excluded*'|Args], Pos} | RestTrace];
                         Trace0 ->
