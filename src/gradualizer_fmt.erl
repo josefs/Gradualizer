@@ -302,7 +302,7 @@ format_type_error({type_error, check_clauses}, _Opts) ->
     io_lib:format("Type error in clauses", []);
 format_type_error({type_error, record_pattern, Anno, Record, Ty}, Opts) ->
     io_lib:format(
-      "~sThe record patterns for record #~p~s is expected to have"
+      "~sThe record pattern for record #~p~s is expected to have"
       " type ~s.~n",
       [format_location(Anno, brief, Opts),
        Record,
