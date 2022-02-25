@@ -1,6 +1,12 @@
 -module(map_pattern).
 
--compile([export_all, nowarn_export_all]).
+-export([f/1,
+         key_subtype/1,
+         map_union/1,
+         any_map/1,
+         map_term/1,
+         map_type_var/1,
+         map_pattern_no_spec/1]).
 
 -type t() :: #{apa := integer(), bepa := boolean()}.
 

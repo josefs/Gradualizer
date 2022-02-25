@@ -1,5 +1,8 @@
--module(map_pattern).
--export([f/1, badkey/1, map_term/1]).
+-module(map_pattern_fail).
+-export([f/1,
+         badkey/1,
+         map_term/1,
+         not_a_map_passed_as_map/0]).
 
 -type t() :: #{apa := integer(), bepa := boolean()}.
 
@@ -14,3 +17,14 @@ badkey(#{bepa := _Bepa}) -> ok.
 map_term(#{k := V}) ->
     %% at this point V :: term()
     atom_to_list(V).
+
+not_a_map_passed_as_map() ->
+    G = g(),
+    h(G).
+
+-spec g() -> {tup, le}.
+g() -> {tup, le}.
+
+-spec h(map()) -> ok.
+h(#{k := v} = _Map) ->
+    ok.
