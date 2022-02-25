@@ -4250,7 +4250,8 @@ add_type_pat({record, P, Record, Fields}, Ty, Env, VEnv) ->
             throw({type_error, record_pattern, P, Record, Ty})
     end;
 add_type_pat({map, P, AssocPats} = MapPat, MapTy, Env, VEnv) ->
-    case expect_map_type(normalize(MapTy, Env), Env) of
+    NormMapTy = normalize(MapTy, Env),
+    case expect_map_type(NormMapTy, Env) of
         any ->
             {type(none), type(any), add_any_types_pat(MapPat, VEnv), constraints:empty()};
         {assoc_tys, AssocTys, Cs0} ->
@@ -4269,7 +4270,15 @@ add_type_pat({map, P, AssocPats} = MapPat, MapTy, Env, VEnv) ->
                             end,
                             {VEnv, [Cs0]},
                             AssocPats),
-            {rewrite_map_assocs_to_exacts(MapTy), MapTy, NewVEnv, constraints:combine(Css)};
+                PatTy = case NormMapTy of
+                            ?top() ->
+                                top();
+                            {var, _, _Var} ->
+                                type(none);
+                            ?type(map, Assocs) when is_list(Assocs) ->
+                                rewrite_map_assocs_to_exacts(NormMapTy)
+                        end,
+            {PatTy, MapTy, NewVEnv, constraints:combine(Css)};
         {type_error, _Type} ->
             throw({type_error, pattern, P, MapPat, MapTy})
     end;
@@ -4326,10 +4335,6 @@ expect_map_type(Ty, _Env) ->
 %% Similarly to map field type inference on map creation - if a pattern matches,
 %% then the map field is exact (:=), not assoc (=>).
 %% There isn't even syntax for optional fields in map patterns.
-rewrite_map_assocs_to_exacts(?top()) ->
-    top();
-rewrite_map_assocs_to_exacts({var, _, _Var}) ->
-    type(none);
 rewrite_map_assocs_to_exacts(?type(map, Assocs)) ->
     type(map, lists:map(fun ({type, Ann, _, KVTy}) ->
                                 {type, Ann, map_field_exact, KVTy}
