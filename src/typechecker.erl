@@ -4317,7 +4317,9 @@ expect_map_type({var, _, Var}, _Env) ->
     Cs = constraints:add_var(Var, constraints:upper(Var, type(map, any))),
     {assoc_tys, any, Cs};
 expect_map_type(?type(map, AssocTys), _Env) ->
-    {assoc_tys, AssocTys, constraints:empty()}.
+    {assoc_tys, AssocTys, constraints:empty()};
+expect_map_type(Ty, _Env) ->
+    {type_error, Ty}.
 
 %% Rewrite map_field_assoc to map_field_exact to return in pattern types.
 %%

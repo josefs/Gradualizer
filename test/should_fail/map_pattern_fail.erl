@@ -2,7 +2,9 @@
 -export([f/1,
          badkey/1,
          map_term/1,
-         not_a_map_passed_as_map/0]).
+         not_a_map_passed_as_map/0,
+         wrong_spec/1
+        ]).
 
 -type t() :: #{apa := integer(), bepa := boolean()}.
 
@@ -27,4 +29,8 @@ g() -> {tup, le}.
 
 -spec h(map()) -> ok.
 h(#{k := v} = _Map) ->
+    ok.
+
+-spec wrong_spec(tuple()) -> ok.
+wrong_spec(#{k := v} = _Map) ->
     ok.
