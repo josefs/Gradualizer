@@ -4249,36 +4249,39 @@ add_type_pat({record, P, Record, Fields}, Ty, Env, VEnv) ->
         {type_error, _Type} ->
             throw({type_error, record_pattern, P, Record, Ty})
     end;
-add_type_pat({map, _, _} = MapPat, {var, _, Var} = TyVar, _Env, VEnv) ->
-    %% FIXME this is a quite rudimentary implementation
-    %% - variables from the map pattern become any()
-    %% - the constraint could contain the map keys
-    Cs = constraints:add_var(
-           Var, constraints:upper(Var, type(map, any))),
-    {type(none), TyVar, add_any_types_pat(MapPat, VEnv), Cs};
-add_type_pat({map, _, _} = MapPat, ?top(), Env, VEnv) ->
-    %% TODO instead of implemented an expect_map_type properly
-    %% just handle the one missing case here
-    %% expect_map_type(top()) would return #{top() => top()}
-    AllMapsTy = type(map, [type(map_field_assoc, [top() ,top()])]),
-    add_type_pat(MapPat, AllMapsTy, Env, VEnv);
-add_type_pat({map, _P, PatAssocs}, {type, _, map, MapTyAssocs} = MapTy, Env, VEnv) ->
-    %% Check each Key := Value and binds vars in Value.
-    {NewVEnv, Css} =
-        lists:foldl(fun ({map_field_exact, _, Key, ValuePat}, {VEnvIn, CsAcc}) ->
-                            case add_type_pat_map_key(Key, MapTyAssocs, Env, VEnvIn) of
-                                {ok, ValueTy, Cs1} ->
-                                    {_ValPatTy, _ValUBound, VEnvOut, Cs2} =
-                                        add_type_pat(ValuePat, normalize(ValueTy, Env),
-                                                     Env, VEnvIn),
-                                    {VEnvOut, [Cs1, Cs2 | CsAcc]};
-                                error ->
-                                    throw({type_error, badkey, Key, MapTy})
-                            end
-                    end,
-                    {VEnv, []},
-                    PatAssocs),
-    {rewrite_map_assocs_to_exacts(MapTy), MapTy, NewVEnv, constraints:combine(Css)};
+add_type_pat({map, P, AssocPats} = MapPat, MapTy, Env, VEnv) ->
+    NormMapTy = normalize(MapTy, Env),
+    case expect_map_type(NormMapTy, Env) of
+        any ->
+            {type(none), type(any), add_any_types_pat(MapPat, VEnv), constraints:empty()};
+        {assoc_tys, AssocTys, Cs0} ->
+            %% Check each Key := Value and bind vars in Value.
+            {NewVEnv, Css} =
+                lists:foldl(fun ({map_field_exact, _, Key, ValuePat}, {VEnvIn, CsAcc}) ->
+                                    case add_type_pat_map_key(Key, AssocTys, Env, VEnvIn) of
+                                        {ok, ValueTy, Cs1} ->
+                                            {_ValPatTy, _ValUBound, VEnvOut, Cs2} =
+                                            add_type_pat(ValuePat, normalize(ValueTy, Env),
+                                                         Env, VEnvIn),
+                                            {VEnvOut, [Cs1, Cs2 | CsAcc]};
+                                        error ->
+                                            throw({type_error, badkey, Key, MapTy})
+                                    end
+                            end,
+                            {VEnv, [Cs0]},
+                            AssocPats),
+                PatTy = case NormMapTy of
+                            ?top() ->
+                                top();
+                            {var, _, _Var} ->
+                                type(none);
+                            ?type(map, Assocs) when is_list(Assocs) ->
+                                rewrite_map_assocs_to_exacts(NormMapTy)
+                        end,
+            {PatTy, MapTy, NewVEnv, constraints:combine(Css)};
+        {type_error, _Type} ->
+            throw({type_error, pattern, P, MapPat, MapTy})
+    end;
 add_type_pat({match, _, {var, _, _Var} = PatVar, Pat}, Ty, Env, VEnv) ->
     add_type_pat_var(Pat, PatVar, Ty, Env, VEnv);
 add_type_pat({match, _, Pat, {var, _, _Var} = PatVar}, Ty, Env, VEnv) ->
@@ -4307,6 +4310,25 @@ add_type_pat(OpPat = {op, _Anno, _Op, _Pat}, Ty, Env, VEnv) ->
     add_type_pat_literal(OpPat, Ty, Env, VEnv);
 add_type_pat(Pat, Ty, _Env, _VEnv) ->
     throw({type_error, pattern, element(2, Pat), Pat, Ty}).
+
+-spec expect_map_type(type(), env()) -> R when
+      R :: any
+         | {assoc_tys, [type()] | any, constraints:constraints()}
+         | {type_error, type()}.
+expect_map_type(?type(any), _Env) ->
+    any;
+expect_map_type(?top(), _Env) ->
+    {assoc_tys, [type(map_field_assoc, [top(), top()])], constraints:empty()};
+expect_map_type({var, _, Var}, _Env) ->
+    %% FIXME this is a quite rudimentary implementation
+    %% - variables from the map pattern become any()
+    %% - the constraint could contain the map keys
+    Cs = constraints:add_var(Var, constraints:upper(Var, type(map, any))),
+    {assoc_tys, any, Cs};
+expect_map_type(?type(map, AssocTys), _Env) ->
+    {assoc_tys, AssocTys, constraints:empty()};
+expect_map_type(Ty, _Env) ->
+    {type_error, Ty}.
 
 %% Rewrite map_field_assoc to map_field_exact to return in pattern types.
 %%
@@ -4798,11 +4820,11 @@ type_check_form_with_timeout(Function, Errors, StopOnFirstError, Env, Opts) ->
            end,
     {Pid, MRef} = spawn_monitor(Task),
     Result = receive
-                 {crash, Crash, St} ->
+                 {crash, Crash, STrace} ->
                      ?verbose(Env, "Task reported crash on ~s~n",
                               [gradualizer_fmt:form_info(Function)]),
                      io:format("Crashing...~n"),
-                     erlang:raise(throw, Crash, St);
+                     erlang:raise(throw, Crash, STrace);
                  {error_trace, Error, Trace} ->
                      ?verbose(Env, "Task reported error with trace from ~s~n",
                               [gradualizer_fmt:form_info(Function)]),
@@ -4837,19 +4859,14 @@ type_check_form(Function, Errors, StopOnFirstError, Env, Opts)
         {_VarBinds, _Cs} ->
             {errors, Errors}
     catch
-        throw:Throw:St ->
-            % Useful for debugging
-            % io:format("~p~n", [erlang:get_stacktrace()]),
-            if
-                CrashOnError ->
-                    {crash, Throw, St};
-                not CrashOnError ->
-                    {errors, [Throw | Errors]}
-            end;
-        error:Error:ST ->
+        throw:Throw:STrace when CrashOnError ->
+            {crash, Throw, STrace};
+        throw:Throw ->
+            {errors, [Throw | Errors]};
+        error:Error:STrace ->
             %% A hack to hide the (very large) #env{} in
             %% error stacktraces. TODO: Add an opt for this.
-            Trace = case ST of
+            Trace = case STrace of
                         [{M, F, [#env{}|Args], Pos} | RestTrace] ->
                             [{M, F, ['*environment excluded*'|Args], Pos} | RestTrace];
                         Trace0 ->
