@@ -193,6 +193,8 @@ pick_value(?type(nonempty_list, Ty), Env) ->
     {cons, erl_anno:new(0), H, {nil, erl_anno:new(0)}};
 pick_value(?type(nil), _Env) ->
     {nil, erl_anno:new(0)};
+pick_value(?type(binary, _), _Env) ->
+    {bin, erl_anno:new(0), []};
 %% The ?type(range) is a different case because the type range
 %% ..information is not encoded as an abstract_type()
 %% i.e. {type, Anno, range, [{integer, Anno2, Low}, {integer, Anno3, High}]}
