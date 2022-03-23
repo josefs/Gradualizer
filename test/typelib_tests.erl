@@ -46,3 +46,7 @@ reduce_test_() ->
      ?_am({_, [{atom, _, my_atom}]},    reduce(F2, [], typelib:parse_type("t(my_atom)"))),
      ?_am({_, [atom2, atom1]},          reduce(F3, [], ComplexTy))
     ].
+
+pp_type_test_() ->
+    [?_am("ok" ++ _,
+          lists:flatten(io_lib:format("ok: ~s\n", [ ["ok", typelib:pp_type(typelib:parse_type("T"))] ])))].
