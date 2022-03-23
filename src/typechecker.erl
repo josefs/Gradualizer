@@ -4236,10 +4236,10 @@ add_type_pat({bin, _P, BinElements} = Bin, Ty, Env, VEnv) ->
 add_type_pat({record, P, Record, Fields}, Ty, Env, VEnv) ->
     case expect_record_type(Ty, Record, Env) of
         any ->
-            {type(none)
-                ,Ty
-                ,union_var_binds([add_any_types_pat(Field, VEnv) || ?record_field_expr(Field) <- Fields], Env)
-                ,constraints:empty()};
+            {type(none), Ty,
+             union_var_binds([VEnv] ++ [ add_any_types_pat(Field, #{})
+                                         || ?record_field_expr(Field) <- Fields ], Env),
+             constraints:empty()};
         {fields_ty, Tys, Cs} ->
             {PatTys, UBounds, VEnv1, Cs1} = add_type_pat_fields(Fields, Tys, Env, VEnv),
             {type_record(Record, PatTys)
