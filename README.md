@@ -38,11 +38,14 @@ use the functions in the `gradualizer` module.
 
     1> gradualizer:type_check_file("path/to/some_file.erl").
 
-## To run Gradualizer from rebar3 or Mix
+## To run Gradualizer from rebar3
 
 There is a rebar3 plugin included. See [examples/rebar3/README.md](examples/rebar3/README.md).
 
-For Mix, a wrapper is provided at https://github.com/OvermindDL1/gradualixir.
+## To use Gradualizer with Elixir / Mix
+
+Please check out [Gradient](https://github.com/esl/gradient), the Elixir frontend for Gradualizer.
+It provides a Mix task to use in your project.
 
 ## Prerequisites
 
