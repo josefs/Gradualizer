@@ -3398,21 +3398,28 @@ check_clauses(Env, ArgsTy, ResTy, Clauses, Caps) ->
                     end,
                     {[], [], ArgsTy, Env#env.venv},
                     Clauses),
-    % Checking for exhaustive pattern matching
-    check_exhaustiveness(Env, ArgsTy, Clauses, RefinedArgsTy, VarBindsList, Css).
+    %% Checking for exhaustive pattern matching argument-wise,
+    %% i.e. separately for each argument.
+    %% This allows to report non-exhaustiveness warnings even if some arguments are not subject
+    %% to exhaustiveness checking, e.g. 'any'.
+    lists:foreach(fun ({ArgTy, RefinedArgTy}) ->
+                          check_arg_exhaustiveness(Env, [ArgTy], Clauses, [RefinedArgTy])
+                  end, lists:zip(ArgsTy, RefinedArgsTy)),
+    {union_var_binds(VarBindsList, Env), constraints:combine(Css)}.
 
-check_exhaustiveness(Env, ArgsTy, Clauses, RefinedArgsTy, VarBindsList, Css) ->
-    case {Env#env.exhaust,
-          ArgsTy =/= any andalso lists:all(fun (Ty) -> refinable(Ty, Env) end, ArgsTy),
-          lists:all(fun no_guards/1, Clauses),
-          is_list(RefinedArgsTy) andalso lists:any(fun (T) -> T =/= type(none) end, RefinedArgsTy)} of
+check_arg_exhaustiveness(Env, ArgsTy, Clauses, RefinedArgsTy) ->
+    Conditions =
+        {Env#env.exhaust,
+         ArgsTy =/= any andalso lists:all(fun (Ty) -> refinable(Ty, Env) end, ArgsTy),
+         lists:all(fun no_guards/1, Clauses),
+         is_list(RefinedArgsTy) andalso lists:any(fun (T) -> T =/= type(none) end, RefinedArgsTy)},
+    case Conditions of
         {true, true, true, true} ->
             [{clause, P, _, _, _}|_] = Clauses,
             throw({nonexhaustive, P, gradualizer_lib:pick_value(RefinedArgsTy, Env)});
         _ ->
             ok
-    end,
-    {union_var_binds(VarBindsList, Env), constraints:combine(Css)}.
+    end.
 
 %% This function checks clauses.
 %% * If clauses have 0 arguments;
