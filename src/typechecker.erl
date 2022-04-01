@@ -3666,6 +3666,13 @@ refine_ty(?type(nil), ?type(list, _), _, _Env) ->
 refine_ty(?type(nonempty_list, _), ?type(list, [?type(any)]), _, _Env) ->
     %% The guard is_list/1 catches every nonempty list
     type(none);
+refine_ty(?type(nonempty_list, [Ty1]), ?type(nonempty_list, [Ty2]), Trace, Env) ->
+    case refine(Ty1, Ty2, Trace, Env) of
+        ?type(none) ->
+            type(none);
+        RefTy ->
+            type(nonempty_list, [RefTy])
+    end;
 refine_ty(?type(binary, [_,_]),
           ?type(binary, [{integer, _, 0}, {integer, _, 1}]), _, _Env) ->
     %% B \ bitstring() => none()
