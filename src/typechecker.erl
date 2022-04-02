@@ -3757,6 +3757,7 @@ refine_ty({Tag1, _, M}, {Tag2, _, N}, _, _Env)
     end;
 refine_ty(Ty1, Ty2, _, _Env) when ?is_int_type(Ty1),
                                    ?is_int_type(Ty2) ->
+    %% TODO: https://github.com/josefs/Gradualizer/issues/406
     gradualizer_int:int_type_diff(Ty1, Ty2);
 refine_ty({user_type, Anno, Name, Args}, {user_type, Anno, Name, Args}, _, _Env) ->
     % After being normalized, it's because it's defined as opaque.

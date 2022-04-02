@@ -24,6 +24,15 @@
 -type int_range() :: {int(), int()}.
 -type type() :: gradualizer_type:abstract_type().
 
+-type extended_int_type() :: {type, erl_anno:anno(), range, [{integer, erl_anno:anno(), int()}]}
+                           | {'integer', erl_anno:anno(), integer()}.
+%% `extended_int_type' is needed to describe type representations
+%% which are not part of `gradualizer_type:abstract_type()'.
+%% We get rid of it before returning from this module.
+%% TODO: Actually, we don't, though we should :/ https://github.com/josefs/Gradualizer/issues/406
+
+-include("gradualizer.hrl").
+
 %% +----------------------------------------+
 %% |  Functions operating on integer types  |
 %% +----------------------------------------+
@@ -58,13 +67,15 @@ int_type_glb(Ty1, Ty2) ->
 
 %% Range difference, like set difference. The result may be zero, one or two
 %% types.
--spec int_type_diff(type(), type()) -> type().
+%% TODO: https://github.com/josefs/Gradualizer/issues/406
+-spec int_type_diff(type(), type()) -> [type()].
 int_type_diff(Ty1, Ty2) ->
     IntRanges = int_range_diff(int_type_to_range(Ty1),
                                int_type_to_range(Ty2)),
     %% Make sure the result is a standard erlang type.
     %% Perhaps we can include generalized ranges such as 10..pos_inf
     ExpandedRanges = lists:map(fun int_range_expand_to_valid/1, IntRanges),
+    %% TODO: This fails self-gradualisation, see https://github.com/josefs/Gradualizer/issues/406
     int_ranges_to_type(ExpandedRanges).
 
 %% Merges integer types by sorting on the lower bound and then merging adjacent
@@ -103,7 +114,7 @@ int_type_to_range({char, _, I})                        -> {I, I};
 int_type_to_range({integer, _, I})                     -> {I, I}.
 
 %% Converts a range back to a type.
--spec int_range_to_type(int_range()) -> type().
+-spec int_range_to_type(int_range()) -> type() | extended_int_type().
 int_range_to_type(Range) ->
     union(int_range_to_types(Range)).
 
@@ -113,7 +124,7 @@ int_range_to_type(Range) ->
 
 %% Converts a range to a list of types. Creates two types in some cases and zero
 %% types if lower bound is greater than upper bound.
--spec int_range_to_types(int_range()) -> [type()].
+-spec int_range_to_types(int_range()) -> [type() | extended_int_type()].
 int_range_to_types({neg_inf, pos_inf}) ->
     [type(integer)];
 int_range_to_types({neg_inf, -1}) ->
@@ -121,11 +132,15 @@ int_range_to_types({neg_inf, -1}) ->
 int_range_to_types({neg_inf, 0}) ->
     [type(neg_integer), {integer, erl_anno:new(0), 0}];
 int_range_to_types({neg_inf, I}) when I > 0 ->
+    %% I > 0 - see the guard above - so we can safely assert that
+    I = ?assert_type(I, pos_integer()),
     [type(neg_integer),
      {type, erl_anno:new(0), range, [{integer, erl_anno:new(0), 0}
                                     ,{integer, erl_anno:new(0), I}]}];
 int_range_to_types({neg_inf, I}) when I < -1 ->
-    %% Non-standard
+    %% Non-standard - see extended_int_type()
+    %% I < -1 - see the guard - so we can safely assert that
+    I = ?assert_type(I, neg_integer()),
     [{type, erl_anno:new(0), range, [{integer, erl_anno:new(0), neg_inf}
                                     ,{integer, erl_anno:new(0), I}]}];
 int_range_to_types({I, pos_inf}) when I < -1 ->
@@ -155,7 +170,7 @@ int_range_to_types({I, J}) when I > J ->
     [].
 
 %% Merges ranges and returns a single type (possibly a union).
--spec int_ranges_to_type([int_range()]) -> type().
+-spec int_ranges_to_type([int_range()]) -> int_range().
 int_ranges_to_type(Ranges) ->
     union(int_ranges_to_types(Ranges)).
 
@@ -165,7 +180,7 @@ int_ranges_to_types(Ranges) ->
     MergedRanges = merge_int_ranges(Ranges),
     lists:flatmap(fun int_range_to_types/1, MergedRanges).
 
--spec union([type()]) -> type().
+-spec union([type() | extended_int_type()]) -> type() | extended_int_type() | int_range().
 union([]) -> type(none);
 union([T]) -> T;
 union(Ts) -> type(union, Ts).
@@ -233,6 +248,7 @@ int_range_diff({Lo1, Hi1}, {Lo2, Hi2}) ->
 
 %% Makes sure a range can be represented as a syntactically valid Erlang type,
 %% by expanding it if necessary.
+-spec int_range_expand_to_valid(int_range()) -> int_range().
 int_range_expand_to_valid({neg_inf, N}) when is_integer(N),
                                              N < -1 ->
     {neg_inf, -1}; % neg_integer()
