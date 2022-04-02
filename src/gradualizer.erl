@@ -78,8 +78,9 @@ type_check_file(File, Opts) ->
 
 %% @doc Runs an erl_lint pass, to check if the forms can be compiled at all,
 %% before running the type checker.
--spec lint_and_check_forms([erl_parse:abstract_form()], file:filename(), options()) ->
-          ok | nok | [{file:filename(), any()}].
+-spec lint_and_check_forms(Forms, file:filename(), options()) -> R when
+      Forms :: gradualizer_file_utils:abstract_forms(),
+      R :: ok | nok | [{file:filename(), any()}].
 lint_and_check_forms(Forms, File, Opts) ->
     case erl_lint:module(Forms, File, [return_errors]) of
         {ok, _Warnings} ->
