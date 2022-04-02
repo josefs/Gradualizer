@@ -3659,8 +3659,13 @@ refine_ty({atom, _, _}, ?type(atom), _, _) ->
     type(none);
 refine_ty(?type(list, E), ?type(nil), _, _Env) ->
     type(nonempty_list, E);
-refine_ty(?type(list, E), ?type(nonempty_list, E), _, _Env) ->
-    type(nil);
+refine_ty(?type(list, [ElemTy1]), ?type(nonempty_list, [ElemTy2]), Trace, Env) ->
+    case refine(ElemTy1, ElemTy2, Trace, Env) of
+        ?type(none) ->
+            type(nil);
+        RefElemTy ->
+            type(list, [RefElemTy])
+    end;
 refine_ty(?type(nil), ?type(list, _), _, _Env) ->
     type(none);
 refine_ty(?type(nonempty_list, _), ?type(list, [?type(any)]), _, _Env) ->
