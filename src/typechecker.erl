@@ -2971,7 +2971,7 @@ unary_op_arg_type(_Op, {var, _, _}) ->
     type(any).
 
 %% Type check list comprehension or a binary comprehension
--spec type_check_comprehension_in(Env        :: #env{},
+-spec type_check_comprehension_in(Env        :: env(),
                                   ResTy      :: type(),
                                   OrigExpr   :: gradualizer_type:abstract_expr(),
                                   Compr      :: lc | bc,
@@ -3355,7 +3355,7 @@ get_atom(_Env, _) ->
 
 
 %% Infers (or at least propagates types from) fun/receive/try/case/if clauses.
--spec infer_clauses(#env{}, [gradualizer_type:abstract_clause()]) ->
+-spec infer_clauses(env(), [gradualizer_type:abstract_clause()]) ->
         {type(), VarBinds :: env(), constraints:constraints()}.
 infer_clauses(Env, Clauses) ->
     {Tys, VarBindsList, Css} =
@@ -3366,7 +3366,7 @@ infer_clauses(Env, Clauses) ->
     ,union_var_binds(VarBindsList, Env)
     ,constraints:combine(Css)}.
 
--spec infer_clause(#env{}, gradualizer_type:abstract_clause()) ->
+-spec infer_clause(env(), gradualizer_type:abstract_clause()) ->
         {type(), VarBinds :: env(), constraints:constraints()}.
 infer_clause(Env, {clause, _, Args, Guards, Block}) ->
     EnvNew = add_any_types_pats(Args, Env),
