@@ -29,10 +29,18 @@
 -define(throw_orig_type(EXPR, ORIGTYPE, NORMTYPE),
         try EXPR
         catch
-            throw:TypeError:ST when element(size(TypeError), TypeError) =:= NORMTYPE ->
-                %% if the last element of the type_error tuple is the normalized type
-                %% replace it with the original result type
-                erlang:raise(throw, setelement(size(TypeError), TypeError, ORIGTYPE), ST)
+            throw:TypeError:ST ->
+                %% WIP
+                %when element(size(TypeError), TypeError) =:= NORMTYPE ->
+                case expected_type(TypeError) of
+                    NORMTYPE ->
+                    %Ty when Ty =:= NORMTYPE ->
+                        %% if the last element of the type_error tuple is the normalized type
+                        %% replace it with the original result type
+                        erlang:raise(throw, setelement(size(TypeError), TypeError, ORIGTYPE), ST);
+                    _ ->
+                        erlang:raise(throw, TypeError, ST)
+                end
         end).
 
 %% Checks that the location annotation of a type is set to zero and raises an
@@ -5014,3 +5022,55 @@ paux([Elem|List], Fun, Tuple) ->
         false ->
             paux(List, Fun, Tuple)
     end.
+
+-type type_error() :: tuple().
+
+-spec expected_type(type_error()) -> type() | none.
+expected_type({type_error, _Expression, _ActualTy, ExpectedTy}) -> ExpectedTy;
+expected_type({nonexhaustive, _Anno, Example}) -> Example;
+%% TODO: dubious
+expected_type({call_undef, _Anno, _Module, _Func, Arity}) -> Arity;
+%expected_type({undef, record, Anno, {Module, RecName}}) ->
+%expected_type({undef, record_field, FieldName}) ->
+%% TODO: dubious
+expected_type({undef, user_type, _Anno, {Name, Arity}}) -> {Name, Arity};
+%% TODO: this case doesn't make sense, the last element definitely isn't a type
+expected_type({undef, Type, _Anno, {_Module, _Name, _Arity} = ExpectedTy})
+  when Type =:= user_type; Type =:= remote_type -> ExpectedTy;
+%expected_type({not_exported, remote_type, Anno, {Module, Name, Arity}}) ->
+%expected_type({illegal_map_type, Type}) ->
+%expected_type({type_error, list, _, _, Expected}) ->
+%expected_type({type_error, list, Anno, Ty}) ->
+expected_type({type_error, cons_pat, _Anno, _Cons, Ty}) -> Ty;
+%% TODO: dubious
+expected_type({argument_length_mismatch, _Anno, _LenTy, LenArgs}) -> LenArgs;
+%% TODO: dubious
+expected_type({type_error, unreachable_clause, Anno}) -> Anno;
+%% TODO: dubious
+expected_type({type_error, call_arity, _Anno, _Fun, _TyArity, CallArity}) -> CallArity;
+%% TODO: this case is dubious, too
+expected_type({type_error, call_intersect, _Anno, _FunTy, Name}) -> Name;
+%expected_type({type_error, expected_fun_type, Anno, Func, FunTy}) ->
+expected_type({type_error, no_type_match_intersection, _Anno, _Func, FunTy}) -> FunTy;
+%expected_type({type_error, relop, RelOp, Anno, Ty1, Ty2}) ->
+expected_type({type_error, op_type_too_precise, _Op, _Anno, Ty}) -> Ty;
+expected_type({type_error, arith_error, _ArithOp, _Anno, _Ty1, Ty2}) -> Ty2;
+expected_type({type_error, int_error, _ArithOp, _Anno, _Ty1, Ty2}) -> Ty2;
+expected_type({type_error, arith_error, _ArithOp, _Anno, Ty}) -> Ty;
+expected_type({type_error, int_error, _IntOp, _Anno, Ty}) -> Ty;
+%expected_type({type_error, non_number_argument_to_plus, Anno, Ty}) ->
+%expected_type({type_error, non_number_argument_to_minus, Anno, Ty}) ->
+expected_type({type_error, unary_error, _Op, _Anno, _TargetTy, Ty}) -> Ty;
+expected_type({type_error, rel_error, _LogicOp, _Anno, _Ty1, Ty2}) -> Ty2;
+%expected_type({type_error, operator_pattern, Pat, Ty}) ->
+expected_type({type_error, pattern, _Anno, _Pat, ExpectedTy}) -> ExpectedTy;
+%expected_type({type_error, check_clauses}) ->
+%expected_type({type_error, record_pattern, Anno, Record, Ty}) ->
+%expected_type({type_error, badkey, KeyExpr, MapType}) ->
+%expected_type({type_error, receive_after, Anno, TyClauses, TyBlock}) ->
+%% TODO: dubious
+expected_type({type_error, cyclic_type_vars, _Anno, _Ty, Xs}) -> Xs;
+%expected_type({type_error, mismatch, Ty, Expr}) ->
+expected_type({bad_type_annotation, TypeLit}) -> TypeLit.
+%expected_type({form_check_timeout, Form}) ->
+%expected_type({none, Module, ErrorDescription})
