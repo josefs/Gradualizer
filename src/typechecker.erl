@@ -1334,7 +1334,8 @@ expect_record_type(Union = {type, _, union, UnionTys}, Record, Env) ->
         _ ->
             {fields_tys, Tyss, Cs}
     end;
-expect_record_type({var, _, Var}, Record, #{records := REnv}) ->
+expect_record_type({var, _, Var}, Record, Env) ->
+    #env{tenv = #{records := REnv}} = Env,
     case REnv of
         #{Record := Fields} ->
             Cs = constraints:add_var(Var, constraints:upper(Var, type_record(Record))),
