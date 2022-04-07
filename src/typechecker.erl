@@ -4058,15 +4058,6 @@ position_info_from_spec([_|_] = Forms) ->
 position_info_from_spec(Form) ->
     element(2, Form).
 
--spec add_types_pats(Pats :: [gradualizer_type:abstract_pattern()],
-                     Tys  :: [type()],
-                     Env  :: env(),
-                     Caps :: capture_vars | bind_vars
-		    )
-		    -> {PatTys      :: [type()],
-			UBounds     :: [type()],
-			NewVEnv     :: map(),
-			Constraints :: constraints:constraints()}.
 %% Type check patterns against types (P1 :: T1, P2 :: T2, ...)
 %% and add variable bindings for the patterns.
 %% Used for the arguments in clauses and the elements of tuples.
@@ -4076,6 +4067,15 @@ position_info_from_spec(Form) ->
 %% is the same as the type. For patterns matching a singleton type, PatTy
 %% is the singleton type. Otherwise, PatTy is none(). PatTy is a type exhausted
 %% by Pat. UBound is Ty or a subtype such that Pat :: UBound.
+-spec add_types_pats(Pats, Tys, Env, Caps) -> R when
+      Pats :: [gradualizer_type:abstract_pattern()],
+      Tys  :: [type()],
+      Env  :: env(),
+      Caps :: capture_vars | bind_vars,
+      R :: {PatTys      :: [type()],
+            UBounds     :: [type()],
+            NewVEnv     :: venv(),
+            Constraints :: constraints:constraints()}.
 %% TODO: move tenv to back
 add_types_pats(Pats, Tys, Env, Caps) ->
     NewEnv = assign_types_to_vars_bound_more_than_once(Pats, Env, Caps),
@@ -4084,18 +4084,29 @@ add_types_pats(Pats, Tys, Env, Caps) ->
 %% Helper for add_types_pats/4, also used in recursive calls from add_type_pat/3.
 %%
 %% NB: Don't use this function directly. Use add_types_pats/4 instead.
--spec do_add_types_pats(Pats :: [gradualizer_type:abstract_pattern()],
-                        Tys  :: [type()],
-                        Env  :: env()
-                       ) -> {PatTys      :: [type()],
-                             UBounds     :: [type()],
-                             NewVEnv     :: map(),
-                             Constraints :: constraints:constraints()}.
+-spec do_add_types_pats(Pats, Tys, Env) -> R when
+      Pats :: [gradualizer_type:abstract_pattern()],
+      Tys  :: [type()],
+      Env  :: env(),
+      R :: {PatTys      :: [type()],
+            UBounds     :: [type()],
+            NewVEnv     :: venv(),
+            Constraints :: constraints:constraints()}.
 do_add_types_pats(Pats, Tys, Env) ->
     add_types_pats(Pats, Tys, Env, [], [], []).
 
 %% TODO: move tenv to back
--spec add_types_pats(_, _, env(), _, _, _) -> any().
+-spec add_types_pats(Pats, Tys, Env, PatTysAcc, UBoundsAcc, CsAcc) -> R when
+      Pats       :: [gradualizer_type:abstract_pattern()],
+      Tys        :: [type()],
+      Env        :: env(),
+      PatTysAcc  :: [type()],
+      UBoundsAcc :: [type()],
+      CsAcc      :: constraints:constraints(),
+      R :: {PatTys      :: [type()],
+            UBounds     :: [type()],
+            NewVEnv     :: venv(),
+            Constraints :: constraints:constraints()}.
 add_types_pats([], [], Env, PatTysAcc, UBoundsAcc, CsAcc) ->
     {lists:reverse(PatTysAcc), lists:reverse(UBoundsAcc), Env#env.venv, constraints:combine(CsAcc)};
 add_types_pats([Pat | Pats], [Ty | Tys], Env, PatTysAcc, UBoundsAcc, CsAcc) ->
@@ -4113,16 +4124,6 @@ denormalize(Ty, NormTy, OrigNormTy) ->
         _          -> NormTy
     end.
 
-%% Set the type of a new variable.
-set_var_type(Env, A, Ty) ->
-    VEnv = Env#env.venv,
-    Env#env{venv = VEnv#{A => Ty}}.
-
-%% Update the type of an already seen variable.
-update_var_type(Env, A, Ty) ->
-    VEnv = Env#env.venv,
-    Env#env{venv = VEnv#{A := Ty}}.
-
 %% Type check a pattern against a normalized type and add variable bindings.
 %%
 %% Note 1: For correct variable binding and refinement logic, don't use this
@@ -4130,10 +4131,14 @@ update_var_type(Env, A, Ty) ->
 %%
 %% Note 2: When this function calls itself recursively, take care that the type
 %% is normalized first.
--spec add_type_pat(Pat  :: gradualizer_type:abstract_pattern(),
-                   Type :: type(),
-                   Env  :: env()) ->
-          {PatTy :: type(), UBound :: type(), NewEnv :: env(), constraints:constraints()}.
+-spec add_type_pat(Pat, Type, Env) -> R when
+      Pat  :: gradualizer_type:abstract_pattern(),
+      Type :: type(),
+      Env  :: env(),
+      R :: {PatTy :: type(),
+            UBound :: type(),
+            NewEnv :: env(),
+            constraints:constraints()}.
 add_type_pat({var, _, '_'}, Ty, Env) ->
     {Ty, Ty, Env, constraints:empty()};
 add_type_pat({var, _, A} = Var, Ty, Env) ->
@@ -4781,6 +4786,16 @@ add_var_binds(VEnv, VarBinds, Env) ->
     % TODO: Don't drop the constraints
     Glb = fun(_K, Ty1, Ty2) -> {Ty, _C} = glb(Ty1, Ty2, Env), Ty end,
     gradualizer_lib:merge_with(Glb, VEnv, VarBinds).
+
+%% Set the type of a new variable.
+set_var_type(Env, A, Ty) ->
+    VEnv = Env#env.venv,
+    Env#env{venv = VEnv#{A => Ty}}.
+
+%% Update the type of an already seen variable.
+update_var_type(Env, A, Ty) ->
+    VEnv = Env#env.venv,
+    Env#env{venv = VEnv#{A := Ty}}.
 
 %% From a record field name, find the default value from the typed list of record field definitions
 get_rec_field_default({atom, _, FieldName},
