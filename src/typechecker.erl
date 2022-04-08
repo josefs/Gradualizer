@@ -734,7 +734,7 @@ has_overlapping_keys({type, _, map, Assocs}, Env) ->
 %% * Expand user-defined and remote types on head level (except opaque types)
 %% * Replace built-in type synonyms
 %% * Flatten unions and merge overlapping types (e.g. ranges) in unions
--spec normalize(type(), tenv()) -> type().
+-spec normalize(type(), env()) -> type().
 normalize(Ty, Env) ->
     normalize_rec(Ty, Env, #{}).
 
@@ -4096,7 +4096,7 @@ do_add_types_pats(Pats, Tys, Env) ->
       Env        :: env(),
       PatTysAcc  :: [type()],
       UBoundsAcc :: [type()],
-      CsAcc      :: constraints:constraints(),
+      CsAcc      :: [constraints:constraints()],
       R :: {PatTys      :: [type()],
             UBounds     :: [type()],
             NewVEnv     :: venv(),
@@ -4540,13 +4540,14 @@ add_any_types_pat(Pat, _Env) ->
     %% Matching other patterns and throwing (but NOT erroring) simplifies property based testing.
     throw({illegal_pattern, Pat}).
 
--spec assign_types_to_vars_bound_more_than_once(Pats :: [gradualizer_type:abstract_pattern()],
-                                                Env  :: env(),
-                                                Caps :: capture_vars | bind_vars) ->
-                                                       NewVEnv :: map().
 %% Assigns the type top() to variables occurring more than once in the list of
 %% patterns. This prevents the variables from being treated as match-all, thus
 %% affecting refinement.
+-spec assign_types_to_vars_bound_more_than_once(Pats, Env, Caps) -> R when
+      Pats :: [gradualizer_type:abstract_pattern()],
+      Env  :: env(),
+      Caps :: capture_vars | bind_vars,
+      R    :: env().
 assign_types_to_vars_bound_more_than_once(Pats, Env, Caps) ->
     VEnv = Env#env.venv,
     VarOccurrences = count_var_occurrences(Pats),
