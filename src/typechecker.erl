@@ -50,6 +50,7 @@
 -type venv() :: map().
 
 -export_type([env/0,
+              venv/0,
               typed_record_field/0]).
 
 -type expr() :: gradualizer_type:abstract_expr().
@@ -94,14 +95,7 @@
 %%       diagnostic, which seems to assume the record only has the
 %%       fields annotated in the type, not all the fields from the definition.
 -include("typechecker.hrl").
--type env() :: #env{ fenv               :: map(),
-                     imported           :: #{{atom(), arity()} => module()},
-                     venv               :: map(),
-                     tenv               :: tenv(),
-                     infer              :: boolean(),
-                     verbose            :: boolean(),
-                     exhaust            :: boolean(),
-                     union_size_limit   :: non_neg_integer() }.
+-type env() :: #env{}.
 
 -include("gradualizer.hrl").
 

@@ -1,9 +1,9 @@
 -ifndef(__TYPECHECKER_HRL__).
 -define(__TYPECHECKER_HRL__, true).
 
--record(env, {fenv              = #{},
+-record(env, {fenv              = #{}   :: map(),
               imported          = #{}   :: #{{atom(), arity()} => module()},
-              venv              = #{},
+              venv              = #{}   :: typechecker:venv(),
               tenv                      :: gradualizer_lib:tenv(),
               infer             = false :: boolean(),
               verbose           = false :: boolean(),
