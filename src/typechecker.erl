@@ -4288,7 +4288,12 @@ add_type_pat(CONS = {cons, P, PH, PT}, ListTy, Env) ->
                 add_type_pat(PH, normalize(ElemTy, Env), Env),
             TailTy = normalize(type(union, [ListTy, type(nil)]), Env),
             {_PatTy2, _Ubound2, Env3, Cs3} = add_type_pat(PT, TailTy, Env2),
-            PatTy = type(nonempty_list, [PatTy1]),
+            PatTy = case is_list_pat_exhaustive(CONS) of
+                        true ->
+                            type(nonempty_list, [PatTy1]);
+                        false ->
+                            type(none)
+                    end,
             NonEmptyTy = rewrite_list_to_nonempty_list(ListTy),
             {PatTy, NonEmptyTy, Env3, constraints:combine([Cs1, Cs2, Cs3])};
         {type_error, _Ty} ->
@@ -4400,6 +4405,10 @@ add_type_pat(OpPat = {op, _Anno, _Op, _Pat}, Ty, Env) ->
     add_type_pat_literal(OpPat, Ty, Env);
 add_type_pat(Pat, Ty, _Env) ->
     throw({type_error, pattern, element(2, Pat), Pat, Ty}).
+
+is_list_pat_exhaustive({nil, _}) -> true;
+is_list_pat_exhaustive({cons, _, {var, _, _}, {var, _, _}}) -> true;
+is_list_pat_exhaustive(_) -> false.
 
 -spec expect_map_type(type(), env()) -> R when
       R :: any
