@@ -3427,25 +3427,24 @@ check_clauses(Env, ArgsTy, ResTy, Clauses, Caps) ->
     %% This is fine, since we match on `any' in the clause above.
     ArgsTy = ?assert_type(ArgsTy, [type()]),
     %% Clauses for if, case, functions, receive, etc.
-    {VarBindsList, Css, RefinedArgsTy, _VEnvJunk} =
-        lists:foldl(fun (Clause, {VBs, Css, RefinedArgsTy, VEnvIn}) ->
-                            {NewRefinedArgsTy, VB, Cs} =
-                                check_clause(Env#env{venv = VEnvIn},
-                                             RefinedArgsTy, ResTy, Clause, Caps),
-                            VEnvOut =
-                                refine_vars_by_mismatching_clause(Clause, VEnvIn, Env),
-                            {[VB | VBs], [Cs | Css], NewRefinedArgsTy, VEnvOut}
+    {VarBindsList, Css, RefinedArgsTy, Env1} =
+        lists:foldl(fun (Clause, {VBs, Css, RefinedArgsTy, EnvIn}) ->
+                            {NewRefinedArgsTy, Env1, Cs} =
+                                check_clause(EnvIn, RefinedArgsTy, ResTy, Clause, Caps),
+                            VB =
+                                refine_vars_by_mismatching_clause(Clause, Env1#env.venv, Env1),
+                            {[Env1#env{venv = VB} | VBs], [Cs | Css], NewRefinedArgsTy, Env1}
                     end,
-                    {[], [], ArgsTy, Env#env.venv},
+                    {[], [], ArgsTy, Env},
                     Clauses),
     %% Checking for exhaustive pattern matching argument-wise,
     %% i.e. separately for each argument.
     %% This allows to report non-exhaustiveness warnings even if some arguments are not subject
     %% to exhaustiveness checking, e.g. 'any'.
     lists:foreach(fun ({ArgTy, RefinedArgTy}) ->
-                          check_arg_exhaustiveness(Env, [ArgTy], Clauses, [RefinedArgTy])
+                          check_arg_exhaustiveness(Env1, [ArgTy], Clauses, [RefinedArgTy])
                   end, lists:zip(ArgsTy, RefinedArgsTy)),
-    {union_var_binds(VarBindsList, Env), constraints:combine(Css)}.
+    {union_var_binds(VarBindsList, Env1), constraints:combine(Css)}.
 
 %% @doc Check pattern matching exhaustiveness of a function or case expression.
 %%
@@ -3501,14 +3500,14 @@ check_clause(Env, ArgsTy, ResTy, C = {clause, P, Args, Guards, Block}, Caps) ->
         {L, L} ->
             {PatTys, _UBounds, EnvNew, Cs1} = add_types_pats(Args, ArgsTy, Env, Caps),
             VarBinds1   = check_guards(EnvNew, Guards),
-            EnvNewest   = add_var_binds(EnvNew, VarBinds1, Env),
+            EnvNewest   = add_var_binds(EnvNew, VarBinds1, EnvNew),
             {VarBinds2, Cs2} = type_check_block_in(EnvNewest, ResTy, Block),
             RefinedTys1 = refine_clause_arg_tys(ArgsTy, PatTys,
-                                                Guards, Env),
+                                                Guards, EnvNewest),
             RefinedTys2 = refine_mismatch_using_guards(RefinedTys1, C,
-                                                       Env#env.venv, Env),
+                                                       EnvNewest#env.venv, EnvNewest),
             {RefinedTys2
-            ,union_var_binds([VarBinds1, VarBinds2, EnvNew], Env)
+            ,union_var_binds([VarBinds1, VarBinds2, EnvNewest], EnvNewest)
             ,constraints:combine(Cs1, Cs2)};
         {LenTy, LenArgs} ->
             throw({argument_length_mismatch, P, LenTy, LenArgs})
@@ -4288,14 +4287,14 @@ add_type_pat(CONS = {cons, P, PH, PT}, ListTy, Env) ->
                 add_type_pat(PH, normalize(ElemTy, Env), Env),
             TailTy = normalize(type(union, [ListTy, type(nil)]), Env),
             {_PatTy2, _Ubound2, Env3, Cs3} = add_type_pat(PT, TailTy, Env2),
-            PatTy = case is_list_pat_exhaustive(CONS) of
-                        true ->
-                            type(nonempty_list, [PatTy1]);
-                        false ->
-                            type(none)
-                    end,
+            {PatTy, Env4} = case is_list_pat_exhaustive(CONS) of
+                                true ->
+                                    {type(nonempty_list, [PatTy1]), Env3};
+                                false ->
+                                    {type(none), Env3#env{exhaust = false}}
+                            end,
             NonEmptyTy = rewrite_list_to_nonempty_list(ListTy),
-            {PatTy, NonEmptyTy, Env3, constraints:combine([Cs1, Cs2, Cs3])};
+            {PatTy, NonEmptyTy, Env4, constraints:combine([Cs1, Cs2, Cs3])};
         {type_error, _Ty} ->
             throw({type_error, cons_pat, P, CONS, ListTy})
     end;
