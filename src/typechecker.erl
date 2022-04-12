@@ -2267,9 +2267,9 @@ do_type_check_expr_in(Env, Ty, {var, _, Name} = Var) ->
     end;
 do_type_check_expr_in(Env, Ty, {match, _, Pat, Expr}) ->
     {VarBinds, Cs} = type_check_expr_in(Env, Ty, Expr),
-    {_PatTys, _UBounds, NewVEnv, Cs2} =
+    {_PatTys, _UBounds, NewEnv, Cs2} =
         add_types_pats([Pat], [Ty], Env, capture_vars),
-    {union_var_binds(VarBinds, NewVEnv, Env), constraints:combine(Cs, Cs2)};
+    {union_var_binds(VarBinds, NewEnv, Env), constraints:combine(Cs, Cs2)};
 do_type_check_expr_in(Env, Ty, Singleton = {Tag, _, Value}) when Tag =:= integer;
                                                                  Tag =:= char;
                                                                  Tag =:= atom ->
@@ -4112,7 +4112,7 @@ position_info_from_spec(Form) ->
       Caps :: capture_vars | bind_vars,
       R :: {PatTys      :: [type()],
             UBounds     :: [type()],
-            NewVEnv     :: env(),
+            NewEnv      :: env(),
             Constraints :: constraints:constraints()}.
 %% TODO: move tenv to back
 add_types_pats(Pats, Tys, Env, Caps) ->
@@ -4128,7 +4128,7 @@ add_types_pats(Pats, Tys, Env, Caps) ->
       Env  :: env(),
       R :: {PatTys      :: [type()],
             UBounds     :: [type()],
-            NewVEnv     :: env(),
+            NewEnv      :: env(),
             Constraints :: constraints:constraints()}.
 do_add_types_pats(Pats, Tys, Env) ->
     add_types_pats(Pats, Tys, Env, [], [], []).
@@ -4143,7 +4143,7 @@ do_add_types_pats(Pats, Tys, Env) ->
       CsAcc      :: [constraints:constraints()],
       R :: {PatTys      :: [type()],
             UBounds     :: [type()],
-            NewVEnv     :: env(),
+            NewEnv      :: env(),
             Constraints :: constraints:constraints()}.
 add_types_pats([], [], Env, PatTysAcc, UBoundsAcc, CsAcc) ->
     {lists:reverse(PatTysAcc), lists:reverse(UBoundsAcc), Env, constraints:combine(CsAcc)};
