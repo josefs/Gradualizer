@@ -3424,27 +3424,45 @@ check_clauses(Env, any, ResTy, [{clause, _, Args, _, _} | _] = Clauses, Caps) ->
     ArgsTy = lists:duplicate(length(Args), type(any)),
     check_clauses(Env, ArgsTy, ResTy, Clauses, Caps);
 check_clauses(Env, ArgsTy, ResTy, Clauses, Caps) ->
+    Env1 = push_clauses_controls(Env, #clauses_controls{exhaust = Env#env.exhaust}),
     %% This is fine, since we match on `any' in the clause above.
     ArgsTy = ?assert_type(ArgsTy, [type()]),
     %% Clauses for if, case, functions, receive, etc.
-    {VarBindsList, Css, RefinedArgsTy, Env1} =
+    {VarBindsList, Css, RefinedArgsTy, Env2} =
         lists:foldl(fun (Clause, {VBs, Css, RefinedArgsTy, EnvIn}) ->
-                            {NewRefinedArgsTy, Env1, Cs} =
+                            {NewRefinedArgsTy, Env2, Cs} =
                                 check_clause(EnvIn, RefinedArgsTy, ResTy, Clause, Caps),
                             VB =
-                                refine_vars_by_mismatching_clause(Clause, Env1#env.venv, Env1),
-                            {[Env1#env{venv = VB} | VBs], [Cs | Css], NewRefinedArgsTy, Env1}
+                                refine_vars_by_mismatching_clause(Clause, Env2#env.venv, Env2),
+                            {[Env2#env{venv = VB} | VBs], [Cs | Css], NewRefinedArgsTy, Env2}
                     end,
-                    {[], [], ArgsTy, Env},
+                    {[], [], ArgsTy, Env1},
                     Clauses),
     %% Checking for exhaustive pattern matching argument-wise,
     %% i.e. separately for each argument.
     %% This allows to report non-exhaustiveness warnings even if some arguments are not subject
     %% to exhaustiveness checking, e.g. 'any'.
     lists:foreach(fun ({ArgTy, RefinedArgTy}) ->
-                          check_arg_exhaustiveness(Env1, [ArgTy], Clauses, [RefinedArgTy])
+                          check_arg_exhaustiveness(Env2, [ArgTy], Clauses, [RefinedArgTy])
                   end, lists:zip(ArgsTy, RefinedArgsTy)),
-    {union_var_binds(VarBindsList, Env1), constraints:combine(Css)}.
+    Env3 = pop_clauses_controls(Env2),
+    {union_var_binds(VarBindsList, Env3), constraints:combine(Css)}.
+
+push_clauses_controls(#env{} = Env, #clauses_controls{} = CC) ->
+    ?verbose(Env, "Pushing ~ts~n", [CC]),
+    CStack = Env#env.clauses_stack,
+    Env#env{clauses_stack = [CC | CStack]}.
+
+pop_clauses_controls(#env{} = Env) ->
+    ?verbose(Env, "Popping clauses controls~n", []),
+    [_ | CStack] = Env#env.clauses_stack,
+    Env#env{clauses_stack = CStack}.
+
+disable_exhaustiveness_check(#env{} = Env) ->
+    [CC | CStack] = Env#env.clauses_stack,
+    NewCC = CC#clauses_controls{exhaust = false},
+    ?verbose(Env, "Disabling exhaustiveness checking for this clauses list~n", []),
+    Env#env{clauses_stack = [NewCC | CStack]}.
 
 %% @doc Check pattern matching exhaustiveness of a function or case expression.
 %%
@@ -3473,7 +3491,11 @@ check_arg_exhaustiveness(Env, ArgsTy, Clauses, RefinedArgsTy) ->
             ok
     end.
 
-exhaustiveness_checking(#env{} = Env) -> Env#env.exhaust.
+exhaustiveness_checking(#env{} = Env) ->
+    [#clauses_controls{} = B | _] = Env#env.clauses_stack,
+    Exhaust = B#clauses_controls.exhaust,
+    ?verbose(Env, "Exhaustiveness checking: ~p~n", [Exhaust]),
+    Exhaust.
 
 all_refinable(any, _Env) -> false;
 all_refinable(Types, Env) -> lists:all(fun (Ty) -> refinable(Ty, Env) end, Types).
@@ -4291,7 +4313,7 @@ add_type_pat(CONS = {cons, P, PH, PT}, ListTy, Env) ->
                                 true ->
                                     {type(nonempty_list, [PatTy1]), Env3};
                                 false ->
-                                    {type(none), Env3#env{exhaust = false}}
+                                    {type(none), disable_exhaustiveness_check(Env3)}
                             end,
             NonEmptyTy = rewrite_list_to_nonempty_list(ListTy),
             {PatTy, NonEmptyTy, Env4, constraints:combine([Cs1, Cs2, Cs3])};
