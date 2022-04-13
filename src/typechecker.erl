@@ -2588,10 +2588,11 @@ do_type_check_expr_in(Env, ResTy, {'receive', _, Clauses}) ->
     {Env1, Cs} = check_clauses(Env, [type(any)], ResTy, Clauses, capture_vars),
     {Env1, Cs};
 do_type_check_expr_in(Env, ResTy, {'receive', _, Clauses, After, Block}) ->
+    VB = Env#env.venv,
     {Env1, Cs1} = check_clauses(Env, [type(any)], ResTy, Clauses, capture_vars),
-    {Env2, Cs2} = type_check_expr_in(Env1, type(integer), After),
-    {Env3, Cs3} = type_check_block_in(Env2, ResTy, Block),
-    {union_var_binds([Env1, Env2, Env3], Env), constraints:combine([Cs1, Cs2, Cs3])};
+    {Env2, Cs2} = type_check_expr_in(Env1#env{venv = VB}, type(integer), After),
+    {Env3, Cs3} = type_check_block_in(Env2#env{venv = VB}, ResTy, Block),
+    {union_var_binds([Env1, Env2, Env3], Env3), constraints:combine([Cs1, Cs2, Cs3])};
 do_type_check_expr_in(Env, ResTy, {op, _, '!', Arg1, Arg2}) ->
     % The first argument should be a pid.
     {_,  VarBinds1, Cs1} = type_check_expr(Env, Arg1),
