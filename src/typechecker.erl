@@ -3450,7 +3450,7 @@ check_clauses(Env, ArgsTy, ResTy, Clauses, Caps) ->
     {union_var_binds(VarBindsList, Env3), constraints:combine(Css)}.
 
 push_clauses_controls(#env{} = Env, #clauses_controls{} = CC) ->
-    ?verbose(Env, "Pushing ~ts~n", [CC]),
+    ?verbose(Env, "Pushing ~p~n", [CC]),
     CStack = Env#env.clauses_stack,
     Env#env{clauses_stack = [CC | CStack]}.
 
