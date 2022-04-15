@@ -3416,10 +3416,13 @@ check_clauses_fun(Env, {fun_ty_union, Tys, Cs1}, Clauses) ->
     {Env1, constraints:combine(Cs1, Cs2)}.
 
 %% Checks a list of clauses (if/case/fun/try/catch/receive).
--spec check_clauses(Env :: #env{}, ArgsTy :: [type()] | any, ResTy :: type(),
-                    Clauses :: [gradualizer_type:abstract_clause()],
-		    Caps :: capture_vars | bind_vars) ->
-                        {VarBinds :: env(), constraints:constraints()}.
+-spec check_clauses(Env, ArgsTy, ResTy, Clauses, Caps) -> R when
+      Env :: env(),
+      ArgsTy :: [type()] | any,
+      ResTy :: type(),
+      Clauses :: [gradualizer_type:abstract_clause()],
+      Caps :: capture_vars | bind_vars,
+      R :: {env(), constraints:constraints()}.
 check_clauses(Env, any, ResTy, [{clause, _, Args, _, _} | _] = Clauses, Caps) ->
     %% 'any' is the ... in the type fun((...) -> ResTy)
     ArgsTy = lists:duplicate(length(Args), type(any)),
