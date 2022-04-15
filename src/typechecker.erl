@@ -4431,6 +4431,17 @@ add_type_pat(OpPat = {op, _Anno, _Op, _Pat}, Ty, Env) ->
 add_type_pat(Pat, Ty, _Env) ->
     throw({type_error, pattern, element(2, Pat), Pat, Ty}).
 
+%% TODO: This is incomplete! Consider:
+%%
+%% -spec f([atom()]) -> ok.
+%% f(X) ->
+%%     case X of
+%%         [] -> ok;
+%%         [X|_] -> ok     % <--- Not exhaustive, but Gradualizer thinks it is.
+%%         [hello|_] -> ok % <--- False positive: clause not reachable?
+%%     end.
+%%
+%% To properly check pattern exhaustiveness we have to consider bound variables.
 is_list_pat_exhaustive({nil, _}) -> true;
 is_list_pat_exhaustive({cons, _, {var, _, _}, {var, _, _}}) -> true;
 is_list_pat_exhaustive(_) -> false.
