@@ -3977,6 +3977,9 @@ refine_vars_by_mismatching_clause({clause, _, Pats, Guards, _Block}, VEnv, Env) 
 %% Returns true if a list of patterns match all possible inputs of the same
 %% length. For this to be true, all patterns must be distinct free variables or
 %% the underscore pattern.
+%%
+%% See also `is_list_pat_exhaustive/1', which is similar,
+%% but incomplete and specific to list patterns.
 are_patterns_matching_all_input([], _VEnv) ->
     true;
 are_patterns_matching_all_input([{var, _, '_'} | Pats], VEnv) ->
@@ -4447,6 +4450,9 @@ add_type_pat(Pat, Ty, _Env) ->
 %%     end.
 %%
 %% To properly check pattern exhaustiveness we have to consider bound variables.
+%%
+%% See also `are_patterns_matching_all_input/2',
+%% which is similar, but limited to variable patterns.
 is_list_pat_exhaustive({nil, _}) -> true;
 is_list_pat_exhaustive({cons, _, {var, _, _}, {var, _, _}}) -> true;
 is_list_pat_exhaustive(_) -> false.
