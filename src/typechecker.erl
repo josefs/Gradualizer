@@ -3379,8 +3379,11 @@ check_clauses_intersect(Env, Ty, Clauses) when not is_list(Ty) ->
 check_clauses_intersect(Env, [], _Clauses) ->
     {Env, constraints:empty()};
 check_clauses_intersect(Env, [Ty|Tys], Clauses) ->
+    %% Variable bindings should not leak into subsequent clauses,
+    %% that's why we explicitely pass them as appropriate.
+    VEnv = Env#env.venv,
     {Env1, Cs1} = check_clauses_fun(Env, Ty, Clauses),
-    {Env2, Cs2} = check_clauses_intersect(Env1, Tys, Clauses),
+    {Env2, Cs2} = check_clauses_intersect(Env1#env{venv = VEnv}, Tys, Clauses),
     {union_var_binds(Env1, Env2, Env), constraints:combine(Cs1, Cs2)}.
 
 check_clauses_union(_Env, [], _Clauses) ->
@@ -3437,8 +3440,11 @@ check_clauses(Env, ArgsTy, ResTy, Clauses, Caps) ->
                             {NewRefinedArgsTy, Env2, Cs} =
                                 check_clause(EnvIn, RefinedArgsTy, ResTy, Clause, Caps),
                             VB =
-                                refine_vars_by_mismatching_clause(Clause, Env2#env.venv, Env2),
-                            {[Env2#env{venv = VB} | VBs], [Cs | Css], NewRefinedArgsTy, Env2}
+                                refine_vars_by_mismatching_clause(Clause, EnvIn#env.venv, Env2),
+                            {[Env2 | VBs],
+                             [Cs | Css],
+                             NewRefinedArgsTy,
+                             Env2#env{venv = VB}}
                     end,
                     {[], [], ArgsTy, Env1},
                     Clauses),
