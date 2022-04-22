@@ -4439,16 +4439,7 @@ add_type_pat(OpPat = {op, _Anno, _Op, _Pat}, Ty, Env) ->
 add_type_pat(Pat, Ty, _Env) ->
     throw({type_error, pattern, element(2, Pat), Pat, Ty}).
 
-%% TODO: This is incomplete! Consider:
-%%
-%% -spec f([atom()]) -> ok.
-%% f(X) ->
-%%     case X of
-%%         [] -> ok;
-%%         [X|_] -> ok     % <--- Not exhaustive, but Gradualizer thinks it is.
-%%         [hello|_] -> ok % <--- False positive: clause not reachable?
-%%     end.
-%%
+%% TODO: This is incomplete!
 %% To properly check pattern exhaustiveness we have to consider bound variables.
 %%
 %% See also `are_patterns_matching_all_input/2',
