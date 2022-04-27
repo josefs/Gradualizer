@@ -2457,7 +2457,7 @@ do_type_check_expr_in(Env, ResTy, {'case', _, Expr, Clauses}) ->
     {ExprTy, VarBinds, Cs1} = type_check_expr(Env, Expr),
     Env1 = add_var_binds(Env, VarBinds, Env),
     {Env2, Cs2} = check_clauses(Env1, [ExprTy], ResTy, Clauses, capture_vars),
-    {union_var_binds(VarBinds, Env2, Env), constraints:combine(Cs1,Cs2)};
+    {Env2, constraints:combine(Cs1, Cs2)};
 do_type_check_expr_in(Env, ResTy, {'if', _, Clauses}) ->
     {Env1, Cs} = check_clauses(Env, [], ResTy, Clauses, capture_vars),
     {Env1, Cs};
