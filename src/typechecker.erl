@@ -3490,7 +3490,7 @@ disable_exhaustiveness_check(#env{} = Env) ->
 %% @end
 check_arg_exhaustiveness(Env, ArgsTy, Clauses, RefinedArgsTy) ->
     case exhaustiveness_checking(Env) andalso
-         all_refinable(ArgsTy, Env) andalso
+         all_refinable(RefinedArgsTy, Env) andalso
          no_clause_has_guards(Clauses) andalso
          some_type_not_none(RefinedArgsTy)
     of
