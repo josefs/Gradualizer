@@ -1734,7 +1734,7 @@ do_type_check_expr(Env, {'fun', P, {function, M, F, A}}) ->
                     Ty = bounded_type_list_to_type(Env, BoundedFunTypeList),
                     {Ty, Env, constraints:empty()};
                 not_found ->
-                    throw({call_undef, P, M, F, A})
+                    throw({call_undef, P, Module, Function, Arity})
             end;
         _ -> %% Not enough information to check the type of the call.
             {type(any), Env, constraints:empty()}
