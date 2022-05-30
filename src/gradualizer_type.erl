@@ -24,6 +24,7 @@
 
 %% Export the additional types that gradualizer uses
 -export_type([abstract_pattern/0,
+              af_constraint/0,
               type_var/0]).
 
 %% Start of Abstract Format
@@ -363,5 +364,9 @@
 -type function_name() :: atom().
 
 -type type_name() :: atom().
+
+-type af_constraint() :: {'type', anno(), 'constraint',
+                          [af_lit_atom('is_subtype') |
+                           [af_type_variable() | abstract_type()]]}. % [IsSubtype, [V, T]]
 
 %% End of Abstract Format

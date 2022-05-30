@@ -8,12 +8,14 @@
          remove_pos_typed_record_field/1]).
 -export_type([graph/1, tenv/0]).
 
+-type type() :: gradualizer_type:abstract_type().
+
 %% Type environment, passed around while comparing compatible subtypes.
 -type tenv() :: #{ module => module(),
-                   types := #{{Ty :: atom(), arity()} => {Params :: [atom()],
-                                                          Body :: gradualizer_type:abstract_type()}},
+                   types := #{{Ty :: atom(), arity()} => {Params :: [atom()], Body :: type()}},
                    records := #{Rec :: atom() => [typechecker:typed_record_field()]} }.
 
+-include("gradualizer.hrl").
 -include("typechecker.hrl").
 
 %% Pattern macros
@@ -100,11 +102,13 @@ reverse_graph(G) ->
 %% `UserTy' is actually an unexported `gradualizer_type:af_user_defined_type()'.
 
 -spec get_type_definition(UserTy, Env, Opts) -> {ok, Ty} | opaque | not_found when
-      UserTy :: gradualizer_type:abstract_type(),
+      UserTy :: type(),
       Env :: typechecker:env(),
       Opts :: [annotate_user_types],
-      Ty :: gradualizer_type:abstract_type().
+      Ty :: type().
 get_type_definition({remote_type, _Anno, [{atom, _, Module}, {atom, _, Name}, Args]}, _Env, _Opts) ->
+    %% We matched out the single atom arguments, so only Args :: [type()] remains.
+    Args = ?assert_type(Args, [type()]),
     gradualizer_db:get_type(Module, Name, Args);
 get_type_definition({user_type, Anno, Name, Args}, Env, Opts) ->
     %% Let's check if the type is a known remote type.
@@ -135,7 +139,7 @@ get_type_definition({user_type, Anno, Name, Args}, Env, Opts) ->
 %% which is not covered by the cases.
 
 -spec pick_value(Ty, Env) -> AbstractVal when
-      Ty :: gradualizer_type:abstract_type(),
+      Ty :: type() | [type()],
       Env :: typechecker:env(),
       AbstractVal :: gradualizer_type:abstract_expr().
 pick_value(List, Env) when is_list(List) ->

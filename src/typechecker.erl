@@ -195,6 +195,9 @@ compat_ty(Ty, {var, _, Var}, A, _Env) ->
 compat_ty({type, _, 'fun', [_, Res1]},
           {type, _, 'fun', [{type, _, any}, Res2]},
           A, Env) ->
+    %% We can assert the below,
+    %% as we know Res2 is not {type, _, any}, which is explicitely matched on above.
+    Res2 = ?assert_type(Res2, type()),
     compat(Res1, Res2, A, Env);
 compat_ty({type, _, 'fun', [{type, _, product, Args1}, Res1]},
           {type, _, 'fun', [{type, _, product, Args2}, Res2]},
@@ -742,6 +745,7 @@ normalize(Ty, Env) ->
 %% It's important that we don't keep unfolding such types because it will
 %% lead to infinite recursion.
 %% TODO: shouldn't {type, _, tuple, Elems} also be normalized?
+-spec normalize_rec(type(), env(), map()) -> type().
 normalize_rec({type, _, record, [{atom, _, Name} | Fields]}, Env, Unfolded)
   when length(Fields) > 0 ->
     NormFields = [type_field_type(FieldName, normalize_rec(Type, Env, Unfolded))
@@ -890,7 +894,7 @@ expand_builtin_aliases(Type) ->
 %% * Remove subtypes of other types in the same union; keeping any() separate
 %% * Merge integer types, including singleton integers and ranges
 %%   1, 1..5, integer(), non_neg_integer(), pos_integer(), neg_integer()
--spec flatten_unions([type()], tenv(), map()) -> [type()].
+-spec flatten_unions([type()], env(), map()) -> [type()].
 flatten_unions(Tys, Env, Unfolded) ->
     [ FTy || Ty <- Tys, FTy <- flatten_type(normalize_rec(Ty, Env, Unfolded), Env, Unfolded) ].
 
@@ -1056,7 +1060,7 @@ expect_list_type({var, _, Var}, _, _) ->
     {elem_ty
     ,{var, erl_anno:new(0), TyVar}
     ,constraints:add_var(TyVar,
-      constraints:upper(Var, {type, erl_anno:new(0), list, [TyVar]}))
+      constraints:upper(Var, {type, erl_anno:new(0), list, [{var, erl_anno:new(0), TyVar}]}))
     };
 expect_list_type(Ty, _, _) ->
     {type_error, Ty}.
@@ -1233,6 +1237,9 @@ expect_fun_type1(_Env, {type, _, 'fun', [{type, _, product, ArgsTy}, ResTy]}) ->
 expect_fun_type1(_Env, {type, _, 'fun', []}) ->
     any;
 expect_fun_type1(_Env, {type, _, 'fun', [{type, _, any}, ResTy]}) ->
+    %% We can assert the below,
+    %% as we know Res2 is not {type, _, any}, which is explicitely matched on above.
+    ResTy = ?assert_type(ResTy, type()),
     {fun_ty_any_args, ResTy, constraints:empty()};
 expect_fun_type1(Env, Tys) when is_list(Tys) ->
     %% This is a spec, not really a type().
@@ -1267,7 +1274,7 @@ expect_fun_type1(_Env, ?top()) ->
 expect_fun_type1(_Env, _Ty) ->
     type_error.
 
--spec expect_intersection_type(#env{}, [tuple()]) -> [fun_ty()] | type_error.
+-spec expect_intersection_type(env(), [tuple()]) -> [fun_ty()] | type_error.
 expect_intersection_type(_Env, []) ->
     [];
 expect_intersection_type(Env, [FunTy|Tys]) ->
@@ -1283,7 +1290,7 @@ expect_intersection_type(Env, [FunTy|Tys]) ->
             end
     end.
 
--spec expect_fun_type_union(#env{}, [tuple()]) -> [fun_ty()].
+-spec expect_fun_type_union(env(), [tuple()]) -> [fun_ty()].
 expect_fun_type_union(_Env, []) ->
     [];
 expect_fun_type_union(Env, [Ty|Tys]) ->
@@ -1298,7 +1305,7 @@ expect_fun_type_union(Env, [Ty|Tys]) ->
     Any :: any,
     FieldsTy :: {fields_ty, [typed_record_field()], constraints:constraints()},
     FieldsTys :: {fields_tys, [[typed_record_field()]], constraints:constraints()},
-    TypeError :: {type_error, type()}.
+    TypeError :: {type_error, atom() | type()}.
 expect_record_type({user_type, _, record, []}, _Record, _Env) ->
     any;
 expect_record_type({type, _, record, [{atom, _, Name}|RefinedTypes]}, Record, Env) when Name =:= Record ->
@@ -1334,7 +1341,8 @@ expect_record_type(Union = {type, _, union, UnionTys}, Record, Env) ->
         _ ->
             {fields_tys, Tyss, Cs}
     end;
-expect_record_type({var, _, Var}, Record, #{records := REnv}) ->
+expect_record_type({var, _, Var}, Record, Env) ->
+    #env{tenv = #{records := REnv}} = Env,
     case REnv of
         #{Record := Fields} ->
             Cs = constraints:add_var(Var, constraints:upper(Var, type_record(Record))),
@@ -1405,7 +1413,7 @@ bounded_type_subst(Env, BTy = {type, P, bounded_fun, [_, Bounds]}) ->
     end.
 
 %% TODO: move tenv to back
--spec solve_bounds(env(), [type()]) -> #{ atom() := type() }.
+-spec solve_bounds(env(), [gradualizer_type:af_constraint()]) -> #{ atom() := type() }.
 solve_bounds(Env, Cs) ->
     Defs = [ {X, T} || {type, _, constraint, [{atom, _, is_subtype}, [{var, _, X}, T]]} <- Cs ],
     DefEnv  = lists:foldl(fun
@@ -2963,7 +2971,7 @@ unary_op_arg_type(_Op, {var, _, _}) ->
     type(any).
 
 %% Type check list comprehension or a binary comprehension
--spec type_check_comprehension_in(Env        :: #env{},
+-spec type_check_comprehension_in(Env        :: env(),
                                   ResTy      :: type(),
                                   OrigExpr   :: gradualizer_type:abstract_expr(),
                                   Compr      :: lc | bc,
@@ -3319,7 +3327,7 @@ get_atom(_Env, _) ->
 
 
 %% Infers (or at least propagates types from) fun/receive/try/case/if clauses.
--spec infer_clauses(#env{}, [gradualizer_type:abstract_clause()]) ->
+-spec infer_clauses(env(), [gradualizer_type:abstract_clause()]) ->
         {type(), VarBinds :: env(), constraints:constraints()}.
 infer_clauses(Env, Clauses) ->
     {Tys, VarBindsList, Css} =
@@ -3330,7 +3338,7 @@ infer_clauses(Env, Clauses) ->
     ,union_var_binds(VarBindsList, Env)
     ,constraints:combine(Css)}.
 
--spec infer_clause(#env{}, gradualizer_type:abstract_clause()) ->
+-spec infer_clause(env(), gradualizer_type:abstract_clause()) ->
         {type(), VarBinds :: env(), constraints:constraints()}.
 infer_clause(Env, {clause, _, Args, Guards, Block}) ->
     EnvNew = add_any_types_pats(Args, Env),
@@ -3729,6 +3737,7 @@ refine_ty({Tag1, _, M}, {Tag2, _, N}, _, _Env)
     end;
 refine_ty(Ty1, Ty2, _, _Env) when ?is_int_type(Ty1),
                                    ?is_int_type(Ty2) ->
+    %% TODO: https://github.com/josefs/Gradualizer/issues/406
     gradualizer_int:int_type_diff(Ty1, Ty2);
 refine_ty({user_type, Anno, Name, Args}, {user_type, Anno, Name, Args}, _, _Env) ->
     % After being normalized, it's because it's defined as opaque.
