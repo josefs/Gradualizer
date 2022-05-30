@@ -3272,34 +3272,6 @@ type_check_record_union_in(Env, [Tys|Tyss], Fields) ->
 type_check_record_union_in(_Env, [], _Fields) ->
     none.
 
--spec type_check_cons_in(env(), type(), expr(), expr()) -> {env(), constraints:constraints()}.
-type_check_cons_in(Env, Ty = {type, _, List, []}, H, T)
-  when List == list orelse List == nonempty_list ->
-    {_Ty, VB1, Cs1} = type_check_expr(Env, H),
-    {     VB2, Cs2} = type_check_expr_in(Env, Ty, T),
-    {union_var_binds(VB1, VB2, Env), constraints:combine(Cs1, Cs2)};
-type_check_cons_in(Env, Ty = {type, _, List, [ElemTy]}, H, T)
-    when List == list orelse List == nonempty_list ->
-    {VB1, Cs1} = type_check_expr_in(Env, ElemTy, H),
-    {VB2, Cs2} = type_check_expr_in(Env, Ty,     T),
-    {union_var_binds(VB1, VB2, Env), constraints:combine(Cs1, Cs2)};
-type_check_cons_in(Env, {type, _, union, Tys}, H, T) ->
-    type_check_cons_union(Env, Tys, H, T).
-
--spec type_check_cons_union(env(), [type()], expr(), expr()) -> {env(), constraints:constraints()}.
-type_check_cons_union(_Env, [], _H, _T) ->
-    throw({type_error, cons_union});
-type_check_cons_union(Env, [ Ty = {type, _, List, _} | Tys ], H, T)
-    when List == list orelse List == nonempty_list ->
-    try type_check_cons_in(Env, Ty, H, T)
-    catch
-        _ ->
-            type_check_cons_union(Env, Tys, H, T)
-    end;
-type_check_cons_union(Env, [_ | Tys], H, T) ->
-    type_check_cons_union(Env, Tys, H, T).
-
-
 get_bounded_fun_type_list(Name, Arity, Env, P) ->
     case maps:find({Name, Arity}, Env#env.fenv) of
         %% TODO: https://github.com/josefs/Gradualizer/issues/388
@@ -4795,9 +4767,6 @@ type_fun(Arity) ->
     Args = [{type, erl_anno:new(0), any, []} || _ <- lists:seq(1, Arity)],
     {type, erl_anno:new(0), 'fun', [{type, erl_anno:new(0), product, Args}, {type, erl_anno:new(0), any, []}]}.
 
-verbose(Env, Fmt, Args) ->
-    Env#env.verbose andalso io:format(Fmt, Args).
-
 is_power_of_two(0) -> false;
 is_power_of_two(1) -> true;
 is_power_of_two(N) when N rem 2 == 0 ->
@@ -5110,19 +5079,3 @@ number_of_exported_functions(Forms) ->
 
 line_no(Expr) ->
     erl_anno:line(element(2, Expr)).
-
--spec gen_partition(pos_integer(), list(tuple()),
-                    fun((tuple()) -> {pos_integer(), gradualizer:top()} | false)) ->
-                           tuple().
-
-gen_partition(N,List, Fun) ->
-    paux(List, Fun, erlang:list_to_tuple(lists:duplicate(N,[]))).
-paux([], _Fun, Tuple) ->
-    Tuple;
-paux([Elem|List], Fun, Tuple) ->
-    case Fun(Elem) of
-        {I, Item} ->
-            paux(List, Fun, erlang:setelement(I, Tuple, [Item | erlang:element(I,Tuple)]));
-        false ->
-            paux(List, Fun, Tuple)
-    end.
