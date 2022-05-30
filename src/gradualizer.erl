@@ -41,8 +41,10 @@
 
 -type options() :: proplists:proplist().
 
-%% This type is the top of the subtyping lattice.
--opaque top() :: any().
+%% This type is the top of the subtyping lattice. It's never expanded.
+%% The definition can be anything apart from any(),
+%% so that we don't run into the "opaque type underspecified and therefore meaningless" warning.
+-opaque top() :: none().
 
 -include("gradualizer.hrl").
 
