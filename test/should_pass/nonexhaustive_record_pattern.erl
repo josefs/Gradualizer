@@ -5,6 +5,6 @@
 -record(env, {}).
 -type env() :: #env{}.
 
--spec g(_, env()) -> ok.
-g([], _Env) -> ok;
-g([_Ty1|_Tys], _Env) -> ok.
+-spec g(integer(), env()) -> ok.
+g(1, _Env) -> ok;
+g(_I, _Env) -> ok.
