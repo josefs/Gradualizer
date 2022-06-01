@@ -3432,9 +3432,10 @@ check_clauses(Env, ArgsTy, ResTy, Clauses, Caps) ->
     %% i.e. separately for each argument.
     %% This allows to report non-exhaustiveness warnings even if some arguments are not subject
     %% to exhaustiveness checking, e.g. 'any'.
-    lists:foreach(fun ({ArgTy, RefinedArgTy}) ->
-                          check_arg_exhaustiveness(Env2, [ArgTy], Clauses, [RefinedArgTy])
-                  end, lists:zip(ArgsTy, RefinedArgsTy)),
+    AllRefinable = all_refinable(ArgsTy, Env2),
+    lists:foreach(fun (RefinedArgTy) ->
+                          check_arg_exhaustiveness(Env2, AllRefinable, Clauses, [RefinedArgTy])
+                  end, RefinedArgsTy),
     Env3 = pop_clauses_controls(Env2),
     {union_var_binds(VarBindsList, Env3), constraints:combine(Css)}.
 
@@ -3468,9 +3469,10 @@ disable_exhaustiveness_check(#env{} = Env) ->
 %% Currently, exhaustiveness checking is disabled if a clause has any guards.
 %% TODO: Exhaustiveness checking might be improved in the future to handle (some) guards.
 %% @end
-check_arg_exhaustiveness(Env, ArgsTy, Clauses, RefinedArgsTy) ->
+check_arg_exhaustiveness(Env, AllRefinable, Clauses, RefinedArgsTy) ->
     case exhaustiveness_checking(Env) andalso
-         all_refinable(ArgsTy, Env) andalso
+         %all_refinable(ArgsTy, Env) andalso
+         AllRefinable andalso
          no_clause_has_guards(Clauses) andalso
          some_type_not_none(RefinedArgsTy)
     of
