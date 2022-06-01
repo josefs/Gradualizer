@@ -3432,10 +3432,9 @@ check_clauses(Env, ArgsTy, ResTy, Clauses, Caps) ->
     %% i.e. separately for each argument.
     %% This allows to report non-exhaustiveness warnings even if some arguments are not subject
     %% to exhaustiveness checking, e.g. 'any'.
-    AllRefinable = all_refinable(ArgsTy, Env2),
-    lists:foreach(fun (RefinedArgTy) ->
-                          check_arg_exhaustiveness(Env2, AllRefinable, Clauses, [RefinedArgTy])
-                  end, RefinedArgsTy),
+    lists:foreach(fun ({ArgTy, RefinedArgTy}) ->
+                          check_arg_exhaustiveness(Env2, [ArgTy], Clauses, [RefinedArgTy])
+                  end, lists:zip(ArgsTy, RefinedArgsTy)),
     Env3 = pop_clauses_controls(Env2),
     {union_var_binds(VarBindsList, Env3), constraints:combine(Css)}.
 
@@ -3469,10 +3468,9 @@ disable_exhaustiveness_check(#env{} = Env) ->
 %% Currently, exhaustiveness checking is disabled if a clause has any guards.
 %% TODO: Exhaustiveness checking might be improved in the future to handle (some) guards.
 %% @end
-check_arg_exhaustiveness(Env, AllRefinable, Clauses, RefinedArgsTy) ->
+check_arg_exhaustiveness(Env, ArgsTy, Clauses, RefinedArgsTy) ->
     case exhaustiveness_checking(Env) andalso
-         %all_refinable(ArgsTy, Env) andalso
-         AllRefinable andalso
+         all_refinable(ArgsTy, Env) andalso
          no_clause_has_guards(Clauses) andalso
          some_type_not_none(RefinedArgsTy)
     of
@@ -3535,16 +3533,26 @@ check_clause(_Env, _ArgsTy, _ResTy, Term, _) ->
 %% each pattern in the previous clause.
 -spec refine_clause_arg_tys([type()], [type()], _Guards, env()) -> [type()].
 refine_clause_arg_tys(Tys, MatchedTys, [], Env) ->
-    Ty        = type(tuple, Tys),
-    MatchedTy = type(tuple, MatchedTys),
-    case type_diff(Ty, MatchedTy, Env) of
-        ?type(tuple, RefTys) ->
-            RefTys;
-        ?type(none) ->
-            lists:duplicate(length(Tys), type(none));
-        ?type(union, _) ->
-            Tys %% Multiple possibilities => don't refine
-    end;
+    %Ty        = type(tuple, Tys),
+    %MatchedTy = type(tuple, MatchedTys),
+    %case type_diff(Ty, MatchedTy, Env) of
+    %    ?type(tuple, RefTys) ->
+    %        RefTys;
+    %    ?type(none) ->
+    %        lists:duplicate(length(Tys), type(none));
+    %    ?type(union, _) ->
+    %        Tys %% Multiple possibilities => don't refine
+    %end;
+    lists:map(fun ({Ty, MatchedTy}) ->
+                      case type_diff(Ty, MatchedTy, Env) of
+                          ?type(none) ->
+                              type(none);
+                          ?type(union, _) ->
+                              Ty;
+                          RefinedTy ->
+                              RefinedTy
+                      end
+              end, lists:zip(Tys, MatchedTys));
 refine_clause_arg_tys(Tys, _MatchedTys, _Guards, _Env) ->
     Tys.
 
