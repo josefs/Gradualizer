@@ -3496,6 +3496,13 @@ no_clause_has_guards(Clauses) ->
 some_type_not_none(Types) when is_list(Types) ->
     lists:any(fun (T) -> T =/= type(none) end, Types).
 
+all_none([]) -> false;
+all_none(Tys) ->
+    lists:all(fun
+                  (?type(none)) -> true;
+                  (_) -> false
+              end, Tys).
+
 %% This function checks clauses.
 %% * If clauses have 0 arguments;
 %% * case/try/catch/receive clauses have 1 argument;
@@ -3504,10 +3511,16 @@ some_type_not_none(Types) when is_list(Types) ->
 -spec check_clause(env(), [type()], type(), gradualizer_type:abstract_clause(),
 		   capture_vars | bind_vars) ->
         {RefinedTys :: [type()] , VarBinds :: env(), constraints:constraints()}.
-check_clause(_Env, [?type(none)|_], _ResTy, {clause, P, _Args, _Guards, _Block}, _) ->
-    throw({type_error, unreachable_clause, P});
+%check_clause(_Env, [?type(none)|_], _ResTy, {clause, P, _Args, _Guards, _Block}, _) ->
+%    throw({type_error, unreachable_clause, P});
 check_clause(Env, ArgsTy, ResTy, C = {clause, P, Args, Guards, Block}, Caps) ->
     ?verbose(Env, "~sChecking clause :: ~s~n", [gradualizer_fmt:format_location(C, brief), typelib:pp_type(ResTy)]),
+    case all_none(ArgsTy) of
+        true ->
+            throw({type_error, unreachable_clause, P});
+        false ->
+            ok
+    end,
     case {length(ArgsTy), length(Args)} of
         {L, L} ->
             {PatTys, _UBounds, EnvNew, Cs1} = add_types_pats(Args, ArgsTy, Env, Caps),
@@ -3543,16 +3556,8 @@ refine_clause_arg_tys(Tys, MatchedTys, [], Env) ->
     %    ?type(union, _) ->
     %        Tys %% Multiple possibilities => don't refine
     %end;
-    lists:map(fun ({Ty, MatchedTy}) ->
-                      case type_diff(Ty, MatchedTy, Env) of
-                          ?type(none) ->
-                              type(none);
-                          ?type(union, _) ->
-                              Ty;
-                          RefinedTy ->
-                              RefinedTy
-                      end
-              end, lists:zip(Tys, MatchedTys));
+    lists:map(fun ({Ty, MatchedTy}) -> type_diff(Ty, MatchedTy, Env) end,
+              lists:zip(Tys, MatchedTys));
 refine_clause_arg_tys(Tys, _MatchedTys, _Guards, _Env) ->
     Tys.
 
