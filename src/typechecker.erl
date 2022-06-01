@@ -3428,13 +3428,7 @@ check_clauses(Env, ArgsTy, ResTy, Clauses, Caps) ->
                     end,
                     {[], [], ArgsTy, Env1},
                     Clauses),
-    %% Checking for exhaustive pattern matching argument-wise,
-    %% i.e. separately for each argument.
-    %% This allows to report non-exhaustiveness warnings even if some arguments are not subject
-    %% to exhaustiveness checking, e.g. 'any'.
-    lists:foreach(fun ({ArgTy, RefinedArgTy}) ->
-                          check_arg_exhaustiveness(Env2, [ArgTy], Clauses, [RefinedArgTy])
-                  end, lists:zip(ArgsTy, RefinedArgsTy)),
+    check_arg_exhaustiveness(Env2, ArgsTy, Clauses, RefinedArgsTy),
     Env3 = pop_clauses_controls(Env2),
     {union_var_binds(VarBindsList, Env3), constraints:combine(Css)}.
 
