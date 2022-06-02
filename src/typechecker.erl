@@ -3450,6 +3450,9 @@ disable_exhaustiveness_check(#env{} = Env) ->
 
 %% @doc Check pattern matching exhaustiveness of a function or case expression.
 %%
+%% This only works if all the arguments are typed, i.e. not `any()'.
+%% To be more precise, it only works if all the arguments are `refinable()'.
+%%
 %% `RefinedArgTys' is the difference of `ArgTys' and all the patterns matched by `Clauses'.
 %% If `Clauses' completely cover `ArgTys', that is the function heads or case expression
 %% cover(s), aka exhaust(s), all possible cases, `RefinedArgTys' is empty
