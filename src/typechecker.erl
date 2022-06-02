@@ -3450,27 +3450,27 @@ disable_exhaustiveness_check(#env{} = Env) ->
 
 %% @doc Check pattern matching exhaustiveness of a function or case expression.
 %%
-%% `RefinedArgsTy' is the difference of `ArgsTy' and all the patterns matched by `Clauses'.
-%% If `Clauses' completely cover `ArgsTy', that is the function heads or case expression
-%% cover(s), aka exhaust(s), all possible cases, `RefinedArgsTy' is empty
+%% `RefinedArgTys' is the difference of `ArgTys' and all the patterns matched by `Clauses'.
+%% If `Clauses' completely cover `ArgTys', that is the function heads or case expression
+%% cover(s), aka exhaust(s), all possible cases, `RefinedArgTys' is empty
 %% (it's a list of `type(none)'s).
 %%
-%% For `case' expressions, `ArgsTy' and `RefinedArgsTy' are single-element lists
+%% For `case' expressions, `ArgTys' and `RefinedArgTys' are single-element lists
 %% (that is, a `case' expression has only one _argument_).
 %% For functions, these lists are as long as the function arity.
 %%
 %% Currently, exhaustiveness checking is disabled if a clause has any guards.
 %% TODO: Exhaustiveness checking might be improved in the future to handle (some) guards.
 %% @end
-check_arg_exhaustiveness(Env, ArgsTy, Clauses, RefinedArgsTy) ->
+check_arg_exhaustiveness(Env, ArgTys, Clauses, RefinedArgTys) ->
     case exhaustiveness_checking(Env) andalso
-         all_refinable(ArgsTy, Env) andalso
+         all_refinable(ArgTys, Env) andalso
          no_clause_has_guards(Clauses) andalso
-         some_type_not_none(RefinedArgsTy)
+         some_type_not_none(RefinedArgTys)
     of
         true ->
             [{clause, P, _, _, _} | _] = Clauses,
-            throw({nonexhaustive, P, gradualizer_lib:pick_value(RefinedArgsTy, Env)});
+            throw({nonexhaustive, P, gradualizer_lib:pick_value(RefinedArgTys, Env)});
         _ ->
             ok
     end.
