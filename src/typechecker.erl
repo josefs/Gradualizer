@@ -3725,6 +3725,10 @@ refine_ty(?type(binary, [{integer, _, 0}, {integer, _, 8}]),
           ?type(binary, [{integer, _, 0}, {integer, _, 0}]), _, _Env) ->
     %% binary() \ <<>> => nonempty_binary()
     type(binary, [{integer, 0, 8}, {integer, 0, 8}]);
+refine_ty(?type(binary, [{integer, _, 0}, {integer, _, 8}]),
+          ?type(binary, [{integer, _, 8}, {integer, _, 8}]), _, _Env) ->
+    %% binary() \ nonempty_binary() => <<>>
+    type(binary, [{integer, 0, 0}, {integer, 0, 0}]);
 refine_ty(?type(binary, [_,_]),
           ?type(binary, [{integer, _, 0}, {integer, _, 1}]), _, _Env) ->
     %% B \ bitstring() => none()
