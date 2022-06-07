@@ -3860,6 +3860,8 @@ refinable(?type(record, [_ | Fields]) = Ty0, Env, Trace) ->
             lists:all(fun (Ty) -> refinable(Ty, Env, NewTrace) end,
                       [X || ?type(field_type, X) <- Fields])
     end;
+refinable(?type(map, []), _Env, _Trace) ->
+    true;
 refinable(?type(map, _) = Ty0, Env, Trace) ->
     ?assert_normalized_anno(Ty0),
     ?type(map, Assocs) = Ty = normalize(Ty0, Env),
