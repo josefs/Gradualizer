@@ -3721,12 +3721,12 @@ refine_ty(?type(nonempty_list, [Ty1]), ?type(nonempty_list, [Ty2]), Trace, Env) 
         RefTy ->
             type(nonempty_list, [RefTy])
     end;
-refine_ty(?type(binary, [{integer, _, 0}, {integer, _, 8}]),
-          ?type(binary, [{integer, _, 0}, {integer, _, 0}]), _, _Env) ->
+refine_ty(?type(binary, [{integer, _, 0}, {integer, _, N}]),
+          ?type(binary, [{integer, _, 0}, {integer, _, 0}]), _, _Env) when N > 0 ->
     %% binary() \ <<>> => nonempty_binary()
-    type(binary, [{integer, 0, 8}, {integer, 0, 8}]);
-refine_ty(?type(binary, [{integer, _, 0}, {integer, _, 8}]),
-          ?type(binary, [{integer, _, 8}, {integer, _, 8}]), _, _Env) ->
+    type(binary, [{integer, 0, N}, {integer, 0, N}]);
+refine_ty(?type(binary, [{integer, _, 0}, {integer, _, N}]),
+          ?type(binary, [{integer, _, N}, {integer, _, N}]), _, _Env) when N > 0 ->
     %% binary() \ nonempty_binary() => <<>>
     type(binary, [{integer, 0, 0}, {integer, 0, 0}]);
 refine_ty(?type(binary, [_,_]),
