@@ -193,8 +193,8 @@ pick_value(?type(nonempty_list, Ty), Env) ->
     {cons, erl_anno:new(0), H, {nil, erl_anno:new(0)}};
 pick_value(?type(nil), _Env) ->
     {nil, erl_anno:new(0)};
-pick_value(?type(binary, _), _Env) ->
-    {bin, erl_anno:new(0), []};
+pick_value(?type(binary, _) = B, Env) ->
+    pick_binary_value(B, Env);
 %% The ?type(range) is a different case because the type range
 %% ..information is not encoded as an abstract_type()
 %% i.e. {type, Anno, range, [{integer, Anno2, Low}, {integer, Anno3, High}]}
@@ -222,6 +222,22 @@ pick_value(Type, Env)
             throw({undef, Kind, Anno, {Name, length(Args)}})
     end.
 
+pick_binary_value(?type(binary, []), _Env) ->
+    {bin, erl_anno:new(0), []};
+pick_binary_value(?type(binary, [{integer, _, 0}, {integer, _, _}]), _Env) ->
+    {bin, erl_anno:new(0), []};
+pick_binary_value(?type(binary, [{integer, _, M}, {integer, _, _}]), _Env) ->
+    Elements = case M rem 8 of
+                   0 ->
+                       S = [ $a || _ <- lists:seq(1, M div 8) ],
+                       [{bin_element, 0, {string, 0, S}, default, default}];
+                   _ ->
+                       Eights = [ {bin_element, 0, {integer, 0, 0}, default, default}
+                                  || _ <- lists:seq(1, M div 8) ],
+                       Tail = {bin_element, 0, {integer, 0, 0}, {integer, 0, M rem 8}, default},
+                       Eights ++ [Tail]
+               end,
+    {bin, erl_anno:new(0), Elements}.
 
 %% ------------------------------------------------
 %% Functions for working with abstract syntax trees
