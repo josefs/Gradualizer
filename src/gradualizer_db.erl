@@ -608,7 +608,9 @@ get_beam_map() ->
                 {match, [Mod]} ->
                     {true, {list_to_atom(Mod), Filename}};
                 nomatch ->
-                    false
+                    false;
+                _ ->
+                    erlang:error({unreachable, "check re:run/3 opts above - this should not happen"})
             end
         end,
         BeamFiles),

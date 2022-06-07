@@ -3721,6 +3721,14 @@ refine_ty(?type(nonempty_list, [Ty1]), ?type(nonempty_list, [Ty2]), Trace, Env) 
         RefTy ->
             type(nonempty_list, [RefTy])
     end;
+refine_ty(?type(binary, [{integer, _, 0}, {integer, _, N}]),
+          ?type(binary, [{integer, _, 0}, {integer, _, 0}]), _, _Env) when N > 0 ->
+    %% binary() \ <<>> => nonempty_binary()
+    type(binary, [{integer, 0, N}, {integer, 0, N}]);
+refine_ty(?type(binary, [{integer, _, 0}, {integer, _, N}]),
+          ?type(binary, [{integer, _, N}, {integer, _, N}]), _, _Env) when N > 0 ->
+    %% binary() \ nonempty_binary() => <<>>
+    type(binary, [{integer, 0, 0}, {integer, 0, 0}]);
 refine_ty(?type(binary, [_,_]),
           ?type(binary, [{integer, _, 0}, {integer, _, 1}]), _, _Env) ->
     %% B \ bitstring() => none()
@@ -3882,6 +3890,8 @@ refinable(?type(list, [ElemTy]) = Ty, Env, Trace) ->
         {proceed, NewTrace} ->
             refinable(ElemTy, Env, NewTrace)
     end;
+refinable(?type(binary, _), _Env, _Trace) ->
+    true;
 refinable(?top(), _Env, _Trace) ->
     %% This clause prevents incorrect exhaustiveness warnings
     %% when `gradualizer:top()' is used explicitly.
@@ -3956,7 +3966,7 @@ refine_vars_by_mismatching_clause({clause, _, Pats, Guards, _Block}, VEnv, Env) 
 %% length. For this to be true, all patterns must be distinct free variables or
 %% the underscore pattern.
 %%
-%% See also `is_list_pat_exhaustive/1', which is similar,
+%% See also `should_list_pat_enable_exhaustiveness_check/1', which is similar,
 %% but incomplete and specific to list patterns.
 are_patterns_matching_all_input([], _VEnv) ->
     true;
@@ -4299,7 +4309,7 @@ add_type_pat(CONS = {cons, P, PH, PT}, ListTy, Env) ->
                 add_type_pat(PH, normalize(ElemTy, Env), Env),
             TailTy = normalize(type(union, [ListTy, type(nil)]), Env),
             {_PatTy2, _Ubound2, Env3, Cs3} = add_type_pat(PT, TailTy, Env2),
-            {PatTy, Env4} = case is_list_pat_exhaustive(CONS) of
+            {PatTy, Env4} = case should_list_pat_enable_exhaustiveness_check(CONS) of
                                 true ->
                                     {type(nonempty_list, [PatTy1]), Env3};
                                 false ->
@@ -4327,7 +4337,7 @@ add_type_pat({bin, _P, BinElements} = Bin, Ty, Env) ->
                   throw({type_error, Bin, BinTy, Ty})
           end,
     %% Check the elements
-    {NewEnv, Cs} =
+    {Env2, Cs} =
         lists:foldl(fun ({bin_element, _, Pat, _Size, _Specifiers} = BinElem,
                          {EnvAcc, CsAcc}) ->
                             %% Check Pat against the bit syntax type specifiers
@@ -4338,7 +4348,13 @@ add_type_pat({bin, _P, BinElements} = Bin, Ty, Env) ->
                     end,
                     {Env, Cs1},
                     BinElements),
-    {type(none), BinTy, NewEnv, Cs};
+    {PatTy, Env3} = case should_bin_pat_enable_exhaustiveness_check(BinElements) of
+                        true ->
+                            {BinTy, Env2};
+                        false ->
+                            {type(none), disable_exhaustiveness_check(Env2)}
+                    end,
+    {PatTy, BinTy, Env3, Cs};
 add_type_pat({record, P, Record, Fields}, Ty, Env) ->
     case expect_record_type(Ty, Record, Env) of
         any ->
@@ -4422,9 +4438,22 @@ add_type_pat(Pat, Ty, _Env) ->
 %%
 %% See also `are_patterns_matching_all_input/2',
 %% which is similar, but limited to variable patterns.
-is_list_pat_exhaustive({nil, _}) -> true;
-is_list_pat_exhaustive({cons, _, {var, _, _}, {var, _, _}}) -> true;
-is_list_pat_exhaustive(_) -> false.
+should_list_pat_enable_exhaustiveness_check({nil, _}) -> true;
+should_list_pat_enable_exhaustiveness_check({cons, _, {var, _, _}, {var, _, _}}) -> true;
+should_list_pat_enable_exhaustiveness_check(_) -> false.
+
+%% TODO: This is incomplete!
+%% To properly check pattern exhaustiveness we have to consider bound variables.
+%% Pattern: <<>>
+should_bin_pat_enable_exhaustiveness_check([]) ->
+    true;
+%% Pattern: <<_, _/bytes>>
+should_bin_pat_enable_exhaustiveness_check([{bin_element, _, {var, _, _}, _, _},
+                       {bin_element, _, {var, _, _}, _, [Bytes]}])
+  when Bytes =:= bytes; Bytes =:= binary ->
+    true;
+should_bin_pat_enable_exhaustiveness_check(_) ->
+    false.
 
 -spec expect_map_type(type(), env()) -> R when
       R :: any
