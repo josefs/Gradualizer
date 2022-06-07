@@ -3966,7 +3966,7 @@ refine_vars_by_mismatching_clause({clause, _, Pats, Guards, _Block}, VEnv, Env) 
 %% length. For this to be true, all patterns must be distinct free variables or
 %% the underscore pattern.
 %%
-%% See also `is_list_pat_exhaustive/1', which is similar,
+%% See also `should_list_pat_enable_exhaustiveness_check/1', which is similar,
 %% but incomplete and specific to list patterns.
 are_patterns_matching_all_input([], _VEnv) ->
     true;
@@ -4309,7 +4309,7 @@ add_type_pat(CONS = {cons, P, PH, PT}, ListTy, Env) ->
                 add_type_pat(PH, normalize(ElemTy, Env), Env),
             TailTy = normalize(type(union, [ListTy, type(nil)]), Env),
             {_PatTy2, _Ubound2, Env3, Cs3} = add_type_pat(PT, TailTy, Env2),
-            {PatTy, Env4} = case is_list_pat_exhaustive(CONS) of
+            {PatTy, Env4} = case should_list_pat_enable_exhaustiveness_check(CONS) of
                                 true ->
                                     {type(nonempty_list, [PatTy1]), Env3};
                                 false ->
@@ -4348,7 +4348,7 @@ add_type_pat({bin, _P, BinElements} = Bin, Ty, Env) ->
                     end,
                     {Env, Cs1},
                     BinElements),
-    {PatTy, Env3} = case is_bin_pat_exhaustive(BinElements) of
+    {PatTy, Env3} = case should_bin_pat_enable_exhaustiveness_check(BinElements) of
                         true ->
                             {BinTy, Env2};
                         false ->
@@ -4438,21 +4438,21 @@ add_type_pat(Pat, Ty, _Env) ->
 %%
 %% See also `are_patterns_matching_all_input/2',
 %% which is similar, but limited to variable patterns.
-is_list_pat_exhaustive({nil, _}) -> true;
-is_list_pat_exhaustive({cons, _, {var, _, _}, {var, _, _}}) -> true;
-is_list_pat_exhaustive(_) -> false.
+should_list_pat_enable_exhaustiveness_check({nil, _}) -> true;
+should_list_pat_enable_exhaustiveness_check({cons, _, {var, _, _}, {var, _, _}}) -> true;
+should_list_pat_enable_exhaustiveness_check(_) -> false.
 
 %% TODO: This is incomplete!
 %% To properly check pattern exhaustiveness we have to consider bound variables.
 %% Pattern: <<>>
-is_bin_pat_exhaustive([]) ->
+should_bin_pat_enable_exhaustiveness_check([]) ->
     true;
 %% Pattern: <<_, _/bytes>>
-is_bin_pat_exhaustive([{bin_element, _, {var, _, _}, _, _},
+should_bin_pat_enable_exhaustiveness_check([{bin_element, _, {var, _, _}, _, _},
                        {bin_element, _, {var, _, _}, _, [Bytes]}])
   when Bytes =:= bytes; Bytes =:= binary ->
     true;
-is_bin_pat_exhaustive(_) ->
+should_bin_pat_enable_exhaustiveness_check(_) ->
     false.
 
 -spec expect_map_type(type(), env()) -> R when
