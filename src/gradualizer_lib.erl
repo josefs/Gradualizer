@@ -226,16 +226,13 @@ pick_binary_value(?type(binary, []), _Env) ->
     {bin, erl_anno:new(0), []};
 pick_binary_value(?type(binary, [{integer, _, 0}, {integer, _, _}]), _Env) ->
     {bin, erl_anno:new(0), []};
-pick_binary_value(?type(binary, [{integer, _, M}, {integer, _, _}]), _Env) ->
+pick_binary_value(?type(binary, [{integer, _, M}, {integer, _, _}]), _Env) when M > 0 ->
     Elements = case M rem 8 of
                    0 ->
                        S = [ $a || _ <- lists:seq(1, M div 8) ],
                        [{bin_element, 0, {string, 0, S}, default, default}];
                    _ ->
-                       Eights = [ {bin_element, 0, {integer, 0, 0}, default, default}
-                                  || _ <- lists:seq(1, M div 8) ],
-                       Tail = {bin_element, 0, {integer, 0, 0}, {integer, 0, M rem 8}, default},
-                       Eights ++ [Tail]
+                       [{bin_element, 0, {integer, 0, 0}, {integer, 0, M}, default}]
                end,
     {bin, erl_anno:new(0), Elements}.
 
