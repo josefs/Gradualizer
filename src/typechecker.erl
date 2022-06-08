@@ -3860,8 +3860,6 @@ refinable(?type(record, [_ | Fields]) = Ty0, Env, Trace) ->
             lists:all(fun (Ty) -> refinable(Ty, Env, NewTrace) end,
                       [X || ?type(field_type, X) <- Fields])
     end;
-refinable(?type(map, []), _Env, _Trace) ->
-    true;
 refinable(?type(map, _) = Ty0, Env, Trace) ->
     ?assert_normalized_anno(Ty0),
     ?type(map, Assocs) = Ty = normalize(Ty0, Env),
@@ -3870,16 +3868,13 @@ refinable(?type(map, _) = Ty0, Env, Trace) ->
         {proceed, NewTrace} ->
             case has_overlapping_keys(Ty, Env) of
                 true ->
-                    %io:format("map ~p not refinable - overlapping keys\n", [Ty]),
                     false;
                 false ->
-                    R = lists:all(fun ({type, _, _AssocTag, [KTy, VTy]}) ->
-                                          refinable(KTy, Env, NewTrace)
-                                          andalso
-                                          refinable(VTy, Env, NewTrace)
-                                  end, Assocs),
-                    %io:format("map ~p maybe refinable - checking assocs: ~p\n", [Ty, R]),
-                    length(Assocs) =/= 0 andalso R
+                    lists:all(fun ({type, _, _AssocTag, [KTy, VTy]}) ->
+                                      refinable(KTy, Env, NewTrace)
+                                      andalso
+                                      refinable(VTy, Env, NewTrace)
+                              end, Assocs)
             end
     end;
 refinable(?type(string), _Env, _Trace) ->
