@@ -3841,6 +3841,8 @@ refinable(?type(neg_integer), _Env, _Trace) ->
     true;
 refinable({atom, _, _}, _Env, _Trace) ->
     true;
+refinable(?type(atom), _Env, _Trace) ->
+    true;
 refinable(?type(nil), _Env, _Trace) ->
     true;
 refinable(?type(Name, Tys) = Ty0, Env, Trace)
