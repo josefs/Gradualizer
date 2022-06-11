@@ -4955,7 +4955,8 @@ type_check_forms(Forms, Opts) ->
 %% To avoid the user experience problem, it's better to opportunistically try performing the check,
 %% but in the light of it taking too long, just forcibly break the infinite loop and report
 %% a Gradualizer (NOT the checked program!) error.
--spec type_check_form_with_timeout(expr(), [any()], boolean(), env(), [any()]) -> [any()].
+-spec type_check_form_with_timeout(expr(), [any()], boolean(), env(), [any()]) -> R when
+      R :: badarg | any | [any()].
 type_check_form_with_timeout(Function, Errors, StopOnFirstError, Env, Opts) ->
     %% TODO: make FormCheckTimeOut configurable
     FormCheckTimeOut = ?form_check_timeout_ms,
