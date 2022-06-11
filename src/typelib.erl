@@ -172,8 +172,11 @@ get_module_from_annotation(Anno) ->
 -spec substitute_type_vars(type(),
                            #{atom() => type()}) -> type().
 substitute_type_vars({type, L, 'fun', [Any = {type, _, any}, RetTy]}, TVars) ->
-    %% special case for `fun((...) -> R)`,
-    %% the only place where `{type, _, any}` can occur
+    %% Special case for `fun((...) -> R)',
+    %% the only place where `{type, _, any}' can occur.
+    %% We match on `{type, _, any}' in the head explicitly, so `RetTy' cannot contain it - the
+    %% assertion is safe.
+    RetTy = ?assert_type(RetTy, type()),
     {type, L, 'fun', [Any, substitute_type_vars(RetTy, TVars)]};
 substitute_type_vars({Tag, L, T, Params}, TVars) when Tag == type orelse
                                                       Tag == user_type,
