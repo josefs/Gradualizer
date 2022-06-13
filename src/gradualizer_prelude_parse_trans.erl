@@ -14,7 +14,8 @@ parse_transform(Forms, _Options) ->
 
 %% Replaces the function body of get_modules_and_forms/0
 replace_get_modules_and_forms([{function, Anno, get_modules_and_forms, 0, _OldBody} | RestForms]) ->
-    ModuleFormsTuples = get_module_forms_tuples(filename:join([filename:dirname(?FILE), "..", "priv", "prelude"])),
+    PreludeDir = filename:join([filename:dirname(?FILE), "..", "priv", "prelude"]),
+    ModuleFormsTuples = get_module_forms_tuples(PreludeDir),
     BodyClauses = [{clause, Anno, [], [],
                     [erl_parse:abstract(ModuleFormsTuples)]}],
     [{function, Anno, get_modules_and_forms, 0, BodyClauses} | RestForms];
