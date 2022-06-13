@@ -4114,6 +4114,7 @@ position_info_from_spec([_|_] = Forms) ->
     %% TODO: https://github.com/josefs/Gradualizer/issues/388
     position_info_from_spec(hd(Forms));
 position_info_from_spec(Form) ->
+    Form = ?assert_type(Form, form()),
     element(2, Form).
 
 %% Type check patterns against types (P1 :: T1, P2 :: T2, ...)
