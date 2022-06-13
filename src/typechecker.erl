@@ -3520,11 +3520,11 @@ check_clause(Env, ArgsTy, ResTy, C = {clause, P, Args, Guards, Block}, Caps) ->
             ,constraints:combine(Cs1, Cs2)};
         {LenTy, LenArgs} ->
             throw({argument_length_mismatch, P, LenTy, LenArgs})
-    end;
+    end.
 %% DEBUG
-check_clause(_Env, _ArgsTy, _ResTy, Term, _) ->
-    io:format("DEBUG: check_clause term: ~p~n", [Term]),
-    throw(check_clause).
+%check_clause(_Env, _ArgsTy, _ResTy, Term, _) ->
+%    io:format("DEBUG: check_clause term: ~p~n", [Term]),
+%    throw(check_clause).
 
 %% Refine types by matching clause. MatchedTys are the types exhausted by
 %% each pattern in the previous clause.
