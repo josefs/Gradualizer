@@ -578,20 +578,17 @@ glb_ty(Ty1 = {type, _, tuple, Tys1}, Ty2 = {type, _, tuple, Tys2}, A, Env) ->
         {_, any} -> ret(Ty1);
         _ when length(Tys1) /= length(Tys2) -> ret(type(none));
         _ ->
-	    {Tys, Css} =
-		lists:unzip(lists:zipwith(fun(T1, T2) ->
-						  glb(T1, T2, A, Env)
-					  end,
-					  Tys1, Tys2)),
-            TupleType =
-                case lists:any(fun(?type(none)) -> true; (_) -> false end,
-                               Tys) of
-                    true ->
-                        type(none);
-                    false ->
-                        type(tuple, Tys)
-                end,
-	    {TupleType, constraints:combine(Css)}
+            {Tys, Css} = lists:unzip(lists:zipwith(fun(T1, T2) ->
+                                                           glb(T1, T2, A, Env)
+                                                   end,
+                                                   Tys1, Tys2)),
+            TupleType = case lists:any(fun(?type(none)) -> true; (_) -> false end, Tys) of
+                            true ->
+                                type(none);
+                            false ->
+                                type(tuple, Tys)
+                        end,
+            {TupleType, constraints:combine(Css)}
     end;
 
 %% Record types. Either exactly the same record (handled above) or tuple().
