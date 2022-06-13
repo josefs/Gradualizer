@@ -881,6 +881,8 @@ expand_builtin_aliases({type, Ann, timeout, []}) ->
                         {type, Ann, non_neg_integer, []}]};
 expand_builtin_aliases({type, Ann, no_return, []}) ->
     {type, Ann, none, []};
+%% TODO: This is a kludge by which lists of types slip through calls to normalize().
+%%       Specifically, lists of Types representing bounded fun clauses.
 expand_builtin_aliases(Type) ->
     Type.
 
@@ -1211,7 +1213,13 @@ allow_empty_list(Ty) ->
 %% TODO: move tenv to back
 -spec expect_fun_type(env(), type() | [type()]) -> fun_ty() | {type_error, type()}.
 expect_fun_type(Env, Type) ->
-    case expect_fun_type1(Env, normalize(Type, Env)) of
+    Normalized = case Type of
+                     Types when is_list(Types) ->
+                         [ normalize(Ty, Env) || Ty <- Types ];
+                     Type ->
+                         normalize(Type, Env)
+                 end,
+    case expect_fun_type1(Env, Normalized) of
         type_error -> {type_error, Type};
         Other -> Other
     end.
