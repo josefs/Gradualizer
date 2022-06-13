@@ -2408,7 +2408,7 @@ do_type_check_expr_in(Env, ResTy, {record, Anno, Name, Fields} = Record) ->
                     {Ty, _VB, _Cs} = type_check_expr(Env#env{infer = true}, Record),
                     throw({type_error, Record, Ty, ResTy});
                 {VBs, Cs2} ->
-                    {union_var_binds(VBs, Env), constraints:combine(Cs1, Cs2)}
+                    {union_var_binds([VBs], Env), constraints:combine(Cs1, Cs2)}
             end;
         any ->
             Rec = get_record_fields(Name, Anno, Env),
@@ -2440,7 +2440,7 @@ do_type_check_expr_in(Env, ResTy, {record, Anno, Exp, Name, Fields} = Record) ->
                     {Ty, _VB, _Cs} = type_check_expr(Env#env{infer = true}, Record),
                     throw({type_error, Record, Ty, ResTy});
                 {VBs, Cs2} ->
-                    {union_var_binds(VBs, Env), constraints:combine(Cs1, Cs2)}
+                    {union_var_binds([VBs], Env), constraints:combine(Cs1, Cs2)}
             end;
         any ->
             Rec = get_record_fields(Name, Anno, Env),
