@@ -10,6 +10,7 @@
          subtype/3,
          normalize/2,
          glb/3,
+         type/1, type/2,
          type_diff/3,
          refinable/2,
          compatible/3,
