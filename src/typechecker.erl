@@ -84,10 +84,10 @@
           functions  = []    :: list()
          }).
 
--type typed_record_field() :: {typed_record_field,
-                               {record_field, erl_anno:anno(), Name :: {atom, erl_anno:anno(), atom()},
-                                DefaultValue :: gradualizer_type:abstract_expr()},
-                               Type :: type()}.
+-type record_field() :: {record_field, erl_anno:anno(),
+                         Name :: {atom, erl_anno:anno(), atom()},
+                         DefaultValue :: gradualizer_type:abstract_expr()}.
+-type typed_record_field() :: {typed_record_field, record_field(), type()}.
 
 %% The environment passed around during typechecking.
 %% TODO: See https://github.com/josefs/Gradualizer/issues/364 for details.
@@ -1902,7 +1902,7 @@ type_check_fields_for_update(Env, Rec, Fields) ->
     type_check_fields(Env, Rec, Fields, should_not_be_inspected).
 
 %% TODO: move tenv to back
--spec type_check_fields(env(), _, _) -> _.
+-spec type_check_fields(env(), [record_field()], [typed_record_field()]) -> _.
 type_check_fields(Env, Rec, Fields) ->
     UnAssignedFields = get_unassigned_fields(Fields, Rec),
     type_check_fields(Env, Rec, Fields, UnAssignedFields).
@@ -1942,6 +1942,7 @@ type_check_fields(Env, TypedRecFields, [], [UnAssignedField|UnAssignedFields]) -
 type_check_fields(Env, _TypedRecFields, [], []) ->
     {Env, constraints:empty()}.
 
+-spec get_unassigned_fields([typed_record_field()], [record_field()]) -> [atom()].
 get_unassigned_fields(Fields, All) ->
     [ Field || {typed_record_field,
                 {record_field, _, {atom, _, Field}, _}, _} <- All] --
