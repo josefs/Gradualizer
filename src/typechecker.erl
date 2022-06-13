@@ -4376,6 +4376,7 @@ add_type_pat({map, P, AssocPats} = MapPat, MapTy, Env) ->
             NewEnv = add_any_types_pat(MapPat, Env),
             {type(none), type(any), NewEnv, constraints:empty()};
         {assoc_tys, AssocTys, Cs0} ->
+            AssocTys = ?assert_type(AssocTys, [gradualizer_type:af_assoc_type()]),
             %% Check each Key := Value and bind vars in Value.
             {NewEnv, Css} =
                 lists:foldl(fun ({map_field_exact, _, Key, ValuePat}, {EnvIn, CsAcc}) ->
@@ -4545,9 +4546,7 @@ add_type_pat_fields([{record_field, _, {atom, _, Name} = FieldWithAnno, Pat}|Fie
 %% Given a pattern for a key, finds the matching association in the map type and
 %% returns the value type. Returns 'error' if the key is not valid in the map.
 -spec add_type_pat_map_key(Key         :: gradualizer_type:abstract_pattern(),
-                           MapTyAssocs :: [{type, erl_anno:anno(),
-                                            map_field_exact | map_field_assoc,
-                                            [type()]}] | any,
+                           MapTyAssocs :: any | [gradualizer_type:af_assoc_type()],
                            Env         :: env()
                           ) -> {ok, ValueTy :: type(), constraints:constraints()} |
                                error.
