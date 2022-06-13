@@ -2514,7 +2514,8 @@ do_type_check_expr_in(Env, ResTy, {call, _, {atom, _, record_info}, [_, _]} = Ca
             throw({type_error, Call, ResTy, Ty})
     end;
 do_type_check_expr_in(Env, ResTy, {call, P, Name, Args} = OrigExpr) ->
-    {FunTy, VarBinds, Cs} = type_check_fun(Env, Name, length(Args)),
+    Arity = ?assert_type(length(Args), arity()),
+    {FunTy, VarBinds, Cs} = type_check_fun(Env, Name, Arity),
     {VarBinds2, Cs2} = type_check_call(Env, ResTy, OrigExpr, expect_fun_type(Env, FunTy), Args,
                                        {P, Name, FunTy}),
     {union_var_binds(VarBinds, VarBinds2, Env), constraints:combine(Cs, Cs2)};
