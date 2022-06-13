@@ -2279,7 +2279,8 @@ type_check_expr_in(Env, ResTy, Expr) ->
     ?verbose(Env, "~sChecking that ~ts :: ~ts~n",
             [gradualizer_fmt:format_location(Expr, brief), erl_prettypr:format(Expr), typelib:pp_type(ResTy)]),
     NormResTy = normalize(ResTy, Env),
-    ?throw_orig_type(do_type_check_expr_in(Env, NormResTy, Expr), ResTy, NormResTy).
+    R = ?throw_orig_type(do_type_check_expr_in(Env, NormResTy, Expr), ResTy, NormResTy),
+    ?assert_type(R, {env(), constraints:constraints()}).
 
 -spec do_type_check_expr_in(Env, ResTy, Expr) -> R when
       Env :: env(),
