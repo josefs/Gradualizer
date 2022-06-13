@@ -1209,7 +1209,7 @@ allow_empty_list(Ty) ->
 %% Normalizes the type (expand user-def and remote types). Errors for non-fun
 %% types are returned with the original non-normalized type.
 %% TODO: move tenv to back
--spec expect_fun_type(env(), type()) -> fun_ty() | {type_error, type()}.
+-spec expect_fun_type(env(), type() | [type()]) -> fun_ty() | {type_error, type()}.
 expect_fun_type(Env, Type) ->
     case expect_fun_type1(Env, normalize(Type, Env)) of
         type_error -> {type_error, Type};
@@ -1217,7 +1217,7 @@ expect_fun_type(Env, Type) ->
     end.
 
 %% TODO: move tenv to back
--spec expect_fun_type1(env(), type()) -> fun_ty() | type_error.
+-spec expect_fun_type1(env(), type() | [type()]) -> fun_ty() | type_error.
 expect_fun_type1(Env, BTy = {type, _, bounded_fun, [Ft, _Fc]}) ->
     Sub = bounded_type_subst(Env, BTy),
     case expect_fun_type1(Env, Ft) of
