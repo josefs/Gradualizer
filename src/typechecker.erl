@@ -2907,6 +2907,8 @@ list_op_arg_types(ListOp, {type, _, union, Tys}) ->
             %% Some type in the union is not a list type
             false;
         false ->
+            %% We explicitly check if `false' is a member of `Pairs'.
+            Pairs = ?assert_type(Pairs, [{type(), type()}]),
             {Arg1Tys, Arg2Tys} = lists:unzip(Pairs),
             {type(union, Arg1Tys), type(union, Arg2Tys)}
     end;
