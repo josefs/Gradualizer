@@ -2051,23 +2051,22 @@ type_check_int_op(Env, Op, P, Arg1, Arg2) ->
 
 -spec type_check_list_op(env(), _, _) -> {type(), env(), constraints:constraints()}.
 type_check_list_op(Env, Arg1, Arg2) ->
-  {Ty1, VB1, Cs1} = type_check_expr(Env, Arg1),
-  {Ty2, VB2, Cs2} = type_check_expr(Env, Arg2),
-
-  ListTy = type(list),
-
-  case {subtype(Ty1, ListTy, Env)
-       ,subtype(Ty2, ListTy, Env)} of
-    {{true, Cs3}, {true, Cs4}} ->
-      {normalize({type, erl_anno:new(0), union, [Ty1, Ty2]}, Env)
-      ,union_var_binds(VB1, VB2, Env)
-      ,constraints:combine([Cs1, Cs2, Cs3, Cs4])
-      };
-    {false, _} ->
-      throw({type_error, Arg1, Ty1, type(list)});
-    {_, false} ->
-        throw({type_error, Arg2, Ty2, type(list)})
-  end.
+    {Ty1, VB1, Cs1} = type_check_expr(Env, Arg1),
+    {Ty2, VB2, Cs2} = type_check_expr(Env, Arg2),
+    ListTy = type(list),
+    case {subtype(Ty1, ListTy, Env), subtype(Ty2, ListTy, Env)} of
+        {{true, Cs3}, {true, Cs4}} ->
+            {normalize(type(union, [Ty1, Ty2]), Env),
+             union_var_binds(VB1, VB2, Env),
+             constraints:combine([Cs1, Cs2, Cs3, Cs4])};
+        {false, _} ->
+            throw({type_error, Arg1, Ty1, type(list)});
+        {_, false} ->
+            throw({type_error, Arg2, Ty2, type(list)});
+        _ ->
+            %% Prevent "Nonexhaustive patterns" when self-gradualizing.
+            erlang:error(unreachable)
+    end.
 
 -spec type_check_call_ty(env(), _, _, _) -> {type(), env(), constraints:constraints()}.
 type_check_call_ty(Env, {fun_ty, ArgsTy, ResTy, Cs}, Args, E) ->
