@@ -784,6 +784,8 @@ normalize_rec(T = ?top(), _Env, _Unfolded) ->
     %% Don't normalize gradualizer:top().
     T;
 normalize_rec({remote_type, _, [{atom, _, M}, {atom, _, N}, Args]}, Env, Unfolded) ->
+    %% It's safe as we explicitly match out `Module :: af_atom()' and `TypeName :: af_atom()'.
+    Args = ?assert_type(Args, [type()]),
     P = position_info_from_spec(Env#env.current_spec),
     case gradualizer_db:get_exported_type(M, N, Args) of
         {ok, T} ->
