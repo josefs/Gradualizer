@@ -68,7 +68,7 @@ int_type_glb(Ty1, Ty2) ->
 %% Range difference, like set difference. The result may be zero, one or two
 %% types.
 %% TODO: https://github.com/josefs/Gradualizer/issues/406
--spec int_type_diff(type(), type()) -> [type()].
+-spec int_type_diff(type(), type()) -> type().
 int_type_diff(Ty1, Ty2) ->
     IntRanges = int_range_diff(int_type_to_range(Ty1),
                                int_type_to_range(Ty2)),
@@ -159,18 +159,19 @@ int_range_to_types({I, pos_inf}) when I > 1 ->
                                     ,{integer, erl_anno:new(0), pos_inf}]}];
 int_range_to_types({I, I}) ->
     [{integer, erl_anno:new(0), I}];
-int_range_to_types({I, J}) when is_integer(I) andalso
-				is_integer(J) andalso
-				I < J ->
-    [{type, erl_anno:new(0), range, [{integer, erl_anno:new(0), I}
-                                    ,{integer, erl_anno:new(0), J}]}];
 int_range_to_types({pos_inf, _}) -> [];
 int_range_to_types({_, neg_inf}) -> [];
-int_range_to_types({I, J}) when I > J ->
-    [].
+int_range_to_types({I, J}) when is_integer(I) andalso is_integer(J) ->
+    if
+        I < J ->
+            [{type, erl_anno:new(0), range, [{integer, erl_anno:new(0), I}
+                                             ,{integer, erl_anno:new(0), J}]}];
+        I > J ->
+            []
+    end.
 
 %% Merges ranges and returns a single type (possibly a union).
--spec int_ranges_to_type([int_range()]) -> int_range().
+-spec int_ranges_to_type([int_range()]) -> type().
 int_ranges_to_type(Ranges) ->
     union(int_ranges_to_types(Ranges)).
 
@@ -180,10 +181,10 @@ int_ranges_to_types(Ranges) ->
     MergedRanges = merge_int_ranges(Ranges),
     lists:flatmap(fun int_range_to_types/1, MergedRanges).
 
--spec union([type() | extended_int_type()]) -> type() | extended_int_type() | int_range().
-union([]) -> type(none);
+-spec union(list()) -> type().
+union([]) -> typechecker:type(none);
 union([T]) -> T;
-union(Ts) -> type(union, Ts).
+union(Ts) -> typechecker:type(union, Ts).
 
 %% +---------------------------------+
 %% |  Functions operating on ranges  |
