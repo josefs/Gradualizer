@@ -28,12 +28,21 @@
         end).
 
 -define(throw_orig_type(EXPR, ORIGTYPE, NORMTYPE),
-        try EXPR
+        try
+            EXPR
         catch
-            throw:TypeError:ST when element(size(TypeError), TypeError) =:= NORMTYPE ->
-                %% if the last element of the type_error tuple is the normalized type
-                %% replace it with the original result type
-                erlang:raise(throw, setelement(size(TypeError), TypeError, ORIGTYPE), ST)
+            throw:TypeError:ST ->
+                case error_evidence(TypeError) of
+                    NORMTYPE ->
+                        %% All error tuple sizes are > 0.
+                        Index = ?assert_type(size(TypeError), pos_integer()),
+                        Index > 0 orelse erlang:error(impossible),
+                        %% if the last element of the type_error tuple is the normalized type
+                        %% replace it with the original result type
+                        erlang:raise(throw, setelement(Index, TypeError, ORIGTYPE), ST);
+                    _ ->
+                        erlang:raise(throw, TypeError, ST)
+                end
         end).
 
 %% Checks that the location annotation of a type is set to zero and raises an
