@@ -1902,7 +1902,7 @@ type_check_fields_for_update(Env, Rec, Fields) ->
     type_check_fields(Env, Rec, Fields, should_not_be_inspected).
 
 %% TODO: move tenv to back
--spec type_check_fields(env(), [record_field()], [typed_record_field()]) -> _.
+-spec type_check_fields(env(), [typed_record_field()], [record_field()]) -> _.
 type_check_fields(Env, Rec, Fields) ->
     UnAssignedFields = get_unassigned_fields(Fields, Rec),
     type_check_fields(Env, Rec, Fields, UnAssignedFields).
@@ -1942,11 +1942,19 @@ type_check_fields(Env, TypedRecFields, [], [UnAssignedField|UnAssignedFields]) -
 type_check_fields(Env, _TypedRecFields, [], []) ->
     {Env, constraints:empty()}.
 
--spec get_unassigned_fields([typed_record_field()], [record_field()]) -> [atom()].
+-spec get_unassigned_fields(Fields, All) -> [atom()] when
+      Fields :: [record_field() | typed_record_field()],
+      All :: [typed_record_field()].
 get_unassigned_fields(Fields, All) ->
-    [ Field || {typed_record_field,
-                {record_field, _, {atom, _, Field}, _}, _} <- All] --
-        [ Field || {record_field, _, {atom, _, Field}, _} <- Fields].
+    FieldNames = lists:flatmap(fun
+                                   (?record_field(Field)) -> [Field];
+                                   (?typed_record_field(Field)) -> [Field];
+                                   %% We might run into values like this, which don't match above:
+                                   %% {record_field, _, {var,{12,11},'_'}, _}
+                                   (_) -> []
+                               end, Fields),
+    AllNames = lists:map(fun (?typed_record_field(Field)) -> Field end, All),
+    AllNames -- FieldNames.
 
 -spec type_check_logic_op(env(), _, _, _) -> {type(), env(), constraints:constraints()}.
 type_check_logic_op(Env, Op, Arg1, Arg2) ->
@@ -3272,7 +3280,8 @@ type_check_tuple_union_in(Env, [Tys|Tyss], Elems) ->
 type_check_tuple_union_in(_Env, [], _Elems) ->
     none.
 
--spec type_check_record_union_in(env(), [[type()]], [expr()]) -> {env(), constraints:constraints()} | none.
+-spec type_check_record_union_in(env(), [[typed_record_field()]], [expr()]) -> R when
+      R :: {env(), constraints:constraints()} | none.
 type_check_record_union_in(Env, [Tys|Tyss], Fields) ->
     try
         type_check_fields(Env, Tys, Fields)
