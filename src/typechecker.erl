@@ -1374,7 +1374,7 @@ expect_record_union([], AccTy, AccCs, _NoAny, _Record, _Env) ->
 %% @doc Generate a new type variable.
 %%
 %% To avoid generating atoms at runtime a string is returned.
--spec new_type_var() -> gradualizer_type:type_var().
+-spec new_type_var() -> gradualizer_type:gr_type_var().
 new_type_var() ->
     I = erlang:unique_integer(),
     "_TyVar" ++ integer_to_list(I).
