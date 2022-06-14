@@ -4789,7 +4789,8 @@ type_of_bin_element({bin_element, _P, Expr, _Size, Specifiers}, OccursAs) ->
 
 %%% Helper functions
 
--spec type(map | tuple, any) -> type();
+-spec type(map, any) -> type();
+          (tuple, any) -> type();
           (atom(), [any()]) -> type().
 type(Name, Args) ->
     {type, erl_anno:new(0), Name, Args}.
