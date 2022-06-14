@@ -2098,6 +2098,8 @@ type_check_call_ty(Env, {fun_ty, ArgsTy, ResTy, Cs}, Args, E) ->
             ,constraints:combine([Cs | Css])};
         {LenTy, LenArgs} ->
             P = element(2, E),
+            LenTy = ?assert_type(LenTy, arity()),
+            LenArgs = ?assert_type(LenArgs, arity()),
             throw(argument_length_mismatch(P, LenTy, LenArgs))
     end;
 type_check_call_ty(Env, {fun_ty_any_args, ResTy, Cs}, Args, _E) ->
@@ -3188,7 +3190,9 @@ type_check_call_intersection_(Env, ResTy, OrigExpr, [Ty | Tys], Args, E) ->
 -spec type_check_call(env(), type(), _, _, _, _) -> {env(), constraints:constraints()}.
 type_check_call(_Env, _ResTy, _, {fun_ty, ArgsTy, _FunResTy, _Cs}, Args, {P, Name, _})
         when length(ArgsTy) /= length(Args) ->
-    throw(type_error(call_arity, P, Name, length(ArgsTy), length(Args)));
+    LenTys = ?assert_type(length(ArgsTy), arity()),
+    LenArgs = ?assert_type(length(Args), arity()),
+    throw(type_error(call_arity, P, Name, LenTys, LenArgs));
 type_check_call(Env, ResTy, OrigExpr, {fun_ty, ArgsTy, FunResTy, Cs}, Args, _) ->
     {VarBindsList, Css} =
         lists:unzip(
@@ -3546,6 +3550,8 @@ check_clause(Env, ArgsTy, ResTy, C = {clause, P, Args, Guards, Block}, Caps) ->
             ,union_var_binds([VarBinds1, VarBinds2, EnvNewest], EnvNewest)
             ,constraints:combine(Cs1, Cs2)};
         {LenTy, LenArgs} ->
+            LenTy = ?assert_type(LenTy, arity()),
+            LenArgs = ?assert_type(LenArgs, arity()),
             throw(argument_length_mismatch(P, LenTy, LenArgs))
     end.
 %% DEBUG
@@ -5141,51 +5147,106 @@ number_of_exported_functions(Forms) ->
 line_no(Expr) ->
     erl_anno:line(element(2, Expr)).
 
+-type anno() :: erl_anno:anno().
+-type binary_op() :: gradualizer_type:binary_op().
+-type bounded_function() :: gradualizer_type:af_constrained_function_type().
+%% TODO: Some of these don't seem to be thrown at all, e.g. expected_fun_type
+-type type_error() :: arith_error | badkey | call_arity | call_intersect | check_clauses | cons_pat
+                    | cyclic_type_vars | expected_fun_type | int_error | list | mismatch
+                    | no_type_match_intersection | non_number_argument_to_minus
+                    | non_number_argument_to_plus | op_type_too_precise | operator_pattern | pattern
+                    | receive_after | record_pattern | rel_error | relop | unary_error
+                    | unreachable_clause.
+-type pattern() :: gradualizer_type:abstract_pattern().
+-type unary_op() :: gradualizer_type:unary_op().
+-type undef() :: record | user_type | remote_type | record_field.
+
+-type error() :: {type_error, type_error()}
+               | {type_error, type_error(), anno()}
+               | {type_error, expr(), type() | [type()], type()}
+               | {type_error, type_error(), anno(), type()}
+               | {type_error, cyclic_type_vars, anno(), bounded_function(), list()}
+               | {type_error, type_error(), anno(), atom() | pattern(), type()}
+               | {type_error, type_error(), unary_op(), anno(), type()}
+               | {type_error, type_error(), binary_op(), anno(), type(), type()}
+               | {type_error, call_arity, anno(), atom(), arity(), arity()}
+               | {undef, undef(), anno(), {atom(), atom() | arity()} | mfa()}
+               | {undef, undef(), expr()}
+               | {not_exported, remote_type, anno(), {module(), atom(), arity()}}
+               | {bad_type_annotation, gradualizer_type:af_string()}
+               | {illegal_map_type, type()}
+               | {argument_length_mismatch, anno(), arity(), arity()}
+               | {nonexhaustive, anno(), expr()}
+               | {illegal_pattern, pattern()}
+               | {internal_error, missing_type_spec, atom(), arity()}
+               | {call_undef, anno(), module(), atom(), arity()}.
+
+-spec type_error(type_error()) -> error().
 type_error(Kind) ->
     {type_error, Kind}.
 
+-spec type_error(type_error(), anno()) -> error().
 type_error(Kind, P) ->
     {type_error, Kind, P}.
 
+-spec type_error(expr(), type() | [type()], type()) -> error();
+                (type_error(), anno(), type()) -> error().
+type_error(Kind, P, Ty) ->
+    {type_error, Kind, P, Ty}.
+
+
+-spec type_error(cyclic_type_vars, anno(), bounded_function(), list()) -> error();
+                (type_error(), anno(), atom() | pattern(), type()) -> error();
+                (type_error(), unary_op(), anno(), type()) -> error().
+type_error(Kind, P, Info, Ty) ->
+    {type_error, Kind, P, Info, Ty}.
+
+-spec type_error(call_arity, anno(), atom(), arity(), arity()) -> error();
+                (type_error(), binary_op(), anno(), type(), type()) -> error().
 type_error(Kind, Op, P, Ty1, Ty2) ->
     {type_error, Kind, Op, P, Ty1, Ty2}.
 
-type_error(Kind, P, Type, Evidence) ->
-    {type_error, Kind, P, Type, Evidence}.
-
-type_error(Kind, P, Type) ->
-    {type_error, Kind, P, Type}.
-
+-spec undef(undef(), expr()) -> error().
 undef(Kind, Info) ->
     {undef, Kind, Info}.
 
+-spec undef(undef(), anno(), expr()) -> error().
 undef(Kind, P, Info) ->
     {undef, Kind, P, Info}.
 
+-spec not_exported(remote_type, anno(), {module(), atom(), arity()}) -> error().
 not_exported(Kind, P, Info) ->
     {not_exported, Kind, P, Info}.
 
+-spec bad_type_annotation(gradualizer_type:af_string()) -> error().
 bad_type_annotation(Info) ->
     {bad_type_annotation, Info}.
 
+-spec illegal_map_type(type()) -> error().
 illegal_map_type(Info) ->
     {illegal_map_type, Info}.
 
+-spec argument_length_mismatch(anno(), arity(), arity()) -> error().
 argument_length_mismatch(P, LenTy, LenArgs) ->
     {argument_length_mismatch, P, LenTy, LenArgs}.
 
+-spec nonexhaustive(anno(), expr()) -> error().
 nonexhaustive(P, Example) ->
     {nonexhaustive, P, Example}.
 
+-spec illegal_pattern(pattern()) -> error().
 illegal_pattern(Pat) ->
     {illegal_pattern, Pat}.
 
+-spec internal_error(missing_type_spec, atom(), arity()) -> error().
 internal_error(missing_type_spec, Name, NArgs) ->
     {internal_error, missing_type_spec, Name, NArgs}.
 
+-spec call_undef(anno(), module(), atom(), arity()) -> error().
 call_undef(P, Module, Name, Arity) ->
     {call_undef, P, Module, Name, Arity}.
 
+-spec error_evidence(error()) -> any().
 error_evidence({_, Evidence}) -> Evidence;
 error_evidence({_, _, Evidence}) -> Evidence;
 error_evidence({_, _, _, Evidence}) -> Evidence;
