@@ -142,21 +142,26 @@ anno_keep_only_filename(Anno) ->
 %% Annotate user-defined types and record types with a file name.
 -spec annotate_user_types(module() | file:filename(), type()) -> type().
 annotate_user_types(Module, Type) when is_atom(Module) ->
-    annotate_user_types(atom_to_list(Module) ++ ".erl", Type);
-annotate_user_types(Filename, {user_type, Anno, Name, Params}) ->
-    %% Annotate local user-defined type
+    annotate_user_types_(atom_to_list(Module) ++ ".erl", Type);
+annotate_user_types(Filename, Type) ->
+    Filename = ?assert_type(Filename, file:filename()),
+    annotate_user_types_(Filename, Type).
+
+-spec annotate_user_types_(file:filename(), type()) -> type().
+annotate_user_types_(Filename, {user_type, Anno, Name, Params}) ->
+    %% Annotate local user-defined type.
     {user_type, erl_anno:set_file(Filename, Anno), Name,
      [annotate_user_types(Filename, Param) || Param <- Params]};
-annotate_user_types(Filename, {type, Anno, record, RecName = [_]}) ->
+annotate_user_types_(Filename, {type, Anno, record, RecName = [_]}) ->
     %% Annotate local record type
     {type, erl_anno:set_file(Filename, Anno), record, RecName};
-annotate_user_types(Filename, {type, Anno, T, Params}) when is_list(Params) ->
+annotate_user_types_(Filename, {type, Anno, T, Params}) when is_list(Params) ->
     {type, Anno, T, [annotate_user_types(Filename, Param) || Param <- Params]};
-annotate_user_types(Filename, {ann_type, Anno, [Var, Type]}) ->
+annotate_user_types_(Filename, {ann_type, Anno, [Var, Type]}) ->
     {ann_type, Anno, [Var, annotate_user_types(Filename, Type)]};
-annotate_user_types(Filename, Types) when is_list(Types) ->
+annotate_user_types_(Filename, Types) when is_list(Types) ->
     [annotate_user_types(Filename, Type) || Type <- Types];
-annotate_user_types(_Filename, Type) ->
+annotate_user_types_(_Filename, Type) ->
     Type.
 
 -spec get_module_from_annotation(erl_anno:anno()) -> {ok, module()} | none.
@@ -172,8 +177,11 @@ get_module_from_annotation(Anno) ->
 -spec substitute_type_vars(type(),
                            #{atom() => type()}) -> type().
 substitute_type_vars({type, L, 'fun', [Any = {type, _, any}, RetTy]}, TVars) ->
-    %% special case for `fun((...) -> R)`,
-    %% the only place where `{type, _, any}` can occur
+    %% Special case for `fun((...) -> R)',
+    %% the only place where `{type, _, any}' can occur.
+    %% We match on `{type, _, any}' in the head explicitly, so `RetTy' cannot contain it - the
+    %% assertion is safe.
+    RetTy = ?assert_type(RetTy, type()),
     {type, L, 'fun', [Any, substitute_type_vars(RetTy, TVars)]};
 substitute_type_vars({Tag, L, T, Params}, TVars) when Tag == type orelse
                                                       Tag == user_type,

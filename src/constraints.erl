@@ -13,7 +13,7 @@
          }).
 
 -type constraints() :: #constraints{}.
--type var() :: gradualizer_type:type_var().
+-type var() :: gradualizer_type:gr_type_var().
 
 -spec empty() -> constraints().
 empty() ->
