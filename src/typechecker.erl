@@ -63,6 +63,7 @@
               typed_record_field/0]).
 
 -type expr() :: gradualizer_type:abstract_expr().
+-type pattern() :: gradualizer_type:abstract_pattern().
 -type type() :: gradualizer_type:abstract_type().
 
 -type form() :: erl_parse:abstract_form().
@@ -109,6 +110,41 @@
 -include("gradualizer.hrl").
 
 -type compatible() :: {true, constraints:constraints()} | false.
+
+-type anno() :: erl_anno:anno().
+-type binary_op() :: gradualizer_type:binary_op().
+-type bounded_function() :: gradualizer_type:af_constrained_function_type().
+-type unary_op() :: gradualizer_type:unary_op().
+
+%% TODO: Some of these don't seem to be thrown at all, e.g. expected_fun_type
+-type type_error() :: arith_error | badkey | call_arity | call_intersect | check_clauses | cons_pat
+                    | cyclic_type_vars | expected_fun_type | int_error | list | mismatch
+                    | no_type_match_intersection | non_number_argument_to_minus
+                    | non_number_argument_to_plus | op_type_too_precise | operator_pattern | pattern
+                    | receive_after | record_pattern | rel_error | relop | unary_error
+                    | unreachable_clause.
+-type undef() :: record | user_type | remote_type | record_field.
+
+-type error() :: {type_error, type_error()}
+               | {type_error, type_error(), anno()}
+               | {type_error, expr(), type() | [type()], type()}
+               | {type_error, type_error(), anno(), type()}
+               | {type_error, cyclic_type_vars, anno(), bounded_function(), list()}
+               | {type_error, type_error(), anno(), atom() | pattern(), type()}
+               | {type_error, type_error(), unary_op(), anno(), type()}
+               | {type_error, type_error(), binary_op(), anno(), type(), type()}
+               | {type_error, call_arity, anno(), atom(), arity(), arity()}
+               | {undef, undef(), anno(), {atom(), atom() | arity()} | mfa()}
+               | {undef, undef(), expr()}
+               | {not_exported, remote_type, anno(), {module(), atom(), arity()}}
+               | {bad_type_annotation, gradualizer_type:af_string()}
+               | {illegal_map_type, type()}
+               | {argument_length_mismatch, anno(), arity(), arity()}
+               | {nonexhaustive, anno(), expr()}
+               | {illegal_pattern, pattern()}
+               | {internal_error, missing_type_spec, atom(), arity()}
+               | {call_undef, anno(), module(), atom(), arity()}.
+%% `typechecker' returns these errors as results of its analysis.
 
 %% Two types are compatible if one is a subtype of the other, or both.
 -spec compatible(type(), type(), env()) -> compatible().
@@ -5147,40 +5183,6 @@ number_of_exported_functions(Forms) ->
 
 line_no(Expr) ->
     erl_anno:line(element(2, Expr)).
-
--type anno() :: erl_anno:anno().
--type binary_op() :: gradualizer_type:binary_op().
--type bounded_function() :: gradualizer_type:af_constrained_function_type().
-%% TODO: Some of these don't seem to be thrown at all, e.g. expected_fun_type
--type type_error() :: arith_error | badkey | call_arity | call_intersect | check_clauses | cons_pat
-                    | cyclic_type_vars | expected_fun_type | int_error | list | mismatch
-                    | no_type_match_intersection | non_number_argument_to_minus
-                    | non_number_argument_to_plus | op_type_too_precise | operator_pattern | pattern
-                    | receive_after | record_pattern | rel_error | relop | unary_error
-                    | unreachable_clause.
--type pattern() :: gradualizer_type:abstract_pattern().
--type unary_op() :: gradualizer_type:unary_op().
--type undef() :: record | user_type | remote_type | record_field.
-
--type error() :: {type_error, type_error()}
-               | {type_error, type_error(), anno()}
-               | {type_error, expr(), type() | [type()], type()}
-               | {type_error, type_error(), anno(), type()}
-               | {type_error, cyclic_type_vars, anno(), bounded_function(), list()}
-               | {type_error, type_error(), anno(), atom() | pattern(), type()}
-               | {type_error, type_error(), unary_op(), anno(), type()}
-               | {type_error, type_error(), binary_op(), anno(), type(), type()}
-               | {type_error, call_arity, anno(), atom(), arity(), arity()}
-               | {undef, undef(), anno(), {atom(), atom() | arity()} | mfa()}
-               | {undef, undef(), expr()}
-               | {not_exported, remote_type, anno(), {module(), atom(), arity()}}
-               | {bad_type_annotation, gradualizer_type:af_string()}
-               | {illegal_map_type, type()}
-               | {argument_length_mismatch, anno(), arity(), arity()}
-               | {nonexhaustive, anno(), expr()}
-               | {illegal_pattern, pattern()}
-               | {internal_error, missing_type_spec, atom(), arity()}
-               | {call_undef, anno(), module(), atom(), arity()}.
 
 -spec type_error(type_error()) -> error().
 type_error(Kind) ->
