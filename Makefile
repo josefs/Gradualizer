@@ -212,6 +212,10 @@ DIALYZER_OPTS ?= -Werror_handling -Wrace_conditions
 dialyze: app $(DIALYZER_PLT)
 	dialyzer $(DIALYZER_OPTS) ebin
 
+.PHONY: dialyze-tests
+dialyze-tests: app $(DIALYZER_PLT)
+	dialyzer $(DIALYZER_OPTS) $(test_data_erls)
+
 # DIALYZER_PLT is a variable understood directly by Dialyzer.
 # Exit status 2 = warnings were emitted
 $(DIALYZER_PLT):
