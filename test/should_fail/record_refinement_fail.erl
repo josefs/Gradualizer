@@ -16,6 +16,8 @@ one_field2(_, I) -> I.
 -spec refined_field(#refined_field{}) -> #refined_field{f :: integer()}.
 refined_field(R) -> R.
 
+%% The refinement in the result type is not handled by Dialyzer - it will error out.
+%% Comment it out if trying to run `make dialyze-tests'.
 -spec refined_field2(#refined_field{}) -> #refined_field{f :: atom()}.
 refined_field2(#refined_field{f = undefined}) -> #refined_field{f = 0};
 refined_field2(R) -> R.
