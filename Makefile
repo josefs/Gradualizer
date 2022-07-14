@@ -107,7 +107,7 @@ clean:
 	rm -rf bin/gradualizer ebin cover test/*.beam
 
 .PHONY: tests eunit compile-tests cli-tests
-tests: build_test_data eunit cli-tests
+tests: check_name_clashes build_test_data eunit cli-tests
 
 test_erls=$(wildcard test/*.erl)
 test_beams=$(test_erls:test/%.erl=test/%.beam)
@@ -211,6 +211,14 @@ DIALYZER_OPTS ?= -Werror_handling -Wrace_conditions
 .PHONY: dialyze
 dialyze: app $(DIALYZER_PLT)
 	dialyzer $(DIALYZER_OPTS) ebin
+
+.PHONY: dialyze-tests
+dialyze-tests: app $(DIALYZER_PLT)
+	dialyzer $(DIALYZER_OPTS) $(test_data_erls)
+
+.PHONY: check_name_clashes
+check_name_clashes:
+	test/check_name_clashes.sh
 
 # DIALYZER_PLT is a variable understood directly by Dialyzer.
 # Exit status 2 = warnings were emitted
