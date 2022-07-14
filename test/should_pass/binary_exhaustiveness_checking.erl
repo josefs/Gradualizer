@@ -2,7 +2,7 @@
 
 -gradualizer([infer]).
 
--export([f/1, g/1, h/1, k/1]).
+-export([f/1, g/1, h/1, k/1, l/1]).
 
 f(<<>>) -> ok;
 f(<<_:8, _/binary>>) -> ok.
