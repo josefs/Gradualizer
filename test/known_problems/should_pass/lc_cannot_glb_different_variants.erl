@@ -13,6 +13,10 @@
 g(1, {a, d} = T) ->
     [T];
 g(_, {a, Ts}) ->
+    %% `typechecker:add_type_pat({a, Ts}, {a, d} | {a, [t()]}, Env)' at `typechecker.erl:4310'
+    %% calls `glb(d, [t()])' to find the type of `Ts'.
+    %% The call determines that `Ts :: none()', as `d' and `[t()]' are incompatible.
+    %% This leads to a warning being reported for the following line.
     [ T || T <- Ts ];
 g(_, _) ->
     [].
