@@ -1743,9 +1743,10 @@ do_type_check_expr(Env, {record_field, Anno, Expr, Record, FieldWithAnno}) ->
             {FieldTy, VB, Cs};
         {type, _, record, [{atom, _, Record} | Fields]} ->
             Rec = get_record_fields(Record, Anno, Env),
-            FieldIndex = get_rec_field_index(FieldWithAnno, Rec),
-            ?type_field_type(_, FieldType) = lists:nth(FieldIndex-1, Fields),
-            {FieldType, VB1, Cs1};
+            FieldTypes1 = record_field_types(Fields),
+            FieldTypes2 = record_field_types(Rec),
+            FieldTy = get_rec_field_type(FieldWithAnno, FieldTypes1, FieldTypes2),
+            {FieldTy, VB1, Cs1};
         _ ->
             {VB2, Cs2} = type_check_expr_in(Env, {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Record}]}, Expr),
             Rec = get_record_fields(Record, Anno, Env),
@@ -4970,6 +4971,18 @@ get_rec_field_type(FieldWithAnno, RecFields) ->
     {_Index, Ty} = get_rec_field_index_and_type(FieldWithAnno, RecFields, 2),
     Ty.
 
+get_rec_field_type(FieldWithAnno, FieldTypes1, FieldTypes2) ->
+    {_, _, Name} = FieldWithAnno,
+    case lists:keyfind(Name, 1, FieldTypes1) of
+        {Name, Ty} -> Ty;
+        false ->
+            case lists:keyfind(Name, 1, FieldTypes2) of
+                {Name, Ty} -> Ty;
+                false ->
+                    throw(undef(record_field, FieldWithAnno))
+            end
+    end.
+
 get_rec_field_index(FieldWithAnno, RecFields) ->
     %% The first field is the second element of the tuple - so start from 2
     {Index, _Ty} = get_rec_field_index_and_type(FieldWithAnno, RecFields, 2),
@@ -4996,6 +5009,14 @@ get_record_info_type({call, Anno, {atom, _, record_info},
                       [{atom, _, size}, {atom, _, RecName}]}, Env) ->
     Fields = get_record_fields(RecName, Anno, Env),
     {integer, erl_anno:new(0), length(Fields) + 1}.
+
+record_field_types(Fields) ->
+    lists:map(fun
+                  (?type_field_type(Name, Type)) ->
+                      {Name, Type};
+                  (?typed_record_field(Name, Type)) ->
+                      {Name, Type}
+              end, Fields).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% Main entry point
