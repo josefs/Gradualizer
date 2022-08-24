@@ -1812,7 +1812,7 @@ do_type_check_expr(Env, {named_fun, _, FunName, Clauses}) ->
                     %% Create a fun type of the correct arity
                     %% on the form fun((_,_,_) -> any()).
                     [{clause, _, Params, _Guards, _Block} | _] = Clauses,
-                    Arity = length(Params),
+                    Arity = ?assert_type(length(Params), arity()),
                     create_fun_type(Arity, type(any));
                 not Env#env.infer ->
                     type(any)

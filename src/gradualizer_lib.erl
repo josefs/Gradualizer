@@ -123,7 +123,7 @@ get_type_definition({user_type, Anno, Name, Args}, Env, Opts) ->
                     Type2 = case proplists:is_defined(annotate_user_types, Opts) of
                                 true ->
                                     Module = maps:get(module, Env#env.tenv),
-                                    Type1 = typelib:annotate_user_types(Module, Type0),
+                                    Type1 = typelib:annotate_user_type(Module, Type0),
                                     typelib:substitute_type_vars(Type1, VarMap);
                                 false ->
                                     typelib:substitute_type_vars(Type0, VarMap)
@@ -137,6 +137,9 @@ get_type_definition({user_type, Anno, Name, Args}, Env, Opts) ->
 %% Given a type `Ty', pick a value of that type.
 %% Used in exhaustiveness checking to show an example value
 %% which is not covered by the cases.
+
+-define(remote_type(Name, Args, Anno), {remote_type, Anno, [_, {atom, _, Name}, Args]}).
+-define(user_type(Name, Args, Anno), {user_type, Anno, Name, Args}).
 
 -spec pick_value(Ty, Env) -> AbstractVal when
       Ty :: type() | [type()],
@@ -206,12 +209,16 @@ pick_value(?type(range, [{_TagLo, _, neg_inf}, Hi = {_TagHi, _, _Hi}]), _Env) ->
 pick_value(?type(range, [Lo = {_TagLo, _, _Lo}, {_TagHi, _, _Hi}]), _Env) ->
     %% pick_value(Lo, Env).
     Lo;
-pick_value(Type, Env)
-  when element(1, Type) =:= remote_type; element(1, Type) =:= user_type ->
+pick_value(?remote_type(_, _, _) = Type, Env) ->
+    pick_remote_or_user_type_value(Type, Env);
+pick_value(?user_type(_, _, _) = Type, Env) ->
+    pick_remote_or_user_type_value(Type, Env).
+
+pick_remote_or_user_type_value(Type, Env) ->
     {Kind, Anno, Name, Args} = case Type of
-                                   {remote_type, Anno1, [_, {atom, _, Name1}, Args1]} ->
+                                   ?remote_type(Name1, Args1, Anno1) ->
                                        {remote_type, Anno1, Name1, Args1};
-                                   {user_type, Anno1, Name1, Args1} ->
+                                   ?user_type(Anno1, Name1, Args1) ->
                                        {user_type, Anno1, Name1, Args1}
                                end,
     case get_type_definition(Type, Env, [annotate_user_types]) of
