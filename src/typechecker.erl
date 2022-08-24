@@ -997,6 +997,8 @@ negate_num_type({type, _, TyName, []} = Ty, _Env) when
       TyName =:= integer;
       TyName =:= float ->
     Ty;
+negate_num_type({var,  _, _} = Ty, _Env) ->
+    Ty;
 negate_num_type({integer, P, I}, _Env) ->
     {integer, P, -I};
 negate_num_type({type, P, union, Tys}, Env) ->
