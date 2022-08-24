@@ -770,7 +770,9 @@ has_overlapping_keys({type, _, map, Assocs}, Env) ->
                  {_R1, _R2} ->
                      true
              end
-             || As1 <- Assocs, As2 <- Assocs, As1 /= As2 ],
+             || As1 <- ?assert_type(Assocs, list()),
+                As2 <- ?assert_type(Assocs, list()),
+                As1 /= As2 ],
     lists:any(fun(X) -> X end, Cart).
 
 %% Normalize

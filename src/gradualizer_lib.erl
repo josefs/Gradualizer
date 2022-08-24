@@ -167,7 +167,7 @@ pick_value(?type(union, [Ty|_]), Env) ->
 pick_value(?type(tuple, any), _Env) ->
     {tuple, erl_anno:new(0), []};
 pick_value(?type(tuple, Tys), Env) ->
-    {tuple, erl_anno:new(0), [pick_value(Ty, Env) || Ty <- Tys]};
+    {tuple, erl_anno:new(0), [pick_value(Ty, Env) || Ty <- ?assert_type(Tys, list())]};
 pick_value(?type(record, [{atom, _, RecordName}]), _Env) ->
     {record, erl_anno:new(0), RecordName, []};
 pick_value(?type(record, [{atom, _, RecordName} | Tys]), Env) ->
@@ -178,7 +178,7 @@ pick_value(?type(record, [{atom, _, RecordName} | Tys]), Env) ->
     {record, erl_anno:new(0), RecordName, MFields};
 pick_value(?type(map, Assocs), Env) ->
     NewAssocs = [ {AssocTag, Anno, pick_value(KTy, Env), pick_value(VTy, Env)}
-                  || {type, Anno, AssocTag, [KTy, VTy]} <- Assocs ],
+                  || {type, Anno, AssocTag, [KTy, VTy]} <- ?assert_type(Assocs, list()) ],
     {map, erl_anno:new(0), NewAssocs};
 pick_value(?type(boolean), _Env) ->
     {atom, erl_anno:new(0), false};
