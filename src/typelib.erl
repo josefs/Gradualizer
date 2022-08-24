@@ -1,7 +1,9 @@
 %% @doc Functions operating on types on the Erlang Abstract Form
 -module(typelib).
 
--export([remove_pos/1, annotate_user_types/2, get_module_from_annotation/1,
+-export([remove_pos/1,
+         annotate_user_type/2, annotate_user_types/2,
+         get_module_from_annotation/1,
          substitute_type_vars/2,
          pp_type/1, debug_type/3, parse_type/1,
          reduce_type/3]).
@@ -139,36 +141,46 @@ anno_keep_only_filename(Anno) ->
         Filename  -> erl_anno:set_file(Filename, NewAnno)
     end.
 
-%% Annotate user-defined types and record types with a file name.
--spec annotate_user_types(module() | file:filename(), type() | [type()]) -> type() | [type()].
-annotate_user_types(ModOrFile, TypeOrTypes) ->
-    Filename = case ModOrFile of
-                   Module when is_atom(ModOrFile) ->
-                       atom_to_list(Module) ++ ".erl";
-                   _ -> ModOrFile
-               end,
-    Filename = ?assert_type(Filename, file:filename()),
-    case TypeOrTypes of
-        Types when is_list(Types) ->
-            [ annotate_user_types_(Filename, Type) || Type <- ?assert_type(Types, [type()]) ];
-        Type ->
-            annotate_user_types_(Filename, ?assert_type(Type, type()))
+%% Annotate a user-defined type or record type with a file name.
+-spec annotate_user_type(module() | file:filename(), type()) -> type().
+annotate_user_type(ModOrFile, Type) ->
+    Filename = ensure_filename(ModOrFile),
+    annotate_user_type_(Filename, Type).
+
+-spec ensure_filename(module() | file:filename()) -> file:filename().
+ensure_filename(ModOrFile) ->
+    case ModOrFile of
+        Module when is_atom(ModOrFile) ->
+            atom_to_list(?assert_type(Module, atom())) ++ ".erl";
+        _ -> ModOrFile
     end.
 
--spec annotate_user_types_(file:filename(), type()) -> type().
-annotate_user_types_(Filename, {user_type, Anno, Name, Params}) ->
+%% Annotate user-defined types and record types with a file name.
+-spec annotate_user_types(ModOrFile, TypeOrTypes) -> type() | [type()] when
+      ModOrFile :: module() | file:filename(),
+      TypeOrTypes :: type() | [type()].
+annotate_user_types(ModOrFile, TypeOrTypes) ->
+    case TypeOrTypes of
+        Types when is_list(Types) ->
+            [ annotate_user_type(ModOrFile, Type) || Type <- ?assert_type(Types, [type()]) ];
+        Type ->
+            annotate_user_type(ModOrFile, ?assert_type(Type, type()))
+    end.
+
+-spec annotate_user_type_(file:filename(), type()) -> type().
+annotate_user_type_(Filename, {user_type, Anno, Name, Params}) ->
     %% Annotate local user-defined type.
     {user_type, erl_anno:set_file(Filename, Anno), Name,
-     [annotate_user_types_(Filename, Param) || Param <- Params]};
-annotate_user_types_(Filename, {type, Anno, record, RecName = [_]}) ->
+     [annotate_user_type_(Filename, Param) || Param <- Params]};
+annotate_user_type_(Filename, {type, Anno, record, RecName = [_]}) ->
     %% Annotate local record type
     {type, erl_anno:set_file(Filename, Anno), record, RecName};
-annotate_user_types_(Filename, {type, Anno, T, Params}) when is_list(Params) ->
+annotate_user_type_(Filename, {type, Anno, T, Params}) when is_list(Params) ->
     {type, Anno, T, [ annotate_user_types(Filename, Param)
                       || Param <- ?assert_type(Params, [type()]) ]};
-annotate_user_types_(Filename, {ann_type, Anno, [Var, Type]}) ->
-    {ann_type, Anno, [Var, annotate_user_types_(Filename, Type)]};
-annotate_user_types_(_Filename, Type) ->
+annotate_user_type_(Filename, {ann_type, Anno, [Var, Type]}) ->
+    {ann_type, Anno, [Var, annotate_user_type_(Filename, Type)]};
+annotate_user_type_(_Filename, Type) ->
     Type.
 
 -spec get_module_from_annotation(erl_anno:anno()) -> {ok, module()} | none.

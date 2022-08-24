@@ -836,7 +836,7 @@ normalize_rec({remote_type, _, [{atom, _, M}, {atom, _, N}, Args]}, Env, Unfolde
             normalize_rec(T, Env, Unfolded);
         opaque ->
             NormalizedArgs = lists:map(fun (Ty) -> normalize_rec(Ty, Env, Unfolded) end, Args),
-            typelib:annotate_user_types(M, {user_type, 0, N, NormalizedArgs});
+            typelib:annotate_user_type(M, {user_type, 0, N, NormalizedArgs});
         not_exported ->
             throw(not_exported(remote_type, P, {M, N, length(Args)}));
         not_found ->
