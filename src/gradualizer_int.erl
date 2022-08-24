@@ -103,9 +103,6 @@ negate_int_type(RangeTy) ->
 
 %% Integer type to range.
 -spec int_type_to_range(type()) -> int_range().
-%% TODO: `{var, _, _}' should probably generate a constraint on the type var, too,
-%% but fixing a crash is more important at this point.
-int_type_to_range({var,  _, _})                        -> {neg_inf, pos_inf};
 int_type_to_range({type, _, integer, []})              -> {neg_inf, pos_inf};
 int_type_to_range({type, _, neg_integer, []})          -> {neg_inf, -1};
 int_type_to_range({type, _, non_neg_integer, []})      -> {0, pos_inf};
