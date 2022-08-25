@@ -770,7 +770,9 @@ has_overlapping_keys({type, _, map, Assocs}, Env) ->
                  {_R1, _R2} ->
                      true
              end
-             || As1 <- Assocs, As2 <- Assocs, As1 /= As2 ],
+             || As1 <- ?assert_type(Assocs, list()),
+                As2 <- ?assert_type(Assocs, list()),
+                As1 /= As2 ],
     lists:any(fun(X) -> X end, Cart).
 
 %% Normalize
@@ -834,7 +836,7 @@ normalize_rec({remote_type, _, [{atom, _, M}, {atom, _, N}, Args]}, Env, Unfolde
             normalize_rec(T, Env, Unfolded);
         opaque ->
             NormalizedArgs = lists:map(fun (Ty) -> normalize_rec(Ty, Env, Unfolded) end, Args),
-            typelib:annotate_user_types(M, {user_type, 0, N, NormalizedArgs});
+            typelib:annotate_user_type(M, {user_type, 0, N, NormalizedArgs});
         not_exported ->
             throw(not_exported(remote_type, P, {M, N, length(Args)}));
         not_found ->
@@ -1810,7 +1812,7 @@ do_type_check_expr(Env, {named_fun, _, FunName, Clauses}) ->
                     %% Create a fun type of the correct arity
                     %% on the form fun((_,_,_) -> any()).
                     [{clause, _, Params, _Guards, _Block} | _] = Clauses,
-                    Arity = length(Params),
+                    Arity = ?assert_type(length(Params), arity()),
                     create_fun_type(Arity, type(any));
                 not Env#env.infer ->
                     type(any)

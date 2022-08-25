@@ -1,7 +1,9 @@
 %% @doc Functions operating on types on the Erlang Abstract Form
 -module(typelib).
 
--export([remove_pos/1, annotate_user_types/2, get_module_from_annotation/1,
+-export([remove_pos/1,
+         annotate_user_type/2, annotate_user_types/2,
+         get_module_from_annotation/1,
          substitute_type_vars/2,
          pp_type/1, debug_type/3, parse_type/1,
          reduce_type/3]).
@@ -139,29 +141,46 @@ anno_keep_only_filename(Anno) ->
         Filename  -> erl_anno:set_file(Filename, NewAnno)
     end.
 
-%% Annotate user-defined types and record types with a file name.
--spec annotate_user_types(module() | file:filename(), type()) -> type().
-annotate_user_types(Module, Type) when is_atom(Module) ->
-    annotate_user_types_(atom_to_list(Module) ++ ".erl", Type);
-annotate_user_types(Filename, Type) ->
-    Filename = ?assert_type(Filename, file:filename()),
-    annotate_user_types_(Filename, Type).
+%% Annotate a user-defined type or record type with a file name.
+-spec annotate_user_type(module() | file:filename(), type()) -> type().
+annotate_user_type(ModOrFile, Type) ->
+    Filename = ensure_filename(ModOrFile),
+    annotate_user_type_(Filename, Type).
 
--spec annotate_user_types_(file:filename(), type()) -> type().
-annotate_user_types_(Filename, {user_type, Anno, Name, Params}) ->
+-spec ensure_filename(module() | file:filename()) -> file:filename().
+ensure_filename(ModOrFile) ->
+    case ModOrFile of
+        Module when is_atom(ModOrFile) ->
+            atom_to_list(?assert_type(Module, atom())) ++ ".erl";
+        _ -> ModOrFile
+    end.
+
+%% Annotate user-defined types and record types with a file name.
+-spec annotate_user_types(ModOrFile, TypeOrTypes) -> type() | [type()] when
+      ModOrFile :: module() | file:filename(),
+      TypeOrTypes :: type() | [type()].
+annotate_user_types(ModOrFile, TypeOrTypes) ->
+    case TypeOrTypes of
+        Types when is_list(Types) ->
+            [ annotate_user_type(ModOrFile, Type) || Type <- ?assert_type(Types, [type()]) ];
+        Type ->
+            annotate_user_type(ModOrFile, ?assert_type(Type, type()))
+    end.
+
+-spec annotate_user_type_(file:filename(), type()) -> type().
+annotate_user_type_(Filename, {user_type, Anno, Name, Params}) ->
     %% Annotate local user-defined type.
     {user_type, erl_anno:set_file(Filename, Anno), Name,
-     [annotate_user_types(Filename, Param) || Param <- Params]};
-annotate_user_types_(Filename, {type, Anno, record, RecName = [_]}) ->
+     [annotate_user_type_(Filename, Param) || Param <- Params]};
+annotate_user_type_(Filename, {type, Anno, record, RecName = [_]}) ->
     %% Annotate local record type
     {type, erl_anno:set_file(Filename, Anno), record, RecName};
-annotate_user_types_(Filename, {type, Anno, T, Params}) when is_list(Params) ->
-    {type, Anno, T, [annotate_user_types(Filename, Param) || Param <- Params]};
-annotate_user_types_(Filename, {ann_type, Anno, [Var, Type]}) ->
-    {ann_type, Anno, [Var, annotate_user_types(Filename, Type)]};
-annotate_user_types_(Filename, Types) when is_list(Types) ->
-    [annotate_user_types(Filename, Type) || Type <- Types];
-annotate_user_types_(_Filename, Type) ->
+annotate_user_type_(Filename, {type, Anno, T, Params}) when is_list(Params) ->
+    {type, Anno, T, [ annotate_user_types(Filename, Param)
+                      || Param <- ?assert_type(Params, [type()]) ]};
+annotate_user_type_(Filename, {ann_type, Anno, [Var, Type]}) ->
+    {ann_type, Anno, [Var, annotate_user_type_(Filename, Type)]};
+annotate_user_type_(_Filename, Type) ->
     Type.
 
 -spec get_module_from_annotation(erl_anno:anno()) -> {ok, module()} | none.
@@ -183,10 +202,15 @@ substitute_type_vars({type, L, 'fun', [Any = {type, _, any}, RetTy]}, TVars) ->
     %% assertion is safe.
     RetTy = ?assert_type(RetTy, type()),
     {type, L, 'fun', [Any, substitute_type_vars(RetTy, TVars)]};
-substitute_type_vars({Tag, L, T, Params}, TVars) when Tag == type orelse
-                                                      Tag == user_type,
-                                                      is_list(Params) ->
-    {Tag, L, T, [substitute_type_vars(P, TVars) || P <- Params]};
+substitute_type_vars({Tag, L, T, Params}, TVars)
+  when Tag == type orelse
+       Tag == user_type,
+       is_list(Params) ->
+    %% We have to assert the type below as we're running into the problem documented
+    %% with test/known_problems/should_pass/lc_cannot_glb_different_variants.erl.
+    %% In other words, the 4th element of a `type()' tuple doesn't have to be a list
+    %% and Gradualizer cannot yet use the `is_list(Params)' guard to refine the type.
+    {Tag, L, T, [substitute_type_vars(P, TVars) || P <- ?assert_type(Params, list())]};
 substitute_type_vars({remote_type, L, [M, T, Params]}, TVars) ->
     {remote_type, L, [M, T, [substitute_type_vars(P, TVars) || P <- Params]]};
 substitute_type_vars({ann_type, L, [Var = {var, _, _}, Type]}, TVars) ->
