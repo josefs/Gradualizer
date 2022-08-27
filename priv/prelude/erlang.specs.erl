@@ -15,3 +15,35 @@
 
 %% -spec tl([term(), ...]) -> [term()].
 -spec tl([A, ...]) -> [A].
+
+-spec erlang:'--'(list(), list()) -> list().
+
+%% The original spec is:
+%%
+%% -spec erlang:'++'(list(), term()) -> term().
+%%
+%% Now, this is funny:
+%%
+%%   > [] ++ b.
+%%   b
+%%   > [a] ++ b.
+%%   [a|b]
+%%   > [a, b] ++ c.
+%%   [a,b|c]
+%%   > [a|b] ++ c.
+%%   ** exception error: bad argument
+%%     in operator  ++/2
+%%        called as [a|b] ++ c
+%%   > [] ++ [a].
+%%   [a]
+%%   > [a,b] ++ [c].
+%%   [a,b,c]
+%%   > [a|b] ++ [c].
+%%   ** exception error: bad argument
+%%        in operator  ++/2
+%%           called as [a|b] ++ [c]
+%%
+-spec erlang:'++'(list(T1), list(T2)) -> list(T1 | T2);
+                 (list(T1), nonempty_improper_list(T2, T3)) -> nonempty_improper_list(T1 | T2, T3);
+                 ([], T) -> T;
+                 (nonempty_list(T1), T2) -> nonempty_improper_list(T1, T2).
