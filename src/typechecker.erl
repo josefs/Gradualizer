@@ -3129,8 +3129,8 @@ type_check_comprehension_in(Env, ResTy, OrigExpr, Compr, Expr, P, [Pred | Quals]
     %% TODO: As a non-boolean predicates don't give runtime errors, we could
     %% possibly add a configuration parameter to toggle this check.
     {VB1, Cs1} = type_check_expr_in(Env, {type, erl_anno:new(0), 'boolean', []}, Pred),
-    {VB2, Cs2} = type_check_comprehension_in(Env, ResTy, OrigExpr, Compr, Expr, P, Quals),
-    {union_var_binds(VB1, VB2, Env), constraints:combine(Cs1, Cs2)}.
+    {VB2, Cs2} = type_check_comprehension_in(union_var_binds([VB1], Env), ResTy, OrigExpr, Compr, Expr, P, Quals),
+    {union_var_binds([VB2], Env), constraints:combine(Cs1, Cs2)}.
 
 -spec type_check_assocs(env(), _) -> {[type()], env(), constraints:constraints()}.
 type_check_assocs(Env, [{Assoc, _P, Key, Val}| Assocs])
