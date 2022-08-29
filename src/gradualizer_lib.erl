@@ -25,9 +25,11 @@
 %% Number of space used when prettyprinting records for nesting
 -define(PP_RECORD_NESTING_OFFSET, 2).
 
-%% merge_with for maps. Similar to merge_with for dicts.
-%% Arguably, this function should be in OTP.
 -spec merge_with(fun(), map(), map()) -> map().
+-if(?OTP_RELEASE >= 24).
+merge_with(F, M1, M2) ->
+    maps:merge_with(F, M1, M2).
+-else.
 merge_with(F, M1, M2) ->
     case maps:size(M1) < maps:size(M2) of
         true ->
@@ -39,6 +41,7 @@ merge_with(F, M1, M2) ->
                               maps:update_with(K, fun (V1) -> F(K, V1, V2) end, V2, M)
                       end, M1, M2)
     end.
+-endif.
 
 %% -- Topological sort
 
