@@ -43,7 +43,7 @@
 %%        in operator  ++/2
 %%           called as [a|b] ++ [c]
 %%
--spec erlang:'++'(list(T1), list(T2)) -> list(T1 | T2);
-                 (list(T1), nonempty_improper_list(T2, T3)) -> nonempty_improper_list(T1 | T2, T3);
-                 ([], T) -> T;
-                 (nonempty_list(T1), T2) -> nonempty_improper_list(T1, T2).
+-spec erlang:'++'([T1, ...], [T2])                           -> [T1 | T2, ...];
+                 ([T1, ...], nonempty_improper_list(T2, T3)) -> nonempty_improper_list(T1 | T2, T3);
+                 ([T1, ...], T2)                             -> nonempty_improper_list(T1, T2);
+                 ([], T)                                     -> T.
