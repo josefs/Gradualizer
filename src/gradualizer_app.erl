@@ -15,7 +15,8 @@
 %%%===================================================================
 
 start(_StartType, _StartArgs) ->
-    gradualizer_sup:start_link().
+    Opts = application:get_env(gradualizer, options, []),
+    gradualizer_sup:start_link(Opts).
 
 stop(_State) ->
     ok.

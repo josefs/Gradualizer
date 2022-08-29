@@ -67,9 +67,11 @@ bin_element_view({bin_element, _Anno, _Expr, default, Specifiers}) ->
     end;
 bin_element_view({bin_element, _Anno, _Expr, SizeSpec, Specifiers}) ->
     %% Non-default size, possibly a constant expression
-    try erl_eval:expr(SizeSpec, []) of
-        {value, Sz, _VarBinds} ->
-            {Sz * get_unit(Specifiers), 0}
+    try
+        case erl_eval:expr(SizeSpec, []) of
+            {value, Sz, _VarBinds} when is_integer(Sz) ->
+                {Sz * get_unit(Specifiers), 0}
+        end
     catch
         error:{unbound_var, _} ->
             %% Variable size
@@ -118,5 +120,5 @@ gcd1(A, 0) -> A;
 gcd1(A, B) ->
   case A rem B of
     0 -> B;
-    X -> gcd1(B, X)
+    X when X > 0 -> gcd1(B, X)
   end.

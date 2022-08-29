@@ -1,5 +1,9 @@
 -module(gradualizer_fmt).
--export([format_location/2, format_type_error/2, print_errors/2, handle_type_error/2]).
+-export([format_location/2,
+         format_type_error/2,
+         print_errors/2,
+         handle_type_error/2,
+         form_info/1]).
 
 -include("typelib.hrl").
 
@@ -57,18 +61,15 @@ format_type_error({nonexhaustive, Anno, Example}, Opts) ->
             X -> erl_pp:expr(X)
         end,
     io_lib:format(
-      "~sNonexhaustive patterns~s~n"
-      "Example values which are not covered:~n\t~s~n",
+      "~sNonexhaustive patterns~s~s",
       [format_location(Anno, brief, Opts),
        format_location(Anno, verbose, Opts),
-       FormattedExample]);
-format_type_error({call_undef, Anno, Func, Arity}, Opts) ->
-    io_lib:format(
-      "~sCall to undefined function ~p/~p~s~n",
-      [format_location(Anno, brief, Opts),
-       Func,
-       Arity,
-       format_location(Anno, verbose, Opts)]);
+       case proplists:get_value(fmt_location, Opts, ?FMT_LOCATION_DEFAULT) of
+           brief ->
+               io_lib:format(": ~s\n", FormattedExample);
+           verbose ->
+               io_lib:format("\nExample values which are not covered:~n\t~s~n", [FormattedExample])
+       end]);
 format_type_error({call_undef, Anno, Module, Func, Arity}, Opts) ->
     io_lib:format(
       "~sCall to undefined function ~p:~p/~p~s~n",
@@ -81,11 +82,6 @@ format_type_error({undef, record, Anno, {Module, RecName}}, Opts) ->
     io_lib:format("~sUndefined record ~p:~p~s~n",
 		  [format_location(Anno, brief, Opts),
 		   Module,
-		   RecName,
-		   format_location(Anno, verbose, Opts)]);
-format_type_error({undef, record, Anno, RecName}, Opts) ->
-    io_lib:format("~sUndefined record ~p~s~n",
-		  [format_location(Anno, brief, Opts),
 		   RecName,
 		   format_location(Anno, verbose, Opts)]);
 format_type_error({undef, record_field, FieldName}, Opts) ->
@@ -120,17 +116,12 @@ format_type_error({not_exported, remote_type, Anno, {Module, Name, Arity}}, Opts
        Name,
        Arity,
        format_location(Anno, verbose, Opts)]);
-format_type_error({illegal_pattern, Pat}, Opts) ->
-    io_lib:format("~sIllegal pattern ~s~s~n",
-		  [format_location(Pat, brief, Opts),
-		   pp_expr(Pat, Opts),
-		   format_location(Pat, verbose, Opts)]);
-format_type_error({illegal_record_info, Expr}, Opts) ->
+format_type_error({illegal_map_type, Type}, Opts) ->
     io_lib:format(
-      "~sIllegal record info ~s~s~n",
-      [format_location(Expr, brief, Opts),
-       pp_expr(Expr, Opts),
-       format_location(Expr, verbose, Opts)]);
+      "~sIllegal map type ~s~s~n",
+      [format_location(Type, brief, Opts),
+       pp_type(Type, Opts),
+       format_location(Type, verbose, Opts)]);
 format_type_error({type_error, list, _Anno, Ty1, Ty}, Opts) ->
     io_lib:format(
       "~sThe type ~s cannot be an element of a list of type ~s~n",
@@ -306,19 +297,13 @@ format_type_error({type_error, pattern, Anno, Pat, Ty}, Opts) ->
        pp_expr(Pat, Opts),
        format_location(Anno, verbose, Opts),
        pp_type(Ty, Opts)]);
-format_type_error({unknown_variable, Anno, Var}, Opts) ->
-    io_lib:format(
-      "~sUnknown variable ~p~s.~n",
-      [format_location(Anno, brief, Opts),
-       Var,
-       format_location(Anno, verbose, Opts)]);
 format_type_error({type_error, check_clauses}, _Opts) ->
     %% TODO: Improve quality of type error
     io_lib:format("Type error in clauses", []);
 format_type_error({type_error, record_pattern, Anno, Record, Ty}, Opts) ->
     io_lib:format(
-      "~sThe record patterns for record #~p~s is expected to have"
-      " type ~s.~n",
+      "~sThe record pattern for record #~p~s is expected to have"
+      " type ~s~n",
       [format_location(Anno, brief, Opts),
        Record,
        format_location(Anno, verbose, Opts),
@@ -361,8 +346,38 @@ format_type_error({bad_type_annotation, TypeLit}, Opts) ->
       [format_location(TypeLit, brief, Opts),
        pp_expr(TypeLit, Opts),
        format_location(TypeLit, verbose, Opts)]);
+format_type_error({form_check_timeout, Form}, Opts) ->
+    io_lib:format(
+      "~sTimeout checking ~s~n",
+      [format_location(Form, brief, Opts),
+       case proplists:get_value(fmt_location, Opts, ?FMT_LOCATION_DEFAULT) of
+           brief ->
+               "form - please report on GitHub";
+           verbose ->
+               io_lib:format("~s~s~n"
+                             "This is most likely a bug in Gradualizer.~n"
+                             "Please report it at https://github.com/josefs/Gradualizer/issues",
+                             [form_info(Form),
+                              format_location(Form, verbose, Opts)])
+       end]);
+format_type_error({Location, Module, ErrorDescription}, Opts)
+  when is_integer(Location) orelse is_tuple(Location),
+       is_atom(Module) ->
+    %% OTP compiler style error descriptor
+    io_lib:format(
+      "~s~s~s~n",
+      [format_location(Location, brief, Opts),
+       Module:format_error(ErrorDescription),
+       format_location(Location, verbose, Opts)]);
+format_type_error({none, Module, ErrorDescription}, _Opts)
+  when is_atom(Module) ->
+    %% OTP compiler style error descriptor, without location
+    io_lib:format("~s~n", [Module:format_error(ErrorDescription)]);
 format_type_error(type_error, _) ->
     io_lib:format("TYPE ERROR~n", []).
+
+form_info({function, _, Name, Arity, _}) ->
+    io_lib:format("function ~s/~p", [Name, Arity]).
 
 -spec format_expr_type_error(gradualizer_type:abstract_expr(),
 			typelib:extended_type(),

@@ -20,7 +20,7 @@
 -spec flatten(deep_list(A), [A]) -> [A].
 
 %% The original fold{l,r} and mapfold{l,r} functions don't require that Acc is
-%% the same type thoughout the procedure. We do.
+%% the same type throughout the procedure. We do.
 
 %% -spec foldl(Fun, Acc0, List) -> Acc1 when
 %%       Fun :: fun((Elem :: T, AccIn) -> AccOut),

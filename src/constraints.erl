@@ -2,7 +2,7 @@
 
 -export([empty/0, upper/2, lower/2, combine/1, combine/2, add_var/2]).
 
--export_type([constraints/0, var/0]).
+-export_type([constraints/0]).
 
 -type type() :: gradualizer_type:abstract_type().
 
@@ -13,7 +13,7 @@
          }).
 
 -type constraints() :: #constraints{}.
--type var() :: atom() | string().
+-type var() :: gradualizer_type:gr_type_var().
 
 -spec empty() -> constraints().
 empty() ->

@@ -41,8 +41,12 @@
 
 -type options() :: proplists:proplist().
 
-%% This type is the top of the subtyping lattice.
--opaque top() :: any().
+%% This type is the top of the subtyping lattice. It's never expanded.
+%% The definition can be anything apart from any(),
+%% so that we don't run into the "opaque type underspecified and therefore meaningless" warning.
+-opaque top() :: none().
+
+-include("gradualizer.hrl").
 
 %% API functions
 
@@ -54,21 +58,48 @@ type_check_file(File) ->
 %% @doc Type check a source or beam file
 -spec type_check_file(file:filename(), options()) -> ok | nok | [{file:filename(), any()}].
 type_check_file(File, Opts) ->
-    ParsedFile =
-        case filename:extension(File) of
-            ".erl" ->
-                Includes = proplists:get_all_values(i, Opts),
-                gradualizer_file_utils:get_forms_from_erl(File, Includes);
-            ".beam" ->
-                gradualizer_file_utils:get_forms_from_beam(File);
-            Ext ->
-                throw({unknown_file_extension, Ext})
-        end,
-    case ParsedFile of
-        {ok, Forms} ->
+    case filename:extension(File) of
+        ".erl" ->
+            Includes = proplists:get_all_values(i, Opts),
+            case gradualizer_file_utils:get_forms_from_erl(File, Includes) of
+                {ok, Forms} ->
+                    lint_and_check_forms(Forms, File, Opts);
+                Error ->
+                    throw(Error)
+            end;
+        ".beam" ->
+            case gradualizer_file_utils:get_forms_from_beam(File) of
+                {ok, Forms} ->
+                    type_check_forms(File, Forms, Opts);
+                Error ->
+                    throw(Error)
+            end;
+        Ext ->
+            throw({unknown_file_extension, Ext})
+    end.
+
+%% @doc Runs an erl_lint pass, to check if the forms can be compiled at all,
+%% before running the type checker.
+-spec lint_and_check_forms(Forms, file:filename(), options()) -> R when
+      Forms :: gradualizer_file_utils:abstract_forms(),
+      R :: ok | nok | [{file:filename(), any()}].
+lint_and_check_forms(Forms, File, Opts) ->
+    case erl_lint:module(Forms, File, [return_errors]) of
+        {ok, _Warnings} ->
             type_check_forms(File, Forms, Opts);
-        Error ->
-            throw(Error)
+        {error, Errors, _Warnings} ->
+            %% If there are lint errors (i.e. compile errors like undefined
+            %% variables) we don't even try to type check.
+            case proplists:get_bool(return_errors, Opts) of
+                true ->
+                    [{Filename, ErrorInfo} || {Filename, ErrorInfos} <- Errors,
+                                              ErrorInfo <- ErrorInfos];
+                false ->
+                    [gradualizer_fmt:print_errors(ErrorInfos,
+                                                  [{filename, Filename} | Opts])
+                     || {Filename, ErrorInfos} <- Errors],
+                    nok
+            end
     end.
 
 %% @doc Type check a module
@@ -98,7 +129,8 @@ type_check_dir(Dir) ->
 type_check_dir(Dir, Opts) ->
     case filelib:is_dir(Dir) of
         true ->
-            type_check_files(filelib:wildcard(filename:join(Dir, "*.{erl,beam}")), Opts);
+            Pattern = ?assert_type(filename:join(Dir, "*.{erl,beam}"), file:filename()),
+            type_check_files(filelib:wildcard(Pattern), Opts);
         false ->
             throw({dir_not_found, Dir})
     end.
@@ -150,7 +182,7 @@ type_check_file_or_dir(File, Opts) ->
 %% @doc Type check an abstract syntax tree of a module. This can be useful
 %% for tools where the abstract forms are generated in memory.
 %%
-%% If the first form is a file attribute (as in forms retuned by e.g.
+%% If the first form is a file attribute (as in forms returned by e.g.
 %% epp:parse_file/1,2), that filename will be used in error messages.
 %% The second form is typically the module attribute.
 -spec type_check_forms([erl_parse:abstract_form()], options()) ->
@@ -163,14 +195,12 @@ type_check_forms(Forms, Opts) ->
     type_check_forms(File, Forms, Opts).
 
 %% Helper
--spec type_check_forms(file:filename(), [erl_parse:abstract_form()], options()) ->
-                            ok | nok | [{file:filename(), any()}].
+-spec type_check_forms(file:filename(), Forms, options()) -> R when
+      Forms :: gradualizer_file_utils:abstract_forms(),
+      R :: ok | nok | [{file:filename(), any()}].
 type_check_forms(File, Forms, Opts) ->
     ReturnErrors = proplists:get_bool(return_errors, Opts),
-    OptsForModule =
-	options_from_forms(Forms) ++
-	Opts ++
-	[prelude], % using prelude is the default if nothing else is specified
+    OptsForModule = options_from_forms(Forms) ++ Opts,
     Errors = typechecker:type_check_forms(Forms, OptsForModule),
     case {ReturnErrors, Errors} of
         {true, _ } ->
@@ -191,7 +221,7 @@ add_source_file_and_forms_to_opts(File, Forms, Opts) ->
     end.
 
 %% Extract -gradualizer(Options) from AST
--spec options_from_forms([erl_parse:abstract_form()]) -> options().
+-spec options_from_forms(gradualizer_file_utils:abstract_forms()) -> options().
 options_from_forms([{attribute, _L, gradualizer, Opts} | Fs]) when is_list(Opts) ->
     Opts ++ options_from_forms(Fs);
 options_from_forms([{attribute, _L, gradualizer, Opt} | Fs]) ->

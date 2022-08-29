@@ -6,8 +6,8 @@
 f(#{} = Ctx) ->
     Ctx#{a := not_a_binary}.
 
--spec g(#{}) -> #{a := any(), b => any()}.
+%% Ctx might not have a field `a`, but Ctx2 has for sure (mandatory)
+-spec g(map()) -> #{a := any()}.
 g(Ctx) ->
     Ctx2 = Ctx#{a => 5},
     Ctx2.
-

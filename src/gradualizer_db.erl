@@ -5,14 +5,14 @@
 -module(gradualizer_db).
 
 %% API functions
--export([start_link/0,
+-export([start_link/1,
          get_spec/3,
          get_type/3, get_exported_type/3, get_opaque_type/3,
          get_record_type/2,
          get_modules/0, get_types/1,
          save/1, load/1,
          import_module/1,
-         import_erl_files/1, import_beam_files/1, import_extra_specs/1,
+         import_erl_files/1, import_erl_files/2, import_beam_files/1, import_extra_specs/1,
          import_app/1, import_otp/0, import_prelude/0]).
 
 %% Callbacks
@@ -34,6 +34,8 @@
 %% Gen server local registered name
 -define(name, ?MODULE).
 
+-include("gradualizer.hrl").
+
 %% Internal data
 -record(typeinfo, {exported :: boolean(),
                    opaque   :: boolean(),
@@ -42,8 +44,10 @@
 
 %% Public API functions
 
-start_link() ->
-    gen_server:start_link({local, ?name}, ?MODULE, #{}, []).
+start_link(Opts) ->
+    OptsMap1 = maps:from_list(proplists:unfold(Opts)),
+    OptsMap2 = OptsMap1#{specs_override => proplists:get_all_values(specs_override, Opts)},
+    gen_server:start_link({local, ?name}, ?MODULE, OptsMap2, []).
 
 %% @doc Fetches the types of the clauses of an exported function. User-defined
 %%      types and record types are annotated with filename on the form
@@ -102,7 +106,11 @@ load(Filename) ->
 
 -spec import_erl_files([file:filename()]) -> ok.
 import_erl_files(Files) ->
-    call({import_erl_files, Files}, infinity).
+    call({import_erl_files, Files, []}, infinity).
+
+-spec import_erl_files([file:filename()],any()) -> ok.
+import_erl_files(Files,Includes) ->
+    call({import_erl_files, Files, Includes}, infinity).
 
 -spec import_beam_files([file:filename() | binary()]) ->
                             ok | gradualizer_file_utils:parsed_file_error().
@@ -133,8 +141,12 @@ import_module(Module) ->
 
 %% Gen_server
 
--type opts() :: #{autoimport => boolean()}.
--define(default_opts, #{autoimport => true}).
+-type opts() :: #{autoimport := boolean(),
+                  prelude := boolean(),
+                  specs_override := [file:name()]}.
+-define(default_opts, #{autoimport => true,
+                        prelude => true,
+                        specs_override => []}).
 
 -record(state, {specs   = #{} :: #{mfa() => [type()]},
                 types   = #{} :: #{mfa() => #typeinfo{}},
@@ -156,6 +168,9 @@ init(Opts0) ->
                  _ ->
                     State1
              end,
+    Self = self(),
+    maps:get(prelude, Opts) andalso (Self ! import_prelude),
+    Self ! {import_extra_specs, maps:get(specs_override, Opts)},
     {ok, State2}.
 
 -spec handle_call(any(), {pid(), term()}, state()) -> {reply, term(), state()}.
@@ -224,8 +239,8 @@ handle_call({import_module, Mod}, _From, State) ->
         not_found ->
             {reply, not_found, State}
     end;
-handle_call({import_erl_files, Files}, _From, State) ->
-    State1 = import_erl_files(Files, State),
+handle_call({import_erl_files, Files, Includes}, _From, State) ->
+    State1 = import_erl_files(Files, Includes, State),
     {reply, ok, State1};
 handle_call({import_beam_files, Files}, _From, State) ->
     case import_beam_files(Files, State) of
@@ -233,14 +248,20 @@ handle_call({import_beam_files, Files}, _From, State) ->
         Error = {_, _} -> {reply, Error, State}
     end;
 handle_call({import_app, App}, _From, State) ->
-    Pattern = code:lib_dir(App) ++ "/src/*.erl",
-    Files = filelib:wildcard(Pattern),
-    State1 = import_erl_files(Files, State),
-    {reply, ok, State1};
+    case code:lib_dir(App) of
+        {error, bad_name} ->
+            error_logger:warning_msg("Unknown app: ~p", [App]),
+            {reply, ok, State};
+        LibDir ->
+            Pattern = LibDir ++ "/src/*.erl",
+            Files = filelib:wildcard(Pattern),
+            State1 = import_erl_files(Files, [], State),
+            {reply, ok, State1}
+    end;
 handle_call(import_otp, _From, State) ->
     Pattern = code:lib_dir() ++ "/*/src/*.erl",
     Files = filelib:wildcard(Pattern),
-    State1 = import_erl_files(Files, State),
+    State1 = import_erl_files(Files, [], State),
     {reply, ok, State1};
 handle_call(import_prelude, _From, State) ->
     State2 = import_prelude(State),
@@ -252,6 +273,12 @@ handle_call({import_extra_specs, Dirs}, _From, State) ->
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
+handle_info(import_prelude, State) ->
+    State2 = import_prelude(State),
+    {noreply, State2};
+handle_info({import_extra_specs, Dirs}, State) ->
+    State2 = lists:foldl(fun import_extra_specs/2, State, Dirs),
+    {noreply, State2};
 handle_info(_Msg, State) ->
     {noreply, State}.
 
@@ -279,7 +306,7 @@ import_prelude(State = #state{loaded = Loaded}) ->
     %% are loaded on demand
     State1#state{loaded = Loaded}.
 
--spec import_extra_specs(filelib:filename(), state()) -> state().
+-spec import_extra_specs(file:name(), state()) -> state().
 import_extra_specs(Dir, State = #state{loaded = Loaded}) ->
     FormsByModule = gradualizer_prelude_parse_trans:get_module_forms_tuples(Dir),
     %% Import forms each of the modules to override
@@ -315,7 +342,7 @@ handle_get_type(M, T, Args, RequireExported, ExpandOpaque, State) ->
                  #typeinfo{params = Vars,
                            body = Type0} ->
                      VarMap = maps:from_list(lists:zip(Vars, Args)),
-                     Type1 = typelib:annotate_user_types(M, Type0),
+                     Type1 = typelib:annotate_user_type(M, Type0),
                      Type2 = typelib:substitute_type_vars(Type1, VarMap),
                      {reply, {ok, Type2}, State}
              end;
@@ -330,7 +357,7 @@ autoimport(M, #state{opts = #{autoimport := true},
                      loaded = Loaded} = State) ->
     case Loaded of
         #{M := _} ->
-            %% Alrady loaded or attempted
+            %% Already loaded or attempted
             State;
         _ ->
             %io:format("Loading types from ~p~n", [M]),
@@ -356,20 +383,20 @@ import_module(Mod, State) ->
 import_module_from_erl(Mod, State) ->
     case State#state.srcmap of
         #{Mod := Filename} ->
-            State1 = import_erl_files([Filename], State),
+            State1 = import_erl_files([Filename], [], State),
             {ok, State1};
         _ ->
             not_found
     end.
 
--spec import_erl_files([file:filename()], state()) -> state().
-import_erl_files([File | Files], State) ->
-    EppOpts = [{includes, guess_include_dirs(File)}],
+-spec import_erl_files([file:filename()], [file:filename()], state()) -> state().
+import_erl_files([File | Files], Includes, State) ->
+    EppOpts = [{includes, guess_include_dirs(File) ++ Includes}],
     {ok, Forms} = epp:parse_file(File, EppOpts),
     {attribute, _, module, Module} = lists:keyfind(module, 3, Forms),
     check_epp_errors(File, Forms),
-    import_erl_files(Files, import_absform(Module, Forms, State));
-import_erl_files([], St) ->
+    import_erl_files(Files, Includes, import_absform(Module, Forms, State));
+import_erl_files([], _Includes, St) ->
     St.
 
 -spec import_beam_files([file:filename() | binary()], state()) -> {ok, state()} | gradualizer_file_utils:parsed_file_error().
@@ -401,7 +428,7 @@ import_absform(Module, Forms1, State) ->
     }.
 
 %% Include dirs for OTP apps are given in makefiles. We can never
-%% guarrantee to get them right without extracting the types during
+%% guarantee to get them right without extracting the types during
 %% compilation.
 guess_include_dirs(File) ->
     Dir = filename:dirname(File),
@@ -445,7 +472,8 @@ add_entries_to_map(Entries, Map) ->
                 Map,
                 Entries).
 
--spec collect_types(module(), Forms :: [tuple()]) -> [{mfa(), #typeinfo{}}].
+-spec collect_types(module(), Forms) -> [{mfa(), #typeinfo{}}] when
+      Forms :: gradualizer_file_utils:abstract_forms().
 %% Collect exported types, including opaques, record definitions,
 %% exported and unexported types
 collect_types(Module, Forms) ->
@@ -455,15 +483,17 @@ collect_types(Module, Forms) ->
 
     %% Now all type definitions are easy to extract.
     Types = [begin
-                 Id       = {Module, Name, length(Vars)},
-                 Exported = lists:member({Name, length(Vars)}, ExportedTypes),
+                 Arity = length(Vars),
+                 Arity >= 0 andalso Arity =< 255 orelse erlang:error({invalid_arity, Arity, Form}),
+                 Id       = {Module, Name, ?assert_type(Arity, arity())},
+                 Exported = lists:member({Name, Arity}, ExportedTypes),
                  Params   = [VarName || {var, _, VarName} <- Vars],
                  Info     = #typeinfo{exported = Exported,
                                       opaque   = (Attr == opaque),
                                       params   = Params,
-                                      body     = Body},
+                                      body     = typelib:remove_pos(Body)},
                  {Id, Info}
-             end || {attribute, _, Attr, {Name, Body, Vars}} <- Forms,
+             end || Form = {attribute, _, Attr, {Name, Body, Vars}} <- Forms,
                     Attr == type orelse Attr == opaque,
                     is_atom(Name)],
     Types.
@@ -483,17 +513,19 @@ collect_records(Module, Forms) ->
 %% forms, create one from the untyped one and normalize so that they
 %% all have a default value.
 %%
+%% Location in field names and types are set to zero to allow comparison using
+%% equality and pattern matching. This is not done for the default value (which
+%% is an expression, not a type).
 -spec extract_record_defs(Forms :: [tuple()]) -> Typedefs :: [{atom(), [type()]}].
 extract_record_defs([{attribute, L, record, {Name, _UntypedFields}},
                      {attribute, L, type, {{record, Name}, Fields, []}} |
                      Rest]) ->
     %% This representation is only used in OTP < 19
-    TypedFields = lists:map(fun absform:normalize_record_field/1, Fields),
-    R = {Name, TypedFields},
-    [R | extract_record_defs(Rest)];
+    extract_record_defs([{attribute, L, record, {Name, Fields}} | Rest]);
 extract_record_defs([{attribute, _L, record, {Name, Fields}} | Rest]) ->
-    %% Convert type typed record
-    TypedFields = lists:map(fun absform:normalize_record_field/1, Fields),
+    TypedFields = [gradualizer_lib:remove_pos_typed_record_field(
+                     absform:normalize_record_field(Field))
+                   || Field <- Fields],
     R = {Name, TypedFields},
     [R | extract_record_defs(Rest)];
 extract_record_defs([_ | Rest]) ->
@@ -530,7 +562,8 @@ collect_specs(Module, Forms) ->
             {F, A} <- Exports,
             not sets:is_element({F, A},
                         SpecedFunsSet)],
-    [{Key, absform:normalize_function_type_list(Types)}
+    [{Key, lists:map(fun typelib:remove_pos/1,
+                     absform:normalize_function_type_list(Types))}
      || {Key, Types} <- Specs ++ ImplicitSpecs].
 
 normalize_spec({{Func, Arity}, Types}, Module) ->
@@ -575,7 +608,9 @@ get_beam_map() ->
                 {match, [Mod]} ->
                     {true, {list_to_atom(Mod), Filename}};
                 nomatch ->
-                    false
+                    false;
+                _ ->
+                    erlang:error({unreachable, "check re:run/3 opts above - this should not happen"})
             end
         end,
         BeamFiles),

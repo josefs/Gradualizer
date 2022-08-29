@@ -1,5 +1,5 @@
 -module(pp_intersection).
--export([foo/1, bar/1]).
+-export([bar/1]).
 
 %% Mostly to make sure pretty printing intersection types doesn't crash.
 

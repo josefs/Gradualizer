@@ -14,14 +14,15 @@ undefined_errors_test_() ->
          [ok = application:stop(App) || App <- Apps],
          ok
      end,
-     ?_test(begin
-        File = "test/misc/undefined_errors.erl",
-        Errors = gradualizer:type_check_file(File, [return_errors]),
-        %% Test that error formatting doesn't crash
-        Opts = [{fmt_location, brief},
-                {fmt_expr_fun, fun erl_prettypr:format/1}],
-        lists:foreach(fun({_, Error}) -> gradualizer_fmt:handle_type_error(Error, Opts) end, Errors),
-        {ok, Forms} = gradualizer_file_utils:get_forms_from_erl(File, []),
-        ExpectedErrors = typechecker:number_of_exported_functions(Forms),
-        ?assertEqual(ExpectedErrors, length(Errors))
-    end)}.
+     [?_test(check_file("test/misc/undefined_errors.erl")),
+      ?_test(check_file("test/misc/lint_errors.erl"))]}.
+
+check_file(File) ->
+    Errors = gradualizer:type_check_file(File, [return_errors]),
+    %% Test that error formatting doesn't crash
+    Opts = [{fmt_location, brief},
+            {fmt_expr_fun, fun erl_prettypr:format/1}],
+    lists:foreach(fun({_, Error}) -> gradualizer_fmt:handle_type_error(Error, Opts) end, Errors),
+    {ok, Forms} = gradualizer_file_utils:get_forms_from_erl(File, []),
+    ExpectedErrors = typechecker:number_of_exported_functions(Forms),
+    ?assertEqual(ExpectedErrors, length(Errors)).

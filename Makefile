@@ -20,7 +20,7 @@
 #   check       Run all checks (tests, dialyze, gradualize)
 #   clean       Delete all generated files
 #
-# Capitalized variables can be overriden on the command line.
+# Capitalized variables can be overridden on the command line.
 # Example:
 #
 #   make tests EUNIT_OPTS=verbose
@@ -37,7 +37,7 @@ all: app escript
 erls = $(wildcard src/*.erl)
 beams = $(erls:src/%.erl=ebin/%.beam)
 
-ERLC_OPTS = -I include -pa ebin +debug_info
+ERLC_OPTS = -I include -I src -pa ebin +debug_info
 TEST_ERLC_OPTS = +debug_info
 
 app: $(beams) ebin/gradualizer.app
@@ -55,10 +55,8 @@ ebin/typechecker.beam: src/typelib.hrl
 ebin/gradualizer_fmt.beam: src/typelib.hrl
 
 # .app file
-# TODO When we start using git tags, insert version from
-# `git describe --tags`
 ebin/gradualizer.app: src/gradualizer.app.src | ebin
-	cp $< $@
+	sed -e "s/{vsn, *\"git\"}/{vsn, \"`git describe --tags --always`\"}/" $< > $@
 
 .PHONY: shell
 shell: app
@@ -90,7 +88,7 @@ bin/gradualizer: $(beams) ebin/gradualizer.app
 
 .PHONY: gradualize
 gradualize: escript
-	bin/gradualizer -pa ebin --color ebin
+	bin/gradualizer -pa ebin --color ebin | grep -v -f gradualize-ignore.lst
 
 .PHONY: nocrashongradualize
 nocrashongradualize: escript
@@ -109,7 +107,7 @@ clean:
 	rm -rf bin/gradualizer ebin cover test/*.beam
 
 .PHONY: tests eunit compile-tests cli-tests
-tests: build_test_data eunit cli-tests
+tests: check_name_clashes build_test_data eunit cli-tests
 
 test_erls=$(wildcard test/*.erl)
 test_beams=$(test_erls:test/%.erl=test/%.beam)
@@ -213,6 +211,14 @@ DIALYZER_OPTS ?= -Werror_handling -Wrace_conditions
 .PHONY: dialyze
 dialyze: app $(DIALYZER_PLT)
 	dialyzer $(DIALYZER_OPTS) ebin
+
+.PHONY: dialyze-tests
+dialyze-tests: app $(DIALYZER_PLT)
+	dialyzer $(DIALYZER_OPTS) $(test_data_erls)
+
+.PHONY: check_name_clashes
+check_name_clashes:
+	test/check_name_clashes.sh
 
 # DIALYZER_PLT is a variable understood directly by Dialyzer.
 # Exit status 2 = warnings were emitted

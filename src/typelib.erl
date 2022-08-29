@@ -1,9 +1,12 @@
 %% @doc Functions operating on types on the Erlang Abstract Form
 -module(typelib).
 
--export([remove_pos/1, annotate_user_types/2, get_module_from_annotation/1,
+-export([remove_pos/1,
+         annotate_user_type/2, annotate_user_types/2,
+         get_module_from_annotation/1,
          substitute_type_vars/2,
-         pp_type/1, debug_type/3, parse_type/1]).
+         pp_type/1, debug_type/3, parse_type/1,
+         reduce_type/3]).
 -export_type([constraint/0, function_type/0, extended_type/0]).
 
 -type type() :: gradualizer_type:abstract_type().
@@ -46,8 +49,11 @@ pp_type(Type = {type, _, bounded_fun, _}) ->
                           [{capture, all_but_first, list}, dotall]),
     "fun(" ++ S ++ ")";
 pp_type({var, _, TyVar}) ->
-    %% TODO: In type(), TyVar should be an atom but we use a string.
-    TyVar;
+    %% See gradualizer_type:af_type_variable/0 and typechecker:new_type_var/0
+    if
+        is_atom(TyVar) -> atom_to_list(TyVar);
+        is_list(TyVar) -> TyVar
+    end;
 pp_type(Type) ->
     %% erl_pp can handle type definitions, so wrap Type in a type definition
     %% and then take the type from that.
@@ -92,10 +98,11 @@ remove_pos({Type, _, Value})
 remove_pos({user_type, Anno, Name, Params}) when is_list(Params) ->
     {user_type, anno_keep_only_filename(Anno), Name,
      lists:map(fun remove_pos/1, Params)};
-% Might need to bring this back but will need to support more params since the records can be refined now
-% One thing to be careful is that we can "redefine" some fields for a specific record instance as well
-% remove_pos({type, Anno, record, Params = [{atom, AtomAnno, Name}]}) ->	
-%     {type, anno_keep_only_filename(Anno), record, [{atom, anno_keep_only_filename(AtomAnno), Name}]};
+remove_pos({type, Anno, record, [Name | TypedFields]}) ->
+    {type, anno_keep_only_filename(Anno), record,
+     [remove_pos(Name)] ++ lists:map(fun remove_pos/1, TypedFields)};
+remove_pos({type, _, field_type, [FName, FTy]}) ->
+    {type, erl_anno:new(0), field_type, [remove_pos(FName), remove_pos(FTy)]};
 remove_pos({type, _, bounded_fun, [FT, Cs]}) ->
     {type, erl_anno:new(0), bounded_fun, [remove_pos(FT)
                                          ,lists:map(fun remove_pos/1, Cs)]};
@@ -104,7 +111,7 @@ remove_pos({type, _, constraint, [{atom, _, is_subtype}, [V, T]]}) ->
                                         ,[remove_pos(V), remove_pos(T)]]};
 remove_pos({type, _, 'fun', [{type, _, any}, RetTy]}) ->
     %% special case for `fun((...) -> R)`,
-    %% the only place where `{type, _, any}` can occure
+    %% the only place where `{type, _, any}` can occur
     {type, erl_anno:new(0), 'fun', [{type, erl_anno:new(0), any}
                                    ,remove_pos(RetTy)]};
 remove_pos({type, _, Type, Params}) when is_list(Params) ->
@@ -134,26 +141,49 @@ anno_keep_only_filename(Anno) ->
         Filename  -> erl_anno:set_file(Filename, NewAnno)
     end.
 
+%% Annotate a user-defined type or record type with a file name.
+-spec annotate_user_type(module() | file:filename(), type()) -> type().
+annotate_user_type(ModOrFile, Type) ->
+    Filename = ensure_filename(ModOrFile),
+    annotate_user_type_(Filename, Type).
+
+-spec ensure_filename(module() | file:filename()) -> file:filename().
+ensure_filename(ModOrFile) ->
+    case ModOrFile of
+        Module when is_atom(ModOrFile) ->
+            atom_to_list(?assert_type(Module, atom())) ++ ".erl";
+        _ -> ModOrFile
+    end.
+
 %% Annotate user-defined types and record types with a file name.
--spec annotate_user_types(module() | file:filename(), type()) -> type().
-annotate_user_types(Module, Type) when is_atom(Module) ->
-    annotate_user_types(atom_to_list(Module) ++ ".erl", Type);
-annotate_user_types(Filename, {user_type, Anno, Name, Params}) ->
-    %% Annotate local user-defined type
+-spec annotate_user_types(ModOrFile, TypeOrTypes) -> type() | [type()] when
+      ModOrFile :: module() | file:filename(),
+      TypeOrTypes :: type() | [type()].
+annotate_user_types(ModOrFile, TypeOrTypes) ->
+    case TypeOrTypes of
+        Types when is_list(Types) ->
+            [ annotate_user_type(ModOrFile, Type) || Type <- ?assert_type(Types, [type()]) ];
+        Type ->
+            annotate_user_type(ModOrFile, ?assert_type(Type, type()))
+    end.
+
+-spec annotate_user_type_(file:filename(), type()) -> type().
+annotate_user_type_(Filename, {user_type, Anno, Name, Params}) ->
+    %% Annotate local user-defined type.
     {user_type, erl_anno:set_file(Filename, Anno), Name,
-     [annotate_user_types(Filename, Param) || Param <- Params]};
-annotate_user_types(Filename, {type, Anno, record, RecName = [_]}) ->
+     [annotate_user_type_(Filename, Param) || Param <- Params]};
+annotate_user_type_(Filename, {type, Anno, record, RecName = [_]}) ->
     %% Annotate local record type
     {type, erl_anno:set_file(Filename, Anno), record, RecName};
-annotate_user_types(Filename, {type, Anno, T, Params}) when is_list(Params) ->
-    {type, Anno, T, [annotate_user_types(Filename, Param) || Param <- Params]};
-annotate_user_types(Filename, {ann_type, Anno, [Var, Type]}) ->
-    {ann_type, Anno, [Var, annotate_user_types(Filename, Type)]};
-annotate_user_types(Filename, Types) when is_list(Types) ->
-    [annotate_user_types(Filename, Type) || Type <- Types];
-annotate_user_types(_Filename, Type) ->
+annotate_user_type_(Filename, {type, Anno, T, Params}) when is_list(Params) ->
+    {type, Anno, T, [ annotate_user_types(Filename, Param)
+                      || Param <- ?assert_type(Params, [type()]) ]};
+annotate_user_type_(Filename, {ann_type, Anno, [Var, Type]}) ->
+    {ann_type, Anno, [Var, annotate_user_type_(Filename, Type)]};
+annotate_user_type_(_Filename, Type) ->
     Type.
 
+-spec get_module_from_annotation(erl_anno:anno()) -> {ok, module()} | none.
 get_module_from_annotation(Anno) ->
     case erl_anno:file(Anno) of
         File when is_list(File) ->
@@ -166,13 +196,21 @@ get_module_from_annotation(Anno) ->
 -spec substitute_type_vars(type(),
                            #{atom() => type()}) -> type().
 substitute_type_vars({type, L, 'fun', [Any = {type, _, any}, RetTy]}, TVars) ->
-    %% special case for `fun((...) -> R)`,
-    %% the only place where `{type, _, any}` can occure
+    %% Special case for `fun((...) -> R)',
+    %% the only place where `{type, _, any}' can occur.
+    %% We match on `{type, _, any}' in the head explicitly, so `RetTy' cannot contain it - the
+    %% assertion is safe.
+    RetTy = ?assert_type(RetTy, type()),
     {type, L, 'fun', [Any, substitute_type_vars(RetTy, TVars)]};
-substitute_type_vars({Tag, L, T, Params}, TVars) when Tag == type orelse
-                                                      Tag == user_type,
-                                                      is_list(Params) ->
-    {Tag, L, T, [substitute_type_vars(P, TVars) || P <- Params]};
+substitute_type_vars({Tag, L, T, Params}, TVars)
+  when Tag == type orelse
+       Tag == user_type,
+       is_list(Params) ->
+    %% We have to assert the type below as we're running into the problem documented
+    %% with test/known_problems/should_pass/lc_cannot_glb_different_variants.erl.
+    %% In other words, the 4th element of a `type()' tuple doesn't have to be a list
+    %% and Gradualizer cannot yet use the `is_list(Params)' guard to refine the type.
+    {Tag, L, T, [substitute_type_vars(P, TVars) || P <- ?assert_type(Params, list())]};
 substitute_type_vars({remote_type, L, [M, T, Params]}, TVars) ->
     {remote_type, L, [M, T, [substitute_type_vars(P, TVars) || P <- Params]]};
 substitute_type_vars({ann_type, L, [Var = {var, _, _}, Type]}, TVars) ->
@@ -194,3 +232,66 @@ substitute_type_vars(Other = {op, _, _Op, _Arg1, _Arg2}, _) ->
 substitute_type_vars(Other = {T, _, _}, _)
   when T == atom; T == integer; T == char ->
     Other.
+
+-type walkable_type() :: gradualizer_type:abstract_type() | {type, _, any} | pos_inf | neg_inf.
+%% `gradualizer_type:abstract_type()' defines the abstract representation of a type.
+%% The type is a tree of nodes. However, there are more node kinds in the tree,
+%% than might appear at the top-level (as the root node).
+%% In order to specify a function which can traverse all nodes, not just the top-level nodes,
+%% we have to include all possible node kinds in the type definition.
+
+%% @doc `reduce_type/3' enables reducing an abstract type to a single value.
+%%
+%% Example 1 - gather all singleton atoms occurring in a type:
+%%
+%% > F = fun
+%% >         ({atom, _, _} = At, Acc) -> {At, [At | Acc]};
+%% >         (Ty, Acc) -> {Ty, Acc}
+%% >     end,
+%% > {_, [{atom, _, my_atom}]} = typelib:reduce_type(F, [], typelib:parse_type("A :: {my_atom}")).
+%%
+%% `Fun' can skip traversing parts of the type tree by matching on it
+%% and returning `none()' instead of the actual subtree.
+%%
+%% Example 2 - gather singleton atoms, but skip a particular branch of a union type:
+%%
+%% > ComplexTy = typelib:parse_type("atom1 | atom2 | "
+%% >                                "{complex, integer(), [{atom() | string(), number()}]}"),
+%% > F = fun
+%% >          ({type, _, tuple, [{atom, _, complex} | _]}, Acc) -> { {type, 0, none, []}, Acc };
+%% >          ({atom, _, Name} = Ty, Acc) -> {Ty, [Name | Acc]};
+%% >          (Ty, Acc) -> {Ty, Acc}
+%% >      end,
+%% > {_, [atom2, atom1]} = reduce(F, [], ComplexTy).
+-spec reduce_type(Fun, Acc, walkable_type()) -> R when
+      Fun :: fun((walkable_type(), Acc) -> {walkable_type(), Acc}),
+      R :: {walkable_type(), Acc}.
+reduce_type(Fun, Acc, Type) ->
+    reduce(Fun, apply, Acc, Type).
+
+-spec reduce(Fun, Action, Acc, walkable_type()) -> R when
+      Fun :: fun((walkable_type(), Acc) -> {walkable_type(), Acc}),
+      Action :: apply | recurse,
+      R :: {walkable_type(), Acc}.
+reduce(Fun, _, Acc, {'atom', _, _} = Ty)              -> Fun(Ty, Acc);
+reduce(Fun, _, Acc, {'type', _Anno, _Name, any} = Ty) -> Fun(Ty, Acc);
+reduce(Fun, _, Acc, {'integer', _, _} = Ty)           -> Fun(Ty, Acc);
+reduce(Fun, _, Acc, {'char', _, _} = Ty)              -> Fun(Ty, Acc);
+reduce(Fun, _, Acc, {'type', _Anno, any} = Ty)        -> Fun(Ty, Acc);
+reduce(Fun, _, Acc, pos_inf = Ty)                     -> Fun(Ty, Acc);
+reduce(Fun, _, Acc, neg_inf = Ty)                     -> Fun(Ty, Acc);
+reduce(Fun, _, Acc, {var, _, _} = Ty)                 -> Fun(Ty, Acc);
+reduce(Fun, apply, Acc, Ty) ->
+    {NewTy, Acc1} = Fun(Ty, Acc),
+    reduce(Fun, recurse, Acc1, NewTy);
+reduce(Fun, recurse, Acc, {'op', _, _, Ty1})                  -> reduce_rec(Fun, Acc, [Ty1]);
+reduce(Fun, recurse, Acc, {'op', _, _, Ty1, Ty2})             -> reduce_rec(Fun, Acc, [Ty1, Ty2]);
+reduce(Fun, recurse, Acc, {'ann_type', _Anno, Args})          -> reduce_rec(Fun, Acc, Args);
+reduce(Fun, recurse, Acc, {'type', _Anno, _Name, Args})       -> reduce_rec(Fun, Acc, Args);
+reduce(Fun, recurse, Acc, {'remote_type', _Anno, [M, T, As]}) -> reduce_rec(Fun, Acc, [M, T | As]);
+reduce(Fun, recurse, Acc, {'user_type', _Anno, _Name, Args})  -> reduce_rec(Fun, Acc, Args).
+
+reduce_rec(Fun, Acc, Args) ->
+    lists:foldl(fun (Arg, {_, Acc1}) ->
+                        reduce(Fun, apply, Acc1, Arg)
+                end, {ok, Acc}, Args).

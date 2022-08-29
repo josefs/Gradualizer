@@ -83,7 +83,7 @@ This suggests a way of developing code:
   As the program grow larger, add type signatures to make it more
   statically typed.
 
-## Gradual typing primer (simlified)
+## Gradual typing primer (simplified)
 
 A Gradual type system has two components
 
@@ -205,7 +205,7 @@ Gradual typing has been a hot research topic over the last decade
   Type specs are the means of control.
 
 * The type system is backwards compatible with all existing type specs,
-  record declarations and type defintions.
+  record declarations and type definitions.
 
   Works well on existing code bases
 
@@ -360,7 +360,7 @@ bar(bepa) ->
 
 ## Speed
 
-Gradualizer to typically **alot** faster than Dialyzer
+Gradualizer to typically **a lot** faster than Dialyzer
 
 TODO: More here.
 

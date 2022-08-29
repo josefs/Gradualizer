@@ -1,6 +1,6 @@
 -module(flow).
 
--export([foo/0]).
+-export([foo/0, bar/1]).
 
 foo() ->
 	bar(apa).

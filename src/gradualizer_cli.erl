@@ -10,11 +10,21 @@ main(Args) ->
             io:format(standard_error, "~s~n", [Message]),
             halt(1);
         {ok, Files, Opts} ->
+            start_application(Opts),
             case gradualizer:type_check_files(Files, Opts) of
                 ok -> ok;
                 nok -> halt(1)
             end
     end.
+
+start_application(Opts) ->
+    %% An explicit load makes sure any options defined in a *.config file are set before
+    %% we call `application:set_env/3'.
+    %% A load after set_env overrides anything set with set_env.
+    %% If gradualizer is run as an escript this should not be necessary, but better safe than sorry.
+    ok = application:load(gradualizer),
+    application:set_env(gradualizer, options, Opts),
+    {ok, _} = application:ensure_all_started(gradualizer).
 
 -spec handle_args([string()]) -> help | version | {error, string()} |
                                  {ok, [string()], gradualizer:options()}.
@@ -80,7 +90,9 @@ print_usage() ->
     io:format("                                   detection of a TTY doesn't work when running as an escript.~n"),
     io:format("       --no_color                - Alias for `--color never'~n"),
     io:format("       --fancy                   - Use fancy error messages when possible (on by default)~n"),
-    io:format("       --no_fancy                - Don't use fancy error messages.~n").
+    io:format("       --no_fancy                - Don't use fancy error messages.~n"),
+    io:format("       --union_size_limit        - Performance hack: Unions larger than this value~n"),
+    io:format("                                   are replaced by any() in normalization (default: 30)~n").
 
 -spec parse_opts([string()], gradualizer:options()) -> {[string()], gradualizer:options()}.
 parse_opts([], Opts) ->
@@ -107,6 +119,7 @@ parse_opts([A | Args], Opts) ->
         "--no_color"               -> parse_opts(Args, [{color, never} | Opts]);
         "--fancy"                  -> parse_opts(Args, [fancy | Opts]);
         "--no_fancy"               -> parse_opts(Args, [{fancy, false} | Opts]);
+        "--union_size_limit"       -> handle_union_size_limit(A, Args, Opts);
         "--"                       -> {Args, Opts};
         "-" ++ _                   -> erlang:error(string:join(["Unknown parameter:", A], " "));
         _                          -> {[A | Args], Opts}
@@ -153,6 +166,12 @@ handle_color(["always"|Args], Opts) -> parse_opts(Args, [{color, always} | Opts]
 handle_color(["never" |Args], Opts) -> parse_opts(Args, [{color, never}  | Opts]);
 handle_color(["auto"  |Args], Opts) -> parse_opts(Args, [{color, auto}   | Opts]);
 handle_color(Args,            Opts) -> parse_opts(Args, [{color, always} | Opts]).
+
+handle_union_size_limit(_, [LimitS | Args], _Opts) ->
+    Limit = list_to_integer(LimitS),
+    parse_opts(Args, [{union_size_limit, Limit}]);
+handle_union_size_limit(A, [], _Opts) ->
+    erlang:error(string:join(["Missing argument for", A], " ")).
 
 no_start_dash("-" ++ _) ->
     false;

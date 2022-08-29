@@ -21,6 +21,7 @@ init(State) ->
 
 -spec do(rebar_state:t()) -> {ok, rebar_state:t()} | {error, string()}.
 do(State) ->
+    {ok, _} = application:ensure_all_started(gradualizer),
     {Opts, _} = rebar_state:command_parsed_args(State),
     UseBeams = proplists:get_value(use_beams, Opts, false),
     code:add_pathsa(rebar_state:code_paths(State, all_deps)),

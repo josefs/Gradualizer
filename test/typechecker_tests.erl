@@ -4,6 +4,8 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
+-include("typechecker.hrl").
+
 %% Macro to convert type to abstract form
 -define(t(T), t(??T)).
 t(T) -> typelib:remove_pos(typelib:parse_type(T)).
@@ -96,10 +98,12 @@ subtype_test_() ->
      %% Maps
      ?_assert(subtype(?t( map()             ), ?t( #{a := b}        ))),
      ?_assert(subtype(?t( #{a := b}         ), ?t( map()            ))),
-     ?_assert(subtype(?t( #{a => b}         ), ?t( #{}              ))),
+     ?_assert(subtype(?t( #{}               ), ?t( #{a => b}        ))),
      ?_assert(subtype(?t( #{a := b}         ), ?t( #{a => b}        ))),
-     ?_assert(subtype(?t( #{a => b, c => d} ), ?t( #{a => b}        ))),
+     ?_assert(subtype(?t( #{a => b}         ), ?t( #{a => b, c => d}))),
+     ?_assert(subtype(?t( #{a := b, c := d} ), ?t( #{a := b, _ => _}))),
      ?_assert(subtype(?t( #{5 := a }        ), ?t( #{1..5 := atom()}))),
+     ?_assert(subtype(?t( #{5 := pid()}     ), ?t( #{_ => pid(), 1..10 => integer()} ))),
 
      %% Fun objects
      ?_assert(subtype(t("fun((...) -> integer())"), t("fun()"))),
@@ -158,10 +162,12 @@ not_subtype_test_() ->
      ?_assertNot(subtype(?t( {1..2, 3..4}   ), ?t( {1, 3}           ))),
 
      %% Maps
-     ?_assertNot(subtype(?t( #{}            ), ?t( #{a := b}        ))),
-     ?_assertNot(subtype(?t( #{a => b}      ), ?t( #{a := b}        ))),
-     ?_assertNot(subtype(?t( #{a := 1..5}   ), ?t( #{a := 2}        ))),
-     ?_assertNot(subtype(?t( #{1 := atom()} ), ?t( #{1 := a}        )))
+     ?_assertNot(subtype(?t( #{}            ), ?t( #{a := b}                            ))),
+     ?_assertNot(subtype(?t( #{a => b}      ), ?t( #{a := b}                            ))),
+     ?_assertNot(subtype(?t( #{a := 1..5}   ), ?t( #{a := 2}                            ))),
+     ?_assertNot(subtype(?t( #{1 := atom()} ), ?t( #{1 := a}                            )))
+     %% TODO: We're not capable of handling maps with overlapping keys yet.
+     %?_assertNot(subtype(?t( #{5 := pid()}  ), ?t( #{1..10 => integer(), _ => pid()}    )))
     ].
 
 -define(glb(T1, T2, R),
@@ -211,8 +217,13 @@ glb_test_() ->
 
      %% Maps
      ?glb( ?t(map()), ?t(#{a := integer()}), ?t(#{a := integer()}) ),
-     ?glb( ?t(#{ a := integer() }), ?t(#{ b := float() }), ?t(none()) ), %% Not the right answer!
+     ?glb( ?t(#{ a := integer() }), ?t(#{ b := float() }), ?t(none()) ),
+
+     ?glb( ?t(#{ a := 1 }), ?t(#{ a := integer() }), ?t(#{ a := 1 }) ),
+
+     ?glb( ?t(#{ a := pos_integer() }), ?t(#{ a := integer() }), ?t(#{ a := pos_integer() }) ),
      ?glb( ?t(#{ a := b }), ?t(#{ a := b }), ?t(#{ a := b }) ),
+     ?glb( ?t(#{ integer() => integer() }), ?t(#{ 1..5 => 1..5, foo => bar }), ?t(#{ 1..5 => 1..5 }) ),
 
      %% Binary types
      ?glb( ?t(binary()),       ?t(<<_:_*32>>),      ?t(<<_:_*32>>) ),
@@ -260,19 +271,22 @@ normalize_test_() ->
     [
      {"Merge intervals",
       ?_assertEqual(?t( 1..6 ),
-                    typechecker:normalize(?t( 1..3|4..6 ),
-                                          gradualizer_lib:create_tenv(?MODULE, [], [])))},
+                    typechecker:normalize(?t( 1..3|4..6 ), test_lib:create_env([])))},
      {"Remove singleton atoms if atom() is present",
       ?_assertEqual(?t( atom() ),
-                    typechecker:normalize(?t( a | atom() | b ),
-                                          gradualizer_lib:create_tenv(?MODULE, [], [])))},
+                    typechecker:normalize(?t( a | atom() | b ), test_lib:create_env([])))},
      {"Evaluate numeric operators in types",
       %% ?t(-8) is parsed as {op,0,'-',{integer,0,8}}
       ?_assertEqual({integer, 0 , -8},
                     typechecker:normalize(?t( (bnot 3) *
                                               (( + 7 ) rem ( 5 div - 2 ) ) bxor
-                                              (1 bsl 6 bsr 4) ),
-                                          gradualizer_lib:create_tenv(?MODULE, [], [])))}
+                                              (1 bsl 6 bsr 4) ), test_lib:create_env([])))},
+     {"normalize(boolean()) == normalize(normalize(boolean))",
+      ?_assertEqual(typechecker:normalize(?t( boolean() ), test_lib:create_env([])),
+                    typechecker:normalize(typechecker:normalize(?t( boolean() ),
+                                                                test_lib:create_env([])),
+                                          test_lib:create_env([])))
+     }
     ].
 
 unfold_bounded_type_test() ->
@@ -287,8 +301,8 @@ unfold_bounded_type_test() ->
         "fun(([{A, B}]) -> {[A], [B]})",
 
     {attribute, _, spec, {{unzip, 1}, [BoundedFun]}} = merl:quote(OrigSpecStr),
-    TEnv = gradualizer_lib:create_tenv(?MODULE, [], []),
-    UnfoldedType = typechecker:unfold_bounded_type(TEnv, BoundedFun),
+    Env = test_lib:create_env([]),
+    UnfoldedType = typechecker:unfold_bounded_type(Env, BoundedFun),
     UnfoldedTypeStr = typelib:pp_type(UnfoldedType),
     ?assertEqual(ExpectedTypeStr, UnfoldedTypeStr).
 
@@ -364,14 +378,14 @@ propagate_types_test_() ->
                    type_check_expr(_Env = "-spec f() -> any().",
                                    _Expr = "not f()")),
      %% (returns a normalised type, in this case of boolean())
-     ?_assertMatch("true | false",
+     ?_assertMatch("false | true",
                    type_check_expr(_Env = "-spec f() -> boolean().",
                                    _Expr = "not f()")),
      ?_assertMatch("false",
                    type_check_expr(_Env = "-spec f() -> true.",
                                    _Expr = "not f()")),
 
-     %% infered type of number negation
+     %% inferred type of number negation
      ?_assertMatch("any()",
                    type_check_expr(_Env = "-spec f() -> any().",
                                    _Expr = "- f()")),
@@ -412,13 +426,14 @@ type_check_in_test_() ->
      ?_assertNot(type_check_forms(["-spec f(foo) -> ok.",
                                    "g() -> f(3.14)."])),
      %% Although there is no spec for f/1 - inferred type is `fun((any()) -> any())'
-     ?_assert(type_check_forms(["f(_) -> ok.",
+     ?_assert(type_check_forms(["f(_) -> 42.",
                                 "-spec g() -> fun((integer()) -> integer()).",
                                 "g() -> fun f/1."],
                                [infer])),
      %% Although there is not spec for f/1 - inferred arity does not match
      ?_assertNot(type_check_forms(["-spec g() -> fun(() -> integer()).",
-                                   "g() -> fun f/1."],
+                                   "g() -> fun f/1.",
+                                   "f(_) -> ok."],
                                   [infer]))
     ].
 
@@ -470,7 +485,7 @@ type_check_call_test_() ->
                                    "f() -> g().",
                                    "-spec g() -> number()."])),
      %% Passing an incompatible type to a spec'ed function
-     ?_assertNot(type_check_forms(["-spec int_top() -> gradualier:top().",
+     ?_assertNot(type_check_forms(["-spec int_top() -> gradualizer:top().",
                                    "int_top() -> 5.",
                                    "-spec int_arg(integer()) -> integer().",
                                    "int_arg(I) -> I + 1.",
@@ -539,12 +554,20 @@ type_check_clause_test_() ->
                                    "    try 1",
                                    "    catch _ -> error",
                                    "    end."])),
-     %% The return type of the after clause is ignored
-     ?_assert(type_check_forms(["-spec f(gradualizer:top()) -> integer().",
-                                "f(X) ->",
-                                "    try throw(error)",
-                                "    after error",
-                                "    end."])),
+
+     %% erlang:throw/1 needs gradualizer_db to be started
+     {setup,
+      fun setup_app/0,
+      fun cleanup_app/1,
+      [
+       %% The return type of the after clause is ignored
+       ?_assert(type_check_forms(["-spec f(gradualizer:top()) -> integer().",
+                                  "f(X) ->",
+                                  "    try throw(error)",
+                                  "    after error",
+                                  "    end."]))
+      ]},
+
      %% Correct try without an after block
      ?_assert(type_check_forms(["-spec f(gradualizer:top()) -> atom().",
                                 "f(X) ->",
@@ -552,7 +575,7 @@ type_check_clause_test_() ->
                                 "    catch _ -> error",
                                 "    end."])),
 
-     %% should emmit: "The clause on line 3 is expected to have 1 argument(s) but it has 0
+     %% should emit: "The clause on line 3 is expected to have 1 argument(s) but it has 0
      ?_assertNot(type_check_forms(["-spec h() -> fun((integer()) -> atom()).",
                                    "h() ->",
                                    "    fun() -> ok end."]))
@@ -564,24 +587,6 @@ add_type_pat_test_() ->
      {"Pattern matching record against any()",
       ?_assert(type_check_forms(["-record(r, {f}).",
                                  "f(#r{f = F}) -> F."]))}
-    ].
-
-%% it is the responsibility of the compiler to catch semantically
-%% invalid programs (such as one with undefined records)
-%% but to improve code coverage we test them quickly.
-%% Gradualizer should not crash but return error nicely
-illegal_forms_test_() ->
-    [%% undefined records
-     ?_assertNot(type_check_forms(["-spec f() -> gradualizer:top().",
-                                   "f() -> #r{f = 1}."])),
-     ?_assertNot(type_check_forms(["-record(r, {f1}).",
-                                   "-spec f() -> gradualizer:top().",
-                                   "f() -> #r{f2 = 1}."])),
-     %% invalid record_info
-     ?_assertNot(type_check_forms(["f() -> record_info(foo, bar)."])),
-     %% illegal pattern
-     ?_assertNot(type_check_forms(["-spec f(gradualizer:top()) -> gradualizer:top().",
-                                   "f(1 + A) -> ok."]))
     ].
 
 %%
@@ -597,7 +602,7 @@ cleanup_app(Apps) ->
     ok.
 
 subtype(T1, T2) ->
-    case typechecker:subtype(T1, T2, gradualizer_lib:create_tenv(?MODULE, [], [])) of
+    case typechecker:subtype(T1, T2, test_lib:create_env([])) of
         {true, _} ->
             true;
         false ->
@@ -605,13 +610,13 @@ subtype(T1, T2) ->
     end.
 
 glb(T1, T2) ->
-    glb(T1, T2, gradualizer_lib:create_tenv(?MODULE, [], [])).
+    glb(T1, T2, test_lib:create_env([])).
 
 glb(T1, T2, Env) ->
     typechecker:glb(T1, T2, Env).
 
 deep_normalize(T) ->
-    deep_normalize(T, gradualizer_lib:create_tenv(?MODULE, [], [])).
+    deep_normalize(T, test_lib:create_env([])).
 
 deep_normalize(T, TEnv) ->
     case typechecker:normalize(T, TEnv) of
@@ -624,24 +629,13 @@ type_check_forms(String) ->
     type_check_forms(String, []).
 
 type_check_forms(String, Opts) ->
-    [] =:= typechecker:type_check_forms(ensure_form_list(merl:quote(String)),
-                                        Opts).
-
-ensure_form_list(List) when is_list(List) ->
-    List;
-ensure_form_list(Other) ->
-    [Other].
+    [] =:= typechecker:type_check_forms(test_lib:ensure_form_list(merl:quote(String)), Opts).
 
 type_check_expr(EnvStr, ExprString) ->
     type_check_expr(EnvStr, ExprString, []).
 
 type_check_expr(EnvStr, ExprString, Opts) ->
-    Env = create_env(EnvStr, Opts),
+    Env = test_lib:create_env(EnvStr, Opts),
     Expr = merl:quote(ExprString),
     {Ty, _VarBinds, _Cs} = typechecker:type_check_expr(Env, Expr),
     typelib:pp_type(Ty).
-
-create_env(String, Opts) ->
-    Forms = ensure_form_list(merl:quote(String)),
-    ParseData = typechecker:collect_specs_types_opaques_and_functions(Forms),
-    typechecker:create_env(ParseData, Opts).
