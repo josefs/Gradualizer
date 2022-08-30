@@ -2462,7 +2462,10 @@ do_type_check_expr_in(Env, ResTy, {record, Anno, Name, Fields} = Record) ->
             {VarBinds, Cs2} = type_check_fields(Env, Rec, Fields),
             {VarBinds, constraints:combine(Cs1, Cs2)};
         {fields_tys, Tyss, Cs1} ->
-            case type_check_record_union_in(Env, Tyss, Fields) of
+            Tyss2 = lists:map(fun (?type(any)) -> get_record_fields(Name, Anno, Env);
+                                  (Other) -> Other
+                              end, Tyss),
+            case type_check_record_union_in(Env, Tyss2, Fields) of
                 none ->
                     {Ty, _VB, _Cs} = type_check_expr(Env#env{infer = true}, Record),
                     throw(type_error(Record, Ty, ResTy));
@@ -2493,7 +2496,10 @@ do_type_check_expr_in(Env, ResTy, {record, Anno, Exp, Name, Fields} = Record) ->
             {union_var_binds([VarBinds|VarBindsList], Env)
                 ,constraints:combine([Cs1, Cs2|Css])};
         {fields_tys, Tyss, Cs1} ->
-            case type_check_record_union_in(Env, Tyss, Fields) of
+            Tyss2 = lists:map(fun (?type(any)) -> get_record_fields(Name, Anno, Env);
+                                  (Other) -> Other
+                              end, Tyss),
+            case type_check_record_union_in(Env, Tyss2, Fields) of
                 none ->
                     {Ty, _VB, _Cs} = type_check_expr(Env#env{infer = true}, Record),
                     throw(type_error(Record, Ty, ResTy));
