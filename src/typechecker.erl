@@ -2462,7 +2462,7 @@ do_type_check_expr_in(Env, ResTy, {record, Anno, Name, Fields} = Record) ->
             {VarBinds, Cs2} = type_check_fields(Env, Rec, Fields),
             {VarBinds, constraints:combine(Cs1, Cs2)};
         {fields_tys, Tyss, Cs1} ->
-            case type_check_record_union_in(Env, Tyss, Fields) of
+            case type_check_record_union_in(Name, Anno, Tyss, Fields, Env) of
                 none ->
                     {Ty, _VB, _Cs} = type_check_expr(Env#env{infer = true}, Record),
                     throw(type_error(Record, Ty, ResTy));
@@ -2493,7 +2493,7 @@ do_type_check_expr_in(Env, ResTy, {record, Anno, Exp, Name, Fields} = Record) ->
             {union_var_binds([VarBinds|VarBindsList], Env)
                 ,constraints:combine([Cs1, Cs2|Css])};
         {fields_tys, Tyss, Cs1} ->
-            case type_check_record_union_in(Env, Tyss, Fields) of
+            case type_check_record_union_in(Name, Anno, Tyss, Fields, Env) of
                 none ->
                     {Ty, _VB, _Cs} = type_check_expr(Env#env{infer = true}, Record),
                     throw(type_error(Record, Ty, ResTy));
@@ -3341,16 +3341,24 @@ type_check_tuple_union_in(Env, [Tys|Tyss], Elems) ->
 type_check_tuple_union_in(_Env, [], _Elems) ->
     none.
 
--spec type_check_record_union_in(env(), [[typed_record_field()]], [expr()]) -> R when
+-spec type_check_record_union_in(Name, Anno, Tyss, Fields, Env) -> R when
+      Name :: atom(),
+      Anno :: anno(),
+      Tyss :: [[typed_record_field()]],
+      Fields :: [expr()],
+      Env :: env(),
       R :: {env(), constraints:constraints()} | none.
-type_check_record_union_in(Env, [Tys|Tyss], Fields) ->
+type_check_record_union_in(Name, Anno, [?type(any) | Tyss], Fields, Env) ->
+    Rec = get_record_fields(Name, Anno, Env),
+    type_check_record_union_in(Name, Anno, [Rec | Tyss], Fields, Env);
+type_check_record_union_in(Name, Anno, [Tys|Tyss], Fields, Env) ->
     try
         type_check_fields(Env, Tys, Fields)
     catch
-        E when element(1,E) == type_error ->
-            type_check_record_union_in(Env, Tyss, Fields)
+        E when element(1, E) == type_error ->
+            type_check_record_union_in(Name, Anno, Tyss, Fields, Env)
     end;
-type_check_record_union_in(_Env, [], _Fields) ->
+type_check_record_union_in(_Name, _Anno, [], _Fields, _Env) ->
     none.
 
 get_bounded_fun_type_list(Name, Arity, Env, P) ->
