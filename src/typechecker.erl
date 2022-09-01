@@ -4,6 +4,10 @@
 %% API used by gradualizer.erl
 -export([type_check_forms/2]).
 
+%% API used by the constraint solver
+-export([glb/2,
+         lub/2]).
+
 %% Functions used in unit tests.
 -export([type_check_expr/2,
          type_check_expr_in/3,
