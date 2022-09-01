@@ -5,7 +5,6 @@
          map_union/1,
          any_map/1,
          map_term/1,
-         map_type_var/1,
          map_pattern_no_spec/1]).
 
 -type t() :: #{apa := integer(), bepa := boolean()}.
@@ -28,15 +27,5 @@ any_map(#{apa := _}) -> ok.
 -spec map_term(gradualizer:top()) -> any().
 map_term(#{}) ->
     ok.
-
--spec map_type_var(nonempty_list(#{atom() => integer()} | atom())) -> integer().
-map_type_var(L) ->
-    V = lists:nth(2, L),
-    %% at this point V :: T
-    case V of
-        %% pattern matching a map against a type var
-        #{k := Int} ->
-            Int
-    end.
 
 map_pattern_no_spec(#{} = _Map) -> ok.
