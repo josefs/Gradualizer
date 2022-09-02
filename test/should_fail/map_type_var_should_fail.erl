@@ -1,6 +1,8 @@
--module(map_pattern_should_pass).
+-module(map_type_var_should_fail).
 
 -export([map_type_var/1]).
+
+-gradualizer([solve_constraints]).
 
 -spec map_type_var(nonempty_list(#{atom() => integer()} | atom())) -> integer().
 map_type_var(L) ->
