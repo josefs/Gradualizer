@@ -15,7 +15,8 @@
               clauses_stack     = []    :: [#clauses_controls{}],
               %% Performance hack: Unions larger than this limit are replaced by any() in normalization.
               union_size_limit          :: non_neg_integer(),
-              current_spec      = none  :: erl_parse:abstract_form() | none
+              current_spec      = none  :: erl_parse:abstract_form() | none,
+              solve_constraints = false :: boolean()
              }).
 
 -endif. %% __TYPECHECKER_HRL__

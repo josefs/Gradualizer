@@ -6,6 +6,8 @@
          poly_2/1,
          poly_fail/3]).
 
+-gradualizer([solve_constraints]).
+
 -spec lookup(T1, [{T1, T2}]) -> (none | T2).
 lookup(_, []) -> none;
 lookup(K, [{K, V}|_]) -> V;

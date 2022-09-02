@@ -4373,7 +4373,7 @@ type_check_function(Env, {function, _, Name, NArgs, Clauses}) ->
             FunTyNoPos = [ typelib:remove_pos(?assert_type(Ty, type())) || Ty <- FunTy ],
             Arity = clause_arity(hd(Clauses)),
             {_Vars, Cs} = check_clauses_fun(NewEnv, expect_fun_type(NewEnv, FunTyNoPos, Arity), Clauses);
-            constraints:solve(Cs, NewEnv);
+            maybe_solve_constraints(Cs, NewEnv);
         error ->
             throw(internal_error(missing_type_spec, Name, NArgs))
     end.
@@ -4386,6 +4386,15 @@ clause_arity({clause, _, Args, _, _}) ->
 arity(I) ->
     ?assert(I < 256, arity_overflow),
     ?assert_type(I, arity()).
+
+-spec maybe_solve_constraints(Cs, Env) -> {Env, Cs} when
+      Cs :: constraints:constraints(),
+      Env :: env().
+maybe_solve_constraints(Cs, #env{solve_constraints = true} = Env) ->
+    {NewCs, _Subst} = constraints:solve(Cs, Env),
+    {Env, NewCs};
+maybe_solve_constraints(Cs, Env) ->
+    {Env, Cs}.
 
 -spec position_info_from_spec(form() | forms() | none) -> erl_anno:anno().
 position_info_from_spec(none) ->
@@ -5408,7 +5417,8 @@ create_env(#parsedata{module    = Module
          infer = proplists:get_bool(infer, Opts),
          verbose = proplists:get_bool(verbose, Opts),
          union_size_limit = proplists:get_value(union_size_limit, Opts,
-                                                default_union_size_limit())}.
+                                                default_union_size_limit()),
+         solve_constraints = proplists:get_bool(solve_constraints, Opts)}.
 
 -spec default_union_size_limit() -> non_neg_integer().
 default_union_size_limit() -> 30.
