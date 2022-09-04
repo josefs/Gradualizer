@@ -3472,7 +3472,7 @@ instantiate(T = {op, _, _, _, _}, Map) ->
     {T, sets:new(), Map};
 instantiate(T = {remote_type, _, _}, Map) ->
     {T, sets:new(), Map};
-instantiate(T = {user_type, Ann, Name, Tys}, Map) ->
+instantiate(_ = {user_type, Ann, Name, Tys}, Map) ->
     {NewTys, Vars, NewMap} = instantiate_list(Tys, Map),
     {{user_type, Ann, Name, NewTys}, Vars, NewMap};
 instantiate(any, Map) ->
