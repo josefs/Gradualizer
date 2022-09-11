@@ -168,7 +168,7 @@ compatible(Ty1, Ty2, Env) ->
 
 -spec subtype(type(), type(), env()) -> compatible().
 subtype(Ty1, Ty2, Env) ->
-    try compat(Ty1, Ty2, sets:new(), Env) of
+    try compat(Ty1, Ty2, maps:new(), Env) of
         {_Memoization, Constraints} ->
             {true, Constraints}
     catch
@@ -189,9 +189,9 @@ any_subtype([Ty1|Tys], Ty, Env) ->
             any_subtype(Tys, Ty, Env)
     end.
 
--type acc(A) :: {A, constraints:constraints()}.
+-type acc(Seen) :: {Seen, constraints:constraints()}.
 
--type compat_acc() :: acc(sets:set(_)).
+-type compat_acc() :: acc(map()).
 
 % This function throws an exception in case of a type error
 
@@ -199,79 +199,82 @@ any_subtype([Ty1|Tys], Ty, Env) ->
 %% The main entry point is compat and all recursive calls should go via compat.
 %% The function compat_ty is just a convenience function to be able to
 %% pattern match on types in a nice way.
--spec compat(type(), type(), sets:set(_), env()) -> compat_acc().
-compat(T1, T2, A, Env) ->
+-spec compat(type(), type(), map(), env()) -> compat_acc().
+compat(T1, T2, Seen, Env) ->
     ?assert_normalized_anno(T1),
     ?assert_normalized_anno(T2),
     Ty1 = normalize(T1, Env),
     Ty2 = normalize(T2, Env),
-    case sets:is_element({Ty1, Ty2}, A) of
+    case compat_seen({T1, T2}, Seen) of
         true ->
-            ret(A);
+            ret(Seen);
         false ->
-            compat_ty(Ty1, Ty2, sets:add_element({Ty1, Ty2}, A), Env)
+            compat_ty(Ty1, Ty2, maps:put({T1, T2}, true, Seen), Env)
     end.
 
--spec compat_ty(type(), type(), sets:set(_), env()) -> compat_acc().
+compat_seen({T1, T2}, Seen) ->
+    maps:get({T1, T2}, Seen, false).
+
+-spec compat_ty(type(), type(), map(), env()) -> compat_acc().
 %% any() and term() are used as the unknown type in the gradual type system
-compat_ty({type, _, any, []}, _, A, _Env) ->
-    ret(A);
-compat_ty(_, {type, _, any ,[]}, A, _Env) ->
-    ret(A);
+compat_ty({type, _, any, []}, _, Seen, _Env) ->
+    ret(Seen);
+compat_ty(_, {type, _, any ,[]}, Seen, _Env) ->
+    ret(Seen);
 % gradualizer:top() is the top of the subtyping hierarchy
-compat_ty(_, ?top(), A, _Env) ->
-    ret(A);
+compat_ty(_, ?top(), Seen, _Env) ->
+    ret(Seen);
 
 %% None is the bottom of the subtyping relation
-compat_ty({type, _, none, []}, _, A, _Env) ->
-    ret(A);
+compat_ty({type, _, none, []}, _, Seen, _Env) ->
+    ret(Seen);
 %% Every type is subtype of itself
-compat_ty(T, T, A, _Env) ->
-    ret(A);
+compat_ty(T, T, Seen, _Env) ->
+    ret(Seen);
 
 %% Variables
-compat_ty({var, _, Var}, Ty, A, _Env) ->
-    {A, constraints:upper(Var, Ty)};
-compat_ty(Ty, {var, _, Var}, A, _Env) ->
-    {A, constraints:lower(Var, Ty)};
+compat_ty({var, _, Var}, Ty, Seen, _Env) ->
+    {Seen, constraints:upper(Var, Ty)};
+compat_ty(Ty, {var, _, Var}, Seen, _Env) ->
+    {Seen, constraints:lower(Var, Ty)};
 
 % TODO: There are several kinds of fun types.
 % Add support for them all eventually
 compat_ty({type, _, 'fun', [_, Res1]},
           {type, _, 'fun', [{type, _, any}, Res2]},
-          A, Env) ->
+          Seen, Env) ->
     %% We can assert the below,
     %% as we know Res2 is not {type, _, any}, which is explicitely matched on above.
     Res2 = ?assert_type(Res2, type()),
-    compat(Res1, Res2, A, Env);
+    compat(Res1, Res2, Seen, Env);
 compat_ty({type, _, 'fun', [{type, _, product, Args1}, Res1]},
           {type, _, 'fun', [{type, _, product, Args2}, Res2]},
-          A, Env) ->
-    {Ap, Cs} = compat_tys(Args2, Args1, A, Env),
+          Seen, Env) ->
+    {Ap, Cs} = compat_tys(Args2, Args1, Seen, Env),
     {Aps, Css} = compat(Res1, Res2, Ap, Env),
     {Aps, constraints:combine(Cs, Css)};
 
 %% Unions
-compat_ty({type, _, union, Tys1}, {type, _, union, Tys2}, A, Env) ->
-    lists:foldl(fun (Ty1, {A1, C1}) ->
-                    {A2, C2} = any_type(Ty1, Tys2, A1, Env),
-                    {A2, constraints:combine(C1, C2)}
-                end, {A, constraints:empty()}, Tys1);
-compat_ty(Ty1, {type, _, union, Tys2}, A, Env) ->
-    any_type(Ty1, Tys2, A, Env);
-compat_ty({type, _, union, Tys1}, Ty2, A, Env) ->
-    all_type(Tys1, Ty2, A, Env);
+compat_ty({type, _, union, Tys1}, {type, _, union, Tys2}, Seen, Env) ->
+    lists:foldl(fun (Ty1, {Seen1, C1}) ->
+                    {Seen2, C2} = any_type(Ty1, Tys2, Seen1, Env),
+                    {Seen2, constraints:combine(C1, C2)}
+                end, {Seen, constraints:empty()}, Tys1);
+compat_ty(Ty1, {type, _, union, Tys2}, Seen, Env) ->
+    any_type(Ty1, Tys2, Seen, Env);
+compat_ty({type, _, union, Tys1}, Ty2, Seen, Env) ->
+    all_type(Tys1, Ty2, Seen, Env);
 
 % Integer types
-compat_ty(Ty1, Ty2, A, _Env) when ?is_int_type(Ty1), ?is_int_type(Ty2) ->
+compat_ty(Ty1, Ty2, Seen, _Env) when ?is_int_type(Ty1), ?is_int_type(Ty2) ->
     case gradualizer_int:is_int_subtype(Ty1, Ty2) of
-        true -> ret(A);
+        true -> ret(Seen);
         false -> throw(nomatch)
     end;
 
 %% Atoms
-compat_ty({atom, _, _Atom}, {type, _, atom, []}, A, _Env) ->
-    ret(A);
+compat_ty({atom, _, _Atom}, {type, _, atom, []}, Seen, _Env) ->
+    ret(Seen);
 
 %% Binary, bitstring
 %%
@@ -289,31 +292,31 @@ compat_ty({atom, _, _Atom}, {type, _, atom, []}, A, _Env) ->
 %%
 compat_ty({type, _, binary, [{integer, _, M1}, {integer, _, N1}]},
           {type, _, binary, [{integer, _, M2}, {integer, _, N2}]},
-          A, _Env)
+          Seen, _Env)
   when N2 > 0, M1 >= M2,
        N1 rem N2 == 0,
        (M1 - M2) rem N2 == 0 ->
-    ret(A);
+    ret(Seen);
 
 %% Records with the same name, defined in different modules
 %% TODO: Record equivallend on tuple form
 compat_ty({type, P1, record, [{atom, _, Name}]},
-          {type, P2, record, [{atom, _, Name}]}, A, Env) ->
+          {type, P2, record, [{atom, _, Name}]}, Seen, Env) ->
     Fields1 = get_maybe_remote_record_fields(Name, P1, Env),
     Fields2 = get_maybe_remote_record_fields(Name, P2, Env),
-    compat_record_fields(Fields1, Fields2, A, Env);
+    compat_record_fields(Fields1, Fields2, Seen, Env);
 
 %% Records that have been refined on one side or the other
 compat_ty({type, Anno1, record, [{atom, _, Name}|Fields1]},
-          {type, Anno2, record, [{atom, _, Name}|Fields2]}, A, Env) ->
+          {type, Anno2, record, [{atom, _, Name}|Fields2]}, Seen, Env) ->
     AllFields1 = case Fields1 of [] -> get_record_fields_types(Name, Anno1, Env); _ -> Fields1 end,
     AllFields2 = case Fields2 of [] -> get_record_fields_types(Name, Anno2, Env); _ -> Fields2 end,
-    compat_record_tys(AllFields1, AllFields2, A, Env);
-compat_ty({type, _, record, _}, {type, _, tuple, any}, A, _Env) ->
-    ret(A);
+    compat_record_tys(AllFields1, AllFields2, Seen, Env);
+compat_ty({type, _, record, _}, {type, _, tuple, any}, Seen, _Env) ->
+    ret(Seen);
 
 %% Lists
-compat_ty(Ty1, Ty2, A, Env) when ?is_list_type(Ty1), ?is_list_type(Ty2) ->
+compat_ty(Ty1, Ty2, Seen, Env) when ?is_list_type(Ty1), ?is_list_type(Ty2) ->
     {Empty1, Elem1, Term1} = list_view(Ty1),
     {Empty2, Elem2, Term2} = list_view(Ty2),
     case {Empty1, Empty2} of
@@ -321,22 +324,22 @@ compat_ty(Ty1, Ty2, A, Env) when ?is_list_type(Ty1), ?is_list_type(Ty2) ->
         {_, any} -> ok;
         _        -> throw(nomatch)
     end,
-    compat_tys([Elem1, Term1], [Elem2, Term2], A, Env);
+    compat_tys([Elem1, Term1], [Elem2, Term2], Seen, Env);
 
 %% Tuples
-compat_ty({type, _, tuple, any}, {type, _, tuple, _Args}, A, _Env) ->
-    ret(A);
-compat_ty({type, _, tuple, _Args}, {type, _, tuple, any}, A, _Env) ->
-    ret(A);
-compat_ty({type, _, tuple, Args1}, {type, _, tuple, Args2}, A, Env) ->
-    compat_tys(Args1, Args2, A, Env);
+compat_ty({type, _, tuple, any}, {type, _, tuple, _Args}, Seen, _Env) ->
+    ret(Seen);
+compat_ty({type, _, tuple, _Args}, {type, _, tuple, any}, Seen, _Env) ->
+    ret(Seen);
+compat_ty({type, _, tuple, Args1}, {type, _, tuple, Args2}, Seen, Env) ->
+    compat_tys(Args1, Args2, Seen, Env);
 
 %% Maps
-compat_ty({type, _, map, [?any_assoc]}, {type, _, map, _Assocs}, A, _Env) ->
-    ret(A);
-compat_ty({type, _, map, _Assocs}, {type, _, map, [?any_assoc]}, A, _Env) ->
-    ret(A);
-compat_ty({type, _, map, Assocs1}, {type, _, map, Assocs2}, A, Env) ->
+compat_ty({type, _, map, [?any_assoc]}, {type, _, map, _Assocs}, Seen, _Env) ->
+    ret(Seen);
+compat_ty({type, _, map, _Assocs}, {type, _, map, [?any_assoc]}, Seen, _Env) ->
+    ret(Seen);
+compat_ty({type, _, map, Assocs1}, {type, _, map, Assocs2}, Seen, Env) ->
     %% Please see: https://github.com/josefs/Gradualizer/wiki/Map-types#subtyping-rule-long-version
     %% for the below rule definitions:
     %% 2. For all mandatory associations K2 := V2 in M2,
@@ -347,120 +350,119 @@ compat_ty({type, _, map, Assocs1}, {type, _, map, Assocs2}, A, Env) ->
                   end,
     MandatoryAssocs1 = lists:filter(IsMandatory, Assocs1),
     MandatoryAssocs2 = lists:filter(IsMandatory, Assocs2),
-    {A3, Cs3} = lists:foldl(fun ({type, _, map_field_exact, _} = Assoc2, {A2, Cs2}) ->
+    {Seen3, Cs3} = lists:foldl(fun ({type, _, map_field_exact, _} = Assoc2, {Seen2, Cs2}) ->
                                     %% This nested loop will only throw nomatch, if there's at least
                                     %% one assoc in MandatoryAssocs1;
                                     %% if that's not the case, let's throw now.
                                     length(MandatoryAssocs1) == 0 andalso throw(nomatch),
                                     case lists:foldl(fun
-                                                         (_Assoc1, {A1, Cs1}) -> {A1, Cs1};
+                                                         (_Assoc1, {Seen1, Cs1}) -> {Seen1, Cs1};
                                                          (Assoc1, nomatch) ->
                                                              try
-                                                                 compat(Assoc1, Assoc2, A2, Env)
+                                                                 compat(Assoc1, Assoc2, Seen2, Env)
                                                              catch
                                                                  nomatch -> nomatch
                                                              end
                                                      end, nomatch, MandatoryAssocs1)
                                     of
                                         nomatch -> throw(nomatch);
-                                        {A1, Cs1} -> {A1, constraints:combine(Cs1, Cs2)}
+                                        {Seen1, Cs1} -> {Seen1, constraints:combine(Cs1, Cs2)}
                                     end
-                            end, ret(A), MandatoryAssocs2),
+                            end, ret(Seen), MandatoryAssocs2),
     %% 1. For all associations K1 <Assoc1> V1 in M1,
     %% there exists an association K2 <Assoc2> V2 in M2...
     lists:foldl(fun (Assoc1, {As, Cs1}) ->
                         {Ax, Cs2} = any_type(Assoc1, Assocs2, As, Env),
                         {Ax, constraints:combine(Cs1, Cs2)}
-                end, {A3, Cs3}, Assocs1);
+                end, {Seen3, Cs3}, Assocs1);
 compat_ty({type, _, AssocTag1, [Key1, Val1]},
-          {type, _, AssocTag2, [Key2, Val2]}, A, Env)
+          {type, _, AssocTag2, [Key2, Val2]}, Seen, Env)
         when AssocTag1 == map_field_assoc, AssocTag2 == map_field_assoc;
              AssocTag1 == map_field_exact, AssocTag2 == map_field_exact;
              AssocTag1 == map_field_exact, AssocTag2 == map_field_assoc ->
     %% For M1 <: M2, mandatory fields in M2 must be mandatory fields in M1
-    {A1, Cs1} = compat(Key1, Key2, A, Env),
-    {A2, Cs2} = compat(Val1, Val2, A1, Env),
-    {A2, constraints:combine(Cs1, Cs2)};
+    {Seen1, Cs1} = compat(Key1, Key2, Seen, Env),
+    {Seen2, Cs2} = compat(Val1, Val2, Seen1, Env),
+    {Seen2, constraints:combine(Cs1, Cs2)};
 
 %% Opaque user types
-compat_ty({user_type, Anno, Name, Args}, {user_type, Anno, Name, Args}, A, _Env) ->
-    ret(A);
-compat_ty({user_type, Anno, Name, Args1}, {user_type, Anno, Name, Args2}, A, Env)
+compat_ty({user_type, Anno, Name, Args}, {user_type, Anno, Name, Args}, Seen, _Env) ->
+    ret(Seen);
+compat_ty({user_type, Anno, Name, Args1}, {user_type, Anno, Name, Args2}, Seen, Env)
   when length(Args1) == length(Args2) ->
-    lists:foldl(fun ({Arg1, Arg2}, {As1, Cs1}) ->
-                        {As2, Cs2} = compat(Arg1, Arg2, As1, Env),
-                        {As2, constraints:combine(Cs1, Cs2)}
-                end, ret(A), lists:zip(Args1, Args2));
+    lists:foldl(fun ({Arg1, Arg2}, {Seen1, Cs1}) ->
+                        {Seen2, Cs2} = compat(Arg1, Arg2, Seen1, Env),
+                        {Seen2, constraints:combine(Cs1, Cs2)}
+                end, ret(Seen), lists:zip(Args1, Args2));
 
 compat_ty(_Ty1, _Ty2, _, _) ->
     throw(nomatch).
 
--spec compat_tys([type()], [type()], sets:set(_), env()) -> compat_acc().
-compat_tys([], [], A, _Env) ->
-    ret(A);
-compat_tys([Ty1|Tys1], [Ty2|Tys2], A, Env) ->
-    {Ap, Cs} =
-    compat(Ty1 ,Ty2, A, Env),
-    {Aps, Css} = compat_tys(Tys1, Tys2, Ap, Env),
-    {Aps, constraints:combine(Cs, Css)};
+-spec compat_tys([type()], [type()], map(), env()) -> compat_acc().
+compat_tys([], [], Seen, _Env) ->
+    ret(Seen);
+compat_tys([Ty1|Tys1], [Ty2|Tys2], Seen, Env) ->
+    {Seen1, Cs} = compat(Ty1 ,Ty2, Seen, Env),
+    {Seen2, Css} = compat_tys(Tys1, Tys2, Seen1, Env),
+    {Seen2, constraints:combine(Cs, Css)};
 compat_tys(_Tys1, _Tys2, _, _) ->
     throw(nomatch).
 
 
--spec compat_record_tys([type()], [type()], sets:set(_), env()) -> compat_acc().
-compat_record_tys([], [], A, _Env) ->
-    ret(A);
-compat_record_tys([?type_field_type(Name, Field1)|Fields1], [?type_field_type(Name, Field2)|Fields2], A, Env) ->
-    {A1, Cs1} = compat(Field1, Field2, A, Env),
-    {A2, Cs2} = compat_record_tys(Fields1, Fields2, A1, Env),
-    {A2, constraints:combine(Cs1, Cs2)};
+-spec compat_record_tys([type()], [type()], map(), env()) -> compat_acc().
+compat_record_tys([], [], Seen, _Env) ->
+    ret(Seen);
+compat_record_tys([?type_field_type(Name, Field1)|Fields1], [?type_field_type(Name, Field2)|Fields2], Seen, Env) ->
+    {Seen1, Cs1} = compat(Field1, Field2, Seen, Env),
+    {Seen2, Cs2} = compat_record_tys(Fields1, Fields2, Seen1, Env),
+    {Seen2, constraints:combine(Cs1, Cs2)};
 compat_record_tys(_, _, _, _) ->
     %% Mismatching number of fields
     throw(nomatch).
 
 %% Two records are compatible if they have the same name (defined in different
 %% modules) and they have the same number of fields and the field types match.
--spec compat_record_fields([_], [_], sets:set(_), env()) -> compat_acc().
-compat_record_fields([], [], A, _Env) ->
-    ret(A);
+-spec compat_record_fields([_], [_], map(), env()) -> compat_acc().
+compat_record_fields([], [], Seen, _Env) ->
+    ret(Seen);
 compat_record_fields([{typed_record_field, _NameAndDefaultValue1, T1} | Fs1],
                      [{typed_record_field, _NameAndDefaultValue2, T2} | Fs2],
-                     A, Env) ->
-    {A1, Cs1} = compat(T1, T2, A, Env),
-    {A2, Cs2} = compat_record_fields(Fs1, Fs2, A1, Env),
-    {A2, constraints:combine(Cs1, Cs2)};
+                     Seen, Env) ->
+    {Seen1, Cs1} = compat(T1, T2, Seen, Env),
+    {Seen2, Cs2} = compat_record_fields(Fs1, Fs2, Seen1, Env),
+    {Seen2, constraints:combine(Cs1, Cs2)};
 compat_record_fields(_, _, _, _) ->
     %% Mismatching number of fields
     throw(nomatch).
 
 %% Returns a successful matching of two types. Convenience function for when
 %% there were no type variables involved.
--spec ret(A) -> acc(A) when
-      A :: sets:set(_) | type().
-ret(A) ->
-    {A, constraints:empty()}.
+-spec ret(Seen) -> acc(Seen) when
+      Seen :: map() | type().
+ret(Seen) ->
+    {Seen, constraints:empty()}.
 
--spec any_type(type(), [type()], sets:set(_), env()) -> compat_acc().
-any_type(_Ty, [], _A, _Env) ->
+-spec any_type(type(), [type()], map(), env()) -> compat_acc().
+any_type(_Ty, [], _Seen, _Env) ->
     throw(nomatch);
-any_type(Ty, [Ty1|Tys], A, Env) ->
+any_type(Ty, [Ty1|Tys], Seen, Env) ->
     try
-        compat(Ty, Ty1, A, Env)
+        compat(Ty, Ty1, Seen, Env)
     catch
         nomatch ->
-            any_type(Ty, Tys, A, Env)
+            any_type(Ty, Tys, Seen, Env)
     end.
 
 %% @doc All types in `Tys' must be compatible with `Ty'.
 %% Returns all the gather memoizations and constraints.
 %% Does not return (throws `nomatch') if any of the types is not compatible.
--spec all_type([type()], type(), sets:set(_), env()) -> compat_acc().
-all_type(Tys, Ty, A, Env) ->
-    all_type(Tys, Ty, A, [], Env).
+-spec all_type([type()], type(), map(), env()) -> compat_acc().
+all_type(Tys, Ty, Seen, Env) ->
+    all_type(Tys, Ty, Seen, [], Env).
 
--spec all_type([type()], type(), sets:set(_), [constraints:constraints()], env()) -> compat_acc().
-all_type([], _Ty, A, Css, _Env) ->
-    {A, constraints:combine(Css)};
+-spec all_type([type()], type(), map(), [constraints:constraints()], env()) -> compat_acc().
+all_type([], _Ty, Seen, Css, _Env) ->
+    {Seen, constraints:combine(Css)};
 all_type([Ty1|Tys], Ty, AIn, Css, Env) ->
     %% TODO: call compat/4 instead of compat_ty/4 here?
     {AOut, Cs} = compat_ty(Ty1, Ty, AIn, Env),
@@ -728,7 +730,7 @@ glb_ty({type, _, 'fun', [{type, _, product, Args1}, Res1]},
     {Res, Cs} = glb(Res1, Res2, A, Env),
     Subtype =
         fun(Ts1, Ts2) ->
-            try compat_tys(Ts1, Ts2, sets:new(), Env) of
+            try compat_tys(Ts1, Ts2, maps:new(), Env) of
                 {_, NoConstraints} -> true;
                 _ -> false
             catch throw:nomatch -> false end
