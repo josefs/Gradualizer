@@ -790,13 +790,7 @@ normalize(Ty, Env) ->
 %% The third argument is a set of user types that we've already unfolded.
 %% It's important that we don't keep unfolding such types because it will
 %% lead to infinite recursion.
-%% TODO: shouldn't {type, _, tuple, Elems} also be normalized?
 -spec normalize_rec(type(), env(), map()) -> type().
-normalize_rec({type, _, record, [{atom, _, Name} | Fields]}, Env, Unfolded)
-  when length(Fields) > 0 ->
-    NormFields = [type_field_type(FieldName, normalize_rec(Type, Env, Unfolded))
-                  || ?type_field_type(FieldName, Type) <- Fields],
-    type_record(Name, NormFields);
 normalize_rec({type, _, union, Tys} = Type, Env, Unfolded) ->
     case maps:get(mta(Type, Env), Unfolded, no_type) of
         {type, NormType} -> NormType;
