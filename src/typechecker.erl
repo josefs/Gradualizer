@@ -4262,10 +4262,10 @@ add_types_pats([Pat | Pats], [Ty | Tys], Env, PatTysAcc, UBoundsAcc, CsAcc) ->
     UBound = denormalize(Ty, UBoundNorm, NormTy),
     add_types_pats(Pats, Tys, Env2, [PatTy|PatTysAcc], [UBound|UBoundsAcc], [Cs1|CsAcc]).
 
-denormalize(Ty, NormTy, OrigNormTy) ->
-    case NormTy of
-        OrigNormTy -> Ty;
-        _          -> NormTy
+denormalize(OrigTy, ComputedTy, NormTy) ->
+    case ComputedTy of
+        NormTy -> OrigTy;
+        _      -> ComputedTy
     end.
 
 %% Type check a pattern against a normalized type and add variable bindings.
