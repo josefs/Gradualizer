@@ -7,9 +7,9 @@
 -type type() :: gradualizer_type:abstract_type().
 
 -record(constraints, {
-          lower_bounds = #{}        :: #{ var() => [type()] },
-          upper_bounds = #{}        :: #{ var() => [type()] },
-          exist_vars   = sets:new() :: sets:set(var())
+          lower_bounds = #{} :: #{ var() => [type()] },
+          upper_bounds = #{} :: #{ var() => [type()] },
+          exist_vars   = #{} :: #{ var() => true }
          }).
 
 -type constraints() :: #constraints{}.
@@ -21,7 +21,7 @@ empty() ->
 
 -spec add_var(var(), constraints()) -> constraints().
 add_var(Var, Cs) ->
-    Cs#constraints{ exist_vars = sets:add_element(Var, Cs#constraints.exist_vars) }.
+    Cs#constraints{ exist_vars = maps:put(Var, true, Cs#constraints.exist_vars) }.
 
 -spec upper(var(), type()) -> constraints().
 upper(Var, Ty) ->
@@ -54,7 +54,7 @@ combine([C1, C2 | Cs]) ->
                                         ,C1#constraints.upper_bounds
                                         ,C2#constraints.upper_bounds)
                     , exist_vars =
-                          sets:union(C1#constraints.exist_vars
+                          maps:merge(C1#constraints.exist_vars
                                     ,C2#constraints.exist_vars)
                     },
     combine([C | Cs]).
