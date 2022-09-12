@@ -3,10 +3,9 @@
 
 -type pred() :: fun((term()) -> boolean()).
 
--record(state, {
-                pred   :: pred()}).
+-record(state, {pred :: pred()}).
 
 -spec foo(term(), #state{}) -> boolean().
 foo(Event, State) ->
-    #state{ pred = Pred} = State,
-Pred(Event).
+    #state{pred = Pred} = State,
+    Pred(Event).
