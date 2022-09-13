@@ -843,11 +843,6 @@ normalize_rec({op, _, _, _Arg1, _Arg2} = Op, _Env, _Unfolded) ->
 normalize_rec({type, Ann, range, [T1, T2]}, Env, Unfolded) ->
     {type, Ann, range, [normalize_rec(T1, Env, Unfolded),
                         normalize_rec(T2, Env, Unfolded)]};
-normalize_rec({type, Ann, map, Assocs}, Env, Unfolded) when is_list(Assocs) ->
-    {type, Ann, map, [normalize_rec(As, Env, Unfolded) || As <- Assocs]};
-normalize_rec({type, Ann, Assoc, KeyVal}, Env, Unfolded)
-  when Assoc =:= map_field_assoc; Assoc =:= map_field_exact ->
-    {type, Ann, Assoc, [normalize_rec(KV, Env, Unfolded) || KV <- KeyVal]};
 normalize_rec(Type, _Env, _Unfolded) ->
     expand_builtin_aliases(Type).
 
