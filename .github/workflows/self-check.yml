@@ -1,4 +1,4 @@
-name: Build and test
+name: Self check
 
 on:
   push:
@@ -13,7 +13,7 @@ jobs:
     name: Erlang ${{matrix.otp}}
     strategy:
       matrix:
-        otp: ['22.3.4.20', '23.3.4.7', '24.3.4.4']
+        otp: ['24.3.4.4']
     steps:
       - uses: actions/checkout@v2
       - uses: erlef/setup-beam@v1
@@ -21,5 +21,12 @@ jobs:
           otp-version: ${{matrix.otp}}
       - name: "Build"
         run: "make"
-      - name: "Run tests"
-        run: "make tests"
+      - name: "Self check"
+        run: |
+          if [ $(make gradualize | wc -l) -lt 100 ]; then
+            echo "ok, self reported errors are in check"
+            exit 0
+          else
+            echo "we've regressed, failing the job"
+            exit 1
+          fi
