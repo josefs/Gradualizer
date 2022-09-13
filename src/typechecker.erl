@@ -856,8 +856,12 @@ expand_builtin_aliases({type, Ann, term, []}) ->
     {type, Ann, any, []};
 expand_builtin_aliases({type, Ann, binary, []}) ->
     {type, Ann, binary, [{integer, Ann, 0}, {integer, Ann, 8}]};
+expand_builtin_aliases({type, Ann, nonempty_binary, []}) ->
+    {type, Ann, binary, [{integer, Ann, 8}, {integer, Ann, 8}]};
 expand_builtin_aliases({type, Ann, bitstring, []}) ->
     {type, Ann, binary, [{integer, Ann, 0}, {integer, Ann, 1}]};
+expand_builtin_aliases({type, Ann, nonempty_bitstring, []}) ->
+    {type, Ann, binary, [{integer, Ann, 1}, {integer, Ann, 1}]};
 expand_builtin_aliases({type, Ann, boolean, []}) ->
     {type, Ann, union, [{atom, Ann, false}, {atom, Ann, true}]};
 expand_builtin_aliases({type, Ann, bool, []}) ->
