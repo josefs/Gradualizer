@@ -796,8 +796,9 @@ normalize_rec({type, _, union, Tys} = Type, Env, Unfolded) ->
         {type, NormType} -> NormType;
         no_type ->
             UnionSizeLimit = Env#env.union_size_limit,
-            Types = flatten_unions(Tys, Env, maps:put(Type, {type, Type}, Unfolded)),
-            case merge_union_types(Types, Env) of
+            Types = flatten_unions(Tys, Env),
+            NormTypes = lists:map(fun (Ty) -> normalize_rec(Ty, Env, Unfolded) end, Types),
+            case merge_union_types(NormTypes, Env) of
                 []  -> type(none);
                 [T] -> T;
                 %% Performance hack: Unions larger than this value are replaced by any().
@@ -933,20 +934,15 @@ expand_builtin_aliases(Type) ->
 %% * Remove subtypes of other types in the same union; keeping any() separate
 %% * Merge integer types, including singleton integers and ranges
 %%   1, 1..5, integer(), non_neg_integer(), pos_integer(), neg_integer()
--spec flatten_unions([type()], env(), map()) -> [type()].
-flatten_unions(Tys, Env, Unfolded) ->
-    [ FTy || Ty <- Tys, FTy <- flatten_type(normalize_rec(Ty, Env, Unfolded), Env, Unfolded) ].
+-spec flatten_unions([type()], env()) -> [type()].
+flatten_unions(Tys, Env) ->
+    [ FTy || Ty <- Tys, FTy <- flatten_type(Ty, Env) ].
 
-flatten_type({type, _, none, []}, _Env, _Unfolded) ->
+flatten_type({type, _, none, []}, _Env) ->
     [];
-flatten_type({type, _, union, Tys} = Type, Env, Unfolded) ->
-    case maps:get(mta(Type, Env), Unfolded, no_type) of
-        {type, NormType} -> [NormType];
-        no_type ->
-            UnfoldedNew = maps:put(mta(Type, Env), {type, Type}, Unfolded),
-            flatten_unions(Tys, Env, UnfoldedNew)
-    end;
-flatten_type(Ty, _Env, _Unfolded) ->
+flatten_type({type, _, union, Tys}, Env) ->
+    flatten_unions(Tys, Env);
+flatten_type(Ty, _Env) ->
     [Ty].
 
 %% Merges overlapping integer types (including ranges and singletons).
