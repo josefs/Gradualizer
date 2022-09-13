@@ -1,7 +1,12 @@
 -module(test_lib).
 
--export([create_env/1, create_env/2,
+-export([create_env_from_file/2,
+         create_env/1, create_env/2,
          ensure_form_list/1]).
+
+create_env_from_file(FileName, Opts) ->
+    {ok, Data} = file:read_file(FileName),
+    create_env(binary_to_list(Data), Opts).
 
 create_env(Opts) ->
     create_env("", Opts).
@@ -24,7 +29,8 @@ create_env(Opts) ->
 %%      false,false,true}
 create_env(TypeEnvString, Opts) ->
     Forms = ensure_form_list(merl:quote(lists:flatten(TypeEnvString))),
-    ParseData = typechecker:collect_specs_types_opaques_and_functions(Forms),
+    ErlParseForms = lists:map(fun erl_syntax:revert/1, Forms),
+    ParseData = typechecker:collect_specs_types_opaques_and_functions(ErlParseForms),
     typechecker:create_env(ParseData, Opts).
 
 ensure_form_list(List) when is_list(List) ->
