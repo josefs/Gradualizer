@@ -788,13 +788,7 @@ normalize(Ty, Env) ->
 %% The third argument is a set of user types that we've already unfolded.
 %% It's important that we don't keep unfolding such types because it will
 %% lead to infinite recursion.
-%% TODO: shouldn't {type, _, tuple, Elems} also be normalized?
 -spec normalize_rec(type(), env(), map()) -> type().
-normalize_rec({type, _, record, [{atom, _, Name} | Fields]}, Env, Unfolded)
-  when length(Fields) > 0 ->
-    NormFields = [type_field_type(FieldName, normalize_rec(Type, Env, Unfolded))
-                  || ?type_field_type(FieldName, Type) <- Fields],
-    type_record(Name, NormFields);
 normalize_rec({type, _, union, Tys} = Type, Env, Unfolded) ->
     case maps:get(mta(Type, Env), Unfolded, no_type) of
         {type, NormType} -> NormType;
@@ -849,11 +843,6 @@ normalize_rec({op, _, _, _Arg1, _Arg2} = Op, _Env, _Unfolded) ->
 normalize_rec({type, Ann, range, [T1, T2]}, Env, Unfolded) ->
     {type, Ann, range, [normalize_rec(T1, Env, Unfolded),
                         normalize_rec(T2, Env, Unfolded)]};
-normalize_rec({type, Ann, map, Assocs}, Env, Unfolded) when is_list(Assocs) ->
-    {type, Ann, map, [normalize_rec(As, Env, Unfolded) || As <- Assocs]};
-normalize_rec({type, Ann, Assoc, KeyVal}, Env, Unfolded)
-  when Assoc =:= map_field_assoc; Assoc =:= map_field_exact ->
-    {type, Ann, Assoc, [normalize_rec(KV, Env, Unfolded) || KV <- KeyVal]};
 normalize_rec(Type, _Env, _Unfolded) ->
     expand_builtin_aliases(Type).
 
