@@ -7,6 +7,7 @@ deps
 *.log
 *.txt
 logs
+/*.erl
 /.dialyzer_plt
 *~
 erl_crash.dump
