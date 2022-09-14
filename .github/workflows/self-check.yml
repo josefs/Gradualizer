@@ -1,0 +1,33 @@
+name: Self check
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request: []
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Erlang ${{matrix.otp}}
+    strategy:
+      matrix:
+        otp: ['24.3.4.4']
+    steps:
+      - uses: actions/checkout@v2
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{matrix.otp}}
+      - name: "Build"
+        run: "make"
+      - name: "Self check"
+        run: |
+          ERROR_LINES=$(make gradualize | wc -l)
+          if [ $ERROR_LINES -lt 100 ]; then
+            echo "ok, self reported errors are in check: $ERROR_LINES < 100"
+            exit 0
+          else
+            echo "we've regressed, failing the job: $ERROR_LINES >= 100"
+            exit 1
+          fi
