@@ -11,10 +11,12 @@ main(Args) ->
             halt(1);
         {ok, Files, Opts} ->
             start_application(Opts),
-            case gradualizer:type_check_files(Files, Opts) of
-                ok -> ok;
-                nok -> halt(1)
-            end
+            R = case gradualizer:type_check_files(Files, Opts) of
+                    ok -> ok;
+                    nok -> halt(1)
+                end,
+            gradualizer_tracer:flush(),
+            R
     end.
 
 start_application(Opts) ->
@@ -24,6 +26,8 @@ start_application(Opts) ->
     %% If gradualizer is run as an escript this should not be necessary, but better safe than sorry.
     ok = application:load(gradualizer),
     application:set_env(gradualizer, options, Opts),
+    %% We could start the tracer based on a CLI flag, but it's config is compile-time anyway.
+    %gradualizer_tracer:start(),
     {ok, _} = application:ensure_all_started(gradualizer).
 
 -spec handle_args([string()]) -> help | version | {error, string()} |
