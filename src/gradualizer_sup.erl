@@ -1,6 +1,4 @@
-%%%-------------------------------------------------------------------
-%%% @doc Main Gradualizer supervisor
-%%%-------------------------------------------------------------------
+%% @doc Main Gradualizer supervisor
 -module(gradualizer_sup).
 
 -behaviour(supervisor).

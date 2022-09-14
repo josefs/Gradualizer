@@ -1,4 +1,4 @@
-%% @doc Collect exported functions and types from multiple files.
+%% @doc Collects exported functions and types from multiple files.
 %%
 %% For exported functions with missing spec, a spec is generated with any()
 %% as the type for all parameters and return values.

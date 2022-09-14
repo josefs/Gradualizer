@@ -8,8 +8,7 @@
 %% Computes the type of a bitstring expression or pattern based on the sizes
 %% of the elements. The returned type is a normalized bitstring type.
 -spec compute_type(ExprOrPat) -> gradualizer_type:abstract_type()
-        when ExprOrPat :: {bin, _, _},
-             ExprOrPat :: gradualizer_type:abstract_expr().
+        when ExprOrPat :: {bin, _, _}.
 compute_type(Bin) ->
     View = bin_view(Bin),
     bitstr_view_to_type(View).
