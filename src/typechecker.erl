@@ -61,6 +61,7 @@
 
 -export_type([env/0,
               venv/0,
+              type/0,
               typed_record_field/0]).
 
 -type expr() :: gradualizer_type:abstract_expr().
@@ -4582,10 +4583,10 @@ should_list_pat_enable_exhaustiveness_check(_) -> false.
 
 %% TODO: This is incomplete!
 %% To properly check pattern exhaustiveness we have to consider bound variables.
-%% Pattern: <<>>
+%% Pattern: `<<>>'
 should_bin_pat_enable_exhaustiveness_check([]) ->
     true;
-%% Pattern: <<_, _/bytes>>
+%% Pattern: `<<_, _/bytes>>'
 should_bin_pat_enable_exhaustiveness_check([{bin_element, _, {var, _, _}, _, _},
                        {bin_element, _, {var, _, _}, _, [Bytes]}])
   when Bytes =:= bytes; Bytes =:= binary ->

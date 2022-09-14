@@ -2,10 +2,13 @@
 %% by tracing Gradualizer internals more efficient.
 %% Configuration of this module is compile time, but using the tracing facilities is more efficient
 %% than traditional printf-debugging anyway.
+%%
+%% See also the module `g' for an example of interactive tracing in the shell.
 
 -module(gradualizer_tracer).
 
 -export([start/0,
+         stop/0,
          flush/0,
          debug/1]).
 
@@ -94,6 +97,7 @@ just_tenv(Args) ->
 
 %% @doc Start tracing.
 start() ->
+    stop(),
     {ok, Tracer} = dbg:tracer(process, {trace_fun(), ok}),
     %dbg:p(all, [call, arity, return_to]),
     dbg:p(all, [call, return_to]),
@@ -131,6 +135,10 @@ start() ->
     %dbg:tpl(typechecker, add_type_pat_union, 3, x),
     %dbg:tpl(typechecker, denormalize, x),
     %dbg:tpl(typechecker, type_check_block_in, x),
+    %dbg:tpl(typechecker, type_check_block_in, x),
+
+    %dbg:tpl(typechecker, type_check_expr, x),
+    %dbg:tpl(typechecker, do_type_check_expr, x),
 
     %dbg:tpl(typechecker, type_check_expr_in, x),
     %dbg:tpl(typechecker, do_type_check_expr_in, x),
@@ -161,6 +169,10 @@ start() ->
 
     application:set_env(gradualizer, tracer, Tracer),
     ok.
+
+%% @doc Stop tracing.
+stop() ->
+    dbg:stop_clear().
 
 %% @doc `debug/1' is a trace point to trace when pinpointing issues across several candidate
 %% locations. Uncomment the below in `start/0':
