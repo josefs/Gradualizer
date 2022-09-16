@@ -1544,7 +1544,7 @@ subst_ty(_, Ty) -> Ty.
 %% and the expression to type check.
 %% Returns the type of the expression, a collection of variables bound in
 %% the expression together with their type and constraints.
--spec type_check_expr(env(), expr()) -> {any(), env(), constraints:constraints()}.
+-spec type_check_expr(env(), expr()) -> {type(), env(), constraints:constraints()}.
 type_check_expr(Env, Expr) ->
     Res = {Ty, _VarBinds, _Cs} = do_type_check_expr(Env, Expr),
     ?verbose(Env, "~sPropagated type of ~ts :: ~ts~n",
@@ -1552,7 +1552,7 @@ type_check_expr(Env, Expr) ->
     Res.
 
 %% TODO: move tenv to back
--spec do_type_check_expr(env(), expr()) -> {any(), env(), constraints:constraints()}.
+-spec do_type_check_expr(env(), expr()) -> {type(), env(), constraints:constraints()}.
 do_type_check_expr(Env, {var, _P, Var}) ->
     case Env#env.venv of
         #{Var := Ty} ->
