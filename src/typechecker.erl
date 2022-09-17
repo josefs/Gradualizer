@@ -1714,10 +1714,10 @@ do_type_check_expr(#env{infer = true} = Env, {float, _, _F}) ->
 %% Maps
 do_type_check_expr(Env, {map, _, Assocs}) ->
     {AssocTys, VB, Cs} = type_check_assocs(Env, Assocs),
-    % TODO: When the --infer flag is set we should return the type of the map
     case Env#env.infer of
         true ->
-            {type(map, AssocTys), VB, Cs};
+            MapTy = update_map_type(type(map, []), AssocTys),
+            {MapTy, VB, Cs};
         false ->
             {type(any), VB, Cs}
     end;
