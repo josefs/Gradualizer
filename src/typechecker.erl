@@ -1544,7 +1544,7 @@ subst_ty(_, Ty) -> Ty.
 %% and the expression to type check.
 %% Returns the type of the expression, a collection of variables bound in
 %% the expression together with their type and constraints.
--spec type_check_expr(env(), expr()) -> {any(), env(), constraints:constraints()}.
+-spec type_check_expr(env(), expr()) -> {type(), env(), constraints:constraints()}.
 type_check_expr(Env, Expr) ->
     Res = {Ty, _VarBinds, _Cs} = do_type_check_expr(Env, Expr),
     ?verbose(Env, "~sPropagated type of ~ts :: ~ts~n",
@@ -1552,7 +1552,7 @@ type_check_expr(Env, Expr) ->
     Res.
 
 %% TODO: move tenv to back
--spec do_type_check_expr(env(), expr()) -> {any(), env(), constraints:constraints()}.
+-spec do_type_check_expr(env(), expr()) -> {type(), env(), constraints:constraints()}.
 do_type_check_expr(Env, {var, _P, Var}) ->
     case Env#env.venv of
         #{Var := Ty} ->
@@ -1714,10 +1714,10 @@ do_type_check_expr(#env{infer = true} = Env, {float, _, _F}) ->
 %% Maps
 do_type_check_expr(Env, {map, _, Assocs}) ->
     {AssocTys, VB, Cs} = type_check_assocs(Env, Assocs),
-    % TODO: When the --infer flag is set we should return the type of the map
     case Env#env.infer of
         true ->
-            {type(map, AssocTys), VB, Cs};
+            MapTy = update_map_type(type(map, []), AssocTys),
+            {MapTy, VB, Cs};
         false ->
             {type(any), VB, Cs}
     end;
