@@ -939,7 +939,12 @@ expand_builtin_aliases(Type) ->
 %%   1, 1..5, integer(), non_neg_integer(), pos_integer(), neg_integer()
 -spec flatten_unions([type()], env(), map()) -> [type()].
 flatten_unions(Tys, Env, Unfolded) ->
-    [ FTy || Ty <- Tys, FTy <- flatten_type(normalize_rec(Ty, Env, Unfolded), Env, Unfolded) ].
+    lists:flatmap(fun (Ty) -> flatten_union(Ty, Env, Unfolded) end, Tys).
+
+flatten_union({user_type, _, _, _} = Ty, _Env, _Unfolded) ->
+    [Ty];
+flatten_union(Ty, Env, Unfolded) ->
+    flatten_type(normalize_rec(Ty, Env, Unfolded), Env, Unfolded).
 
 flatten_type({type, _, none, []}, _Env, _Unfolded) ->
     [];
