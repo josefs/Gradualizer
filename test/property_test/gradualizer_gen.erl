@@ -8,6 +8,7 @@ abstract_type() ->
     Opts = [{weight, {binop, 0}},
             {weight, {unop, 0}},
             {weight, {remote_type, 0}},
+            {weight, {annotated_type, 0}},
             {weight, {user_defined_type, 10}}],
     abstract_type(Opts).
 
