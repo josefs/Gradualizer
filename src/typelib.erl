@@ -179,6 +179,8 @@ annotate_user_type_(Filename, {type, Anno, T, Params}) when is_list(Params) ->
     {type, Anno, T, [ annotate_user_types(Filename, Param)
                       || Param <- ?assert_type(Params, [type()]) ]};
 annotate_user_type_(Filename, {ann_type, Anno, [Var, Type]}) ->
+    %% We match Var :: af_anno() and Type :: type() above.
+    Type = ?assert_type(Type, type()),
     {ann_type, Anno, [Var, annotate_user_type_(Filename, Type)]};
 annotate_user_type_(_Filename, Type) ->
     Type.
@@ -214,6 +216,8 @@ substitute_type_vars({Tag, L, T, Params}, TVars)
 substitute_type_vars({remote_type, L, [M, T, Params]}, TVars) ->
     {remote_type, L, [M, T, [substitute_type_vars(P, TVars) || P <- Params]]};
 substitute_type_vars({ann_type, L, [Var = {var, _, _}, Type]}, TVars) ->
+    %% We matched out Var :: af_anno() from [af_anno() | type()] above.
+    Type = ?assert_type(Type, type()),
     {ann_type, L, [Var, substitute_type_vars(Type, TVars)]};
 substitute_type_vars({var, L, Var}, TVars) ->
     case TVars of

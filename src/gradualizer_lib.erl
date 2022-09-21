@@ -25,7 +25,7 @@
 %% Number of space used when prettyprinting records for nesting
 -define(PP_RECORD_NESTING_OFFSET, 2).
 
--spec merge_with(fun(), map(), map()) -> map().
+-spec merge_with(fun((_, _, _) -> _), map(), map()) -> map().
 -if(?OTP_RELEASE >= 24).
 merge_with(F, M1, M2) ->
     maps:merge_with(F, M1, M2).

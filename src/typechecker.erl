@@ -35,8 +35,9 @@
                 case error_evidence(TypeError) of
                     NORMTYPE ->
                         %% All error tuple sizes are > 0.
-                        Index = ?assert_type(size(TypeError), pos_integer()),
+                        Index = size(TypeError),
                         Index > 0 orelse erlang:error(impossible),
+                        Index = ?assert_type(size(TypeError), pos_integer()),
                         %% if the last element of the type_error tuple is the normalized type
                         %% replace it with the original result type
                         erlang:raise(throw, setelement(Index, TypeError, ORIGTYPE), ST);
@@ -96,9 +97,7 @@
           functions  = []    :: list()
          }).
 
--type record_field() :: {record_field, erl_anno:anno(),
-                         Name :: {atom, erl_anno:anno(), atom()},
-                         DefaultValue :: gradualizer_type:abstract_expr()}.
+-type record_field() :: gradualizer_type:af_record_field(expr()).
 -type typed_record_field() :: {typed_record_field, record_field(), type()}.
 
 %% The environment passed around during typechecking.
@@ -114,6 +113,7 @@
 -type compatible() :: {true, constraints:constraints()} | false.
 
 -type anno() :: erl_anno:anno().
+-type any_t() :: {type, anno(), any, []}.
 -type binary_op() :: gradualizer_type:binary_op().
 -type bounded_function() :: gradualizer_type:af_constrained_function_type().
 -type unary_op() :: gradualizer_type:unary_op().
@@ -130,15 +130,15 @@
 -type error() :: {type_error, type_error()}
                | {type_error, type_error(), anno()}
                | {type_error, expr(), type() | [type()], type()}
-               | {type_error, type_error(), anno(), type()}
+               | {type_error, type_error(), anno() | type(), type() | expr()}
                | {type_error, cyclic_type_vars, anno(), bounded_function(), list()}
                | {type_error, type_error(), anno(), atom() | pattern(), type()}
-               | {type_error, type_error(), unary_op(), anno(), type()}
+               | {type_error, type_error(), unary_op() | binary_op(), anno(), type()}
                | {type_error, type_error(), binary_op(), anno(), type(), type()}
                | {type_error, call_arity, anno(), atom(), arity(), arity()}
-               | {undef, undef(), anno(), {atom(), atom() | arity()} | mfa()}
+               | {undef, undef(), anno(), {atom(), atom() | non_neg_integer()} | mfa() | expr()}
                | {undef, undef(), expr()}
-               | {not_exported, remote_type, anno(), {module(), atom(), arity()}}
+               | {not_exported, remote_type, anno(), mfa()}
                | {bad_type_annotation, gradualizer_type:af_string()}
                | {illegal_map_type, type()}
                | {argument_length_mismatch, anno(), arity(), arity()}
@@ -810,7 +810,7 @@ normalize_rec({user_type, _, Name, Args} = Type, Env) ->
             Type;
         not_found ->
             P = position_info_from_spec(Env#env.current_spec),
-            throw(undef(user_type, P, {Name, length(Args)}))
+            throw(undef(user_type, P, {Name, ?assert_type(length(Args), arity())}))
     end;
 normalize_rec(T = ?top(), _Env) ->
     %% Don't normalize gradualizer:top().
@@ -824,11 +824,12 @@ normalize_rec({remote_type, _, [{atom, _, M}, {atom, _, N}, Args]}, Env) ->
             normalize_rec(T, Env);
         opaque ->
             NormalizedArgs = lists:map(fun (Ty) -> normalize_rec(Ty, Env) end, Args),
-            typelib:annotate_user_type(M, {user_type, 0, N, NormalizedArgs});
+            Ty = {user_type, 0, N, NormalizedArgs},
+            typelib:annotate_user_type(M, ?assert_type(Ty, type()));
         not_exported ->
-            throw(not_exported(remote_type, P, {M, N, length(Args)}));
+            throw(not_exported(remote_type, P, {M, N, ?assert_type(length(Args), arity())}));
         not_found ->
-            throw(undef(remote_type, P, {M, N, length(Args)}))
+            throw(undef(remote_type, P, {M, N, ?assert_type(length(Args), arity())}))
     end;
 normalize_rec({op, _, _, _Arg} = Op, _Env) ->
     erl_eval:partial_eval(Op);
@@ -1025,6 +1026,7 @@ list_view(Ty = {type, _, T, Args}) when ?is_list_type(Ty) ->
             []      -> type(any);
             [A | _] -> A
         end,
+    Elem = ?assert_type(Elem, type()),
     Term =
         case Args of
             _ when T == nil; T == list; T == nonempty_list ->
@@ -1032,6 +1034,7 @@ list_view(Ty = {type, _, T, Args}) when ?is_list_type(Ty) ->
             [_, B] -> B;
             _ -> type(any)  %% Don't think we get here
         end,
+    Term = ?assert_type(Term, type()),
     {Empty, Elem, Term};
 list_view(_) -> false.
 
@@ -1613,6 +1616,7 @@ do_type_check_expr(Env, {bin, _, BinElements} = BinExpr) ->
                 not Env#env.infer ->
                     type(any)
             end,
+    RetTy = ?assert_type(RetTy, type()),
     {RetTy,
      union_var_binds(VarBinds, Env),
      constraints:combine(Css)};
@@ -2210,6 +2214,7 @@ type_check_comprehension(Env, lc, Expr, []) ->
                     %% Propagate the type information
                     {type, erl_anno:new(0), list, [Ty]}
             end,
+    RetTy = ?assert_type(RetTy, type()),
     {RetTy, Env, Cs};
 type_check_comprehension(Env, bc, Expr, []) ->
     {Ty, _VB, Cs} = type_check_expr(Env, Expr),
@@ -2236,6 +2241,7 @@ type_check_comprehension(Env, bc, Expr, []) ->
                              {integer, erl_anno:new(0), 1}]},
                     throw(type_error(Expr, NormTy, BitstringTy))
             end,
+    RetTy = ?assert_type(RetTy, type()),
     {RetTy, Env, Cs};
 type_check_comprehension(Env, Compr, Expr, [{generate, _, Pat, Gen} | Quals]) ->
     {Ty,  _,  Cs1} = type_check_expr(Env, Gen),
@@ -3170,13 +3176,13 @@ type_check_fun(Env, {remote, P, {atom,_,Module}, {atom,_,Fun}}, Arity) ->
         {ok, Types} -> {Types, Env, constraints:empty()};
         not_found   -> throw(call_undef(P, Module, Fun, Arity))
     end;
-type_check_fun(Env, {remote, _, _Expr, _}, Arity)->
+type_check_fun(Env, {remote, _, _Expr, _}, Arity) ->
     % Call to an unknown module. Revert to dynamic types.
-    FunTy = {type, erl_anno:new(0), bounded_fun,
-             [{type, erl_anno:new(0), 'fun',
-               [{type, erl_anno:new(0), product,
-                 lists:duplicate(Arity, type(any))},
-                {type,0,any,[]}]},
+    P = erl_anno:new(0),
+    AnyArgs = ?assert_type(lists:duplicate(Arity, type(any)), [type()]),
+    FunTy = {type, P, bounded_fun,
+             [{type, P, 'fun',
+               [{type, P, product, AnyArgs}, type(any)]},
               []]},
     {[FunTy], Env, constraints:empty()};
 type_check_fun(Env, Expr, _Arity) ->
@@ -3314,14 +3320,16 @@ type_check_tuple_union_in(_Env, [], _Elems) ->
 -spec type_check_record_union_in(Name, Anno, Tyss, Fields, Env) -> R when
       Name :: atom(),
       Anno :: anno(),
-      Tyss :: [[typed_record_field()]],
-      Fields :: [expr()],
+      Tyss :: [any_t() | [typed_record_field()]],
+      Fields :: [record_field()],
       Env :: env(),
       R :: {env(), constraints:constraints()} | none.
 type_check_record_union_in(Name, Anno, [?type(any) | Tyss], Fields, Env) ->
     Rec = get_record_fields(Name, Anno, Env),
     type_check_record_union_in(Name, Anno, [Rec | Tyss], Fields, Env);
 type_check_record_union_in(Name, Anno, [Tys|Tyss], Fields, Env) ->
+    %% We can refine, since any_t() is matched in the previous clause.
+    Tys = ?assert_type(Tys, [typed_record_field()]),
     try
         type_check_fields(Env, Tys, Fields)
     catch
@@ -4139,7 +4147,7 @@ check_guards(Env, Guards) ->
                      end, Guards),
     union_var_binds_symmetrical(Envs, Env).
 
--spec type_check_function(env(), expr()) -> {env(), constraints:constraints()}.
+-spec type_check_function(env(), erl_parse:abstract_form()) -> {env(), constraints:constraints()}.
 type_check_function(Env, {function, _, Name, NArgs, Clauses}) ->
     ?verbose(Env, "Checking function ~p/~p~n", [Name, NArgs]),
     case maps:find({Name, NArgs}, Env#env.fenv) of
@@ -4533,6 +4541,7 @@ expect_map_type(Ty, _Env) ->
 %% Similarly to map field type inference on map creation - if a pattern matches,
 %% then the map field is exact (:=), not assoc (=>).
 %% There isn't even syntax for optional fields in map patterns.
+-spec rewrite_map_assocs_to_exacts(type()) -> type().
 rewrite_map_assocs_to_exacts(?type(map, Assocs)) ->
     type(map, lists:map(fun ({type, Ann, _, KVTy}) ->
                                 {type, Ann, map_field_exact, KVTy}
@@ -5199,14 +5208,13 @@ type_error(Kind, P) ->
     {type_error, Kind, P}.
 
 -spec type_error(expr(), type() | [type()], type()) -> error();
-                (type_error(), anno(), type()) -> error().
+                (type_error(), anno() | type(), type() | expr()) -> error().
 type_error(Kind, P, Ty) ->
     {type_error, Kind, P, Ty}.
 
-
 -spec type_error(cyclic_type_vars, anno(), bounded_function(), list()) -> error();
                 (type_error(), anno(), atom() | pattern(), type()) -> error();
-                (type_error(), unary_op(), anno(), type()) -> error().
+                (type_error(), unary_op() | binary_op(), anno(), type()) -> error().
 type_error(Kind, P, Info, Ty) ->
     {type_error, Kind, P, Info, Ty}.
 
@@ -5219,7 +5227,7 @@ type_error(Kind, Op, P, Ty1, Ty2) ->
 undef(Kind, Info) ->
     {undef, Kind, Info}.
 
--spec undef(undef(), anno(), expr()) -> error().
+-spec undef(undef(), anno(), expr() | {atom(), arity() | atom()} | mfa()) -> error().
 undef(Kind, P, Info) ->
     {undef, Kind, P, Info}.
 
