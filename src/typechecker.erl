@@ -934,15 +934,12 @@ flatten_unions(Tys, Env) ->
 
 flatten_union({user_type, _, _, _} = Ty, _Env) ->
     [Ty];
-flatten_union(Ty, Env) ->
-    flatten_type(normalize_rec(Ty, Env), Env).
-
-flatten_type({type, _, none, []}, _Env) ->
+flatten_union({type, _, none, []}, _Env) ->
     [];
-flatten_type({type, _, union, Tys}, Env) ->
+flatten_union({type, _, union, Tys}, Env) ->
     flatten_unions(Tys, Env);
-flatten_type(Ty, _Env) ->
-    [Ty].
+flatten_union(Ty, Env) ->
+    [normalize_rec(Ty, Env)].
 
 %% Merges overlapping integer types (including ranges and singletons).
 %% (TODO) Removes all types that are subtypes of other types in the same union.
