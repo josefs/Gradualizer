@@ -286,7 +286,13 @@ normalize_test_() ->
                     typechecker:normalize(typechecker:normalize(?t( boolean() ),
                                                                 test_lib:create_env([])),
                                           test_lib:create_env([])))
-     }
+     },
+     {"normalize(union()) == normalize(normalize(union()))",
+      ?_test(begin
+                 Env = test_lib:create_env("-type t1() :: {} | t1().", []),
+                 ?assertEqual( typechecker:normalize(?t( t1() ), Env),
+                               typechecker:normalize(typechecker:normalize(?t( t1() ), Env), Env) )
+             end)}
     ].
 
 unfold_bounded_type_test() ->
