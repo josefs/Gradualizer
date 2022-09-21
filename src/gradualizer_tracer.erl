@@ -48,15 +48,15 @@ trace_fun() ->
         %% In the general case, however, it might be more convenient to use one of the already
         %% available helpers like `just_venv/1' or `skip_env/1' in the clauses below:
         ({trace, _Pid, call, {_M, _F, _Args}}, ok) when is_list(_Args) ->
-            Trace = {trace, _Pid, call, {_M, _F, just_venv(_Args)}},
+            Trace = {trace, _Pid, call, {_M, _F, simplify(_Args)}},
             io:format("~p\n", [Trace]);
 
         ({trace, _Pid, return_from, {_M, _F, _Arity}, RetVal}, ok) ->
             RV = case RetVal of
                      _ when is_list(RetVal) ->
-                         just_venv(RetVal);
+                         simplify(RetVal);
                      _ when is_tuple(RetVal) ->
-                         list_to_tuple(just_venv(tuple_to_list(RetVal)));
+                         list_to_tuple(simplify(tuple_to_list(RetVal)));
                      _ ->
                          RetVal
                  end,
@@ -66,6 +66,11 @@ trace_fun() ->
         (Trace, ok) ->
             io:format("~p\n", [Trace])
     end.
+
+simplify(Args) ->
+    %skip_env(Args).
+    just_venv(Args).
+    %just_tenv(Args).
 
 skip_env(Args) ->
     lists:map(fun
@@ -110,6 +115,7 @@ start() ->
     %dbg:tpl(typechecker, refine_mismatch_using_guards, x),
 
     %dbg:tpl(typechecker, expect_tuple_type, x),
+    %dbg:tpl(typechecker, expect_tuple_union, x),
     %dbg:tpl(typechecker, refine_clause_arg_tys, x),
     %dbg:tpl(typechecker, refine_ty, x),
 
@@ -122,11 +128,16 @@ start() ->
 
     %dbg:tpl(typechecker, type_check_expr_in, x),
     %dbg:tpl(typechecker, do_type_check_expr_in, x),
+    %dbg:tpl(typechecker, type_check_logic_op_in, x),
 
     %dbg:tpl(typechecker, subtype, x),
     %dbg:tpl(typechecker, compat, x),
     %dbg:tpl(typechecker, compat_seen, x),
     %dbg:tpl(typechecker, compat_ty, x),
+
+    %dbg:tpl(typechecker, glb_ty, x),
+    %dbg:tpl(typechecker, normalize, x),
+    %dbg:tpl(typechecker, do_add_types_pats, x),
 
     %dbg:tpl(?MODULE, debug, x),
     %dbg:tpl(erlang, throw, x),
