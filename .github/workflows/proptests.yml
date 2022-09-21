@@ -21,4 +21,3 @@ jobs:
           otp-version: ${{matrix.otp}}
       - name: "Run property-based tests"
         run: "PROP_NUMTESTS=5000 rebar3 ct --suite test/gradualizer_prop_SUITE.erl"
-        continue-on-error: true
