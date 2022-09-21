@@ -19,8 +19,8 @@ all() ->
      refinable,
      compatible,
      type_check_expr,
-     type_check_expr_in,
-     type_check_forms
+     type_check_expr_in
+     %type_check_forms
     ].
 
 prop_opts() ->
