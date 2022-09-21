@@ -80,6 +80,8 @@
 -define(typed_record_field(Name, Type), {typed_record_field, ?record_field(Name), Type}).
 -define(type_field_type(Name, Type), {type, _, field_type, [{atom, _, Name}, Type]}).
 -define(any_assoc, ?type(map_field_assoc, [?type(any), ?type(any)])).
+-define(user_type(), {user_type, _, _, _}).
+-define(user_type(Name, Args, Anno), {user_type, Anno, Name, Args}).
 
 %% Data collected from epp parse tree
 -record(parsedata, {
@@ -1158,17 +1160,17 @@ infer_literal_string(Str, Env) ->
                                {char, erl_anno:new(0), lists:last(SortedChars)}])])
     end.
 
-expect_tuple_type({type, _, any, []}, _N) ->
+expect_tuple_type({type, _, any, []}, _N, _Env) ->
     any;
-expect_tuple_type({type, _, tuple, any}, _N) ->
+expect_tuple_type({type, _, tuple, any}, _N, _Env) ->
     any;
-expect_tuple_type({type, _, tuple, Tys}, N) when length(Tys) == N ->
+expect_tuple_type({type, _, tuple, Tys}, N, _Env) when length(Tys) == N ->
     {elem_ty, Tys, constraints:empty()};
-expect_tuple_type(?top() = TermTy, N) ->
+expect_tuple_type(?top() = TermTy, N, _Env) ->
     {elem_ty, lists:duplicate(N, TermTy), constraints:empty()};
-expect_tuple_type(Union = {type, _, union, UnionTys}, N) ->
+expect_tuple_type(Union = {type, _, union, UnionTys}, N, Env) ->
     {Tyss, Cs} =
-        expect_tuple_union(UnionTys, [], constraints:empty(), no_any, N),
+        expect_tuple_union(UnionTys, [], constraints:empty(), no_any, N, Env),
     case Tyss of
         [] ->
             {type_error, Union};
@@ -1177,45 +1179,31 @@ expect_tuple_type(Union = {type, _, union, UnionTys}, N) ->
         _ ->
             {elem_tys, Tyss, Cs}
     end;
-expect_tuple_type({var, _, Var}, N) ->
+expect_tuple_type({var, _, Var}, N, _Env) ->
     TyVars = [ new_type_var() || _ <- lists:seq(1,N) ],
-    {elem_ty
-    ,[ {var, erl_anno:new(0), TyVar} || TyVar <- TyVars ]
-    ,lists:foldr(fun constraints:add_var/2
-                ,constraints:upper(Var, type(tuple, TyVars))
-                ,TyVars
-                )
-    };
-expect_tuple_type(Ty, _N) ->
+    {elem_ty,
+     [ {var, erl_anno:new(0), TyVar} || TyVar <- TyVars ],
+     lists:foldr(fun constraints:add_var/2, constraints:upper(Var, type(tuple, TyVars)), TyVars)};
+expect_tuple_type(?user_type() = Ty, N, Env) ->
+    expect_tuple_type(normalize(Ty, Env), N, Env);
+expect_tuple_type(Ty, _N, _) ->
     {type_error, Ty}.
 
 
-expect_tuple_union([Ty|Tys], AccTy, AccCs, Any, N) ->
-    case expect_tuple_type(Ty, N) of
+expect_tuple_union([Ty|Tys], AccTy, AccCs, Any, N, Env) ->
+    case expect_tuple_type(Ty, N, Env) of
         {type_error, _} ->
-            expect_tuple_union(Tys, AccTy, AccCs, Any, N);
+            expect_tuple_union(Tys, AccTy, AccCs, Any, N, Env);
         any ->
-            expect_tuple_union(Tys
-                             ,AccTy
-                             ,AccCs
-                             ,any
-                             ,N);
+            expect_tuple_union(Tys, AccTy, AccCs, any, N, Env);
         {elem_ty, TTy, Cs} ->
-            expect_tuple_union(Tys
-                              ,[TTy | AccTy]
-                              ,constraints:combine(Cs, AccCs)
-                              ,Any
-                              ,N);
+            expect_tuple_union(Tys, [TTy | AccTy], constraints:combine(Cs, AccCs), Any, N, Env);
         {elem_tys, TTys, Cs} ->
-            expect_tuple_union(Tys
-                              ,TTys ++ AccTy
-                              ,constraints:combine(Cs, AccCs)
-                              ,Any
-                              ,N)
+            expect_tuple_union(Tys, TTys ++ AccTy, constraints:combine(Cs, AccCs), Any, N, Env)
     end;
-expect_tuple_union([], AccTy, AccCs, any, N) ->
+expect_tuple_union([], AccTy, AccCs, any, N, _Env) ->
     {[ lists:duplicate(N, type(any)) | AccTy], AccCs};
-expect_tuple_union([], AccTy, AccCs, _NoAny, _N) ->
+expect_tuple_union([], AccTy, AccCs, _NoAny, _N, _Env) ->
     {AccTy, AccCs}.
 
 
@@ -2390,7 +2378,7 @@ do_type_check_expr_in(Env, Ty, {bin, _Anno, _BinElements} = Bin) ->
     {_Ty, VarBinds, Cs2} = type_check_expr(Env, Bin),
     {VarBinds, constraints:combine(Cs1, Cs2)};
 do_type_check_expr_in(Env, ResTy, {tuple, _, TS} = Tup) ->
-    case expect_tuple_type(ResTy, length(TS)) of
+    case expect_tuple_type(ResTy, length(TS), Env) of
         {elem_ty, Tys, Cs} ->
             {VBs, Css} = lists:unzip([ type_check_expr_in(Env, Ty, Expr)
                                     || {Ty, Expr} <- lists:zip(Tys, TS) ]),
@@ -4300,7 +4288,7 @@ add_type_pat(Lit = {float, P, _}, Ty, Env) ->
             throw(type_error(pattern, P, Lit, Ty))
     end;
 add_type_pat(Tuple = {tuple, P, Pats}, Ty, Env) ->
-    case expect_tuple_type(Ty, length(Pats)) of
+    case expect_tuple_type(Ty, length(Pats), Env) of
         any ->
             NewEnv = union_var_binds([ add_any_types_pat(Pat, Env) || Pat <- Pats ], Env),
             {type(none),
