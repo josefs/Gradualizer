@@ -785,67 +785,58 @@ has_overlapping_keys({type, _, map, Assocs}, Env) ->
 %% * Flatten unions and merge overlapping types (e.g. ranges) in unions
 -spec normalize(type(), env()) -> type().
 normalize(Ty, Env) ->
-    normalize_rec(Ty, Env, #{}).
+    normalize_rec(Ty, Env).
 
 %% The third argument is a set of user types that we've already unfolded.
 %% It's important that we don't keep unfolding such types because it will
 %% lead to infinite recursion.
--spec normalize_rec(type(), env(), map()) -> type().
-normalize_rec({type, _, union, Tys} = Type, Env, Unfolded) ->
-    case maps:get(mta(Type, Env), Unfolded, no_type) of
-        {type, NormType} -> NormType;
-        no_type ->
-            UnionSizeLimit = Env#env.union_size_limit,
-            Types = flatten_unions(Tys, Env, maps:put(Type, {type, Type}, Unfolded)),
-            case merge_union_types(Types, Env) of
-                []  -> type(none);
-                [T] -> T;
-                %% Performance hack: Unions larger than this value are replaced by any().
-                Ts when length(Ts) > UnionSizeLimit -> type(any);
-                Ts  -> type(union, Ts)
-            end
+-spec normalize_rec(type(), env()) -> type().
+normalize_rec({type, _, union, Tys}, Env) ->
+    UnionSizeLimit = Env#env.union_size_limit,
+    Types = flatten_unions(Tys, Env),
+    case merge_union_types(Types, Env) of
+        []  -> type(none);
+        [T] -> T;
+        %% Performance hack: Unions larger than this value are replaced by any().
+        Ts when length(Ts) > UnionSizeLimit -> type(any);
+        Ts  -> type(union, Ts)
     end;
-normalize_rec({user_type, _, Name, Args} = Type, Env, Unfolded) ->
-    case maps:get(mta(Type, Env), Unfolded, no_type) of
-        {type, NormType} -> NormType;
-        no_type ->
-            UnfoldedNew = maps:put(mta(Type, Env), {type, Type}, Unfolded),
-            case gradualizer_lib:get_type_definition(Type, Env, []) of
-                {ok, T} ->
-                    normalize_rec(T, Env, UnfoldedNew);
-                opaque ->
-                    Type;
-                not_found ->
-                    P = position_info_from_spec(Env#env.current_spec),
-                    throw(undef(user_type, P, {Name, length(Args)}))
-            end
+normalize_rec({user_type, _, Name, Args} = Type, Env) ->
+    case gradualizer_lib:get_type_definition(Type, Env, []) of
+        {ok, T} ->
+            normalize_rec(T, Env);
+        opaque ->
+            Type;
+        not_found ->
+            P = position_info_from_spec(Env#env.current_spec),
+            throw(undef(user_type, P, {Name, length(Args)}))
     end;
-normalize_rec(T = ?top(), _Env, _Unfolded) ->
+normalize_rec(T = ?top(), _Env) ->
     %% Don't normalize gradualizer:top().
     T;
-normalize_rec({remote_type, _, [{atom, _, M}, {atom, _, N}, Args]}, Env, Unfolded) ->
+normalize_rec({remote_type, _, [{atom, _, M}, {atom, _, N}, Args]}, Env) ->
     %% It's safe as we explicitly match out `Module :: af_atom()' and `TypeName :: af_atom()'.
     Args = ?assert_type(Args, [type()]),
     P = position_info_from_spec(Env#env.current_spec),
     case gradualizer_db:get_exported_type(M, N, Args) of
         {ok, T} ->
-            normalize_rec(T, Env, Unfolded);
+            normalize_rec(T, Env);
         opaque ->
-            NormalizedArgs = lists:map(fun (Ty) -> normalize_rec(Ty, Env, Unfolded) end, Args),
+            NormalizedArgs = lists:map(fun (Ty) -> normalize_rec(Ty, Env) end, Args),
             typelib:annotate_user_type(M, {user_type, 0, N, NormalizedArgs});
         not_exported ->
             throw(not_exported(remote_type, P, {M, N, length(Args)}));
         not_found ->
             throw(undef(remote_type, P, {M, N, length(Args)}))
     end;
-normalize_rec({op, _, _, _Arg} = Op, _Env, _Unfolded) ->
+normalize_rec({op, _, _, _Arg} = Op, _Env) ->
     erl_eval:partial_eval(Op);
-normalize_rec({op, _, _, _Arg1, _Arg2} = Op, _Env, _Unfolded) ->
+normalize_rec({op, _, _, _Arg1, _Arg2} = Op, _Env) ->
     erl_eval:partial_eval(Op);
-normalize_rec({type, Ann, range, [T1, T2]}, Env, Unfolded) ->
-    {type, Ann, range, [normalize_rec(T1, Env, Unfolded),
-                        normalize_rec(T2, Env, Unfolded)]};
-normalize_rec(Type, _Env, _Unfolded) ->
+normalize_rec({type, Ann, range, [T1, T2]}, Env) ->
+    {type, Ann, range, [normalize_rec(T1, Env),
+                        normalize_rec(T2, Env)]};
+normalize_rec(Type, _Env) ->
     expand_builtin_aliases(Type).
 
 %% Replace built-in type aliases
@@ -937,25 +928,20 @@ expand_builtin_aliases(Type) ->
 %% * Remove subtypes of other types in the same union; keeping any() separate
 %% * Merge integer types, including singleton integers and ranges
 %%   1, 1..5, integer(), non_neg_integer(), pos_integer(), neg_integer()
--spec flatten_unions([type()], env(), map()) -> [type()].
-flatten_unions(Tys, Env, Unfolded) ->
-    lists:flatmap(fun (Ty) -> flatten_union(Ty, Env, Unfolded) end, Tys).
+-spec flatten_unions([type()], env()) -> [type()].
+flatten_unions(Tys, Env) ->
+    lists:flatmap(fun (Ty) -> flatten_union(Ty, Env) end, Tys).
 
-flatten_union({user_type, _, _, _} = Ty, _Env, _Unfolded) ->
+flatten_union({user_type, _, _, _} = Ty, _Env) ->
     [Ty];
-flatten_union(Ty, Env, Unfolded) ->
-    flatten_type(normalize_rec(Ty, Env, Unfolded), Env, Unfolded).
+flatten_union(Ty, Env) ->
+    flatten_type(normalize_rec(Ty, Env), Env).
 
-flatten_type({type, _, none, []}, _Env, _Unfolded) ->
+flatten_type({type, _, none, []}, _Env) ->
     [];
-flatten_type({type, _, union, Tys} = Type, Env, Unfolded) ->
-    case maps:get(mta(Type, Env), Unfolded, no_type) of
-        {type, NormType} -> [NormType];
-        no_type ->
-            UnfoldedNew = maps:put(mta(Type, Env), {type, Type}, Unfolded),
-            flatten_unions(Tys, Env, UnfoldedNew)
-    end;
-flatten_type(Ty, _Env, _Unfolded) ->
+flatten_type({type, _, union, Tys}, Env) ->
+    flatten_unions(Tys, Env);
+flatten_type(Ty, _Env) ->
     [Ty].
 
 %% Merges overlapping integer types (including ranges and singletons).
