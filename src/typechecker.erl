@@ -4473,9 +4473,8 @@ add_type_pat(Pat, Ty, _Env) ->
 add_type_pat_union(Pat, ?type(union, UnionTys) = UnionTy, Env) ->
     {PatTys, UBounds, Envs, Css} =
         lists:foldr(fun (Ty, {PatTysAcc, UBoundsAcc, EnvAcc, CsAcc} = Acc) ->
-                        %% Ty is normalized, since UnionTy is normalized
-                        try add_type_pat(Pat, Ty, Env) of
-                            {PatTy, UBound, NewEnv, Cs} ->
+                        try do_add_types_pats([Pat], [Ty], Env) of
+                            {[PatTy], [UBound], NewEnv, Cs} ->
                                 {[PatTy|PatTysAcc],
                                  [UBound|UBoundsAcc],
                                  [NewEnv|EnvAcc],
