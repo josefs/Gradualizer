@@ -116,6 +116,7 @@ start() ->
     %dbg:tpl(typechecker, add_types_pats, 4, x),
     %dbg:tpl(typechecker, add_types_pats, 6, x),
     %dbg:tpl(typechecker, add_type_pat, 3, x),
+    %dbg:tpl(typechecker, add_type_pat_union, 3, x),
     %dbg:tpl(typechecker, denormalize, x),
     %dbg:tpl(typechecker, type_check_block_in, x),
 
