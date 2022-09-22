@@ -88,7 +88,7 @@ bin/gradualizer: $(beams) ebin/gradualizer.app
 
 .PHONY: gradualize
 gradualize: escript
-	bin/gradualizer -pa ebin --color ebin | grep -v -f gradualize-ignore.lst
+	bin/gradualizer --infer -pa ebin --color ebin | grep -v -f gradualize-ignore.lst
 
 .PHONY: nocrashongradualize
 nocrashongradualize: escript
