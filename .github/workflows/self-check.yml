@@ -21,9 +21,11 @@ jobs:
           otp-version: ${{matrix.otp}}
       - name: "Build"
         run: "make"
-      - name: "Self check"
+      - name: "Run self check"
+        run: "make gradualize | tee gradualize.log"
+      - name: "Assess self check result"
         run: |
-          ERROR_LINES=$(make gradualize | wc -l)
+          ERROR_LINES=$(wc -l gradualize.log | awk '{print $1}')
           if [ $ERROR_LINES -lt 100 ]; then
             echo "ok, self reported errors are in check: $ERROR_LINES < 100"
             exit 0
