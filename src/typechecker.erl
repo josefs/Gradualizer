@@ -466,8 +466,7 @@ all_type(Tys, Ty, Seen, Env) ->
 all_type([], _Ty, Seen, Css, _Env) ->
     {Seen, constraints:combine(Css)};
 all_type([Ty1|Tys], Ty, AIn, Css, Env) ->
-    %% TODO: call compat/4 instead of compat_ty/4 here?
-    {AOut, Cs} = compat_ty(Ty1, Ty, AIn, Env),
+    {AOut, Cs} = compat(Ty1, Ty, AIn, Env),
     all_type(Tys, Ty, AOut, [Cs|Css], Env).
 
 %% Looks up the fields of a record by name and, if present, by the module where
