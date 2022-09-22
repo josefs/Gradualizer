@@ -4280,36 +4280,8 @@ add_type_pat({var, _, A} = Var, Ty, Env) ->
             %% Match all
             {Ty, Ty, set_var_type(Env, A, Ty), constraints:empty()}
     end;
-add_type_pat(Pat, ?type(union, UnionTys) = UnionTy, Env) ->
-    {PatTys, UBounds, Envs, Css} =
-        lists:foldr(fun (Ty, {PatTysAcc, UBoundsAcc, EnvAcc, CsAcc} = Acc) ->
-                        %% Ty is normalized, since UnionTy is normalized
-                        try add_type_pat(Pat, Ty, Env) of
-                            {PatTy, UBound, NewEnv, Cs} ->
-                                {[PatTy|PatTysAcc],
-                                 [UBound|UBoundsAcc],
-                                 [NewEnv|EnvAcc],
-                                 [Cs|CsAcc]}
-                        catch _TypeError ->
-                            Acc
-                        end
-                    end,
-                    {[], [], [], []},
-                    UnionTys),
-    case PatTys of
-        [] ->
-            %% Pattern doesn't match any type in the union
-            Anno = element(2, Pat),
-            throw(type_error(pattern, Anno, Pat, UnionTy));
-        _SomeTysMatched ->
-            %% TODO: The constraints should be merged with *or* semantics
-            %%       and var binds with intersection
-            {Ty, Cs} = glb(PatTys, Env),
-            {Ty,
-             normalize(type(union, UBounds), Env),
-             union_var_binds(Envs, Env),
-             constraints:combine([Cs|Css])}
-    end;
+add_type_pat(Pat, ?type(union, _) = UnionTy, Env) ->
+    add_type_pat_union(Pat, UnionTy, Env);
 add_type_pat(Lit = {Tag, P, Val}, Ty, Env)
   when Tag =:= integer;
        Tag =:= char ->
@@ -4497,6 +4469,37 @@ add_type_pat(OpPat = {op, _Anno, _Op, _Pat}, Ty, Env) ->
     add_type_pat_literal(OpPat, Ty, Env);
 add_type_pat(Pat, Ty, _Env) ->
     throw(type_error(pattern, element(2, Pat), Pat, Ty)).
+
+add_type_pat_union(Pat, ?type(union, UnionTys) = UnionTy, Env) ->
+    {PatTys, UBounds, Envs, Css} =
+        lists:foldr(fun (Ty, {PatTysAcc, UBoundsAcc, EnvAcc, CsAcc} = Acc) ->
+                        %% Ty is normalized, since UnionTy is normalized
+                        try add_type_pat(Pat, Ty, Env) of
+                            {PatTy, UBound, NewEnv, Cs} ->
+                                {[PatTy|PatTysAcc],
+                                 [UBound|UBoundsAcc],
+                                 [NewEnv|EnvAcc],
+                                 [Cs|CsAcc]}
+                        catch _TypeError ->
+                            Acc
+                        end
+                    end,
+                    {[], [], [], []},
+                    UnionTys),
+    case PatTys of
+        [] ->
+            %% Pattern doesn't match any type in the union
+            Anno = element(2, Pat),
+            throw(type_error(pattern, Anno, Pat, UnionTy));
+        _SomeTysMatched ->
+            %% TODO: The constraints should be merged with *or* semantics
+            %%       and var binds with intersection
+            {Ty, Cs} = glb(PatTys, Env),
+            {Ty,
+             normalize(type(union, UBounds), Env),
+             union_var_binds(Envs, Env),
+             constraints:combine([Cs|Css])}
+    end.
 
 %% TODO: This is incomplete!
 %% To properly check pattern exhaustiveness we have to consider bound variables.
