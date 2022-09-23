@@ -13,7 +13,7 @@ jobs:
     name: Erlang ${{matrix.otp}}
     strategy:
       matrix:
-        otp: ['23.3.4.7', '24.1']
+        otp: ['24.3.4.4']
     steps:
       - uses: actions/checkout@v2
       - uses: erlef/setup-beam@v1
@@ -21,4 +21,3 @@ jobs:
           otp-version: ${{matrix.otp}}
       - name: "Run property-based tests"
         run: "PROP_NUMTESTS=5000 rebar3 ct --suite test/gradualizer_prop_SUITE.erl"
-        continue-on-error: true
