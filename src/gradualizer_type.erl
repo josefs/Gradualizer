@@ -24,6 +24,7 @@
               af_assoc_type/0,
               af_constrained_function_type/0,
               af_constraint/0,
+              af_fun_type/0,
               af_function_type_list/0,
               af_record_field/1,
               af_string/0,
@@ -279,9 +280,10 @@
 -type af_user_defined_type() ::
         {'user_type', anno(), type_name(),  [abstract_type()]}.
 
-%% Gradualizer: this is a part of `abstract_form()' which we do not copy from erl_parse.erl,
-%% but we still want to keep it as it's the only place that refers to `bounded_fun' form,
-%% which we use.
+%% Gradualizer: this is a part of `abstract_form()'.
+%% We do not copy the entire `abstract_form()' from `erl_parse.erl',
+%% but we want to have `af_function_type_list()' defined here as it's the only type
+%% that defines the `bounded_fun' form which we use.
 -type af_function_type_list() :: [af_constrained_function_type() |
                                   af_function_type(), ...].
 
@@ -293,7 +295,11 @@
         {'type', anno(), 'fun',
          [{'type', anno(), 'product', [abstract_type()]} | abstract_type()]}.
 
--type af_function_constraint() :: [af_constraint(), ...].
+%% Originally, `af_function_constraint()' is defined as a non-empty list.
+%% In Gradualizer, however, all functions are normalized to the `bounded_fun' form,
+%% so the constraints might be empty.
+%-type af_function_constraint() :: [af_constraint(), ...].
+-type af_function_constraint() :: [af_constraint()].
 
 -type af_constraint() :: {'type', anno(), 'constraint',
                           [af_lit_atom('is_subtype') |
