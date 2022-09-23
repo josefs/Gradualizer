@@ -110,6 +110,7 @@
 
 -include("gradualizer.hrl").
 
+-type constraints() :: constraints:constraints().
 -type compatible() :: {true, constraints:constraints()} | false.
 
 -type anno() :: erl_anno:anno().
@@ -1162,6 +1163,11 @@ infer_literal_string(Str, Env) ->
                                {char, erl_anno:new(0), lists:last(SortedChars)}])])
     end.
 
+-spec expect_tuple_type(type(), non_neg_integer(), env()) -> R when
+      R :: any
+         | {elem_ty, [type()], constraints()}
+         | {elem_tys, [ [type()] ], constraints()}
+         | {type_error, type()}.
 expect_tuple_type({type, _, any, []}, _N, _Env) ->
     any;
 expect_tuple_type({type, _, tuple, any}, _N, _Env) ->
