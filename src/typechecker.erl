@@ -1765,8 +1765,8 @@ do_type_check_expr(Env, {'fun', _, {clauses, Clauses}}) ->
     type_check_fun(Env, Clauses);
 do_type_check_expr(Env, {'fun', P, {function, Name, Arity}}) ->
     case get_bounded_fun_type_list(Name, Arity, Env, P) of
-        AnyType = {type, _, any, []} ->
-            {AnyType, Env, constraints:empty()};
+        [?type(any)] ->
+            {type(any), Env, constraints:empty()};
         BoundedFunTypeList ->
             Ty = bounded_type_list_to_type(Env, BoundedFunTypeList),
             {Ty, Env, constraints:empty()}
@@ -2586,9 +2586,9 @@ do_type_check_expr_in(Env, Ty, {'fun', _, {clauses, Clauses}} = Fun) ->
     end;
 do_type_check_expr_in(Env, ResTy, Expr = {'fun', P, {function, Name, Arity}}) ->
     case get_bounded_fun_type_list(Name, Arity, Env, P) of
-        ?type(any) when not Env#env.infer ->
+        [?type(any)] when not Env#env.infer ->
             {Env, constraints:empty()};
-        ?type(any) ->
+        [?type(any)] ->
             FunType = create_fun_type(Arity, type(any)),
             case subtype(FunType, ResTy, Env) of
                 {true, Cs} -> {Env, Cs};
@@ -3345,13 +3345,11 @@ type_check_record_union_in(Name, Anno, [Tys|Tyss], Fields, Env) ->
 type_check_record_union_in(_Name, _Anno, [], _Fields, _Env) ->
     none.
 
+-spec get_bounded_fun_type_list(atom(), arity(), env(), anno()) -> [type()].
 get_bounded_fun_type_list(Name, Arity, Env, P) ->
     case maps:find({Name, Arity}, Env#env.fenv) of
-        %% TODO: https://github.com/josefs/Gradualizer/issues/388
         {ok, Types} when is_list(Types) ->
             [ typelib:remove_pos(Ty) || Ty <- Types ];
-        {ok, Type} ->
-            typelib:remove_pos(Type);
         error ->
             case erl_internal:bif(Name, Arity) of
                 true ->
@@ -4159,13 +4157,7 @@ type_check_function(Env, {function, _, Name, NArgs, Clauses}) ->
     case maps:find({Name, NArgs}, Env#env.fenv) of
         {ok, FunTy} ->
             NewEnv = Env#env{current_spec = FunTy},
-            %% TODO: https://github.com/josefs/Gradualizer/issues/388
-            FunTyNoPos = case FunTy of
-                             _ when is_list(FunTy) ->
-                                 [ typelib:remove_pos(Ty) || Ty <- FunTy ];
-                             _ ->
-                                 typelib:remove_pos(FunTy)
-                         end,
+            FunTyNoPos = [ typelib:remove_pos(Ty) || Ty <- FunTy ],
             check_clauses_fun(NewEnv, expect_fun_type(NewEnv, FunTyNoPos), Clauses);
         error ->
             throw(internal_error(missing_type_spec, Name, NArgs))
@@ -5146,7 +5138,7 @@ create_fenv(Specs, Funs) ->
 % case it will mean that if there is a spec, then that will take precedence
 % over the default type any().
     maps:from_list(
-      [ {{Name, NArgs}, type(any)}
+      [ {{Name, NArgs}, [type(any)]}
         || {function,_, Name, NArgs, _Clauses} <- Funs
       ] ++
       [ {{Name, NArgs}, absform:normalize_function_type_list(Types)}
