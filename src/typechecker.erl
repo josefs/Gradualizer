@@ -3192,7 +3192,12 @@ type_check_fun(Env, {remote, _, _Expr, _}, Arity) ->
               []]},
     {[FunTy], Env, constraints:empty()};
 type_check_fun(Env, Expr, _Arity) ->
-    type_check_expr(Env, Expr).
+    case type_check_expr(Env, Expr) of
+        {[_|_] = Types, Env1, Cs} ->
+            {Types, Env1, Cs};
+        {Type, Env1, Cs} ->
+            {[Type], Env1, Cs}
+    end.
 
 -spec type_check_call_intersection(env(), type(), _, _, _, _) -> {env(), constraints:constraints()}.
 type_check_call_intersection(Env, ResTy, OrigExpr, [Ty], Args, E) ->
