@@ -3,7 +3,7 @@
 -module(gradualizer_lib).
 
 -export([merge_with/3, top_sort/1, get_type_definition/3,
-         pick_value/2, fold_ast/3, get_ast_children/1,
+         pick_values/2, fold_ast/3, get_ast_children/1,
          empty_tenv/0, create_tenv/3,
          remove_pos_typed_record_field/1]).
 -export_type([graph/1, tenv/0]).
@@ -144,12 +144,17 @@ get_type_definition({user_type, Anno, Name, Args}, Env, Opts) ->
 -define(remote_type(Name, Args, Anno), {remote_type, Anno, [_, {atom, _, Name}, Args]}).
 -define(user_type(Name, Args, Anno), {user_type, Anno, Name, Args}).
 
+-spec pick_values(Tys, Env) -> AbstractVal when
+      Tys :: [type()],
+      Env :: typechecker:env(),
+      AbstractVal :: [gradualizer_type:abstract_expr()].
+pick_values(Tys, Env) ->
+    [ pick_value(Ty, Env) || Ty <- Tys ].
+
 -spec pick_value(Ty, Env) -> AbstractVal when
-      Ty :: type() | [type()],
+      Ty :: type(),
       Env :: typechecker:env(),
       AbstractVal :: gradualizer_type:abstract_expr().
-pick_value(List, Env) when is_list(List) ->
-    [pick_value(Ty, Env) || Ty <- List ];
 pick_value(?type(integer), _Env) ->
     {integer, erl_anno:new(0), 0};
 pick_value(?type(char), _Env) ->
@@ -159,14 +164,17 @@ pick_value(?type(non_neg_integer), _Env) ->
 pick_value(?type(pos_integer), _Env) ->
     {integer, erl_anno:new(0), 0};
 pick_value(?type(neg_integer), _Env) ->
-    {integer, erl_anno:new(0), -1};
+    L = erl_anno:new(0),
+    {op, L, '-', {integer, L, 1}};
 pick_value(?type(float), _Env) ->
-    {float, erl_anno:new(0), -1.0};
+    L = erl_anno:new(0),
+    {op, L, '-', {float, L, 1.0}};
 pick_value(?type(atom), _Env) ->
     {atom, erl_anno:new(0), a};
 pick_value({atom, _, A}, _Env) ->
     {atom, erl_anno:new(0), A};
 pick_value({ann_type, _, [_, Ty]}, Env) ->
+    Ty = ?assert_type(Ty, type()),
     pick_value(Ty, Env);
 pick_value(?type(union, [Ty|_]), Env) ->
     pick_value(Ty, Env);
@@ -194,13 +202,14 @@ pick_value(?type(list), _Env) ->
     {nil, erl_anno:new(0)};
 pick_value(?type(list,_), _Env) ->
     {nil, erl_anno:new(0)};
-pick_value(?type(nonempty_list, Ty), Env) ->
-    [H | _] = pick_value(Ty, Env),
+pick_value(?type(nonempty_list, [Ty]), Env) ->
+    H = pick_value(Ty, Env),
     {cons, erl_anno:new(0), H, {nil, erl_anno:new(0)}};
 pick_value(?type(nil), _Env) ->
     {nil, erl_anno:new(0)};
 pick_value(?type(binary, [{integer, _, M}, {integer, _, _}]), _Env) when M > 0 ->
-    {bin, erl_anno:new(0), [{bin_element, 0, {integer, 0, 0}, {integer, 0, M}, default}]};
+    L = erl_anno:new(0),
+    {bin, L, [{bin_element, L, {integer, L, 0}, {integer, L, M}, default}]};
 pick_value(?type(binary, _), _Env) ->
     {bin, erl_anno:new(0), []};
 %% The ?type(range) is a different case because the type range

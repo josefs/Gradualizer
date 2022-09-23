@@ -143,7 +143,7 @@
                | {bad_type_annotation, gradualizer_type:af_string()}
                | {illegal_map_type, type()}
                | {argument_length_mismatch, anno(), arity(), arity()}
-               | {nonexhaustive, anno(), expr()}
+               | {nonexhaustive, anno(), [expr()]}
                | {illegal_pattern, pattern()}
                | {internal_error, missing_type_spec, atom(), arity()}
                | {call_undef, anno(), module(), atom(), arity()}.
@@ -3541,7 +3541,7 @@ check_arg_exhaustiveness(Env, ArgTys, Clauses, RefinedArgTys) ->
     of
         true ->
             [{clause, P, _, _, _} | _] = Clauses,
-            throw(nonexhaustive(P, gradualizer_lib:pick_value(RefinedArgTys, Env)));
+            throw(nonexhaustive(P, gradualizer_lib:pick_values(RefinedArgTys, Env)));
         _ ->
             ok
     end.
@@ -5250,9 +5250,9 @@ illegal_map_type(Info) ->
 argument_length_mismatch(P, LenTy, LenArgs) ->
     {argument_length_mismatch, P, LenTy, LenArgs}.
 
--spec nonexhaustive(anno(), expr()) -> error().
-nonexhaustive(P, Example) ->
-    {nonexhaustive, P, Example}.
+-spec nonexhaustive(anno(), [expr()]) -> error().
+nonexhaustive(P, Examples) ->
+    {nonexhaustive, P, Examples}.
 
 -spec illegal_pattern(pattern()) -> error().
 illegal_pattern(Pat) ->
