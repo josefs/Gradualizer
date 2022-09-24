@@ -11,12 +11,12 @@ main(Args) ->
             halt(1);
         {ok, Files, Opts} ->
             start_application(Opts),
-            R = case gradualizer:type_check_files(Files, Opts) of
-                    ok -> ok;
-                    nok -> halt(1)
-                end,
+            CheckResult = gradualizer:type_check_files(Files, Opts),
             gradualizer_tracer:flush(),
-            R
+            case CheckResult of
+                ok -> ok;
+                nok -> halt(1)
+            end
     end.
 
 start_application(Opts) ->
