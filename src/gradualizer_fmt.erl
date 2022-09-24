@@ -149,7 +149,8 @@ format_type_error({argument_length_mismatch, Anno, LenTy, LenArgs}, Opts) ->
        format_location(Anno, verbose, Opts),
        LenTy,
        LenArgs]);
-format_type_error({type_error, unreachable_clause, Anno}, Opts) ->
+format_type_error({type_error, unreachable_clauses, Clauses}, Opts) ->
+    Anno = element(2, hd(Clauses)),
     io_lib:format(
       "~sThe clause~s cannot be reached~n",
       [format_location(Anno, brief, Opts),

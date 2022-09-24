@@ -126,7 +126,7 @@
                     | no_type_match_intersection | non_number_argument_to_minus
                     | non_number_argument_to_plus | op_type_too_precise | operator_pattern | pattern
                     | receive_after | record_pattern | rel_error | relop | unary_error
-                    | unreachable_clause.
+                    | unreachable_clauses.
 -type undef() :: record | user_type | remote_type | record_field.
 
 -type error() :: {type_error, type_error()}
@@ -3369,31 +3369,6 @@ infer_clause(Env, {clause, _, Args, Guards, Block}) ->
     {Ty, VB, Cs} = type_check_block(EnvNew, Block),
     {Ty, union_var_binds(VB, EnvNew, EnvNew), Cs}.
 
--spec check_clauses_intersect(env(), [fun_ty()], Clauses) -> R when
-      Clauses :: [gradualizer_type:abstract_clause()],
-      R :: {env(), constraints()}.
-check_clauses_intersect(Env, [], _Clauses) ->
-    {Env, constraints:empty()};
-check_clauses_intersect(Env, [Ty|Tys], Clauses) ->
-    %% Variable bindings should not leak into subsequent clauses,
-    %% that's why we explicitely pass them as appropriate.
-    VEnv = Env#env.venv,
-    {Env1, Cs1} = check_clauses_fun(Env, Ty, Clauses),
-    {Env2, Cs2} = check_clauses_intersect(Env1#env{venv = VEnv}, Tys, Clauses),
-    {union_var_binds(Env1, Env2, Env), constraints:combine(Cs1, Cs2)}.
-
-check_clauses_union(_Env, [], _Clauses) ->
-    %% TODO: Improve quality of type error
-    throw(type_error(check_clauses));
-check_clauses_union(Env, [Ty|Tys], Clauses) ->
-    try
-        check_clauses_fun(Env, Ty, Clauses)
-    catch
-        Error when element(1,Error) == type_error ->
-            check_clauses_union(Env, Tys, Clauses)
-    end.
-
-
 -spec check_clauses_fun(Env, FunTy, Clauses) -> R when
       Env :: env(),
       FunTy :: _,
@@ -3409,34 +3384,84 @@ check_clauses_fun(Env, {fun_ty_union, Tys, Cs1}, Clauses) ->
     {Env1, Cs2} = check_clauses_union(Env, Tys, Clauses),
     {Env1, constraints:combine(Cs1, Cs2)}.
 
+-spec check_clauses_intersect(env(), [fun_ty()], Clauses) -> R when
+      Clauses :: [gradualizer_type:abstract_clause()],
+      R :: {env(), constraints()}.
+check_clauses_intersect(Env, Tys, Clauses) ->
+    %% TODO: don't drop the constraints!
+    {ArgsTyss, ResTys} =
+        lists:unzip(lists:map(fun ({fun_ty, ArgsTy, ResTy, _Cs1}) ->
+                                      {ArgsTy, ResTy}
+                              end, Tys)),
+    check_clauses(Env, {intersection, ArgsTyss}, {intersection, ResTys}, Clauses, bind_vars).
+
+check_clauses_union(_Env, [], _Clauses) ->
+    %% TODO: Improve quality of type error
+    throw(type_error(check_clauses));
+check_clauses_union(Env, [Ty|Tys], Clauses) ->
+    try
+        check_clauses_fun(Env, Ty, Clauses)
+    catch
+        Error when element(1,Error) == type_error ->
+            check_clauses_union(Env, Tys, Clauses)
+    end.
+
 %% Checks a list of clauses (if/case/fun/try/catch/receive).
 -spec check_clauses(Env, ArgsTy, ResTy, Clauses, Caps) -> R when
       Env :: env(),
-      ArgsTy :: [type()],
-      ResTy :: type(),
+      ArgsTy :: [type()] | {intersection, [[type()]]},
+      ResTy :: type() | {intersection, [type()]},
       Clauses :: [gradualizer_type:abstract_clause()],
       Caps :: capture_vars | bind_vars,
       R :: {env(), constraints:constraints()}.
+check_clauses(Env, {intersection, [ArgsTys | ArgsTyss]}, {intersection, [ResTy | ResTys]}, Clauses, Caps) ->
+    Env1 = push_clauses_controls(Env, #clauses_controls{exhaust = Env#env.exhaust}),
+    %Env1 = Env,
+    %% Clauses for if, case, functions, receive, etc.
+    try {check_reachable_clauses(ResTy, Clauses, Caps, [], [], ArgsTys, Env1, return), ArgsTyss, ResTys} of
+        {{remaining_clauses, RemainingClauses, _}, [], []} ->
+            throw(type_error(unreachable_clauses, RemainingClauses));
+        {{remaining_clauses, RemainingClauses, Env2}, [_|_], [_|_]} ->
+            %% Variable bindings should not leak into subsequent clauses,
+            %% that's why we explicitly pass them as appropriate.
+            VEnv = Env1#env.venv,
+            check_clauses(Env2#env{venv = VEnv}, {intersection, ArgsTyss}, {intersection, ResTys},
+                          RemainingClauses, Caps);
+        {Acc, _, _} ->
+            {VarBindsList, Css, _RefinedArgsTy, Env2} = Acc,
+            %% TODO: work in progress
+            %check_arg_exhaustiveness(Env2, ArgsTys, Clauses, RefinedArgsTy),
+            %Env3 = pop_clauses_controls(Env2),
+            Env3 = Env2,
+            {union_var_binds(VarBindsList, Env3), constraints:combine(Css)}
+    catch
+        E ->
+            gradualizer_tracer:debug({?MODULE, ?LINE, E}),
+            throw(E)
+    end;
 check_clauses(Env, ArgsTy, ResTy, Clauses, Caps) ->
     Env1 = push_clauses_controls(Env, #clauses_controls{exhaust = Env#env.exhaust}),
+    %% This is fine, since we handle the other option in the clause above.
     ArgsTy = ?assert_type(ArgsTy, [type()]),
     %% Clauses for if, case, functions, receive, etc.
     {VarBindsList, Css, RefinedArgsTy, Env2} =
-        lists:foldl(fun (Clause, {VBs, Css, RefinedArgsTy, EnvIn}) ->
-                            {NewRefinedArgsTy, Env2, Cs} =
-                                check_clause(EnvIn, RefinedArgsTy, ResTy, Clause, Caps),
-                            VB =
-                                refine_vars_by_mismatching_clause(Clause, EnvIn#env.venv, Env2),
-                            {[Env2 | VBs],
-                             [Cs | Css],
-                             NewRefinedArgsTy,
-                             Env2#env{venv = VB}}
-                    end,
-                    {[], [], ArgsTy, Env1},
-                    Clauses),
+        check_reachable_clauses(ResTy, Clauses, Caps, [], [], ArgsTy, Env1, throw),
     check_arg_exhaustiveness(Env2, ArgsTy, Clauses, RefinedArgsTy),
     Env3 = pop_clauses_controls(Env2),
     {union_var_binds(VarBindsList, Env3), constraints:combine(Css)}.
+
+check_reachable_clauses(_ResTy, [], _Caps, VBs, Cs, RefinedArgsTy, Env, _) ->
+    {VBs, Cs, RefinedArgsTy, Env};
+check_reachable_clauses(_ResTy, Clauses, _Caps, _, _, [?type(none)|_], Env, Action) ->
+    case Action of
+        throw -> throw(type_error(unreachable_clauses, Clauses));
+        return -> {remaining_clauses, Clauses, Env}
+    end;
+check_reachable_clauses(ResTy, [Clause | Clauses], Caps, VBs, Css, RefinedArgsTy, EnvIn, Action) ->
+    {NewRefinedArgsTy, Env2, Cs} = check_clause(EnvIn, RefinedArgsTy, ResTy, Clause, Caps),
+    VB = refine_vars_by_mismatching_clause(Clause, EnvIn#env.venv, Env2),
+    check_reachable_clauses(ResTy, Clauses, Caps, [Env2 | VBs], [Cs | Css],
+                            NewRefinedArgsTy, Env2#env{venv = VB}, Action).
 
 push_clauses_controls(#env{} = Env, #clauses_controls{} = CC) ->
     ?verbose(Env, "Pushing ~p~n", [CC]),
@@ -3507,8 +3532,6 @@ some_type_not_none(Types) when is_list(Types) ->
 -spec check_clause(env(), [type()], type(), gradualizer_type:abstract_clause(),
 		   capture_vars | bind_vars) ->
         {RefinedTys :: [type()] , VarBinds :: env(), constraints:constraints()}.
-check_clause(_Env, [?type(none)|_], _ResTy, {clause, P, _Args, _Guards, _Block}, _) ->
-    throw(type_error(unreachable_clause, P));
 check_clause(Env, ArgsTy, ResTy, C = {clause, P, Args, Guards, Block}, Caps) ->
     ?verbose(Env, "~sChecking clause :: ~s~n", [gradualizer_fmt:format_location(C, brief), typelib:pp_type(ResTy)]),
     case {length(ArgsTy), length(Args)} of
