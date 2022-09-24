@@ -108,6 +108,7 @@
 -include("typechecker.hrl").
 -type env() :: #env{}.
 
+-include_lib("stdlib/include/assert.hrl").
 -include("gradualizer.hrl").
 
 -type constraints() :: constraints:constraints().
@@ -811,7 +812,7 @@ normalize_rec({user_type, _, Name, Args} = Type, Env) ->
             Type;
         not_found ->
             P = position_info_from_spec(Env#env.current_spec),
-            throw(undef(user_type, P, {Name, ?assert_type(length(Args), arity())}))
+            throw(undef(user_type, P, {Name, arity(length(Args))}))
     end;
 normalize_rec(T = ?top(), _Env) ->
     %% Don't normalize gradualizer:top().
@@ -828,9 +829,9 @@ normalize_rec({remote_type, _, [{atom, _, M}, {atom, _, N}, Args]}, Env) ->
             Ty = {user_type, 0, N, NormalizedArgs},
             typelib:annotate_user_type(M, ?assert_type(Ty, type()));
         not_exported ->
-            throw(not_exported(remote_type, P, {M, N, ?assert_type(length(Args), arity())}));
+            throw(not_exported(remote_type, P, {M, N, arity(length(Args))}));
         not_found ->
-            throw(undef(remote_type, P, {M, N, ?assert_type(length(Args), arity())}))
+            throw(undef(remote_type, P, {M, N, arity(length(Args))}))
     end;
 normalize_rec({op, _, _, _Arg} = Op, _Env) ->
     erl_eval:partial_eval(Op);
@@ -1652,8 +1653,7 @@ do_type_check_expr(Env, {call, _, {atom, _, record_info}, [_, _]} = Call) ->
     Ty = get_record_info_type(Call, Env),
     {Ty, Env, constraints:empty()};
 do_type_check_expr(Env, {call, P, Name, Args}) ->
-    Arity = length(Args),
-    Arity = ?assert_type(Arity, arity()),
+    Arity = arity(length(Args)),
     {FunTy, VarBinds1, Cs1} = type_check_fun(Env, Name, Arity),
     {ResTy, VarBinds2, Cs2} = type_check_call_ty(Env, expect_fun_type(Env, FunTy, Arity),
                                                  Args, {Name, P, FunTy}),
@@ -1793,7 +1793,7 @@ do_type_check_expr(Env, {named_fun, _, FunName, Clauses}) ->
                     %% Create a fun type of the correct arity
                     %% on the form fun((_,_,_) -> any()).
                     [{clause, _, Params, _Guards, _Block} | _] = Clauses,
-                    Arity = ?assert_type(length(Params), arity()),
+                    Arity = arity(length(Params)),
                     create_fun_type(Arity, type(any));
                 not Env#env.infer ->
                     type(any)
@@ -1919,8 +1919,7 @@ type_check_fun(Env, Clauses) ->
                     %% Create a fun type with the correct arity on the form
                     %% fun((any(), any(), ...) -> RetTy).
                     [{clause, _, Params, _Guards, _Body} | _] = Clauses,
-                    Arity = length(Params),
-                    Arity = ?assert_type(Arity, arity()),
+                    Arity = arity(length(Params)),
                     create_fun_type(Arity, RetTy)
             end,
     %% Variable bindings inside the fun clauses are local inside the fun.
@@ -2120,9 +2119,7 @@ type_check_call_ty(Env, {fun_ty, ArgsTy, ResTy, Cs}, Args, E) ->
             ,constraints:combine([Cs | Css])};
         {LenTy, LenArgs} ->
             P = element(2, E),
-            LenTy = ?assert_type(LenTy, arity()),
-            LenArgs = ?assert_type(LenArgs, arity()),
-            throw(argument_length_mismatch(P, LenTy, LenArgs))
+            throw(argument_length_mismatch(P, arity(LenTy), arity(LenArgs)))
     end;
 type_check_call_ty(Env, {fun_ty_intersection, Tyss, Cs}, Args, E) ->
     {ResTy, VarBinds, CsI} = type_check_call_ty_intersect(Env, Tyss, Args, E),
@@ -2536,7 +2533,7 @@ do_type_check_expr_in(Env, ResTy, {call, _, {atom, _, record_info}, [_, _]} = Ca
             throw(type_error(Call, ResTy, Ty))
     end;
 do_type_check_expr_in(Env, ResTy, {call, P, Name, Args} = OrigExpr) ->
-    Arity = ?assert_type(length(Args), arity()),
+    Arity = arity(length(Args)),
     {FunTy, VarBinds, Cs} = type_check_fun(Env, Name, Arity),
     {VarBinds2, Cs2} = type_check_call(Env, ResTy, OrigExpr, expect_fun_type(Env, FunTy, Arity),
                                        Args, {P, Name, FunTy}),
@@ -3192,8 +3189,8 @@ type_check_call_intersection_(Env, ResTy, OrigExpr, [Ty | Tys], Args, E) ->
 -spec type_check_call(env(), type(), _, _, _, _) -> {env(), constraints:constraints()}.
 type_check_call(_Env, _ResTy, _, {fun_ty, ArgsTy, _FunResTy, _Cs}, Args, {P, Name, _})
         when length(ArgsTy) /= length(Args) ->
-    LenTys = ?assert_type(length(ArgsTy), arity()),
-    LenArgs = ?assert_type(length(Args), arity()),
+    LenTys = arity(length(ArgsTy)),
+    LenArgs = arity(length(Args)),
     throw(type_error(call_arity, P, Name, LenTys, LenArgs));
 type_check_call(Env, ResTy, OrigExpr, {fun_ty, ArgsTy, FunResTy, Cs}, Args, _) ->
     {VarBindsList, Css} =
@@ -3528,9 +3525,7 @@ check_clause(Env, ArgsTy, ResTy, C = {clause, P, Args, Guards, Block}, Caps) ->
             ,union_var_binds([VarBinds1, VarBinds2, EnvNewest], EnvNewest)
             ,constraints:combine(Cs1, Cs2)};
         {LenTy, LenArgs} ->
-            LenTy = ?assert_type(LenTy, arity()),
-            LenArgs = ?assert_type(LenArgs, arity()),
-            throw(argument_length_mismatch(P, LenTy, LenArgs))
+            throw(argument_length_mismatch(P, arity(LenTy), arity(LenArgs)))
     end.
 %% DEBUG
 %check_clause(_Env, _ArgsTy, _ResTy, Term, _) ->
@@ -4116,7 +4111,7 @@ clause_arity({clause, _, Args, _, _}) ->
 
 -spec arity(non_neg_integer()) -> arity().
 arity(I) ->
-    I < 256 orelse erlang:error(arity_overflow),
+    ?assert(I < 256, arity_overflow),
     ?assert_type(I, arity()).
 
 -spec position_info_from_spec(form() | forms() | none) -> erl_anno:anno().
