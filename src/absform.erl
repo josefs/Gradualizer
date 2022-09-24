@@ -32,7 +32,7 @@ normalize_record_field({typed_record_field,
 -spec normalize_function_type_list(FunTypeList) -> FunTypeList when
       FunTypeList :: gradualizer_type:af_function_type_list().
 normalize_function_type_list(FunTypeList) ->
-    ?assert_type(lists:map(fun normalize_function_type/1, FunTypeList), [B, ...]).
+    lists:map(fun normalize_function_type/1, FunTypeList).
 
 -spec normalize_function_type(BoundedFun | Fun) -> BoundedFun when
       BoundedFun :: gradualizer_type:af_constrained_function_type(),
