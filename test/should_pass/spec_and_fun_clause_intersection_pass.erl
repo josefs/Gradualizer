@@ -6,4 +6,4 @@
          (list()) -> baz | qux.
 foo(bar) -> bar;
 foo([]) -> baz;
-foo([a]) -> qux.
+foo([_|_]) -> qux.
