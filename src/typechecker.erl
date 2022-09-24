@@ -1227,39 +1227,34 @@ allow_empty_list(Ty) ->
         false -> Ty
     end.
 
--type fun_ty() :: any
-		| {fun_ty, [type()], type(), constraints:constraints()}
-		| {fun_ty_any_args, type(), constraints:constraints()}
-		| {fun_ty_intersection, [fun_ty()], constraints:constraints()}
-		| {fun_ty_union, [fun_ty()], constraints:constraints()}
-		.
+-type fun_ty() :: {fun_ty, [type()], type(), constraints()}
+                | {fun_ty_intersection, [fun_ty()], constraints()}
+                | {fun_ty_union, [fun_ty()], constraints()}.
 
 %% Categorizes a function type.
 %% Normalizes the type (expand user-def and remote types). Errors for non-fun
 %% types are returned with the original non-normalized type.
 %% TODO: move tenv to back
--spec expect_fun_type(env(), type() | [type()]) -> fun_ty() | {type_error, type()}.
-expect_fun_type(Env, Type) ->
+-spec expect_fun_type(env(), type() | [type()], arity()) -> fun_ty() | {type_error, type()}.
+expect_fun_type(Env, Type, Arity) ->
     Normalized = case Type of
                      Types when is_list(Types) ->
                          [ normalize(Ty, Env) || Ty <- Types ];
                      Type ->
                          normalize(Type, Env)
                  end,
-    case expect_fun_type1(Env, Normalized) of
+    case expect_fun_type1(Env, Normalized, Arity) of
         type_error -> {type_error, Type};
         Other -> Other
     end.
 
 %% TODO: move tenv to back
--spec expect_fun_type1(env(), type() | [type()]) -> fun_ty() | type_error.
-expect_fun_type1(Env, BTy = {type, _, bounded_fun, [Ft, _Fc]}) ->
+-spec expect_fun_type1(env(), type() | [type()], arity()) -> fun_ty() | type_error.
+expect_fun_type1(Env, BTy = {type, _, bounded_fun, [Ft, _Fc]}, Arity) ->
     Sub = bounded_type_subst(Env, BTy),
-    case expect_fun_type1(Env, Ft) of
+    case expect_fun_type1(Env, Ft, Arity) of
         {fun_ty, ArgsTy, ResTy, Cs} ->
             {fun_ty, subst_ty(Sub, ArgsTy), subst_ty(Sub, ResTy), Cs};
-        {fun_ty_any_args, ResTy, Cs} ->
-            {fun_ty_any_args, subst_ty(Sub, ResTy), Cs};
         {fun_ty_intersection, Tys, Cs} ->
             {fun_ty_intersection, subst_ty(Sub, Tys), Cs};
         {fun_ty_union, Tys, Cs} ->
@@ -1267,18 +1262,21 @@ expect_fun_type1(Env, BTy = {type, _, bounded_fun, [Ft, _Fc]}) ->
         Err ->
             Err
     end;
-expect_fun_type1(_Env, {type, _, 'fun', [{type, _, product, ArgsTy}, ResTy]}) ->
+expect_fun_type1(_Env, {type, _, 'fun', [{type, _, product, ArgsTy}, ResTy]}, _Arity) ->
     {fun_ty, ArgsTy, ResTy, constraints:empty()};
-expect_fun_type1(_Env, {type, _, 'fun', []}) ->
-    any;
-expect_fun_type1(_Env, {type, _, 'fun', [{type, _, any}, ResTy]}) ->
+expect_fun_type1(_Env, {type, _, 'fun', []}, Arity) ->
+    ArgsTy = lists:duplicate(Arity, type(any)),
+    ResTy = type(any),
+    {fun_ty, ArgsTy, ResTy, constraints:empty()};
+expect_fun_type1(_Env, {type, _, 'fun', [{type, _, any}, ResTy]}, Arity) ->
+    ArgsTy = lists:duplicate(Arity, type(any)),
     %% We can assert the below,
     %% as we know Res2 is not {type, _, any}, which is explicitely matched on above.
     ResTy = ?assert_type(ResTy, type()),
-    {fun_ty_any_args, ResTy, constraints:empty()};
-expect_fun_type1(Env, Tys) when is_list(Tys) ->
+    {fun_ty, ArgsTy, ResTy, constraints:empty()};
+expect_fun_type1(Env, Tys, Arity) when is_list(Tys) ->
     %% This is a spec, not really a type().
-    case expect_intersection_type(Env, Tys) of
+    case expect_intersection_type(Env, Tys, Arity) of
         type_error ->
             type_error;
         [Ty] ->
@@ -1286,8 +1284,8 @@ expect_fun_type1(Env, Tys) when is_list(Tys) ->
         Tyss ->
             {fun_ty_intersection, Tyss, constraints:empty()}
     end;
-expect_fun_type1(Env, {type, _, union, UnionTys}) ->
-    case expect_fun_type_union(Env, UnionTys) of
+expect_fun_type1(Env, {type, _, union, UnionTys}, Arity) ->
+    case expect_fun_type_union(Env, UnionTys, Arity) of
         [] ->
             type_error;
         [Ty] ->
@@ -1295,29 +1293,32 @@ expect_fun_type1(Env, {type, _, union, UnionTys}) ->
         Tys ->
             {fun_ty_union, Tys, constraints:empty()}
     end;
-expect_fun_type1(_Env, {var, _, Var}) ->
+expect_fun_type1(_Env, {var, _, Var}, Arity) ->
+    ArgsTy = lists:duplicate(Arity, type(any)),
     ResTy = new_type_var(),
-    {fun_ty_any_args, {var, erl_anno:new(0), ResTy}
-    ,constraints:add_var(Var,
-       constraints:upper(ResTy,
-         {type, erl_anno:new(0), 'fun', [{type, erl_anno:new(0), any}
-                                        ,{var,  erl_anno:new(0), ResTy}]}))};
-expect_fun_type1(_Env, {type, _, any, []}) ->
-    any;
-expect_fun_type1(_Env, ?top()) ->
-    {fun_ty_any_args, top(), constraints:empty()};
-expect_fun_type1(_Env, _Ty) ->
+    ResTyUpper = {type, erl_anno:new(0), 'fun', [{type, erl_anno:new(0), any},
+                                                 {var,  erl_anno:new(0), ResTy}]},
+    {fun_ty, ArgsTy, {var, erl_anno:new(0), ResTy},
+     constraints:add_var(Var, constraints:upper(ResTy, ResTyUpper))};
+expect_fun_type1(_Env, {type, _, any, []}, Arity) ->
+    ArgsTy = lists:duplicate(Arity, type(any)),
+    ResTy = type(any),
+    {fun_ty, ArgsTy, ResTy, constraints:empty()};
+expect_fun_type1(_Env, ?top(), Arity) ->
+    ArgsTy = lists:duplicate(Arity, type(any)),
+    {fun_ty, ArgsTy, top(), constraints:empty()};
+expect_fun_type1(_Env, _Ty, _Arity) ->
     type_error.
 
--spec expect_intersection_type(env(), [tuple()]) -> [fun_ty()] | type_error.
-expect_intersection_type(_Env, []) ->
+-spec expect_intersection_type(env(), [tuple()], arity()) -> [fun_ty()] | type_error.
+expect_intersection_type(_Env, [], _Arity) ->
     [];
-expect_intersection_type(Env, [FunTy|Tys]) ->
-    case expect_fun_type1(Env, FunTy) of
+expect_intersection_type(Env, [FunTy|Tys], Arity) ->
+    case expect_fun_type1(Env, FunTy, Arity) of
         type_error ->
             type_error;
         Ty ->
-            case expect_intersection_type(Env, Tys) of
+            case expect_intersection_type(Env, Tys, Arity) of
                 type_error ->
                     type_error;
                 Tyss ->
@@ -1325,15 +1326,15 @@ expect_intersection_type(Env, [FunTy|Tys]) ->
             end
     end.
 
--spec expect_fun_type_union(env(), [tuple()]) -> [fun_ty()].
-expect_fun_type_union(_Env, []) ->
+-spec expect_fun_type_union(env(), [tuple()], arity()) -> [fun_ty()].
+expect_fun_type_union(_Env, [], _Arity) ->
     [];
-expect_fun_type_union(Env, [Ty|Tys]) ->
-    case expect_fun_type1(Env, Ty) of
+expect_fun_type_union(Env, [Ty|Tys], Arity) ->
+    case expect_fun_type1(Env, Ty, Arity) of
         type_error ->
-            expect_fun_type_union(Env, Tys);
+            expect_fun_type_union(Env, Tys, Arity);
         TyOut ->
-            [TyOut | expect_fun_type_union(Env, Tys)]
+            [TyOut | expect_fun_type_union(Env, Tys, Arity)]
     end.
 
 -spec expect_record_type(type(), atom(), env()) -> Any | FieldsTy | FieldsTys | TypeError when
@@ -1654,8 +1655,8 @@ do_type_check_expr(Env, {call, P, Name, Args}) ->
     Arity = length(Args),
     Arity = ?assert_type(Arity, arity()),
     {FunTy, VarBinds1, Cs1} = type_check_fun(Env, Name, Arity),
-    {ResTy, VarBinds2, Cs2} = type_check_call_ty(Env, expect_fun_type(Env, FunTy), Args
-                                                ,{Name, P, FunTy}),
+    {ResTy, VarBinds2, Cs2} = type_check_call_ty(Env, expect_fun_type(Env, FunTy, Arity),
+                                                 Args, {Name, P, FunTy}),
     {ResTy, union_var_binds(VarBinds1, VarBinds2, Env),
             constraints:combine(Cs1, Cs2)};
 
@@ -2123,24 +2124,6 @@ type_check_call_ty(Env, {fun_ty, ArgsTy, ResTy, Cs}, Args, E) ->
             LenArgs = ?assert_type(LenArgs, arity()),
             throw(argument_length_mismatch(P, LenTy, LenArgs))
     end;
-type_check_call_ty(Env, {fun_ty_any_args, ResTy, Cs}, Args, _E) ->
-    {_Tys, VarBindsList, Css} =
-        lists:unzip3(
-          [ type_check_expr(Env, Arg)
-            || Arg <- Args
-          ]),
-    {ResTy
-    ,union_var_binds(VarBindsList, Env)
-    ,constraints:combine([Cs | Css])};
-type_check_call_ty(Env, any, Args, _E) ->
-    {_Tys, VarBindsList, Css} =
-        lists:unzip3(
-          [ type_check_expr(Env, Arg)
-            || Arg <- Args
-          ]),
-    {type(any)
-    ,union_var_binds(VarBindsList, Env)
-    ,constraints:combine(Css)};
 type_check_call_ty(Env, {fun_ty_intersection, Tyss, Cs}, Args, E) ->
     {ResTy, VarBinds, CsI} = type_check_call_ty_intersect(Env, Tyss, Args, E),
     {ResTy, VarBinds, constraints:combine(Cs, CsI)};
@@ -2555,8 +2538,8 @@ do_type_check_expr_in(Env, ResTy, {call, _, {atom, _, record_info}, [_, _]} = Ca
 do_type_check_expr_in(Env, ResTy, {call, P, Name, Args} = OrigExpr) ->
     Arity = ?assert_type(length(Args), arity()),
     {FunTy, VarBinds, Cs} = type_check_fun(Env, Name, Arity),
-    {VarBinds2, Cs2} = type_check_call(Env, ResTy, OrigExpr, expect_fun_type(Env, FunTy), Args,
-                                       {P, Name, FunTy}),
+    {VarBinds2, Cs2} = type_check_call(Env, ResTy, OrigExpr, expect_fun_type(Env, FunTy, Arity),
+                                       Args, {P, Name, FunTy}),
     {union_var_binds(VarBinds, VarBinds2, Env), constraints:combine(Cs, Cs2)};
 do_type_check_expr_in(Env, ResTy, {lc, P, Expr, Qualifiers} = OrigExpr) ->
     type_check_comprehension_in(Env, ResTy, OrigExpr, lc, Expr, P, Qualifiers);
@@ -2565,14 +2548,9 @@ do_type_check_expr_in(Env, ResTy, {bc, P, Expr, Qualifiers} = OrigExpr) ->
 
 %% Functions
 do_type_check_expr_in(Env, Ty, {'fun', _, {clauses, Clauses}} = Fun) ->
-    case expect_fun_type(Env, Ty) of
-        any ->
-            {Env, constraints:empty()};
+    case expect_fun_type(Env, Ty, clause_arity(hd(Clauses))) of
         {fun_ty, ArgsTy, ResTy, Cs1} ->
             {Env1, Cs2} = check_clauses(Env, ArgsTy, ResTy, Clauses, bind_vars),
-            {Env1, constraints:combine(Cs1, Cs2)};
-        {fun_ty_any_args, ResTy, Cs1} ->
-            {Env1, Cs2} = check_clauses(Env, any, ResTy, Clauses, bind_vars),
             {Env1, constraints:combine(Cs1, Cs2)};
         %% TODO: Can this case actually happen?
         {fun_ty_intersection, Tyss, Cs1} ->
@@ -2621,14 +2599,9 @@ do_type_check_expr_in(Env, ResTy, Expr = {'fun', P, {function, M, F, A}}) ->
     end;
 do_type_check_expr_in(Env, Ty, {named_fun, _, FunName, Clauses} = Fun) ->
     Env1 = add_var_binds(Env#env{venv = #{ FunName => Ty }}, Env, Env),
-    case expect_fun_type(Env, Ty) of
-        any ->
-            {Env#env{venv = #{ FunName => Ty }}, constraints:empty()};
+    case expect_fun_type(Env, Ty, clause_arity(hd(Clauses))) of
         {fun_ty, ArgsTy, ResTy, Cs1} ->
             {Env2, Cs2} = check_clauses(Env1, ArgsTy, ResTy, Clauses, bind_vars),
-            {Env2, constraints:combine(Cs1, Cs2)};
-        {fun_ty_any_args, ResTy, Cs1} ->
-            {Env2, Cs2} = check_clauses(Env1, any, ResTy, Clauses, bind_vars),
             {Env2, constraints:combine(Cs1, Cs2)};
         %% TODO: Can this case actually happen?
         {fun_ty_intersection, Tyss, Cs1} ->
@@ -3236,28 +3209,6 @@ type_check_call(Env, ResTy, OrigExpr, {fun_ty, ArgsTy, FunResTy, Cs}, Args, _) -
         false ->
             throw(type_error(OrigExpr, FunResTy, ResTy))
     end;
-type_check_call(Env, ResTy, OrigExpr, {fun_ty_any_args, FunResTy, Cs}, Args, _)  ->
-    {_Tys, VarBindsList, Css} =
-        lists:unzip3(
-          lists:map(fun (Arg) ->
-                            type_check_expr(Env, Arg)
-                    end, Args)
-         ),
-    case subtype(FunResTy, ResTy, Env) of
-        {true, Cs1} ->
-            { union_var_binds(VarBindsList, Env)
-            , constraints:combine([Cs, Cs1 | Css]) };
-        false ->
-            throw(type_error(OrigExpr, FunResTy, ResTy))
-    end;
-type_check_call(Env, _ResTy, _, any, Args, _E) ->
-    {_Tys, VarBindsList, Css} =
-        lists:unzip3(
-          lists:map(fun (Arg) ->
-                            type_check_expr(Env, Arg)
-                    end, Args)
-         ),
-    {union_var_binds(VarBindsList, Env), constraints:combine(Css)};
 type_check_call(Env, ResTy, OrigExpr, {fun_ty_intersection, Tys, Cs1}, Args, E) ->
     {VB, Cs2} = type_check_call_intersection(Env, ResTy, OrigExpr, Tys, Args, E),
     {VB, constraints:combine(Cs1, Cs2)};
@@ -3454,11 +3405,6 @@ check_clauses_union(Env, [Ty|Tys], Clauses) ->
 check_clauses_fun(Env, {fun_ty, ArgsTy, FunResTy, Cs1}, Clauses) ->
     {Env1, Cs2} = check_clauses(Env, ArgsTy, FunResTy, Clauses, bind_vars),
     {Env1, constraints:combine(Cs1, Cs2)};
-check_clauses_fun(Env, {fun_ty_any_args, FunResTy, Cs1}, Clauses) ->
-    {Env1, Cs2} = check_clauses(Env, any, FunResTy, Clauses, bind_vars),
-    {Env1, constraints:combine(Cs1, Cs2)};
-check_clauses_fun(Env, any, Clauses) ->
-    check_clauses(Env, any, type(any), Clauses, bind_vars);
 check_clauses_fun(Env, {fun_ty_intersection, Tys, Cs1}, Clauses) ->
     {Env1, Cs2} = check_clauses_intersect(Env, Tys, Clauses),
     {Env1, constraints:combine(Cs1, Cs2)};
@@ -3469,18 +3415,13 @@ check_clauses_fun(Env, {fun_ty_union, Tys, Cs1}, Clauses) ->
 %% Checks a list of clauses (if/case/fun/try/catch/receive).
 -spec check_clauses(Env, ArgsTy, ResTy, Clauses, Caps) -> R when
       Env :: env(),
-      ArgsTy :: [type()] | any,
+      ArgsTy :: [type()],
       ResTy :: type(),
       Clauses :: [gradualizer_type:abstract_clause()],
       Caps :: capture_vars | bind_vars,
       R :: {env(), constraints:constraints()}.
-check_clauses(Env, any, ResTy, [{clause, _, Args, _, _} | _] = Clauses, Caps) ->
-    %% 'any' is the ... in the type fun((...) -> ResTy)
-    ArgsTy = lists:duplicate(length(Args), type(any)),
-    check_clauses(Env, ArgsTy, ResTy, Clauses, Caps);
 check_clauses(Env, ArgsTy, ResTy, Clauses, Caps) ->
     Env1 = push_clauses_controls(Env, #clauses_controls{exhaust = Env#env.exhaust}),
-    %% This is fine, since we match on `any' in the clause above.
     ArgsTy = ?assert_type(ArgsTy, [type()]),
     %% Clauses for if, case, functions, receive, etc.
     {VarBindsList, Css, RefinedArgsTy, Env2} =
@@ -4163,10 +4104,20 @@ type_check_function(Env, {function, _, Name, NArgs, Clauses}) ->
         {ok, FunTy} ->
             NewEnv = Env#env{current_spec = FunTy},
             FunTyNoPos = [ typelib:remove_pos(Ty) || Ty <- FunTy ],
-            check_clauses_fun(NewEnv, expect_fun_type(NewEnv, FunTyNoPos), Clauses);
+            Arity = clause_arity(hd(Clauses)),
+            check_clauses_fun(NewEnv, expect_fun_type(NewEnv, FunTyNoPos, Arity), Clauses);
         error ->
             throw(internal_error(missing_type_spec, Name, NArgs))
     end.
+
+-spec clause_arity({clause, _, list(), _, _}) -> arity().
+clause_arity({clause, _, Args, _, _}) ->
+    arity(length(Args)).
+
+-spec arity(non_neg_integer()) -> arity().
+arity(I) ->
+    I < 256 orelse erlang:error(arity_overflow),
+    ?assert_type(I, arity()).
 
 -spec position_info_from_spec(form() | forms() | none) -> erl_anno:anno().
 position_info_from_spec(none) ->
