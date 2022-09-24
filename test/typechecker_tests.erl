@@ -436,7 +436,7 @@ type_check_in_test_() ->
                                 "-spec g() -> fun((integer()) -> integer()).",
                                 "g() -> fun f/1."],
                                [infer])),
-     %% Although there is not spec for f/1 - inferred arity does not match
+     %% Although there is no spec for f/1 - inferred arity does not match
      ?_assertNot(type_check_forms(["-spec g() -> fun(() -> integer()).",
                                    "g() -> fun f/1.",
                                    "f(_) -> ok."],
