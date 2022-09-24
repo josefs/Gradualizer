@@ -3421,9 +3421,9 @@ infer_clause(Env, {clause, _, Args, Guards, Block}) ->
     {Ty, VB, Cs} = type_check_block(EnvNew, Block),
     {Ty, union_var_binds(VB, EnvNew, EnvNew), Cs}.
 
-
-check_clauses_intersect(Env, Ty, Clauses) when not is_list(Ty) ->
-    check_clauses_fun(Env, Ty, Clauses);
+-spec check_clauses_intersect(env(), [fun_ty()], Clauses) -> R when
+      Clauses :: [gradualizer_type:abstract_clause()],
+      R :: {env(), constraints()}.
 check_clauses_intersect(Env, [], _Clauses) ->
     {Env, constraints:empty()};
 check_clauses_intersect(Env, [Ty|Tys], Clauses) ->
