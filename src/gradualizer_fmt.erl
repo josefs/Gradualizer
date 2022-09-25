@@ -369,10 +369,10 @@ format_type_error({unsupported_expression, Anno, Expr}, Opts) ->
        format_location(Anno, verbose, Opts)]);
 format_type_error({constraint_error, Anno, LB, UB}, Opts) ->
     io_lib:format(
-      "~sConstraint violation~s: the type ~s is not a subtype of ~s~n",
+      "~sThe type ~s~s is not a subtype of ~s~n",
       [format_location(Anno, brief, Opts),
-       format_location(Anno, verbose, Opts),
        pp_type(LB, Opts),
+       format_location(Anno, verbose, Opts),
        pp_type(UB, Opts)]);
 format_type_error({Location, Module, ErrorDescription}, Opts)
   when is_integer(Location) orelse is_tuple(Location),
