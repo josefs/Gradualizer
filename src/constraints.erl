@@ -3,24 +3,25 @@
 
 -export([empty/0, vars/1, upper/2, lower/2, combine/1, combine/2, add_var/2, solve/3]).
 
--export_type([t/0]).
+-export_type([t/0,
+              mapset/1,
+              var/0]).
 
 -include_lib("stdlib/include/assert.hrl").
 
 -type type() :: gradualizer_type:abstract_type().
 
--record(constraints, { lower_bounds = #{} :: #{ var() => [type()] },
-                       upper_bounds = #{} :: #{ var() => [type()] },
-                       exist_vars   = #{} :: #{ var() => true } }).
+-include("constraints.hrl").
 
 -type t() :: #constraints{}.
+-type mapset(T) :: #{T => true}.
 -type var() :: gradualizer_type:gr_type_var().
 
 -spec empty() -> t().
 empty() ->
     #constraints{}.
 
--spec vars(#{ var() => true }) -> #constraints{}.
+-spec vars(mapset(var())) -> #constraints{}.
 vars(Vars) ->
     #constraints{ exist_vars = Vars }.
 

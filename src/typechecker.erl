@@ -119,6 +119,7 @@
 -type env() :: #env{}.
 
 -include_lib("stdlib/include/assert.hrl").
+-include("constraints.hrl").
 -include("gradualizer.hrl").
 
 -type constraints() :: constraints:t().
@@ -4387,7 +4388,7 @@ arity(I) ->
     ?assert_type(I, arity()).
 
 -spec maybe_solve_constraints(Cs, Anno, Env) -> {Env, Cs} when
-      Cs :: constraints:constraints(),
+      Cs :: constraints:t(),
       Anno :: anno(),
       Env :: env().
 maybe_solve_constraints(Cs, Anno, #env{solve_constraints = true} = Env) ->
