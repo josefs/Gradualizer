@@ -3416,28 +3416,23 @@ check_clauses_union(Env, [Ty|Tys], Clauses) ->
       R :: {env(), constraints:constraints()}.
 check_clauses(Env, {intersection, [ArgsTys | ArgsTyss]}, {intersection, [ResTy | ResTys]}, Clauses, Caps) ->
     Env1 = push_clauses_controls(Env, #clauses_controls{exhaust = Env#env.exhaust}),
-    %Env1 = Env,
     %% Clauses for if, case, functions, receive, etc.
-    try {check_reachable_clauses(ResTy, Clauses, Caps, [], [], ArgsTys, Env1, return), ArgsTyss, ResTys} of
+    case {check_reachable_clauses(ResTy, Clauses, Caps, [], [], ArgsTys, Env1, return), ArgsTyss, ResTys} of
         {{remaining_clauses, RemainingClauses, _}, [], []} ->
             throw(type_error(unreachable_clauses, RemainingClauses));
         {{remaining_clauses, RemainingClauses, Env2}, [_|_], [_|_]} ->
             %% Variable bindings should not leak into subsequent clauses,
             %% that's why we explicitly pass them as appropriate.
             VEnv = Env1#env.venv,
-            check_clauses(Env2#env{venv = VEnv}, {intersection, ArgsTyss}, {intersection, ResTys},
+            Env3 = pop_clauses_controls(Env2),
+            check_clauses(Env3#env{venv = VEnv}, {intersection, ArgsTyss}, {intersection, ResTys},
                           RemainingClauses, Caps);
         {Acc, _, _} ->
             {VarBindsList, Css, _RefinedArgsTy, Env2} = Acc,
             %% TODO: work in progress
             %check_arg_exhaustiveness(Env2, ArgsTys, Clauses, RefinedArgsTy),
-            %Env3 = pop_clauses_controls(Env2),
-            Env3 = Env2,
+            Env3 = pop_clauses_controls(Env2),
             {union_var_binds(VarBindsList, Env3), constraints:combine(Css)}
-    catch
-        E ->
-            gradualizer_tracer:debug({?MODULE, ?LINE, E}),
-            throw(E)
     end;
 check_clauses(Env, ArgsTy, ResTy, Clauses, Caps) ->
     Env1 = push_clauses_controls(Env, #clauses_controls{exhaust = Env#env.exhaust}),
@@ -3453,15 +3448,25 @@ check_clauses(Env, ArgsTy, ResTy, Clauses, Caps) ->
 check_reachable_clauses(_ResTy, [], _Caps, VBs, Cs, RefinedArgsTy, Env, _) ->
     {VBs, Cs, RefinedArgsTy, Env};
 check_reachable_clauses(_ResTy, Clauses, _Caps, _, _, [?type(none)|_], Env, Action) ->
+    %% We've exhausted this spec clause by matching the function clauses,
+    %% but there are still more function clauses to check.
     case Action of
         throw -> throw(type_error(unreachable_clauses, Clauses));
         return -> {remaining_clauses, Clauses, Env}
     end;
 check_reachable_clauses(ResTy, [Clause | Clauses], Caps, VBs, Css, RefinedArgsTy, EnvIn, Action) ->
-    {NewRefinedArgsTy, Env2, Cs} = check_clause(EnvIn, RefinedArgsTy, ResTy, Clause, Caps),
-    VB = refine_vars_by_mismatching_clause(Clause, EnvIn#env.venv, Env2),
-    check_reachable_clauses(ResTy, Clauses, Caps, [Env2 | VBs], [Cs | Css],
-                            NewRefinedArgsTy, Env2#env{venv = VB}, Action).
+    try check_clause(EnvIn, RefinedArgsTy, ResTy, Clause, Caps) of
+        {NewRefinedArgsTy, Env2, Cs} ->
+            VB = refine_vars_by_mismatching_clause(Clause, EnvIn#env.venv, Env2),
+            check_reachable_clauses(ResTy, Clauses, Caps, [Env2 | VBs], [Cs | Css],
+                                    NewRefinedArgsTy, Env2#env{venv = VB}, Action)
+    catch
+        E when element(1, E) =:= type_error andalso Action =:= return ->
+            %% We've not exhausted this spec clause, but we've got a type error,
+            %% e.g. a pattern in the function head doesn't match the spec.
+            %% We try with the remaining spec clauses.
+            {remaining_clauses, [Clause | Clauses], EnvIn}
+    end.
 
 push_clauses_controls(#env{} = Env, #clauses_controls{} = CC) ->
     ?verbose(Env, "Pushing ~p~n", [CC]),
