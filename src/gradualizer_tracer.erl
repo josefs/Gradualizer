@@ -105,6 +105,12 @@ start() ->
     %dbg:tpl(typechecker, refine_vars_by_mismatching_clause, x),
     %dbg:tpl(typechecker, check_arg_exhaustiveness, x),
 
+    %dbg:tpl(typechecker, check_arg_exhaustiveness, x),
+    %dbg:tpl(typechecker, exhaustiveness_checking, x),
+    %dbg:tpl(typechecker, all_refinable, x),
+    %dbg:tpl(typechecker, no_clause_has_guards, x),
+    %dbg:tpl(typechecker, some_type_not_none, x),
+
     %dbg:tpl(typechecker, check_clause, x),
     %dbg:tpl(typechecker, check_clause, x),
     %dbg:tpl(typechecker, add_types_pats, x),
