@@ -4130,7 +4130,7 @@ type_check_function(Env, {function, _, Name, NArgs, Clauses}) ->
     case maps:find({Name, NArgs}, Env#env.fenv) of
         {ok, FunTy} ->
             NewEnv = Env#env{current_spec = FunTy},
-            FunTyNoPos = [ typelib:remove_pos(Ty) || Ty <- FunTy ],
+            FunTyNoPos = [ typelib:remove_pos(?assert_type(Ty, type())) || Ty <- FunTy ],
             Arity = clause_arity(hd(Clauses)),
             check_clauses_fun(NewEnv, expect_fun_type(NewEnv, FunTyNoPos, Arity), Clauses);
         error ->
