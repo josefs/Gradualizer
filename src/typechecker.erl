@@ -3430,62 +3430,61 @@ get_atom(_Env, _) ->
 % also.
 
 % We assume that the constraints have been removed at this point.
--spec instantiate_fun_type([type()], type()) -> {{[type()], type()}, constraints:t()}.
+-spec instantiate_fun_type([type()], type()) -> R when
+      R :: {{[type()], type()}, constraints:t()}.
 instantiate_fun_type(Args,Res) ->
     {NewArgs, ArgVars, Map} = instantiate_list(Args, #{}),
     {NewRes , ResVars, _Map} = instantiate(Res, Map),
-    {{NewArgs, NewRes}, constraints:vars(sets:union(ArgVars, ResVars))}.
+    {{NewArgs, NewRes}, constraints:vars(maps:merge(ArgVars, ResVars))}.
 
 -spec instantiate_fun_type([type()]) -> {[type()], constraints:t()}.
 instantiate_fun_type(Tys) ->
     {NewTys, Vars, _Map} = instantiate_list(Tys, #{}),
     {NewTys, constraints:vars(Vars)}.
 
--spec instantiate(type(), #{ constraints:var() => type() }) ->
-			 { type()
-			 , sets:set(constraints:var())
-			 , #{ constraints:var() => type() }}.
+-spec instantiate(type(), #{ constraints:var() => type() }) -> R when
+      R :: {type(), constraints:mapset(constraints:var()), #{constraints:var() => type()}}.
 instantiate(T = {var, _, '_'}, Map) ->
-    {T, sets:new(), Map};
+    {T, maps:new(), Map};
 instantiate({var, _, TyVar}, Map) ->
     case maps:get(TyVar, Map, not_found) of
         not_found ->
             NewTyVar = new_type_var(),
             Type = {var, erl_anno:new(0), NewTyVar},
-            {Type, sets:from_list([NewTyVar]), Map#{ TyVar => Type }};
-	Ty ->
-	    {Ty, sets:new(), Map}
+            {Type, maps:from_list([{NewTyVar, true}]), Map#{TyVar => Type}};
+        Ty ->
+            {Ty, maps:new(), Map}
     end;
 instantiate(T = ?type(_), Map) ->
-    {T, sets:new(), Map};
+    {T, maps:new(), Map};
 instantiate(?type(Ty, Args), Map) ->
     {NewArgs, Set, NewMap} = instantiate_list(Args, Map),
     {type(Ty, NewArgs), Set, NewMap};
 instantiate(T = {type, _, any}, Map) ->
-    {T, sets:new(), Map};
+    {T, maps:new(), Map};
 instantiate(T = {Tag, _,_}, Map)
   when Tag == integer orelse Tag == atom orelse Tag == char ->
-    {T, sets:new(), Map};
+    {T, maps:new(), Map};
 instantiate(T = {op, _, _, _}, Map) ->
-    {T, sets:new(), Map};
+    {T, maps:new(), Map};
 instantiate(T = {op, _, _, _, _}, Map) ->
-    {T, sets:new(), Map};
+    {T, maps:new(), Map};
 instantiate(T = {remote_type, _, _}, Map) ->
-    {T, sets:new(), Map};
+    {T, maps:new(), Map};
 instantiate(_ = {user_type, Ann, Name, Tys}, Map) ->
     {NewTys, Vars, NewMap} = instantiate_list(Tys, Map),
     {{user_type, Ann, Name, NewTys}, Vars, NewMap};
 instantiate(any, Map) ->
-    {any, sets:new(), Map}.
+    {any, maps:new(), Map}.
 
 instantiate_list(any, Map) ->
-    {any, sets:new(), Map};
+    {any, maps:new(), Map};
 instantiate_list([], Map) ->
-    {[], sets:new(), Map};
+    {[], maps:new(), Map};
 instantiate_list([Ty|Tys], Map) ->
     {NewTy, Vars, NewMap} = instantiate(Ty, Map),
     {NewTys, MoreVars, EvenNewerMap} = instantiate_list(Tys, NewMap),
-    {[NewTy|NewTys], sets:union(Vars, MoreVars), EvenNewerMap}.
+    {[NewTy|NewTys], maps:merge(Vars, MoreVars), EvenNewerMap}.
 
 
 %% Infers (or at least propagates types from) fun/receive/try/case/if clauses.
