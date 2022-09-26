@@ -998,6 +998,8 @@ negate_num_type({type, P, union, Tys}, Env) ->
     normalize({type, P, union, [negate_num_type(Ty, Env) || Ty <- Tys]}, Env);
 negate_num_type(None = {type, _, none, []}, _Env) ->
     None;
+negate_num_type(?user_type() = Ty, Env) ->
+    negate_num_type(normalize(Ty, Env), Env);
 negate_num_type(RangeTy, _Env) ->
     %% some kind of range type like `1..3' or `neg_integer()'
     gradualizer_int:negate_int_type(RangeTy).
