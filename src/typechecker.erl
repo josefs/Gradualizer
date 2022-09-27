@@ -2785,9 +2785,13 @@ arith_op_arg_types(Op, Ty = {type, _, float, []}) ->
 arith_op_arg_types(_, {T, _, _}) when T == integer; T == char ->
     false;
 
-%% pos_integer() is closed under '+',  '*', and 'bor'
-arith_op_arg_types(Op, Ty = {type, _, pos_integer, []}) ->
-    case lists:member(Op, ['+', '*', 'bor']) of
+%% pos_integer() is closed under '+',  '*', and 'bor',
+%% but to get a pos_integer() from an addition expr one of the operands can be 0.
+%% TODO: it's a bit sad our addition is not commutative :'(
+arith_op_arg_types('+', ?type(pos_integer)) ->
+    {type(non_neg_integer), type(pos_integer), constraints:empty()};
+arith_op_arg_types(Op, ?type(pos_integer) = Ty) ->
+    case lists:member(Op, ['*', 'bor']) of
         true -> {Ty, Ty, constraints:empty()};
         false -> false
     end;
