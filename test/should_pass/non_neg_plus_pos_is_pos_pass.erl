@@ -6,5 +6,9 @@
 f(N) ->
     h(N + 1).
 
+-spec g(non_neg_integer()) -> pos_integer().
+g(N) ->
+    h(1 + N).
+
 -spec h(pos_integer()) -> pos_integer().
 h(P) -> P.
