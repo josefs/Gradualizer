@@ -2745,6 +2745,19 @@ type_check_arith_op_in(Env, Kind, ResTy, Op, P, Arg1, Arg2) ->
             {VB, constraints:combine(Cs, Cs1)};
         _ ->
             case arith_op_arg_types(Op, ResTy1) of
+                { {ArgTy11, ArgTy12}, {ArgTy21, ArgTy22}, Cs1 } ->
+                    try
+                        {VBs1, Cs2} = arith_op_do_check(ArgTy11, ArgTy12, Arg1, Arg2, Env),
+                        {VBs1, constraints:combine(Cs1, Cs2)}
+                    catch
+                        throw:E ->
+                            try
+                                {VBs2, Cs3} = arith_op_do_check(ArgTy21, ArgTy22, Arg1, Arg2, Env),
+                                {VBs2, constraints:combine(Cs1, Cs3)}
+                            catch
+                                throw:_ -> throw(E)
+                            end
+                    end;
                 {ArgTy1, ArgTy2, Cs1} ->
                     {VarBinds1, Cs2} = type_check_expr_in(Env, ArgTy1, Arg1),
                     {VarBinds2, Cs3} = type_check_expr_in(Env, ArgTy2, Arg2),
@@ -2754,6 +2767,11 @@ type_check_arith_op_in(Env, Kind, ResTy, Op, P, Arg1, Arg2) ->
                     throw(type_error(op_type_too_precise, Op, P, ResTy1))
             end
     end.
+
+arith_op_do_check(ArgTy1, ArgTy2, Arg1, Arg2, Env) ->
+    {VarBinds1, Cs1} = type_check_expr_in(Env, ArgTy1, Arg1),
+    {VarBinds2, Cs2} = type_check_expr_in(Env, ArgTy2, Arg2),
+    {union_var_binds(VarBinds1, VarBinds2, Env), constraints:combine(Cs1, Cs2)}.
 
 %% What types should be pushed into the arguments if checking an operator
 %% application against a given type.
@@ -2785,9 +2803,15 @@ arith_op_arg_types(Op, Ty = {type, _, float, []}) ->
 arith_op_arg_types(_, {T, _, _}) when T == integer; T == char ->
     false;
 
-%% pos_integer() is closed under '+',  '*', and 'bor'
-arith_op_arg_types(Op, Ty = {type, _, pos_integer, []}) ->
-    case lists:member(Op, ['+', '*', 'bor']) of
+%% pos_integer() is the result of addition even if one of the operands is 0, i.e. non_neg_integer()
+arith_op_arg_types('+', ?type(pos_integer)) ->
+    { {type(non_neg_integer), type(pos_integer)},
+      {type(pos_integer), type(non_neg_integer)},
+      constraints:empty() };
+
+%% pos_integer() is closed under '*' and 'bor',
+arith_op_arg_types(Op, ?type(pos_integer) = Ty) ->
+    case lists:member(Op, ['*', 'bor']) of
         true -> {Ty, Ty, constraints:empty()};
         false -> false
     end;

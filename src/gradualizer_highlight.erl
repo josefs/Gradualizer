@@ -171,13 +171,13 @@ highlight_line(Line, N, {N, C1}, {N, C2}, Color) ->
     color_and_mark_line(Line, C1, C2, Color);
 highlight_line(Line, N, {L1, C1}, {L2, _C2}, Color) when L1 == N, N < L2 ->
     %% First line
-    color_and_mark_line(Line, C1, ?assert_type(length(Line) + 1, pos_integer()), Color);
+    color_and_mark_line(Line, C1, length(Line) + 1, Color);
 highlight_line(Line, N, {L1, _C1}, {L2, C2}, Color) when L1 < N, N == L2 ->
     %% Last line
     color_and_mark_line(Line, step_spaces(Line, 1), C2, Color);
 highlight_line(Line, N, {L1, _}, {L2, __}, Color) when L1 < N, N < L2 ->
     %% Internal line
-    color_and_mark_line(Line, step_spaces(Line, 1), ?assert_type(length(Line) + 1, pos_integer()), Color).
+    color_and_mark_line(Line, step_spaces(Line, 1), length(Line) + 1, Color).
 
 -spec step_spaces(string(), erl_anno:column()) -> erl_anno:column().
 step_spaces([$\t | Str], Col) -> step_spaces(Str, Col + 1);
