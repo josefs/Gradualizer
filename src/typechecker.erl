@@ -1364,6 +1364,8 @@ expect_record_type({type, _, record, [{atom, _, Name}|RefinedTypes]}, Record, En
     end;
 expect_record_type(?top() = _TermTy, _Record, _Env) ->
     any;
+expect_record_type(?user_type() = Ty, Record, Env) ->
+    expect_record_type(normalize(Ty, Env), Record, Env);
 expect_record_type(Union = {type, _, union, UnionTys}, Record, Env) ->
     {Tyss, Cs} =
         expect_record_union(UnionTys, [], constraints:empty(), no_any, Record, Env),
