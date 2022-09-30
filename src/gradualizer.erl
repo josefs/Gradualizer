@@ -58,24 +58,31 @@ type_check_file(File) ->
 %% @doc Type check a source or beam file
 -spec type_check_file(file:filename(), options()) -> ok | nok | [{file:filename(), any()}].
 type_check_file(File, Opts) ->
-    case filename:extension(File) of
-        ".erl" ->
-            Includes = proplists:get_all_values(i, Opts),
-            case gradualizer_file_utils:get_forms_from_erl(File, Includes) of
-                {ok, Forms} ->
-                    lint_and_check_forms(Forms, File, Opts);
-                Error ->
-                    throw(Error)
-            end;
-        ".beam" ->
-            case gradualizer_file_utils:get_forms_from_beam(File) of
-                {ok, Forms} ->
-                    type_check_forms(File, Forms, Opts);
-                Error ->
-                    throw(Error)
-            end;
-        Ext ->
-            throw({unknown_file_extension, Ext})
+    ExcludeModules = proplists:get_value(exclude_modules, Opts, []),
+    AtomBaseFile = list_to_atom(filename:rootname(filename:basename(File))),
+    case lists:member(AtomBaseFile, ExcludeModules) of
+        true ->
+            ok;
+        false ->
+            case filename:extension(File) of
+                ".erl" ->
+                    Includes = proplists:get_all_values(i, Opts),
+                    case gradualizer_file_utils:get_forms_from_erl(File, Includes) of
+                        {ok, Forms} ->
+                            lint_and_check_forms(Forms, File, Opts);
+                        Error ->
+                            throw(Error)
+                    end;
+                ".beam" ->
+                    case gradualizer_file_utils:get_forms_from_beam(File) of
+                        {ok, Forms} ->
+                            type_check_forms(File, Forms, Opts);
+                        Error ->
+                            throw(Error)
+                    end;
+                Ext ->
+                    throw({unknown_file_extension, Ext})
+            end
     end.
 
 %% @doc Runs an erl_lint pass, to check if the forms can be compiled at all,
