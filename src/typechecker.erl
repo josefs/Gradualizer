@@ -3592,7 +3592,7 @@ check_clause(Env, ArgsTy, ResTy, C = {clause, P, Args, Guards, Block}, Caps) ->
             RefinedTys1 = refine_clause_arg_tys(ArgsTy, PatTys,
                                                 Guards, EnvNewest),
             RefinedTys2 = refine_mismatch_using_guards(RefinedTys1, C,
-                                                       EnvNewest#env.venv, EnvNewest),
+                                                       Env#env.venv, EnvNewest),
             {RefinedTys2
             ,union_var_binds([VarBinds1, VarBinds2, EnvNewest], EnvNewest)
             ,constraints:combine(Cs1, Cs2)};
