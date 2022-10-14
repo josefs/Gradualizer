@@ -145,6 +145,17 @@ start() ->
     %dbg:tpl(typechecker, normalize, x),
     %dbg:tpl(typechecker, do_add_types_pats, x),
 
+    %dbg:tpl(typechecker, check_clauses_intersection, []),
+    %dbg:tpl(typechecker, check_reachable_clauses, x),
+    %dbg:tpl(typechecker, check_clause, x),
+    %dbg:tpl(typechecker, check_arg_exhaustiveness, x),
+    %dbg:tpl(typechecker, check_clauses_intersection_throw_if_seen, x),
+    %dbg:tpl(typechecker, refine_clause_arg_tys, x),
+    %dbg:tpl(typechecker, refine_mismatch_using_guards, x),
+    %dbg:tpl(typechecker, are_patterns_matching_all_input, x),
+    %dbg:tpl(typechecker, check_guard_call, x),
+    %dbg:tpl(typechecker, type_diff, x),
+
     %dbg:tpl(?MODULE, debug, x),
     %dbg:tpl(erlang, throw, x),
 
