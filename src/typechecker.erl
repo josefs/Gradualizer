@@ -3792,6 +3792,8 @@ refine_ty(?type(nil), ?type(list, _), _, _Env) ->
 refine_ty(?type(nonempty_list, _), ?type(list, [?type(any)]), _, _Env) ->
     %% The guard is_list/1 catches every nonempty list
     type(none);
+refine_ty(?type(list, _), ?type(list, [?type(any)]), _, _Env) ->
+    type(none);
 refine_ty(?type(nonempty_list, [Ty1]), ?type(nonempty_list, [Ty2]), Trace, Env) ->
     case refine(Ty1, Ty2, Trace, Env) of
         ?type(none) ->
