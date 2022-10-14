@@ -47,3 +47,12 @@
                  ([T1, ...], nonempty_improper_list(T2, T3)) -> nonempty_improper_list(T1 | T2, T3);
                  ([T1, ...], T2)                             -> nonempty_improper_list(T1, T2);
                  ([], T)                                     -> T.
+
+%% Prior to OTP 24 the spec does not list `none' as valid `Args',
+%% but the function accepts it and works properly.
+%%
+%% We do not override `erlang:error/3' spec, since the function was added only in OTP 24
+%% with the correct spec from the get go.
+-spec erlang:error(Reason, Args) -> no_return() when
+      Reason :: term(),
+      Args :: [term()] | none.
