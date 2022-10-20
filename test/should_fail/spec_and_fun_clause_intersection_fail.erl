@@ -14,7 +14,7 @@ f({tag, _}) -> "".
 g([] = _Types) -> "";
 g({tag, _}) -> "".
 
--spec i([t()]) -> string();
+-spec i([t()]) -> [string()];
        (t()) -> string().
 i([_|_] = Types) -> lists:map(fun i/1, Types);
 i({tag, _}) -> "".
