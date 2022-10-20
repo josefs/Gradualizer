@@ -3502,15 +3502,13 @@ check_clauses_intersection(Env, [{ArgsTys, ResTy} = SpecClause | SpecClauses],
 %% Checks a list of clauses (if/case/fun/try/catch/receive) against a single-clause spec.
 -spec check_clauses(Env, ArgsTy, ResTy, Clauses, Caps) -> R when
       Env :: env(),
-      ArgsTy :: [type()] | {intersection, [{[type()], type()}]},
-      ResTy :: type() | {{intersection, [{[type()], type()}]}, #{}},
+      ArgsTy :: [type()],
+      ResTy :: type(),
       Clauses :: [gradualizer_type:abstract_clause(), ...],
       Caps :: capture_vars | bind_vars,
       R :: {env(), constraints:constraints()}.
 check_clauses(Env, ArgsTy, ResTy, Clauses, Caps) ->
     Env1 = push_clauses_controls(Env, #clauses_controls{exhaust = Env#env.exhaust}),
-    %% This is fine, since we handle the other option in the clause above.
-    ArgsTy = ?assert_type(ArgsTy, [type()]),
     %% Clauses for if, case, functions, receive, etc.
     {VarBindsList, Css, RefinedArgsTy, Env2} =
         check_reachable_clauses(ResTy, Clauses, Caps, [], [], ArgsTy, Env1),
