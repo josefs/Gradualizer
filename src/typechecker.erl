@@ -3513,7 +3513,7 @@ check_clauses(Env, ArgsTy, ResTy, Clauses, Caps) ->
     ArgsTy = ?assert_type(ArgsTy, [type()]),
     %% Clauses for if, case, functions, receive, etc.
     {VarBindsList, Css, RefinedArgsTy, Env2} =
-        check_reachable_clauses(ResTy, Clauses, Caps, [], [], ArgsTy, Env1, throw),
+        check_reachable_clauses(ResTy, Clauses, Caps, [], [], ArgsTy, Env1),
     check_arg_exhaustiveness(Env2, ArgsTy, Clauses, RefinedArgsTy),
     Env3 = pop_clauses_controls(Env2),
     {union_var_binds(VarBindsList, Env3), constraints:combine(Css)}.
@@ -3529,30 +3529,15 @@ check_clauses_intersection_throw_if_seen(ArgsTys, RefinedArgsTy, Clause, Seen, E
             {type_error, ClauseError}
     end.
 
-%% We return `{remaining_clauses, _, _, _, _}' either because of exhaustion of the current spec clause
-%% or because we failed matching a function clause pattern to the spec clause.
-check_reachable_clauses(_ResTy, [], _Caps, VBs, Cs, RefinedArgsTys, Env, _) ->
+check_reachable_clauses(_ResTy, [], _Caps, VBs, Cs, RefinedArgsTys, Env) ->
     {VBs, Cs, RefinedArgsTys, Env};
-check_reachable_clauses(_ResTy, Clauses, _Caps, _, _, [?type(none)|_] = RefinedArgsTys, Env, Action) ->
-    %% We've exhausted this spec clause by matching the function clauses,
-    %% but there are still more function clauses to check.
-    case Action of
-        throw -> throw(type_error(unreachable_clauses, Clauses));
-        return -> {remaining_clauses, Clauses, RefinedArgsTys, Env, ok}
-    end;
-check_reachable_clauses(ResTy, [Clause | Clauses], Caps, VBs, Css, RefinedArgsTys, EnvIn, Action) ->
-    try check_clause(EnvIn, RefinedArgsTys, ResTy, Clause, Caps) of
-        {NewRefinedArgsTys, Env2, Cs} ->
-            VB = refine_vars_by_mismatching_clause(Clause, EnvIn#env.venv, Env2),
-            check_reachable_clauses(ResTy, Clauses, Caps, [Env2 | VBs], [Cs | Css],
-                                    NewRefinedArgsTys, Env2#env{venv = VB}, Action)
-    catch
-        E when element(1, E) =:= type_error andalso Action =:= return ->
-            %% We've not exhausted this spec clause, but we've got a type error,
-            %% e.g. a pattern in the function head doesn't match the spec.
-            %% We return to try with the remaining spec clauses.
-            {remaining_clauses, [Clause | Clauses], RefinedArgsTys, EnvIn, E}
-    end.
+check_reachable_clauses(_ResTy, Clauses, _Caps, _, _, [?type(none)|_], _Env) ->
+    throw(type_error(unreachable_clauses, Clauses));
+check_reachable_clauses(ResTy, [Clause | Clauses], Caps, VBs, Css, RefinedArgsTys, EnvIn) ->
+    {NewRefinedArgsTys, Env2, Cs} = check_clause(EnvIn, RefinedArgsTys, ResTy, Clause, Caps),
+    VB = refine_vars_by_mismatching_clause(Clause, EnvIn#env.venv, Env2),
+    check_reachable_clauses(ResTy, Clauses, Caps, [Env2 | VBs], [Cs | Css],
+                            NewRefinedArgsTys, Env2#env{venv = VB}).
 
 push_clauses_controls(#env{} = Env, #clauses_controls{} = CC) ->
     ?verbose(Env, "Pushing ~p~n", [CC]),
