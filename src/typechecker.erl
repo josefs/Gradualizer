@@ -3395,7 +3395,7 @@ check_clauses_intersect(Env, Tys, Clauses) ->
     RefinedArgsTyss = maps:from_list(lists:map(fun ({ArgsTys, _}) ->
                                                        {ArgsTys, ArgsTys}
                                                end, FunTys)),
-    check_clauses(Env, {intersection, FunTys}, {Clauses, #{}, RefinedArgsTyss}, Clauses, bind_vars).
+    check_clauses_intersection(Env, FunTys, {Clauses, #{}, RefinedArgsTyss}, Clauses, bind_vars).
 
 check_clauses_union(_Env, [], _Clauses) ->
     %% TODO: Improve quality of type error
@@ -3408,7 +3408,98 @@ check_clauses_union(Env, [Ty|Tys], Clauses) ->
             check_clauses_union(Env, Tys, Clauses)
     end.
 
-%% Checks a list of clauses (if/case/fun/try/catch/receive).
+%% Checks a list of function clauses against an intersection type (multiple-clause spec).
+-spec check_clauses_intersection(Env, SpecClauses, Acc, Clauses, Caps) -> R when
+      Env :: env(),
+      SpecClauses :: [{[type()], type()}],
+      Acc :: {OrigClauses, Seen, RefinedArgsTyss},
+      OrigClauses :: [gradualizer_type:abstract_clause(), ...],
+      Seen :: map(),
+      RefinedArgsTyss :: #{[type()] := [type()]},
+      Clauses :: [gradualizer_type:abstract_clause()],
+      Caps :: capture_vars | bind_vars,
+      R :: {env(), constraints:constraints()}.
+check_clauses_intersection(Env, [] = _SpecClauses, _Acc, _Clauses, _Caps) ->
+    %% `SpecClauses' are empty - the function is checked without errors.
+    %% TODO: return the right constraints - we should store them in Acc
+    {Env, constraints:empty()};
+check_clauses_intersection(Env, [{ArgsTys, _ResTy} = SpecClause | SpecClauses],
+                           {OrigClauses, Seen, RefinedArgsTyss},
+                           [] = _Clauses, _Caps) ->
+    %% `SpecClauses' are not empty, but `Clauses' are empty.
+    %% Let's consider the following code:
+    %%
+    %% -spec h(t()) -> string();
+    %%        ([t()]) -> [string()].
+    %% h(Types) when is_list(Types) -> lists:map(fun h/1, Types);
+    %% h({tag, _}) -> "".
+    %%
+    %% We'll reach this `check_clauses_intersection' clause when we've already
+    %% checked `(t()) -> string()' and we're looking at `([t()]) -> string()'.
+    %% In order to check `(t()) -> string()' we had to go through all `h/1' clauses,
+    %% so `Clauses' is empty.
+    %% To find clauses matching `([t()]) -> string()' we have to start over with `OrigClauses'.
+    check_clauses_intersection(Env, [SpecClause | SpecClauses],
+                               {OrigClauses, maps:put(ArgsTys, hd(OrigClauses), Seen), RefinedArgsTyss},
+                               OrigClauses, _Caps);
+check_clauses_intersection(Env, [{ArgsTys, ResTy} = SpecClause | SpecClauses],
+                           {OrigClauses, Seen, RefinedArgsTyss},
+                           [Clause | Clauses], Caps) ->
+    %% `SpecClauses' is not empty and `Clauses' is not empty either.
+    %% Now considering:
+    %%
+    %% -spec g2(t()) -> string();
+    %%         ([t()]) -> [string()].
+    %% g2([] = _Types) -> [];
+    %% g2({tag, _}) -> "";
+    %% g2([_|_] = Types) -> lists:map(fun g2/1, Types).
+    %%
+    %% We're in the general case, for example checking
+    %% `g2([_|_] = _Types) -> []' against `([t()]) -> [string()]'.
+    %%
+    %% First, we have to check if there's already any refinement recorded for `ArgsTys :: [t()]'.
+    MaybeRefinedArgsTys = maps:get(ArgsTys, RefinedArgsTyss),
+    %% We also have to check if we've already seen this `{ArgsTys, Clause}' pair.
+    %% If that's the case, we have to fail to prevent cycling indefinitely.
+    case check_clauses_intersection_throw_if_seen(ArgsTys, MaybeRefinedArgsTys, Clause, Seen, Env) of
+        {type_error, E} ->
+            throw(E);
+        ok ->
+            Env1 = push_clauses_controls(Env, #clauses_controls{exhaust = Env#env.exhaust}),
+            try check_clause(Env1, MaybeRefinedArgsTys, ResTy, Clause, Caps) of
+                {[?type(none) | _] = RefinedArgsTys, _Env2, _Cs} ->
+                    %% We've exhausted this `SpecClause'. Check remaining `SpecClauses'.
+                    %% TODO: don't drop the constraints
+                    RefinedArgsTyss1 = maps:put(ArgsTys, RefinedArgsTys, RefinedArgsTyss),
+                    Seen1 = maps:put({ArgsTys, Clause}, true, Seen),
+                    check_clauses_intersection(pop_clauses_controls(Env1),
+                                               SpecClauses,
+                                               {OrigClauses, Seen1, RefinedArgsTyss1},
+                                               OrigClauses, Caps);
+                {RefinedArgsTys, _Env2, _Cs} ->
+                    %% We've not exhausted this `SpecClause', so continue with the next `Clauses'.
+                    %% TODO: don't drop the constraints
+                    RefinedArgsTyss1 = maps:put(ArgsTys, RefinedArgsTys, RefinedArgsTyss),
+                    Seen1 = maps:put({ArgsTys, Clause}, true, Seen),
+                    check_clauses_intersection(pop_clauses_controls(Env1),
+                                               [SpecClause | SpecClauses],
+                                               {OrigClauses, Seen1, RefinedArgsTyss1},
+                                               Clauses, Caps)
+            catch
+                E when element(1, E) =:= type_error ->
+                    %% We've not exhausted this spec clause, but we've got a type error,
+                    %% e.g. a pattern in the function head doesn't match the spec.
+                    %% We'll rethrow this error if we ever cycle back to this
+                    %% `SpecClause' / `Clause' combination.
+                    Seen1 = maps:put({ArgsTys, Clause}, E, Seen),
+                    check_clauses_intersection(pop_clauses_controls(Env1),
+                                               [SpecClause | SpecClauses],
+                                               {OrigClauses, Seen1, RefinedArgsTyss},
+                                               Clauses, Caps)
+            end
+    end.
+
+%% Checks a list of clauses (if/case/fun/try/catch/receive) against a single-clause spec.
 -spec check_clauses(Env, ArgsTy, ResTy, Clauses, Caps) -> R when
       Env :: env(),
       ArgsTy :: [type()] | {intersection, [{[type()], type()}]},
@@ -3416,53 +3507,6 @@ check_clauses_union(Env, [Ty|Tys], Clauses) ->
       Clauses :: [gradualizer_type:abstract_clause(), ...],
       Caps :: capture_vars | bind_vars,
       R :: {env(), constraints:constraints()}.
-check_clauses(Env, {intersection, []}, _Acc, _Clauses, _Caps) ->
-    %% TODO: return the right constraints
-    {Env, constraints:empty()};
-check_clauses(Env, {intersection, [{ArgsTys, _ResTy} = FunTy | FunTys]},
-              {OrigClauses, Seen, RefinedArgsTyss},
-              [] = _Clauses, _Caps) ->
-    check_clauses(Env, {intersection, [FunTy | FunTys]},
-                  {OrigClauses, maps:put(ArgsTys, hd(OrigClauses), Seen), RefinedArgsTyss},
-                  OrigClauses, _Caps);
-check_clauses(Env, {intersection, [{ArgsTys, ResTy} = FunTy | FunTys]},
-              {OrigClauses, Seen, RefinedArgsTyss},
-              [Clause | Clauses], Caps) ->
-    MaybeRefinedArgsTys = maps:get(ArgsTys, RefinedArgsTyss),
-    case check_clauses_throw_if_already_seen(ArgsTys, MaybeRefinedArgsTys, Clause, Seen, Env) of
-        done ->
-            {Env, constraints:empty()};
-        {type_error, E} ->
-            throw(E);
-        ok ->
-
-            Env1 = push_clauses_controls(Env, #clauses_controls{exhaust = Env#env.exhaust}),
-            %% Clauses for if, case, functions, receive, etc.
-
-            try check_clause(Env1, MaybeRefinedArgsTys, ResTy, Clause, Caps) of
-                {[?type(none) | _] = RefinedArgsTys, Env2, Cs} ->
-                    RefinedArgsTyss1 = maps:put(ArgsTys, RefinedArgsTys, RefinedArgsTyss),
-                    Seen1 = maps:put({ArgsTys, Clause}, true, Seen),
-                    check_clauses(Env1, {intersection, FunTys},
-                                  {OrigClauses, Seen1, RefinedArgsTyss1},
-                                  OrigClauses, Caps);
-                {RefinedArgsTys, Env2, Cs} ->
-                    RefinedArgsTyss1 = maps:put(ArgsTys, RefinedArgsTys, RefinedArgsTyss),
-                    Seen1 = maps:put({ArgsTys, Clause}, true, Seen),
-                    check_clauses(Env1, {intersection, [FunTy | FunTys]},
-                                  {OrigClauses, Seen1, RefinedArgsTyss1},
-                                  Clauses, Caps)
-            catch
-                E when element(1, E) =:= type_error ->
-                    %% We've not exhausted this spec clause, but we've got a type error,
-                    %% e.g. a pattern in the function head doesn't match the spec.
-                    Seen1 = maps:put({ArgsTys, Clause}, E, Seen),
-                    check_clauses(Env1, {intersection, [FunTy | FunTys]},
-                                  {OrigClauses, Seen1, RefinedArgsTyss},
-                                  Clauses, Caps)
-            end
-
-    end;
 check_clauses(Env, ArgsTy, ResTy, Clauses, Caps) ->
     Env1 = push_clauses_controls(Env, #clauses_controls{exhaust = Env#env.exhaust}),
     %% This is fine, since we handle the other option in the clause above.
@@ -3474,12 +3518,10 @@ check_clauses(Env, ArgsTy, ResTy, Clauses, Caps) ->
     Env3 = pop_clauses_controls(Env2),
     {union_var_binds(VarBindsList, Env3), constraints:combine(Css)}.
 
-check_clauses_throw_if_already_seen(ArgsTys, RefinedArgsTy, Clause, Seen, Env) ->
+check_clauses_intersection_throw_if_seen(ArgsTys, RefinedArgsTy, Clause, Seen, Env) ->
     case maps:get({ArgsTys, Clause}, Seen, false) of
         false ->
             ok;
-        ok ->
-            done;
         true ->
             {clause, P, _, _, _} = Clause,
             throw(nonexhaustive(P, gradualizer_lib:pick_values(RefinedArgsTy, Env)));
