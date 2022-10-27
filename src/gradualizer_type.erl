@@ -22,12 +22,14 @@
 %% Export the additional types that gradualizer uses
 -export_type([abstract_pattern/0,
               af_assoc_type/0,
+              af_binary_op/1,
               af_constrained_function_type/0,
               af_constraint/0,
               af_fun_type/0,
               af_function_type_list/0,
               af_record_field/1,
               af_string/0,
+              af_unary_op/1,
               binary_op/0,
               gr_type_var/0,
               unary_op/0]).
@@ -213,6 +215,7 @@
                        | af_bitstring_type()
                        | af_empty_list_type()
                        | af_fun_type()
+                       | af_constrained_function_type()
                        | af_integer_range_type()
                        | af_map_type()
                        | af_predefined_type()
@@ -237,8 +240,7 @@
 -type af_fun_type() :: {'type', anno(), 'fun', []}
                      | {'type', anno(), 'fun', [{'type', anno(), 'any'} |
                                                 abstract_type()]}
-                     | af_function_type()
-                     | af_constrained_function_type().
+                     | af_function_type().
 
 -type af_integer_range_type() ::
         {'type', anno(), 'range', [af_singleton_integer_type()]}.

@@ -33,6 +33,10 @@
 -spec foldl(fun((T, Acc) -> Acc), Acc, [T]) -> Acc.
 -spec foldr(fun((T, Acc) -> Acc), Acc, [T]) -> Acc.
 
+%% Preserve the (non)empty property of the input list.
+-spec map(fun((A) -> B), [A, ...]) -> [B, ...];
+         (fun((A) -> B), [A]) -> [B].
+
 %% -spec mapfoldl(Fun, Acc0, List1) -> {List2, Acc1} when
 %%       Fun :: fun((A, AccIn) -> {B, AccOut}),
 %%       Acc0 :: term(),
