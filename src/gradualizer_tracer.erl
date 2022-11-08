@@ -3,7 +3,34 @@
 %% Configuration of this module is compile time, but using the tracing facilities is more efficient
 %% than traditional printf-debugging anyway.
 %%
-%% See also the module `g' for an example of interactive tracing in the shell.
+%% Together with the shell interface of `gradualizer', we can use this module to inspect
+%% or debug the inner workings of the type checker live.
+%% Watch out for the trace sizes - they can grow huge!
+%%
+%% ```
+%% > gradualizer_tracer:start().
+%% ok
+%% > gradualizer:type_of("[a]").
+%% {trace,<0.1296.0>,call,
+%%        {typechecker,type_check_expr,[{venv,#{}},{cons,1,{atom,1,a},{nil,1}}]}}
+%% {trace,<0.1296.0>,call,{typechecker,type_check_expr,[{venv,#{}},{atom,1,a}]}}
+%% {trace,<0.1296.0>,return_from,
+%%        {typechecker,type_check_expr,2},
+%%        {{atom,0,a},{venv,#{}},{constraints,#{},#{},#{}}}}
+%% {trace,<0.1296.0>,return_to,{typechecker,do_type_check_expr,2}}
+%% {trace,<0.1296.0>,call,{typechecker,type_check_expr,[{venv,#{}},{nil,1}]}}
+%% {trace,<0.1296.0>,return_from,
+%%        {typechecker,type_check_expr,2},
+%%        {{type,0,nil,[]},{venv,#{}},{constraints,#{},#{},#{}}}}
+%% {trace,<0.1296.0>,return_to,{typechecker,do_type_check_expr,2}}
+%% {trace,<0.1296.0>,return_from,
+%%        {typechecker,type_check_expr,2},
+%%        {{type,0,nonempty_list,[{atom,0,a}]},
+%%         {venv,#{}},
+%%         {constraints,#{},#{},#{}}}}
+%% {trace,<0.1296.0>,return_to,{g,type_of,2}}
+%% {type,0,nonempty_list,[{atom,0,a}]}
+%% '''
 
 -module(gradualizer_tracer).
 
