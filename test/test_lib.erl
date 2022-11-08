@@ -1,8 +1,7 @@
 -module(test_lib).
 
 -export([create_env_from_file/2,
-         create_env/1, create_env/2,
-         ensure_form_list/1]).
+         create_env/1, create_env/2]).
 
 create_env_from_file(FileName, Opts) ->
     {ok, Data} = file:read_file(FileName),

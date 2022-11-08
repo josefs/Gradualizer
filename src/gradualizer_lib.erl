@@ -5,7 +5,8 @@
 -export([merge_with/3, top_sort/1, get_type_definition/3,
          pick_values/2, fold_ast/3, get_ast_children/1,
          empty_tenv/0, create_tenv/3,
-         remove_pos_typed_record_field/1]).
+         remove_pos_typed_record_field/1,
+         ensure_form_list/1]).
 -export_type([graph/1, tenv/0]).
 
 -type type() :: gradualizer_type:abstract_type().
@@ -314,3 +315,8 @@ remove_pos_typed_record_field({typed_record_field,
     {typed_record_field,
      {record_field, 0, typelib:remove_pos(Name), Default},
      typelib:remove_pos(Type)}.
+
+ensure_form_list(List) when is_list(List) ->
+    List;
+ensure_form_list(Other) ->
+    [Other].

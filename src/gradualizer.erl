@@ -334,15 +334,10 @@ env(Opts) ->
 %% '''
 -spec env(string(), gradualizer:options()) -> typechecker:env().
 env(ErlSource, Opts) ->
-    Forms = ensure_form_list(merl:quote(lists:flatten(ErlSource))),
+    Forms = gradualizer_lib:ensure_form_list(merl:quote(lists:flatten(ErlSource))),
     ErlParseForms = lists:map(fun erl_syntax:revert/1, Forms),
     ParseData = typechecker:collect_specs_types_opaques_and_functions(ErlParseForms),
     typechecker:create_env(ParseData, Opts).
-
-ensure_form_list(List) when is_list(List) ->
-    List;
-ensure_form_list(Other) ->
-    [Other].
 
 %% @see type_of/2
 -spec type_of(string()) -> typechecker:type().
