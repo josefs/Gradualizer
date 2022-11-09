@@ -308,6 +308,8 @@ env(Opts) ->
 %% @doc Create a type checker environment populated by types defined in a source code snippet
 %% via `-type ...' and `-record(...)' attributes.
 %%
+%% Currently, it's not possible to define variable bindings in the environment.
+%%
 %% ```
 %% > rr(typechecker).
 %% > gradualizer:env("-type a() :: integer().", []).
