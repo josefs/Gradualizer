@@ -351,6 +351,11 @@ type_of(Expr) ->
 %% ```
 %% > gradualizer:type_of("[ a || _ <- lists:seq(1, 5) ]").
 %% {type,0,list,[{atom,0,a}]}
+%% > gradualizer:type_of("case 5 of 1 -> one; _ -> more end").
+%% {type,0,union,[{atom,0,more},{atom,0,one}]}
+%% > Env = gradualizer:env([{union_size_limit, 1}]).
+%% > gradualizer:type_of("case 5 of 1 -> one; _ -> more end", Env).
+%% {type,0,any,[]}
 %% '''
 -spec type_of(string(), typechecker:env()) -> typechecker:type().
 type_of(Expr, Env) ->
