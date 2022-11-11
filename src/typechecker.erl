@@ -598,13 +598,13 @@ glb_ty(Ty, Ty, _A, _Env) ->
 
 %% Type variables. TODO: can we get here with constrained type variables?
 glb_ty(Var = {var, _, _}, Ty2, _A, _Env) ->
-    V = new_type_var(),
+    V = new_type_var(?MODULE, ?LINE),
     {{var, erl_anno:new(0), V},
      constraints:add_var(V,
                          constraints:combine(constraints:upper(V, Var),
                                              constraints:upper(V, Ty2)))};
 glb_ty(Ty1, Var = {var, _, _}, _A, _Env) ->
-    V = new_type_var(),
+    V = new_type_var(?MODULE, ?LINE),
     {{var, erl_anno:new(0), V},
      constraints:add_var(V,
                          constraints:combine(constraints:upper(V, Var),
@@ -1137,7 +1137,7 @@ expect_list_type(Union = {type, _, union, UnionTys}, N, Env) ->
             {elem_tys, Tys, constraints:empty()}
     end;
 expect_list_type({var, _, Var}, _, _) ->
-    TyVar = new_type_var(),
+    TyVar = new_type_var(?MODULE, ?LINE),
     ElemTy = {var, erl_anno:new(0), TyVar},
     {elem_ty,
      ElemTy,
@@ -1234,7 +1234,7 @@ expect_tuple_type(Union = {type, _, union, UnionTys}, N, Env) ->
 expect_tuple_type(?user_type() = Ty, N, Env) ->
     expect_tuple_type(normalize(Ty, Env), N, Env);
 expect_tuple_type({var, _, Var}, N, _Env) ->
-    TyVars = [ new_type_var() || _ <- lists:seq(1,N) ],
+    TyVars = [ new_type_var(?MODULE, ?LINE) || _ <- lists:seq(1,N) ],
     Types = [ {var, erl_anno:new(0), TyVar} || TyVar <- TyVars ],
     {elem_ty,
      Types,
@@ -1347,7 +1347,7 @@ expect_fun_type1(Env, {type, _, union, UnionTys}, Arity) ->
     end;
 expect_fun_type1(_Env, {var, _, Var}, Arity) ->
     ArgsTy = lists:duplicate(Arity, type(any)),
-    ResTyVar = new_type_var(),
+    ResTyVar = new_type_var(?MODULE, ?LINE),
     ResTy = {var, erl_anno:new(0), ResTyVar},
     ResTyUpper = {type, erl_anno:new(0), 'fun', [{type, erl_anno:new(0), any},
                                                  {var,  erl_anno:new(0), ResTy}]},
@@ -1458,10 +1458,11 @@ expect_record_union([], AccTy, AccCs, _Record, _Env) ->
 %% @doc Generate a new type variable.
 %%
 %% To avoid generating atoms at runtime a string is returned.
--spec new_type_var() -> gradualizer_type:gr_type_var().
-new_type_var() ->
-    I = erlang:unique_integer(),
-    "_TyVar" ++ integer_to_list(I).
+-spec new_type_var(atom(), integer()) -> gradualizer_type:gr_type_var().
+new_type_var(Mod, Line) ->
+    I = erlang:unique_integer([positive]),
+    lists:flatten(["_TyVar_", atom_to_list(Mod), "_", integer_to_list(Line), "_",
+                   integer_to_list(I)]).
 
 %% TODO: move tenv to back
 -spec bounded_type_list_to_type(env(), [type()]) -> type().
@@ -2902,8 +2903,8 @@ arith_op_arg_types(Op, {type, _, union, Tys}) ->
 %% constrain it appropriately. We generate new type variables for the
 %% two arguments.
 arith_op_arg_types(_Op, VarTy={var, _, TyVar}) ->
-    LTyVar = new_type_var(),
-    RTyVar = new_type_var(),
+    LTyVar = new_type_var(?MODULE, ?LINE),
+    RTyVar = new_type_var(?MODULE, ?LINE),
     {type_var(LTyVar), type_var(RTyVar),
      constraints:add_var(LTyVar,
      constraints:add_var(RTyVar,
@@ -3450,7 +3451,7 @@ instantiate(T = {var, _, '_'}, Map) ->
 instantiate({var, _, TyVar}, Map) ->
     case maps:get(TyVar, Map, not_found) of
         not_found ->
-            NewTyVar = new_type_var(),
+            NewTyVar = new_type_var(?MODULE, ?LINE),
             Type = {var, erl_anno:new(0), NewTyVar},
             {Type, maps:from_list([{NewTyVar, true}]), Map#{TyVar => Type}};
         Ty ->
