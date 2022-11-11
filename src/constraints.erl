@@ -67,9 +67,9 @@ combine([C1, C2 | Cs]) ->
       R :: {t(), {#{var() => type()}, #{var() => type()}}}.
 solve(Constraints, Anno, Env) ->
     ElimVars = Constraints#constraints.exist_vars,
-    WorkList = [ {LB, UB} || E <- maps:keys(ElimVars),
-                             LB <- maps:get(E, Constraints#constraints.lower_bounds, []),
-                             UB <- maps:get(E, Constraints#constraints.upper_bounds, []) ],
+    WorkList = [ {E, LB, UB} || E <- maps:keys(ElimVars),
+                                LB <- maps:get(E, Constraints#constraints.lower_bounds, []),
+                                UB <- maps:get(E, Constraints#constraints.upper_bounds, []) ],
     Cs = solve_loop(WorkList, maps:new(), Constraints, ElimVars, Anno, Env),
     GlbSubs = fun(_Var, Tys) ->
                       {Ty, _C} = typechecker:glb(Tys, Env),
@@ -93,14 +93,14 @@ solve(Constraints, Anno, Env) ->
 
 solve_loop([], _, Constraints, _, _, _) ->
     Constraints;
-solve_loop([I = {LB, UB} | WL], Seen, Constraints, ElimVars, Anno, Env) ->
+solve_loop([I = {E, LB, UB} | WL], Seen, Constraints, ElimVars, Anno, Env) ->
     case maps:is_key(I, Seen) of
         true ->
             solve_loop(WL, Seen, Constraints, ElimVars, Anno, Env);
         false ->
             C = case typechecker:subtype(LB, UB, Env) of
                     false ->
-                        throw({constraint_error, Anno, LB, UB});
+                        throw({constraint_error, Anno, E, LB, UB});
                     {true, Cs} ->
                         Cs
                 end,
@@ -117,12 +117,14 @@ solve_loop([I = {LB, UB} | WL], Seen, Constraints, ElimVars, Anno, Env) ->
                                                  C#constraints.upper_bounds),
             Constraints2 = #constraints{lower_bounds = LBounds,
                                         upper_bounds = UBounds},
-            NewWL = ([ {Lower, Upper} || {EVar, Lowers} <- maps:to_list(ELowerBounds),
-                                         Lower <- Lowers,
-                                         Upper <- maps:get(EVar, Constraints2#constraints.upper_bounds, []) ] ++
-                     [ {Lower, Upper} || {Evar, Uppers} <- maps:to_list(EUpperBounds),
-                                         Upper <- Uppers,
-                                         Lower <- maps:get(Evar, Constraints2#constraints.lower_bounds, []) ] ++
+            NewWL = ([ {EVar, Lower, Upper}
+                       || {EVar, Lowers} <- maps:to_list(ELowerBounds),
+                          Lower <- Lowers,
+                          Upper <- maps:get(EVar, Constraints2#constraints.upper_bounds, []) ] ++
+                     [ {EVar, Lower, Upper}
+                       || {EVar, Uppers} <- maps:to_list(EUpperBounds),
+                          Upper <- Uppers,
+                          Lower <- maps:get(EVar, Constraints2#constraints.lower_bounds, []) ] ++
                      WL),
             solve_loop(NewWL, maps:put(I, true, Seen), Constraints2, ElimVars, Anno, Env)
     end.

@@ -367,11 +367,12 @@ format_type_error({unsupported_expression, Anno, Expr}, Opts) ->
       [format_location(Anno, brief, Opts),
        atom_to_list(element(1, Expr)),
        format_location(Anno, verbose, Opts)]);
-format_type_error({constraint_error, Anno, LB, UB}, Opts) ->
+format_type_error({constraint_error, Anno, E, LB, UB}, Opts) ->
     io_lib:format(
-      "~sThe type ~s~s is not a subtype of ~s~n",
+      "~sLower bound ~s of type variable ~s~s is not a subtype of ~s~n",
       [format_location(Anno, brief, Opts),
        pp_type(LB, Opts),
+       E,
        format_location(Anno, verbose, Opts),
        pp_type(UB, Opts)]);
 format_type_error({Location, Module, ErrorDescription}, Opts)
