@@ -2622,11 +2622,22 @@ do_type_check_expr_in(Env, ResTy, Expr = {'fun', P, {function, Name, Arity}}) ->
                 false -> throw(type_error(Expr, FunType, ResTy))
             end;
         BoundedFunTypeList ->
-            FunTypeList =
-                unfold_bounded_type_list(Env, BoundedFunTypeList),
+            FunTypeList = unfold_bounded_type_list(Env, BoundedFunTypeList),
+            %% TODO: This leads to a problem when solving constraints.
+            %%       FunTypeList is a list of spec clauses.
+            %%       If ResTy has type vars, which accept everything as their subtype, yet the first
+            %%       spec clause we check isn't the best fit, a constraint might be registered on
+            %%       the type var.
+            %%       That constraint might later lead to a contradiction when solving constraints,
+            %%       even though FunTypeList might have another matching clause which would result
+            %%       in a valid constraint being registered.
+            %%       To fix this, we temporarily drop the constraints here.
+            %%       This means we're likely also letting some bugs slip through.
             case any_subtype(FunTypeList, ResTy, Env) of
-                {true, Cs} -> {Env, Cs};
-                false -> throw(type_error(Expr, FunTypeList, ResTy))
+                {true, _Cs} ->
+                    {Env, constraints:empty()};
+                false ->
+                    throw(type_error(Expr, FunTypeList, ResTy))
             end
     end;
 do_type_check_expr_in(Env, ResTy, Expr = {'fun', P, {function, M, F, A}}) ->
