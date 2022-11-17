@@ -43,10 +43,13 @@
 %%        in operator  ++/2
 %%           called as [a|b] ++ [c]
 %%
--spec erlang:'++'([T1, ...], [T2])                           -> [T1 | T2, ...];
+-spec erlang:'++'([], T)                                     -> T;
+                 ([T1, ...], [T2])                           -> [T1 | T2, ...];
+                 ([T1], [T2])                                -> [T1 | T2];
                  ([T1, ...], nonempty_improper_list(T2, T3)) -> nonempty_improper_list(T1 | T2, T3);
-                 ([T1, ...], T2)                             -> nonempty_improper_list(T1, T2);
-                 ([], T)                                     -> T.
+                 ([T1], nonempty_improper_list(T2, T3))      -> nonempty_improper_list(T1 | T2, T3);
+                 ([T1, ...], T2)                             -> nonempty_improper_list(T1, T2).
+
 
 %% Prior to OTP 24.1 the spec does not list `none' as valid `Args',
 %% but the function accepts it and works properly.
