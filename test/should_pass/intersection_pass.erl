@@ -1,6 +1,6 @@
 -module(intersection_pass).
 
--compile([export_all, nowarn_export_all]).
+-export([f/1, g/0, h/0, num/1]).
 
 -spec f(integer()) -> integer();
        (boolean()) -> boolean().
@@ -13,3 +13,8 @@ g() ->
 -spec h() -> boolean().
 h() ->
     f(false).
+
+-spec num(1) -> one;
+         (2) -> two.
+num(1) -> one;
+num(2) -> two.
