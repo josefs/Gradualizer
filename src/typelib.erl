@@ -290,6 +290,8 @@ substitute_type_vars(Other = {T, _, _}, _)
 %% >      end,
 %% > {_, [atom2, atom1]} = reduce(F, [], ComplexTy).
 %% '''
+%% @end
+%% TODO: this is mostly redundant with `gradualizer_lib:fold_ast'
 -spec reduce_type(Fun, Acc, walkable_type()) -> R when
       Fun :: fun((walkable_type(), Acc) -> {walkable_type(), Acc}),
       R :: {walkable_type(), Acc}.
