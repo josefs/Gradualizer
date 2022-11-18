@@ -5,7 +5,7 @@
          nonempty2_concat_fun_elem_gives_improper/0,
          nil_concat_fun_nonempty_gives_proper/0,
          nonempty_concat_fun_nonempty_gives_proper/0,
-         nonempty1_concat_fun_nonempty2_gives_proper/0]).
+         proper_concat_fun_proper_gives_proper/0]).
 
 -spec nil_concat_fun_elem_gives_elem() -> b.
 nil_concat_fun_elem_gives_elem() ->
@@ -27,8 +27,8 @@ nil_concat_fun_nonempty_gives_proper() ->
 nonempty_concat_fun_nonempty_gives_proper() ->
     erlang:'++'([a,b], [c]).
 
--spec nonempty1_concat_fun_nonempty2_gives_proper() -> [integer()].
-nonempty1_concat_fun_nonempty2_gives_proper() ->
+-spec proper_concat_fun_proper_gives_proper() -> [integer()].
+proper_concat_fun_proper_gives_proper() ->
     erlang:'++'(generate_list(), generate_list()).
 
 -spec generate_list() -> [integer()].
