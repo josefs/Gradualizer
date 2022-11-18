@@ -3446,17 +3446,20 @@ get_atom(_Env, _) ->
 -spec instantiate_fun_type([type()], type()) -> R when
       R :: {{[type()], type()}, constraints:t()}.
 instantiate_fun_type(Args,Res) ->
-    {NewArgs, ArgVars, Map} = instantiate_list(Args, #{}),
+    {NewArgs, ArgVars, Map} = instantiate_inner(Args, #{}),
     {NewRes , ResVars, _Map} = instantiate(Res, Map),
     {{NewArgs, NewRes}, constraints:vars(maps:merge(ArgVars, ResVars))}.
 
 -spec instantiate_fun_type([type()]) -> {[type()], constraints:t()}.
 instantiate_fun_type(Tys) ->
-    {NewTys, Vars, _Map} = instantiate_list(Tys, #{}),
+    {NewTys, Vars, _Map} = instantiate_inner(Tys, #{}),
     {NewTys, constraints:vars(Vars)}.
 
--spec instantiate(type(), #{ constraints:var() => type() }) -> R when
-      R :: {type(), constraints:mapset(constraints:var()), #{constraints:var() => type()}}.
+-type instantiate_retval(T) :: {T,
+                                constraints:mapset(constraints:var()),
+                                #{constraints:var() => type()}}.
+
+-spec instantiate(type(), #{constraints:var() => type()}) -> instantiate_retval(type()).
 instantiate(T = {var, _, '_'}, Map) ->
     {T, maps:new(), Map};
 instantiate({var, _, TyVar}, Map) ->
@@ -3471,10 +3474,8 @@ instantiate({var, _, TyVar}, Map) ->
 instantiate(T = ?type(_), Map) ->
     {T, maps:new(), Map};
 instantiate(?type(Ty, Args), Map) ->
-    {NewArgs, Set, NewMap} = instantiate_list(Args, Map),
+    {NewArgs, Set, NewMap} = instantiate_inner(Args, Map),
     {type(Ty, NewArgs), Set, NewMap};
-instantiate(T = {type, _, any}, Map) ->
-    {T, maps:new(), Map};
 instantiate(T = {Tag, _,_}, Map)
   when Tag == integer orelse Tag == atom orelse Tag == char ->
     {T, maps:new(), Map};
@@ -3485,18 +3486,27 @@ instantiate(T = {op, _, _, _, _}, Map) ->
 instantiate(T = {remote_type, _, _}, Map) ->
     {T, maps:new(), Map};
 instantiate(_ = {user_type, Ann, Name, Tys}, Map) ->
-    {NewTys, Vars, NewMap} = instantiate_list(Tys, Map),
-    {{user_type, Ann, Name, NewTys}, Vars, NewMap};
-instantiate(any, Map) ->
-    {any, maps:new(), Map}.
+    {NewTys, Vars, NewMap} = instantiate_inner(Tys, Map),
+    {{user_type, Ann, Name, NewTys}, Vars, NewMap}.
 
-instantiate_list(any, Map) ->
+%% This handles the inner nodes of erl_parse `type()' node:
+%% - lists of types
+%% - any
+%% - {type, _, any} - that is `gradualizer_type:gr_any_fun_args()'
+-spec instantiate_inner(any, map()) -> {any, map(), map()};
+                       (list(), map()) -> {list(), map(), map()}.
+instantiate_inner(any, Map) ->
     {any, maps:new(), Map};
-instantiate_list([], Map) ->
+instantiate_inner([], Map) ->
     {[], maps:new(), Map};
-instantiate_list([Ty|Tys], Map) ->
-    {NewTy, Vars, NewMap} = instantiate(Ty, Map),
-    {NewTys, MoreVars, EvenNewerMap} = instantiate_list(Tys, NewMap),
+instantiate_inner([Ty | Tys], Map) ->
+    {NewTy, Vars, NewMap} = case Ty of
+                                {type, _, any} ->
+                                    {Ty, maps:new(), Map};
+                                _ ->
+                                    instantiate(Ty, Map)
+                            end,
+    {NewTys, MoreVars, EvenNewerMap} = instantiate_inner(Tys, NewMap),
     {[NewTy|NewTys], maps:merge(Vars, MoreVars), EvenNewerMap}.
 
 
