@@ -31,4 +31,5 @@ nonempty_concat_fun_nonempty_gives_proper() ->
 nonempty1_concat_fun_nonempty2_gives_proper() ->
     erlang:'++'(generate_list(), generate_list()).
 
+-spec generate_list() -> [integer()].
 generate_list() -> lists:seq(1, 2).
