@@ -1,3 +1,4 @@
+%% @private
 %% @doc Main Gradualizer supervisor
 -module(gradualizer_sup).
 

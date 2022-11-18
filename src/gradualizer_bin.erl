@@ -1,3 +1,4 @@
+%% @private
 %% Helper module for binaries/bitstrings
 -module(gradualizer_bin).
 

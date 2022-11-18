@@ -1,3 +1,4 @@
+%% @private
 %% @doc
 %% Functions operating on types represented as the Erlang Abstract Forms.
 %% @end

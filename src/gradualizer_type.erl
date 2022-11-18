@@ -1,3 +1,4 @@
+%% @private
 %% This file was automatically generated from the file "erl_parse.yrl".
 %%
 %% Copyright Ericsson AB 1996-2018. All Rights Reserved.

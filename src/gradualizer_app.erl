@@ -1,3 +1,4 @@
+%% @private
 -module(gradualizer_app).
 
 -behaviour(application).

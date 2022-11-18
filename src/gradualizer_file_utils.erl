@@ -1,4 +1,5 @@
-%%% @doc Module with utility functions to work with files.
+%% @private
+%% @doc Module with utility functions to work with files.
 
 -module(gradualizer_file_utils).
 

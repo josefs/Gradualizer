@@ -1,4 +1,5 @@
-%%% @doc Module for extracting data from an Erlang parse tree.
+%% @doc Module for extracting data from an Erlang parse tree.
+%% @private
 -module(absform).
 
 -export([normalize_record_field/1,

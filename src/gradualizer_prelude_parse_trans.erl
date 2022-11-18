@@ -1,3 +1,4 @@
+%% @private
 -module(gradualizer_prelude_parse_trans).
 
 %% This file is compiled first and used for compiling other files,

@@ -1,3 +1,4 @@
+%% @private
 -module(gradualizer_highlight).
 
 -export([prettyprint_and_highlight/3,

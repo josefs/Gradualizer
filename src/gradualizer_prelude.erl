@@ -1,3 +1,4 @@
+%% @private
 -module(gradualizer_prelude).
 
 -compile({parse_transform, gradualizer_prelude_parse_trans}).
