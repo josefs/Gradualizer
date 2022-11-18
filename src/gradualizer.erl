@@ -15,10 +15,14 @@
 %%% We can choose the right balance between the static/dynamic extremes depending on the application,
 %%% project maturity, team size, the need for reusability or for documentation consistency.
 %%%
-%%% This module contains the main external entry points to Gradualizer
-%%% as well as some Erlang shell utilities for working with it.
-%%% You might also be interested in the Rebar3 plugin `rebar_prv_gradualizer'
+%%% <strong>
+%%% If you are interested in using Gradualizer to type check your code,
+%%% then you might be more interested in the Rebar3 plugin `rebar_prv_gradualizer'
 %%% or the command-line interface `gradualizer_cli'.
+%%% </strong>
+%%%
+%%% This module contains entry points for calling into Gradualizer as a library,
+%%% as well as some Erlang shell utilities for working directly with the type checker internals.
 %%%
 %%% Let's try out the shell utilities by running:
 %%%
