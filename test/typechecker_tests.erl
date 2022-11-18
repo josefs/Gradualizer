@@ -635,7 +635,7 @@ type_check_forms(String) ->
     type_check_forms(String, []).
 
 type_check_forms(String, Opts) ->
-    [] =:= typechecker:type_check_forms(test_lib:ensure_form_list(merl:quote(String)), Opts).
+    [] =:= typechecker:type_check_forms(gradualizer_lib:ensure_form_list(merl:quote(String)), Opts).
 
 type_check_expr(EnvStr, ExprString) ->
     type_check_expr(EnvStr, ExprString, []).

@@ -2,10 +2,40 @@
 %% by tracing Gradualizer internals more efficient.
 %% Configuration of this module is compile time, but using the tracing facilities is more efficient
 %% than traditional printf-debugging anyway.
+%%
+%% Together with the shell interface of `gradualizer', we can use this module to inspect
+%% or debug the inner workings of the type checker live.
+%% Watch out for the trace sizes - they can grow huge!
+%%
+%% ```
+%% > gradualizer_tracer:start().
+%% ok
+%% > gradualizer:type_of("[a]").
+%% {trace,<0.1296.0>,call,
+%%        {typechecker,type_check_expr,[{venv,#{}},{cons,1,{atom,1,a},{nil,1}}]}}
+%% {trace,<0.1296.0>,call,{typechecker,type_check_expr,[{venv,#{}},{atom,1,a}]}}
+%% {trace,<0.1296.0>,return_from,
+%%        {typechecker,type_check_expr,2},
+%%        {{atom,0,a},{venv,#{}},{constraints,#{},#{},#{}}}}
+%% {trace,<0.1296.0>,return_to,{typechecker,do_type_check_expr,2}}
+%% {trace,<0.1296.0>,call,{typechecker,type_check_expr,[{venv,#{}},{nil,1}]}}
+%% {trace,<0.1296.0>,return_from,
+%%        {typechecker,type_check_expr,2},
+%%        {{type,0,nil,[]},{venv,#{}},{constraints,#{},#{},#{}}}}
+%% {trace,<0.1296.0>,return_to,{typechecker,do_type_check_expr,2}}
+%% {trace,<0.1296.0>,return_from,
+%%        {typechecker,type_check_expr,2},
+%%        {{type,0,nonempty_list,[{atom,0,a}]},
+%%         {venv,#{}},
+%%         {constraints,#{},#{},#{}}}}
+%% {trace,<0.1296.0>,return_to,{g,type_of,2}}
+%% {type,0,nonempty_list,[{atom,0,a}]}
+%% '''
 
 -module(gradualizer_tracer).
 
 -export([start/0,
+         stop/0,
          flush/0,
          debug/1]).
 
@@ -94,6 +124,7 @@ just_tenv(Args) ->
 
 %% @doc Start tracing.
 start() ->
+    stop(),
     {ok, Tracer} = dbg:tracer(process, {trace_fun(), ok}),
     %dbg:p(all, [call, arity, return_to]),
     dbg:p(all, [call, return_to]),
@@ -131,6 +162,10 @@ start() ->
     %dbg:tpl(typechecker, add_type_pat_union, 3, x),
     %dbg:tpl(typechecker, denormalize, x),
     %dbg:tpl(typechecker, type_check_block_in, x),
+    %dbg:tpl(typechecker, type_check_block_in, x),
+
+    %dbg:tpl(typechecker, type_check_expr, x),
+    %dbg:tpl(typechecker, do_type_check_expr, x),
 
     %dbg:tpl(typechecker, type_check_expr_in, x),
     %dbg:tpl(typechecker, do_type_check_expr_in, x),
@@ -161,6 +196,10 @@ start() ->
 
     application:set_env(gradualizer, tracer, Tracer),
     ok.
+
+%% @doc Stop tracing.
+stop() ->
+    dbg:stop_clear().
 
 %% @doc `debug/1' is a trace point to trace when pinpointing issues across several candidate
 %% locations. Uncomment the below in `start/0':

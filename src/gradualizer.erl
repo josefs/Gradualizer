@@ -1,6 +1,59 @@
-%%% @doc Main external API of the Gradualizer
+%%% @doc
+%%% Gradualizer is a static type checker for Erlang with support for gradual typing.
 %%%
-%%% The functions `type_check(file|module|dir)' accept the following options:
+%%% A static type checker detects errors thanks to type analysis of a given program.
+%%% Gradualizer can infer some types, but mostly relies on function specs.
+%%% In a nutshell, we could say that it checks for consistency of a function body with its
+%%% declared spec and for consistency of a callee's spec with passed in arguments.
+%%% Specifically, Gradualizer does not perform entire program flow analysis.
+%%%
+%%% Gradual typing means that full type information is not required to raise warnings - any type
+%%% information is better than no type information. It allows for a _gradual_ transition between
+%%% fully static typing, which offers the best correctness guarantee, and fully dynamic typing,
+%%% which means the least overhead of writing specs, the full Erlang expressiveness,
+%%% and _letting it crash_ at runtime.
+%%% We can choose the right balance between the static/dynamic extremes depending on the application,
+%%% project maturity, team size, the need for reusability or for documentation consistency.
+%%%
+%%% <strong>
+%%% If you are interested in using Gradualizer to type check your code,
+%%% then you might be more interested in the Rebar3 plugin `rebar_prv_gradualizer'
+%%% or the command-line interface `gradualizer_cli'.
+%%% </strong>
+%%%
+%%% This module contains entry points for calling into Gradualizer as a library,
+%%% as well as some Erlang shell utilities for working directly with the type checker internals.
+%%%
+%%% Let's try out the shell utilities by running:
+%%%
+%%% ```
+%%% rebar3 shell
+%%% '''
+%%%
+%%% Now, we can play with some examples:
+%%%
+%%% ```
+%%% > gradualizer:type_of("[ a || _ <- lists:seq(1, 5) ]").
+%%% {type,0,list,[{atom,0,a}]}
+%%% > typelib:pp_type(v(-1)).
+%%% "[a]"
+%%% > typechecker:normalize(gradualizer:type("a()"), gradualizer:env("-type a() :: integer().", [])).
+%%% {type,0,integer,[]}
+%%% > typelib:pp_type(v(-1)).
+%%% "integer()"
+%%% > gradualizer:type_of("fun (A) -> #{tag => my_map, list_of_as => [ A || _ <- lists:seq(1, 5) ]} end").
+%%% {type,0,'fun',
+%%%       [{type,0,product,[{type,0,any,[]}]},
+%%%        {type,0,map,
+%%%              [{type,0,map_field_assoc,[{atom,0,tag},{atom,0,my_map}]},
+%%%               {type,0,map_field_assoc,
+%%%                     [{atom,0,list_of_as},{type,0,list,[{type,0,any,[]}]}]}]}]}
+%%% > typelib:pp_type(v(-1)).
+%%% "fun((any()) -> #{tag => my_map, list_of_as => [any()]})"
+%%% '''
+%%%
+%%% The main library API of Gradualizer are `type_check_(file|module|dir)' functions.
+%%% These accept the following options:
 %%% - `{i, Dir}': Include path for `-include' and `-include_lib' when checking
 %%%   Erlang source files. Specify multiple times for multiple include paths.
 %%% - `stop_on_first_error': if `true' stop type checking at the first error,
@@ -26,16 +79,15 @@
 %%%   default. Doesn't work when a custom `fmt_expr_fun' is used.
 -module(gradualizer).
 
--export([type_check_file/1,
-         type_check_file/2,
-         type_check_module/1,
-         type_check_module/2,
-         type_check_dir/1,
-         type_check_dir/2,
-         type_check_files/1,
-         type_check_files/2,
-         type_check_forms/2
-        ]).
+-export([type_check_file/1, type_check_file/2,
+         type_check_module/1, type_check_module/2,
+         type_check_dir/1, type_check_dir/2,
+         type_check_files/1, type_check_files/2,
+         type_check_forms/2]).
+
+-export([type/1,
+         env/0, env/1, env/2,
+         type_of/1, type_of/2]).
 
 -export_type([options/0, top/0]).
 
@@ -47,6 +99,7 @@
 -opaque top() :: none().
 
 -include("gradualizer.hrl").
+-include("typechecker.hrl").
 
 %% API functions
 
@@ -227,7 +280,7 @@ add_source_file_and_forms_to_opts(File, Forms, Opts) ->
         false -> Opts1
     end.
 
-%% Extract -gradualizer(Options) from AST
+%% Extract `-gradualizer(Options)' from AST
 -spec options_from_forms(gradualizer_file_utils:abstract_forms()) -> options().
 options_from_forms([{attribute, _L, gradualizer, Opts} | Fs]) when is_list(Opts) ->
     Opts ++ options_from_forms(Fs);
@@ -235,3 +288,81 @@ options_from_forms([{attribute, _L, gradualizer, Opt} | Fs]) ->
     [Opt | options_from_forms(Fs)];
 options_from_forms([_F | Fs]) -> options_from_forms(Fs);
 options_from_forms([]) -> [].
+
+%% @doc Return a Gradualizer type for the passed in Erlang type definition.
+%%
+%% ```
+%% > gradualizer:type("[integer()]").
+%% {type,0,list,[{type,0,integer,[]}]}
+%% '''
+-spec type(string()) -> typechecker:type().
+type(Type) ->
+    typelib:remove_pos(typelib:parse_type(Type)).
+
+%% @see env/2
+-spec env() -> typechecker:env().
+env() ->
+    env([]).
+
+%% @see env/2
+-spec env(gradualizer:options()) -> typechecker:env().
+env(Opts) ->
+    env("", Opts).
+
+%% @doc Create a type checker environment populated by types defined in a source code snippet
+%% via `-type ...' and `-record(...)' attributes.
+%%
+%% Currently, it's not possible to define variable bindings in the environment.
+%%
+%% ```
+%% > rr(typechecker).
+%% > gradualizer:env("-type a() :: integer().", []).
+%% #env{fenv = #{},imported = #{},venv = #{},
+%%      tenv = #{module => undefined,records => #{},
+%%               types => #{{a,0} => {[],{type,0,integer,[]}}}},
+%%      infer = false,verbose = false,exhaust = true,
+%%      clauses_stack = [],union_size_limit = 30,
+%%      current_spec = none}
+%% > gradualizer:env("-record(r, {f}).", []).
+%% #env{
+%%     fenv = #{},imported = #{},venv = #{},
+%%     tenv =
+%%         #{module => undefined,
+%%           records =>
+%%               #{r =>
+%%                     [{typed_record_field,
+%%                          {record_field,0,{atom,0,f},{atom,1,undefined}},
+%%                          {type,0,any,[]}}]},
+%%           types => #{}},
+%%     infer = false,verbose = false,exhaust = true,
+%%     clauses_stack = [],union_size_limit = 30,
+%%     current_spec = none}
+%% '''
+-spec env(string(), gradualizer:options()) -> typechecker:env().
+env(ErlSource, Opts) ->
+    Forms = gradualizer_lib:ensure_form_list(merl:quote(lists:flatten(ErlSource))),
+    ErlParseForms = lists:map(fun erl_syntax:revert/1, Forms),
+    ParseData = typechecker:collect_specs_types_opaques_and_functions(ErlParseForms),
+    typechecker:create_env(ParseData, Opts).
+
+%% @see type_of/2
+-spec type_of(string()) -> typechecker:type().
+type_of(Expr) ->
+    type_of(Expr, env([infer])).
+
+%% @doc Infer type of an Erlang expression.
+%%
+%% ```
+%% > gradualizer:type_of("[ a || _ <- lists:seq(1, 5) ]").
+%% {type,0,list,[{atom,0,a}]}
+%% > gradualizer:type_of("case 5 of 1 -> one; _ -> more end").
+%% {type,0,union,[{atom,0,more},{atom,0,one}]}
+%% > Env = gradualizer:env([{union_size_limit, 1}]).
+%% > gradualizer:type_of("case 5 of 1 -> one; _ -> more end", Env).
+%% {type,0,any,[]}
+%% '''
+-spec type_of(string(), typechecker:env()) -> typechecker:type().
+type_of(Expr, Env) ->
+    AlwaysInfer = Env#env{infer = true},
+    {Ty, _Env, _Cs} = typechecker:type_check_expr(AlwaysInfer, merl:quote(Expr)),
+    Ty.
