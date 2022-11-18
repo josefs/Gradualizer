@@ -5055,14 +5055,18 @@ type_of_bin_element({bin_element, _P, Expr, _Size, Specifiers}, OccursAs) ->
                                 {true, type(number)};
                             (S) when S == binary; S == bytes ->
                                 %% TODO: Consider Size and Unit
-                                {true, {type, erl_anno:new(0), binary,
-                                        [{integer, erl_anno:new(0), 0}
-                                        ,{integer, erl_anno:new(0), 8}]}};
+                                Ty = ?assert_type({type, erl_anno:new(0), binary,
+                                                   [{integer, erl_anno:new(0), 0},
+                                                    {integer, erl_anno:new(0), 8}]},
+                                                  type()),
+                                {true, Ty};
                             (S) when S == bitstring; S == bits ->
                                 %% TODO: Consider Size and Unit
-                                {true, {type, erl_anno:new(0), binary,
-                                        [{integer, erl_anno:new(0), 0}
-                                        ,{integer, erl_anno:new(0), 1}]}};
+                                Ty = ?assert_type({type, erl_anno:new(0), binary,
+                                                   [{integer, erl_anno:new(0), 0},
+                                                    {integer, erl_anno:new(0), 1}]},
+                                                  type()),
+                                {true, Ty};
                             (_NotATypeSpecifier) ->
                                 false
                         end,
