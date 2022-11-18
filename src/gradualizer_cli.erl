@@ -1,3 +1,6 @@
+%% @doc
+%% Gradualizer command line interface.
+%% @end
 -module(gradualizer_cli).
 -export([main/1, handle_args/1]).
 

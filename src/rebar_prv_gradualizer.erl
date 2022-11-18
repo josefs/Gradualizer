@@ -1,3 +1,15 @@
+%% @doc
+%% The Rebar3 plugin for Gradualizer.
+%%
+%% To run Gradualizer from Rebar3, add it as a plugin in your `rebar.config':
+%%
+%% ```
+%% {plugins, [
+%%   {gradualizer, {git, "git@github.com:josefs/Gradualizer.git", {branch, "master"}}}
+%% ]}.
+%% '''
+%%
+%% @end
 -module(rebar_prv_gradualizer).
 
 -export([init/1, do/1, format_error/1]).

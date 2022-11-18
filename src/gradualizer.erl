@@ -18,8 +18,8 @@
 %%
 %% <strong>
 %% If you are interested in using Gradualizer to type check your code,
-%% then you might be more interested in the Rebar3 plugin `rebar_prv_gradualizer'
-%% or the command-line interface `gradualizer_cli'.
+%% then you might be looking for the Rebar3 plugin {@link rebar_prv_gradualizer}
+%% or the command-line interface {@link gradualizer_cli}.
 %% </strong>
 %%
 %% This module contains entry points for calling into Gradualizer as a library,
@@ -28,7 +28,7 @@
 %% Let's try out the shell utilities by running:
 %%
 %% ```
-%% rebar3 shell
+%% $ rebar3 shell
 %% '''
 %%
 %% Now, we can play with some examples:
@@ -55,6 +55,7 @@
 %%
 %% The main library API of Gradualizer are `type_check_(file|module|dir)' functions,
 %% which accept options described by the {@link options()} type.
+%% @end
 -module(gradualizer).
 
 -export([type_check_file/1, type_check_file/2,
