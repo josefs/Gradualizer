@@ -1,3 +1,4 @@
+%% @private
 -module(constraints).
 
 -export([empty/0, upper/2, lower/2, combine/1, combine/2, add_var/2]).

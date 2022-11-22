@@ -1,4 +1,7 @@
-%% @doc Functions operating on types on the Erlang Abstract Form
+%% @private
+%% @doc
+%% Functions operating on types represented as the Erlang Abstract Forms.
+%% @end
 -module(typelib).
 
 -export([remove_pos/1,
@@ -30,6 +33,10 @@
                           {type, erl_anno:anno(), bounded_fun,
                                  [function_type() | [constraint()]]} |
                           [extended_type()].
+
+%% @doc
+%% Pretty-print a type represented as an Erlang abstract form.
+%% @end
 -spec pp_type(extended_type()) -> string().
 pp_type(Types = [_|_]) ->
     %% TODO: This is a workaround for the fact that a list is sometimes used in
@@ -261,17 +268,20 @@ substitute_type_vars(Other = {T, _, _}, _)
 %%
 %% Example 1 - gather all singleton atoms occurring in a type:
 %%
+%% ```
 %% > F = fun
 %% >         ({atom, _, _} = At, Acc) -> {At, [At | Acc]};
 %% >         (Ty, Acc) -> {Ty, Acc}
 %% >     end,
 %% > {_, [{atom, _, my_atom}]} = typelib:reduce_type(F, [], typelib:parse_type("A :: {my_atom}")).
+%% '''
 %%
 %% `Fun' can skip traversing parts of the type tree by matching on it
 %% and returning `none()' instead of the actual subtree.
 %%
 %% Example 2 - gather singleton atoms, but skip a particular branch of a union type:
 %%
+%% ```
 %% > ComplexTy = typelib:parse_type("atom1 | atom2 | "
 %% >                                "{complex, integer(), [{atom() | string(), number()}]}"),
 %% > F = fun
@@ -280,6 +290,9 @@ substitute_type_vars(Other = {T, _, _}, _)
 %% >          (Ty, Acc) -> {Ty, Acc}
 %% >      end,
 %% > {_, [atom2, atom1]} = reduce(F, [], ComplexTy).
+%% '''
+%% @end
+%% TODO: this is mostly redundant with `gradualizer_lib:fold_ast'
 -spec reduce_type(Fun, Acc, walkable_type()) -> R when
       Fun :: fun((walkable_type(), Acc) -> {walkable_type(), Acc}),
       R :: {walkable_type(), Acc}.

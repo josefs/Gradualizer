@@ -1,3 +1,4 @@
+%% @private
 %% Integer types represented as ranges with infinities
 -module(gradualizer_int).
 

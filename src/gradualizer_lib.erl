@@ -1,5 +1,4 @@
-% This module contains useful helper functions.
-
+%% @private
 -module(gradualizer_lib).
 
 -export([merge_with/3, top_sort/1, get_type_definition/3,

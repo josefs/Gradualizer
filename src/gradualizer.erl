@@ -1,82 +1,61 @@
-%%% @doc
-%%% Gradualizer is a static type checker for Erlang with support for gradual typing.
-%%%
-%%% A static type checker detects errors thanks to type analysis of a given program.
-%%% Gradualizer can infer some types, but mostly relies on function specs.
-%%% In a nutshell, we could say that it checks for consistency of a function body with its
-%%% declared spec and for consistency of a callee's spec with passed in arguments.
-%%% Specifically, Gradualizer does not perform entire program flow analysis.
-%%%
-%%% Gradual typing means that full type information is not required to raise warnings - any type
-%%% information is better than no type information. It allows for a _gradual_ transition between
-%%% fully static typing, which offers the best correctness guarantee, and fully dynamic typing,
-%%% which means the least overhead of writing specs, the full Erlang expressiveness,
-%%% and _letting it crash_ at runtime.
-%%% We can choose the right balance between the static/dynamic extremes depending on the application,
-%%% project maturity, team size, the need for reusability or for documentation consistency.
-%%%
-%%% <strong>
-%%% If you are interested in using Gradualizer to type check your code,
-%%% then you might be more interested in the Rebar3 plugin `rebar_prv_gradualizer'
-%%% or the command-line interface `gradualizer_cli'.
-%%% </strong>
-%%%
-%%% This module contains entry points for calling into Gradualizer as a library,
-%%% as well as some Erlang shell utilities for working directly with the type checker internals.
-%%%
-%%% Let's try out the shell utilities by running:
-%%%
-%%% ```
-%%% rebar3 shell
-%%% '''
-%%%
-%%% Now, we can play with some examples:
-%%%
-%%% ```
-%%% > gradualizer:type_of("[ a || _ <- lists:seq(1, 5) ]").
-%%% {type,0,list,[{atom,0,a}]}
-%%% > typelib:pp_type(v(-1)).
-%%% "[a]"
-%%% > typechecker:normalize(gradualizer:type("a()"), gradualizer:env("-type a() :: integer().", [])).
-%%% {type,0,integer,[]}
-%%% > typelib:pp_type(v(-1)).
-%%% "integer()"
-%%% > gradualizer:type_of("fun (A) -> #{tag => my_map, list_of_as => [ A || _ <- lists:seq(1, 5) ]} end").
-%%% {type,0,'fun',
-%%%       [{type,0,product,[{type,0,any,[]}]},
-%%%        {type,0,map,
-%%%              [{type,0,map_field_assoc,[{atom,0,tag},{atom,0,my_map}]},
-%%%               {type,0,map_field_assoc,
-%%%                     [{atom,0,list_of_as},{type,0,list,[{type,0,any,[]}]}]}]}]}
-%%% > typelib:pp_type(v(-1)).
-%%% "fun((any()) -> #{tag => my_map, list_of_as => [any()]})"
-%%% '''
-%%%
-%%% The main library API of Gradualizer are `type_check_(file|module|dir)' functions.
-%%% These accept the following options:
-%%% - `{i, Dir}': Include path for `-include' and `-include_lib' when checking
-%%%   Erlang source files. Specify multiple times for multiple include paths.
-%%% - `stop_on_first_error': if `true' stop type checking at the first error,
-%%%   if `false' continue checking all functions in the given file and all files
-%%%   in the given directory.
-%%% - `crash_on_error': if `true' crash on the first produced error
-%%% - `return_errors': if `true', turns off error printing and errors
-%%%   (in their internal format) are returned in a list instead of being
-%%%   condensed into a single ok | nok.
-%%% - `fmt_location': how to format location when pretty printing errors
-%%%   - `none': no location for easier comparison
-%%%   - `brief': for machine processing ("LINE:COLUMN:" before message text)
-%%%   - `verbose' (default): for human readers
-%%%     ("on line LINE at column COLUMN" within the message text)
-%%% - `fmt_expr_fun': function to pretty print an expression AST
-%%%   (useful to support other languages)
-%%% - `fmt_type_fun': function to pretty print a type AST
-%%%   (useful to support other languages)
-%%% - `{color, always | never | auto}': Use colors when printing fancy messages.
-%%%   Auto is the default but auto-detection of tty doesn't work when running
-%%%   as an escript. It works when running from the Erlang shell though.
-%%% - `{fancy, boolean()}': Use fancy error messages when possible. True by
-%%%   default. Doesn't work when a custom `fmt_expr_fun' is used.
+%% @doc
+%% Gradualizer is a <em>static type checker</em> for Erlang
+%% with support for <em>gradual typing</em>.
+%%
+%% A static type checker detects errors thanks to type analysis of a given program.
+%% Gradualizer can infer some types, but mostly relies on function specs.
+%% In a nutshell, we could say that it checks for consistency of a function body with its
+%% declared spec and for consistency of a callee's spec with passed in arguments.
+%% Specifically, Gradualizer does not perform entire program flow analysis.
+%%
+%% Gradual typing means that full type information is not required to raise warnings - any type
+%% information is better than no type information. It allows for a _gradual_ transition between
+%% fully static typing, which offers the best correctness guarantee, and fully dynamic typing,
+%% which means the least overhead of writing specs, the full Erlang expressiveness,
+%% and _letting it crash_ at runtime.
+%% We can choose the right balance between the static/dynamic extremes depending on the application,
+%% project maturity, team size, the need for reusability or for documentation consistency.
+%%
+%% <strong>
+%% If you are interested in using Gradualizer to type check your code,
+%% then you might be looking for the Rebar3 plugin {@link rebar_prv_gradualizer}
+%% or the command-line interface {@link gradualizer_cli}.
+%% </strong>
+%%
+%% This module contains entry points for calling into Gradualizer as a library,
+%% as well as some Erlang shell utilities for working directly with the type checker internals.
+%%
+%% Let's try out the shell utilities by running:
+%%
+%% ```
+%% $ rebar3 shell
+%% '''
+%%
+%% Now, we can play with some examples:
+%%
+%% ```
+%% > gradualizer:type_of("[ a || _ <- lists:seq(1, 5) ]").
+%% {type,0,list,[{atom,0,a}]}
+%% > typelib:pp_type(v(-1)).
+%% "[a]"
+%% > typechecker:normalize(gradualizer:type("a()"), gradualizer:env("-type a() :: integer().", [])).
+%% {type,0,integer,[]}
+%% > typelib:pp_type(v(-1)).
+%% "integer()"
+%% > gradualizer:type_of("fun (A) -> #{tag => my_map, list_of_as => [ A || _ <- lists:seq(1, 5) ]} end").
+%% {type,0,'fun',
+%%       [{type,0,product,[{type,0,any,[]}]},
+%%        {type,0,map,
+%%              [{type,0,map_field_assoc,[{atom,0,tag},{atom,0,my_map}]},
+%%               {type,0,map_field_assoc,
+%%                     [{atom,0,list_of_as},{type,0,list,[{type,0,any,[]}]}]}]}]}
+%% > typelib:pp_type(v(-1)).
+%% "fun((any()) -> #{tag => my_map, list_of_as => [any()]})"
+%% '''
+%%
+%% The main library API of Gradualizer are `type_check_(file|module|dir)' functions,
+%% which accept options described by the {@link options()} type.
+%% @end
 -module(gradualizer).
 
 -export([type_check_file/1, type_check_file/2,
@@ -92,6 +71,76 @@
 -export_type([options/0, top/0]).
 
 -type options() :: proplists:proplist().
+%% The options accepted by the Gradualizer API.
+%%
+%% <ul>
+%%   <li>
+%%   `{i, Dir}':
+%%   include path for `-include' and `-include_lib' when checking
+%%   Erlang source files. Specify multiple times for multiple include paths.
+%%   </li>
+%%
+%%   <li>
+%%   `stop_on_first_error':
+%%   if `true' stop type checking on the first error,
+%%   if `false' continue checking all functions in the given file and all files
+%%   in the given directory.
+%%   </li>
+%%
+%%   <li>
+%%   `crash_on_error':
+%%   if `true' crash on the first produced error.
+%%   </li>
+%%
+%%   <li>
+%%   `return_errors':
+%%   return a list of errors instead of printing them and returning a single condensed `ok | nok'.
+%%   </li>
+%%
+%%   <li>
+%%   `fmt_location':
+%%   how to format location when pretty printing errors:
+%%     <ul>
+%%       <li>
+%%       `none':
+%%       no location for easier comparison
+%%       </li>
+%%
+%%       <li>
+%%       `brief':
+%%       for machine processing (`<line>:<column>:' before message text)
+%%       </li>
+%%
+%%       <li>
+%%       `verbose' (default): for human readers
+%%       (`on line <line> at column <column>' within the message text)
+%%       </li>
+%%     </ul>
+%%   </li>
+%%
+%%   <li>
+%%   `fmt_expr_fun':
+%%   function to pretty print an expression AST (useful to support other languages)
+%%   </li>
+%%
+%%   <li>
+%%   `fmt_type_fun':
+%%   function to pretty print a type AST (useful to support other languages)
+%%   </li>
+%%
+%%   <li>
+%%   `{color, always | never | auto}':
+%%   Use colors when printing fancy messages.
+%%   Auto is the default but auto-detection of tty doesn't work when running
+%%   as an escript. It works when running from the Erlang shell though.
+%%   </li>
+%%
+%%   <li>
+%%   `{fancy, boolean()}':
+%%   Use fancy error messages when possible. True by
+%%   default. Doesn't work when a custom `fmt_expr_fun' is used.
+%%   </li>
+%% </ul>
 
 %% This type is the top of the subtyping lattice. It's never expanded.
 %% The definition can be anything apart from any(),

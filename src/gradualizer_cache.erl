@@ -1,9 +1,8 @@
-%%%-------------------------------------------------------------------
-%%% @doc Cache tables for memoizing certain calculated values
-%%% Currently cached
-%%% - glb(Type1, Type2, Module)
-%%% @end
-%%%-------------------------------------------------------------------
+%% @private
+%% @doc Cache tables for memoizing certain calculated values
+%% Currently cached
+%% - glb(Type1, Type2, Module)
+%% @end
 -module(gradualizer_cache).
 
 -behaviour(gen_server).

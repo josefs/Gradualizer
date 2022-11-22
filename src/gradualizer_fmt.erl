@@ -1,3 +1,4 @@
+%% @private
 -module(gradualizer_fmt).
 -export([format_location/2,
          format_type_error/2,

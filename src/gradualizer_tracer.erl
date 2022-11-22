@@ -97,6 +97,7 @@ trace_fun() ->
             io:format("~p\n", [Trace])
     end.
 
+%% @doc Simplify traces with predefined transformations.
 simplify(Args) ->
     %skip_env(Args).
     just_venv(Args).
@@ -123,6 +124,11 @@ just_tenv(Args) ->
               end, Args).
 
 %% @doc Start tracing.
+%%
+%% Check out the source code of this function to see trace pattern examples
+%% matching specific parts of the type checker.
+%% Uncomment the relevant ones or add your own, recompile the project, and start tracing.
+%% @end
 start() ->
     stop(),
     {ok, Tracer} = dbg:tracer(process, {trace_fun(), ok}),
@@ -204,13 +210,17 @@ stop() ->
 %% @doc `debug/1' is a trace point to trace when pinpointing issues across several candidate
 %% locations. Uncomment the below in `start/0':
 %%
-%%   dbg:tpl(?MODULE, debug, x)
+%% ```
+%% dbg:tpl(?MODULE, debug, x)
+%% '''
 %%
 %% Then insert the following somewhere in code, recompile and check the trace for the line from
 %% which `debug/1' was called:
 %%
-%%   gradualizer_tracer:debug(?LINE)
-%%
+%% ```
+%% gradualizer_tracer:debug(?LINE)
+%% '''
+%% @end
 debug(_) -> ok.
 
 %% @doc Wait for flushing all the trace messages to stdout.
