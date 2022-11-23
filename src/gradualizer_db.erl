@@ -144,7 +144,7 @@ import_module(Module) ->
 
 -type opts() :: #{autoimport := boolean(),
                   prelude := boolean(),
-                  specs_override := [file:name()]}.
+                  specs_override := [file:filename()]}.
 -define(default_opts, #{autoimport => true,
                         prelude => true,
                         specs_override => []}).
@@ -307,7 +307,7 @@ import_prelude(State = #state{loaded = Loaded}) ->
     %% are loaded on demand
     State1#state{loaded = Loaded}.
 
--spec import_extra_specs(file:name(), state()) -> state().
+-spec import_extra_specs(file:filename(), state()) -> state().
 import_extra_specs(Dir, State = #state{loaded = Loaded}) ->
     FormsByModule = gradualizer_prelude_parse_trans:get_module_forms_tuples(Dir),
     %% Import forms each of the modules to override
