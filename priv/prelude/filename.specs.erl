@@ -7,3 +7,6 @@
 
 -spec rootname(binary()) -> binary();
               (string() | atom() | deep_list()) -> string().
+
+-spec join([string() | atom() | deep_list()]) -> string();
+          ([string() | atom() | deep_list() | binary()]) -> binary().
