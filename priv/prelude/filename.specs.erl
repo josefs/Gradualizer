@@ -5,6 +5,9 @@
 -spec basename(binary()) -> binary();
               (string() | atom() | deep_list()) -> string().
 
+-spec dirname(binary()) -> binary();
+             (string() | atom() | deep_list()) -> string().
+
 -spec rootname(binary()) -> binary();
               (string() | atom() | deep_list()) -> string().
 
