@@ -431,6 +431,7 @@ import_absform(Module, Forms1, State) ->
 %% Include dirs for OTP apps are given in makefiles. We can never
 %% guarantee to get them right without extracting the types during
 %% compilation.
+-spec guess_include_dirs(file:filename()) -> list().
 guess_include_dirs(File) ->
     Dir = filename:dirname(File),
     case filename:basename(Dir) of
