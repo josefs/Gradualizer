@@ -11,5 +11,13 @@
 -spec rootname(binary()) -> binary();
               (string() | atom() | deep_list()) -> string().
 
--spec join([string() | atom() | deep_list()]) -> string();
-          ([string() | atom() | deep_list() | binary()]) -> binary().
+-type name() :: string() | atom() | deep_list().
+-type bname() :: string() | atom() | deep_list() | binary().
+
+-spec join([name()]) -> string();
+          ([bname()]) -> binary().
+
+-spec join(name(),  name())  -> string();
+          (bname(), name())  -> binary();
+          (name(),  bname()) -> binary();
+          (bname(), bname()) -> binary().
