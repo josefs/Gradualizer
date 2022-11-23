@@ -147,6 +147,7 @@
                | {type_error, type_error(), anno(), atom() | pattern(), type()}
                | {type_error, type_error(), unary_op() | binary_op(), anno(), type()}
                | {type_error, type_error(), binary_op(), anno(), type(), type()}
+               | {type_error, call_intersect, anno(), [type()], type(), expr()}
                | {type_error, call_arity, anno(), atom(), arity(), arity()}
                | {undef, undef(), anno(), {atom(), atom() | non_neg_integer()} | mfa() | expr()}
                | {undef, undef(), expr()}
@@ -2205,8 +2206,12 @@ type_check_call_ty(_Env, {type_error, _}, _Args, {Name, _P, FunTy}) ->
     throw(type_error(Name, FunTy, type('fun'))).
 
 -spec type_check_call_ty_intersect(env(), _, _, _) -> {type(), env(), constraints:t()}.
-type_check_call_ty_intersect(_Env, [], _Args, {Name, P, FunTy}) ->
-    throw(type_error(call_intersect, P, FunTy, Name));
+type_check_call_ty_intersect(Env, [], Args, {Name, P, FunTy}) ->
+    ArgsTys = lists:map(fun (Arg) ->
+                                {ArgTy, _VB, _Cs} = type_check_expr(Env#env{infer = true}, Arg),
+                                ArgTy
+                        end, Args),
+    throw(type_error(call_intersect, P, ArgsTys, FunTy, Name));
 type_check_call_ty_intersect(Env, [Ty | Tys], Args, E) ->
     try
         type_check_call_ty(Env, Ty, Args, E)

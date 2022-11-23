@@ -164,13 +164,14 @@ format_type_error({type_error, call_arity, Anno, Fun, TyArity, CallArity}, Opts)
        TyArity,
        ["s" || TyArity /= 1],
        CallArity]);
-format_type_error({type_error, call_intersect, Anno, FunTy, Name}, Opts) ->
+format_type_error({type_error, call_intersect, Anno, ArgsTys, FunTy, Name}, Opts) ->
     io_lib:format(
-      "~sThe type of the function ~s, called~s doesn't match "
-      "the surrounding calling context.~n"
-      "It has the following type~n~s~n",
+      "~sThe arguments ~s to ~s/~p~s don't match "
+      "the function type:~n~s~n",
       [format_location(Anno, brief, Opts),
+       string:join([ pp_type(ATy, Opts) || ATy <- ArgsTys ], ", "),
        pp_expr(Name, Opts),
+       length(ArgsTys),
        format_location(Anno, verbose, Opts),
        pp_intersection_type(FunTy, Opts)]);
 format_type_error({type_error, expected_fun_type, Anno, Func, FunTy}, Opts) ->
