@@ -238,7 +238,7 @@ type_check_dir(Dir) ->
 type_check_dir(Dir, Opts) ->
     case filelib:is_dir(Dir) of
         true ->
-            Pattern = ?assert_type(filename:join(Dir, "*.{erl,beam}"), file:filename()),
+            Pattern = filename:join(Dir, "*.{erl,beam}"),
             type_check_files(filelib:wildcard(Pattern), Opts);
         false ->
             throw({dir_not_found, Dir})
