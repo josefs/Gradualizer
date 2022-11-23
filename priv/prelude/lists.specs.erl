@@ -3,6 +3,8 @@
 %% This module contains specs to replace incorrect or inexact specs in OTP. The
 %% commented-out specs are the original specs given in OTP 21 (stdlib-3.7.1)
 
+-export_type([deep_list/1]).
+
 -type deep_list(A) :: [A | deep_list(A)].
 
 %% flatten/1,2 are defined using recursive constraints, which is something we
