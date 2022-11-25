@@ -54,6 +54,9 @@
                 end
         end).
 
+-define(a2l(A), atom_to_list(A)).
+-define(i2l(I), integer_to_list(I)).
+
 %% Checks that the location annotation of a type is set to zero and raises an
 %% error if it isn't.
 -define(assert_normalized_anno(Tuple),
@@ -597,14 +600,14 @@ glb_ty(Ty, Ty, _A, _Env) ->
     ret(Ty);
 
 %% Type variables. TODO: can we get here with constrained type variables?
-glb_ty(Var = {var, _, _}, Ty2, _A, _Env) ->
-    V = new_type_var(?MODULE, ?LINE),
+glb_ty(Var = {var, _, VarName}, Ty2, _A, _Env) ->
+    V = new_type_var(VarName, ?MODULE, ?LINE),
     {{var, erl_anno:new(0), V},
      constraints:add_var(V,
                          constraints:combine(constraints:upper(V, Var),
                                              constraints:upper(V, Ty2)))};
-glb_ty(Ty1, Var = {var, _, _}, _A, _Env) ->
-    V = new_type_var(?MODULE, ?LINE),
+glb_ty(Ty1, Var = {var, _, VarName}, _A, _Env) ->
+    V = new_type_var(VarName, ?MODULE, ?LINE),
     {{var, erl_anno:new(0), V},
      constraints:add_var(V,
                          constraints:combine(constraints:upper(V, Var),
@@ -1137,7 +1140,7 @@ expect_list_type(Union = {type, _, union, UnionTys}, N, Env) ->
             {elem_tys, Tys, constraints:empty()}
     end;
 expect_list_type({var, _, Var}, _, _) ->
-    TyVar = new_type_var(?MODULE, ?LINE),
+    TyVar = new_type_var(Var, ?MODULE, ?LINE),
     ElemTy = {var, erl_anno:new(0), TyVar},
     {elem_ty,
      ElemTy,
@@ -1234,7 +1237,7 @@ expect_tuple_type(Union = {type, _, union, UnionTys}, N, Env) ->
 expect_tuple_type(?user_type() = Ty, N, Env) ->
     expect_tuple_type(normalize(Ty, Env), N, Env);
 expect_tuple_type({var, _, Var}, N, _Env) ->
-    TyVars = [ new_type_var(?MODULE, ?LINE) || _ <- lists:seq(1,N) ],
+    TyVars = [ new_type_var(Var, ?MODULE, ?LINE) || _ <- lists:seq(1,N) ],
     Types = [ {var, erl_anno:new(0), TyVar} || TyVar <- TyVars ],
     {elem_ty,
      Types,
@@ -1347,7 +1350,7 @@ expect_fun_type1(Env, {type, _, union, UnionTys}, Arity) ->
     end;
 expect_fun_type1(_Env, {var, _, Var}, Arity) ->
     ArgsTy = lists:duplicate(Arity, type(any)),
-    ResTyVar = new_type_var(?MODULE, ?LINE),
+    ResTyVar = new_type_var(Var, ?MODULE, ?LINE),
     ResTy = {var, erl_anno:new(0), ResTyVar},
     ResTyUpper = {type, erl_anno:new(0), 'fun', [{type, erl_anno:new(0), any},
                                                  {var,  erl_anno:new(0), ResTy}]},
@@ -1458,15 +1461,18 @@ expect_record_union([], AccTy, AccCs, _Record, _Env) ->
 %% @doc Generate a new type variable.
 %%
 %% To avoid generating atoms at runtime a string is returned.
--spec new_type_var(atom(), integer()) -> gradualizer_type:gr_type_var().
-new_type_var(Mod, Line) ->
+-spec new_type_var(atom(), atom(), integer()) -> gradualizer_type:gr_type_var().
+new_type_var(Name0, Mod, Line) ->
     I = case erlang:get(next_type_var) of
             undefined -> 1;
             Next when is_integer(Next) -> Next
         end,
     erlang:put(next_type_var, I+1),
-    lists:flatten(["_TyVar_", atom_to_list(Mod), "_", integer_to_list(Line), "_",
-                   integer_to_list(I)]).
+    Name = if
+               is_atom(Name0) -> ?a2l(Name0);
+               true -> Name0
+           end,
+    lists:flatten([Name, "_", ?a2l(Mod), "_", ?i2l(Line), "_", ?i2l(I), "_"]).
 
 %% TODO: move tenv to back
 -spec bounded_type_list_to_type(env(), [type()]) -> type().
@@ -2918,8 +2924,8 @@ arith_op_arg_types(Op, {type, _, union, Tys}) ->
 %% constrain it appropriately. We generate new type variables for the
 %% two arguments.
 arith_op_arg_types(_Op, VarTy={var, _, TyVar}) ->
-    LTyVar = new_type_var(?MODULE, ?LINE),
-    RTyVar = new_type_var(?MODULE, ?LINE),
+    LTyVar = new_type_var(TyVar, ?MODULE, ?LINE),
+    RTyVar = new_type_var(TyVar, ?MODULE, ?LINE),
     {type_var(LTyVar), type_var(RTyVar),
      constraints:add_var(LTyVar,
      constraints:add_var(RTyVar,
@@ -3469,7 +3475,7 @@ instantiate(T = {var, _, '_'}, Map) ->
 instantiate({var, _, TyVar}, Map) ->
     case maps:get(TyVar, Map, not_found) of
         not_found ->
-            NewTyVar = new_type_var(?MODULE, ?LINE),
+            NewTyVar = new_type_var(TyVar, ?MODULE, ?LINE),
             Type = {var, erl_anno:new(0), NewTyVar},
             {Type, maps:from_list([{NewTyVar, true}]), Map#{TyVar => Type}};
         Ty ->
