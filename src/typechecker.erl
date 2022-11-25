@@ -1460,7 +1460,11 @@ expect_record_union([], AccTy, AccCs, _Record, _Env) ->
 %% To avoid generating atoms at runtime a string is returned.
 -spec new_type_var(atom(), integer()) -> gradualizer_type:gr_type_var().
 new_type_var(Mod, Line) ->
-    I = erlang:unique_integer([positive]),
+    I = case erlang:get(next_type_var) of
+            undefined -> 1;
+            Next when is_integer(Next) -> Next
+        end,
+    erlang:put(next_type_var, I+1),
     lists:flatten(["_TyVar_", atom_to_list(Mod), "_", integer_to_list(Line), "_",
                    integer_to_list(I)]).
 
