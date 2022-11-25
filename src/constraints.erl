@@ -93,12 +93,12 @@ solve(Constraints, Anno, Env) ->
 
 solve_loop([], _, Constraints, _, _, _) ->
     Constraints;
-solve_loop([I = {E, LB, UB} | WL], Seen, Constraints, ElimVars, Anno, Env) ->
+solve_loop([I = {E, LB, UB} | WL], Seen, Constraints0, ElimVars, Anno, Env) ->
     case maps:is_key(I, Seen) of
         true ->
-            solve_loop(WL, Seen, Constraints, ElimVars, Anno, Env);
+            solve_loop(WL, Seen, Constraints0, ElimVars, Anno, Env);
         false ->
-            C = case typechecker:subtype(LB, UB, Env) of
+            Constraints1 = case typechecker:subtype(LB, UB, Env) of
                     false ->
                         throw({constraint_error, Anno, E, LB, UB});
                     {true, Cs} ->
@@ -106,15 +106,17 @@ solve_loop([I = {E, LB, UB} | WL], Seen, Constraints, ElimVars, Anno, Env) ->
                 end,
 
             % Subtyping should not create new existential variables
-            ?assert(C#constraints.exist_vars == #{}),
+            ?assert(Constraints1#constraints.exist_vars == #{}),
 
-            ELowerBounds = maps:with(maps:keys(ElimVars), C#constraints.lower_bounds),
-            EUpperBounds = maps:with(maps:keys(ElimVars), C#constraints.upper_bounds),
+            ELowerBounds = maps:with(maps:keys(ElimVars), Constraints1#constraints.lower_bounds),
+            EUpperBounds = maps:with(maps:keys(ElimVars), Constraints1#constraints.upper_bounds),
 
-            LBounds = gradualizer_lib:merge_with(fun app/3, Constraints#constraints.lower_bounds,
-                                                 C#constraints.lower_bounds),
-            UBounds = gradualizer_lib:merge_with(fun app/3, Constraints#constraints.upper_bounds,
-                                                 C#constraints.upper_bounds),
+            LBounds = gradualizer_lib:merge_with(fun append_values/3,
+                                                 Constraints0#constraints.lower_bounds,
+                                                 Constraints1#constraints.lower_bounds),
+            UBounds = gradualizer_lib:merge_with(fun append_values/3,
+                                                 Constraints0#constraints.upper_bounds,
+                                                 Constraints1#constraints.upper_bounds),
             Constraints2 = #constraints{lower_bounds = LBounds,
                                         upper_bounds = UBounds},
             NewWL = ([ {EVar, Lower, Upper}
@@ -129,5 +131,5 @@ solve_loop([I = {E, LB, UB} | WL], Seen, Constraints, ElimVars, Anno, Env) ->
             solve_loop(NewWL, maps:put(I, true, Seen), Constraints2, ElimVars, Anno, Env)
     end.
 
-app(_, Xs, Ys) ->
+append_values(_, Xs, Ys) ->
     Xs ++ Ys.
