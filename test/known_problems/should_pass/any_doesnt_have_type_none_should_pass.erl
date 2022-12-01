@@ -1,5 +1,7 @@
 -module(any_doesnt_have_type_none_should_pass).
 
+-export([f/2]).
+
 -type type() :: abstract_type().
 
 -type abstract_type() :: af_tuple_type().
