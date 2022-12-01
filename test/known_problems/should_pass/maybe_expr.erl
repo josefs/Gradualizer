@@ -2,7 +2,9 @@
 
 -ifdef(OTP_RELEASE).
 -if(?OTP_RELEASE >= 25).
--if(?FEATURE_ENABLED(maybe_expr)).
+-if(?FEATURE_AVAILABLE(maybe_expr)).
+
+-feature(maybe_expr, enable).
 
 -export([syntax/0]).
 
@@ -11,6 +13,6 @@ syntax() ->
         ok ?= ok
     end.
 
--endif. %% FEATURE_ENABLED
+-endif. %% FEATURE_AVAILABLE
 -endif. %% OTP >= 25
 -endif. %% OTP_RELEASE
