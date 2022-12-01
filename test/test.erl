@@ -57,7 +57,10 @@ gen_should_fail() ->
 gen_known_problem_should_pass() ->
     map_erl_files(
       fun(File) ->
-              ?_assertNotEqual(ok, safe_type_check_file(File))
+              {ok, Forms} = gradualizer_file_utils:get_forms_from_erl(File, []),
+              ExpectedErrors = typechecker:number_of_exported_functions(Forms),
+              ReturnedErrors = length(safe_type_check_file(File, [return_errors])),
+              ?_assertEqual(ExpectedErrors, ReturnedErrors)
       end, "test/known_problems/should_pass").
 
 % Test succeeds if Gradualizer crashes or if it does type check.
@@ -85,8 +88,11 @@ map_erl_files(Fun, Dir) ->
     [{filename:basename(File), Fun(File)} || File <- Files].
 
 safe_type_check_file(File) ->
+    safe_type_check_file(File, []).
+
+safe_type_check_file(File, Opts) ->
     try
-        gradualizer:type_check_file(File)
+        gradualizer:type_check_file(File, Opts)
     catch
         _:_ -> crash
     end.
