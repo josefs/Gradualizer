@@ -1,6 +1,17 @@
 -module(type_refinement_pass).
 
--compile([export_all, nowarn_export_all]).
+-export([basic_type_refinement/1,
+         getenv/1,
+         int_literals_1/1, int_literals_2/1, int_literals_3/1,
+         disjoint_stuff_1/1, disjoint_stuff_2/1, disjoint_stuff_3/1, disjoint_stuff_4/1,
+         var_pat/2,
+         nil_elimination/1,
+         tuple_union/1,
+         tuple_union_2/1,
+         beside_match_all/2,
+         beside_singleton/2,
+         refine_bound_var_by_guard_bifs/1,
+         refine_literals_by_guards/1]).
 
 %% Test that Value is not considered to be string() | false.
 -spec basic_type_refinement(string()) -> string().
@@ -81,3 +92,10 @@ refine_bound_var_by_guard_bifs(X) ->
         is_pid(X)     -> ok;
         true          -> X
     end.
+
+-spec refine_literals_by_guards(banana | 0 | {} | [] | pid()) -> pid().
+refine_literals_by_guards(X) when is_atom(X)    -> self();
+refine_literals_by_guards(X) when is_integer(X) -> self();
+refine_literals_by_guards(X) when is_tuple(X)   -> self();
+refine_literals_by_guards(X) when is_list(X)    -> self();
+refine_literals_by_guards(X)                    -> X.
