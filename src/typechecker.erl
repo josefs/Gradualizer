@@ -77,7 +77,7 @@
 -type type() :: gradualizer_type:abstract_type().
 
 -type form() :: erl_parse:abstract_form().
--type forms() :: gradualizer_file_utils:abstract_forms().
+-type forms() :: [form()].
 
 %% Pattern macros
 -define(type(T), {type, _, T, []}).
