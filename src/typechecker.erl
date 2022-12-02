@@ -987,7 +987,7 @@ flatten_union(Ty, Env) ->
 %% Returns a list of disjoint types.
 -spec merge_union_types([type()], env()) -> [type()].
 merge_union_types(Types, _Env) ->
-    case lists:any(fun (?top()) -> true; (_) -> false end, Types) of
+    case lists:any(fun is_top/1, Types) of
         true ->
             %% gradualizer:top() is among the types.
             [top()];
@@ -999,6 +999,10 @@ merge_union_types(Types, _Env) ->
             OtherTypes3 = lists:usort(OtherTypes2),
             IntegerTypes2 ++ OtherTypes3
     end.
+
+-spec is_top(gradualizer:top()) -> boolean().
+is_top(?top()) -> true;
+is_top(_) -> false.
 
 %% Remove all atom listerals if atom() is among the types.
 -spec merge_atom_types([type()]) -> [type()].
