@@ -1,6 +1,6 @@
 -module(fun_subtyping).
 
--compile([export_all, nowarn_export_all]).
+-export([return_fun_intersection/0]).
 
 -spec return_fun_intersection() -> fun((number()) -> number()).
 return_fun_intersection() -> fun number/1.

@@ -9,11 +9,11 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     name: Erlang ${{matrix.otp}}
     strategy:
       matrix:
-        otp: ['22.3.4.20', '23.3.4.7', '24.3.4.4']
+        otp: ['23.3.4.7', '24.3.4.4', '25.1.2']
     steps:
       - uses: actions/checkout@v2
       - uses: erlef/setup-beam@v1

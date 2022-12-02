@@ -32,6 +32,8 @@
 .PHONY: all
 all: app escript
 
+ERL_OPTS = -enable-feature maybe_expr
+
 # Compilation
 
 erls = $(wildcard src/*.erl)
@@ -143,7 +145,7 @@ end
 endef
 
 eunit: compile-tests
-	erl -noinput -pa ebin -pa test -eval \
+	erl $(ERL_OPTS) -noinput -pa ebin -pa test -eval \
 	 '$(erl_run_eunit), halt().'
 
 cli-tests: bin/gradualizer test/arg.beam
