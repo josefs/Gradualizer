@@ -362,6 +362,12 @@ format_type_error({form_check_timeout, Form}, Opts) ->
                              [form_info(Form),
                               format_location(Form, verbose, Opts)])
        end]);
+format_type_error({unsupported_expression, Anno, Expr}, Opts) ->
+    io_lib:format(
+      "~sThe ~s expression~s is not supported yet~n",
+      [format_location(Anno, brief, Opts),
+       atom_to_list(element(1, Expr)),
+       format_location(Anno, verbose, Opts)]);
 format_type_error({Location, Module, ErrorDescription}, Opts)
   when is_integer(Location) orelse is_tuple(Location),
        is_atom(Module) ->

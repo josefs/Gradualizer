@@ -1903,7 +1903,12 @@ do_type_check_expr(Env, {'try', _, Block, CaseCs, CatchCs, AfterBlock}) ->
           end,
     {normalize({type, erl_anno:new(0), union, [Ty, TyC, TyS]}, Env)
     ,VB
-    ,constraints:combine([Cs1,Cs2,Cs3,Cs4])}.
+    ,constraints:combine([Cs1,Cs2,Cs3,Cs4])};
+
+%% Maybe - value-based error handling expression
+%% See https://www.erlang.org/eeps/eep-0049
+do_type_check_expr(Env, {'maybe', Anno, [{maybe_match, _, _LHS, _RHS}]} = MaybeExpr) ->
+    erlang:throw({unsupported_expression, Anno, MaybeExpr}).
 
 %% Helper for type_check_expr for funs
 -spec type_check_fun(env(), _) -> {type(), env(), constraints:constraints()}.
