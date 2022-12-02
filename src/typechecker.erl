@@ -4663,26 +4663,25 @@ add_type_pat({map, P, AssocPats} = MapPat, MapTy, Env) ->
         {assoc_tys, AssocTys, Cs0} ->
             AssocTys = ?assert_type(AssocTys, [gradualizer_type:af_assoc_type()]),
             %% Check each Key := Value and bind vars in Value.
-            {NewEnv, Css} =
-                lists:foldl(fun ({map_field_exact, _, Key, ValuePat}, {EnvIn, CsAcc}) ->
-                                    case add_type_pat_map_key(Key, AssocTys, EnvIn) of
-                                        {ok, ValueTy, Cs1} ->
-                                            {_ValPatTy, _ValUBound, EnvOut, Cs2} =
-                                                add_type_pat(ValuePat, normalize(ValueTy, EnvIn), EnvIn),
-                                            {EnvOut, [Cs1, Cs2 | CsAcc]};
-                                        error ->
-                                            throw(type_error(badkey, Key, MapTy))
-                                    end
-                            end,
-                            {Env, [Cs0]}, AssocPats),
-                PatTy = case NormMapTy of
-                            ?top() ->
-                                top();
-                            {var, _, _Var} ->
-                                type(none);
-                            ?type(map, Assocs) when is_list(Assocs) ->
-                                rewrite_map_assocs_to_exacts(NormMapTy)
-                        end,
+            CheckAssoc = fun ({map_field_exact, _, Key, ValuePat}, {EnvIn, CsAcc}) ->
+                                 case add_type_pat_map_key(Key, AssocTys, EnvIn) of
+                                     {ok, ValueTy, Cs1} ->
+                                         {_ValPatTy, _ValUBound, EnvOut, Cs2} =
+                                         add_type_pat(ValuePat, normalize(ValueTy, EnvIn), EnvIn),
+                                         {EnvOut, [Cs1, Cs2 | CsAcc]};
+                                     error ->
+                                         throw(type_error(badkey, Key, MapTy))
+                                 end
+                         end,
+            {NewEnv, Css} = lists:foldl(CheckAssoc, {Env, [Cs0]}, AssocPats),
+            PatTy = case NormMapTy of
+                        ?top() ->
+                            top();
+                        {var, _, _Var} ->
+                            type(none);
+                        ?type(map, Assocs) when is_list(Assocs) ->
+                            rewrite_map_assocs_to_exacts(NormMapTy)
+                    end,
             {PatTy, MapTy, NewEnv, constraints:combine(Css)};
         {type_error, _Type} ->
             throw(type_error(pattern, P, MapPat, MapTy))
