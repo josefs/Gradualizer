@@ -3,6 +3,10 @@
   <img src="https://github.com/josefs/Gradualizer/actions/workflows/build-and-test.yml/badge.svg"
        alt="GitHub Actions Build and Test Status" />
 </a>
+<a href="https://hex.pm/packages/gradualizer">
+  <img src="https://img.shields.io/hexpm/v/gradualizer.svg"
+       alt="Gradualizer on Hex.pm" />
+</a>
 
 
 ## A type checker for Erlang
