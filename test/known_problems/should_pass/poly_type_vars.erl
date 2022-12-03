@@ -1,4 +1,4 @@
--module(type_vars).
+-module(poly_type_vars).
 
 -export([foo/1,
          map_type_var/1]).
