@@ -27,7 +27,7 @@ A picture is worth more than a thousand words:
 
 [![](screenshots/exhaustive_type.png) ![](doc/screenshots/exhaustive_type.png)][examples]
 
-[examples]: https://github.com/erszcz/Gradualizer/blob/release-0.2.0/doc/examples.md
+[examples]: https://github.com/josefs/Gradualizer/blob/master/doc/examples.md
 
 
 ## Usage
