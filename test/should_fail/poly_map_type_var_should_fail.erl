@@ -1,4 +1,4 @@
--module(map_type_var_should_fail).
+-module(poly_map_type_var_should_fail).
 
 -export([map_type_var/1]).
 
