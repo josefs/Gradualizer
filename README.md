@@ -23,33 +23,11 @@ It does so by
   When type specs are added the program is checked against
   these specs statically. The more type specs, the more static typing.
 
-An example is worth more than a thousand words:
+A picture is worth more than a thousand words:
 
-```erlang
-     1	-module(exhaustive_type).
-     2
-     3	-export([allergen_score/1]).
-     4
-     5	-type allergen() :: eggs
-     6	                  | chocolate
-     7	                  | pollen
-     8	                  | cats.
-     9
-    10	-spec allergen_score(allergen()) -> integer().
-    11	allergen_score(Al) ->
-    12	    case Al of
-    13	        eggs         ->  1;
-    14	        chocolate    -> 32;
-    15	        pollen       -> 64
-    16	    end.
-```
+[![](screenshots/exhaustive_type.png) ![](doc/screenshots/exhaustive_type.png)][examples]
 
-```
-$ gradualizer test/should_fail/exhaustive_type.erl
-test/should_fail/exhaustive_type.erl: Nonexhaustive patterns on line 13 at column 9
-Example values which are not covered:
-	cats
-```
+[examples]: https://github.com/erszcz/Gradualizer/blob/release-0.2.0/doc/examples.md
 
 
 ## Usage
