@@ -1913,7 +1913,7 @@ do_type_check_expr(Env, {'try', _, Block, CaseCs, CatchCs, AfterBlock}) ->
 
 %% Maybe - value-based error handling expression
 %% See https://www.erlang.org/eeps/eep-0049
-do_type_check_expr(Env, {'maybe', Anno, [{maybe_match, _, _LHS, _RHS}]} = MaybeExpr) ->
+do_type_check_expr(_Env, {'maybe', Anno, [{maybe_match, _, _LHS, _RHS}]} = MaybeExpr) ->
     erlang:throw({unsupported_expression, Anno, MaybeExpr}).
 
 %% Helper for type_check_expr for funs
@@ -5315,6 +5315,7 @@ aux([_|Forms], Acc) ->
     aux(Forms, Acc).
 
 %% Used by test module to cross-check number of reported errors
+-spec number_of_exported_functions(forms()) -> non_neg_integer().
 number_of_exported_functions(Forms) ->
     ParseData = typechecker:collect_specs_types_opaques_and_functions(Forms),
     case ParseData#parsedata.export_all of
