@@ -1658,6 +1658,10 @@ do_type_check_expr(Env, {call, _, {atom, _, TypeOp}, [Expr, {string, _, TypeStr}
 do_type_check_expr(Env, {call, _, {atom, _, record_info}, [_, _]} = Call) ->
     Ty = get_record_info_type(Call, Env),
     {Ty, Env, constraints:empty()};
+do_type_check_expr(Env, {call, P, {remote, _, _Mod, {atom, _, module_info}} = Name, Args}) ->
+    Arity = arity(length(Args)),
+    FunTy = get_module_info_type(Arity),
+    type_check_call_ty(Env, expect_fun_type(Env, FunTy, Arity), Args, {Name, P, FunTy});
 do_type_check_expr(Env, {call, P, Name, Args}) ->
     Arity = arity(length(Args)),
     {FunTy, VarBinds1, Cs1} = type_check_fun(Env, Name, Arity),
@@ -2543,6 +2547,11 @@ do_type_check_expr_in(Env, ResTy, {call, _, {atom, _, record_info}, [_, _]} = Ca
         false ->
             throw(type_error(Call, ResTy, Ty))
     end;
+do_type_check_expr_in(Env, ResTy, {call, P, {remote, _, _Mod, {atom, _, module_info}} = Name, Args} = Call) ->
+    Arity = arity(length(Args)),
+    FunTy = get_module_info_type(Arity),
+    type_check_call(Env, ResTy, Call, expect_fun_type(Env, FunTy, Arity),
+                    Args, {P, Name, FunTy});
 do_type_check_expr_in(Env, ResTy, {call, P, Name, Args} = OrigExpr) ->
     Arity = arity(length(Args)),
     {FunTy, VarBinds, Cs} = type_check_fun(Env, Name, Arity),
@@ -4944,9 +4953,16 @@ type_record(Name, Fields) ->
 type_field_type(Name, Type) ->
     {type, erl_anno:new(0), field_type, [{atom, erl_anno:new(0), Name}, Type]}.
 
+-spec type_fun([type()], type()) -> type().
+type_fun(Args, ResTy) ->
+    type('fun', [type(product, Args), ResTy]).
+
 type_fun(Arity) ->
-    Args = [{type, erl_anno:new(0), any, []} || _ <- lists:seq(1, Arity)],
-    {type, erl_anno:new(0), 'fun', [{type, erl_anno:new(0), product, Args}, {type, erl_anno:new(0), any, []}]}.
+    Args = [type(any) || _ <- lists:seq(1, Arity)],
+    type_fun(Args, type(any)).
+
+type_atom(Name) ->
+    {atom, erl_anno:new(0), Name}.
 
 is_power_of_two(0) -> false;
 is_power_of_two(1) -> true;
@@ -5094,6 +5110,31 @@ record_field_types(Fields) ->
                   (?typed_record_field(Name, Type)) ->
                       {Name, Type}
               end, Fields).
+
+% Helper returning the type of module_info/0 and module_info/1 functions
+-spec get_module_info_type(arity()) -> fun_ty().
+get_module_info_type(0) ->
+    Options = get_module_info_options(),
+    DefaultKeys = [module, attributes, compile, exports, md5, native],
+    DefaultOpts = lists:filter(fun ({Key, _}) -> lists:member(Key, DefaultKeys) end, Options),
+    TupleTys = lists:map(fun ({Key, Ty}) -> type(tuple, [type_atom(Key), Ty]) end, DefaultOpts),
+    type_fun([], type(list, [type(union, TupleTys)]));
+get_module_info_type(1) ->
+    Options = get_module_info_options(),
+    lists:map(fun ({Key, Type}) -> type_fun([type_atom(Key)], Type) end, Options).
+
+-spec get_module_info_options() -> #{atom() => type()}.
+get_module_info_options() ->
+    [
+        {module, type(module)},
+        {attributes, type(list, [type(tuple, [type(atom), type(any)])])},
+        {compile, type(list, [type(tuple, [type(any), type(any)])])},
+        {md5, type(binary)},
+        {exports, type(list, [type(tuple, [type(atom), type(arity)])])},
+        {functions, type(list, [type(tuple, [type(atom), type(arity)])])},
+        {nifs, type(list, [type(tuple, [type(atom), type(arity)])])},
+        {native, type(boolean)}
+    ].
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% Main entry point
