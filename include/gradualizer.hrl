@@ -29,7 +29,10 @@
 -compile({nowarn_unused_function, ['::'/2, ':::'/2]}).
 -ignore_xref(['::'/2, ':::'/2]).
 
+-spec '::'(any(), any()) -> any().
 '::'(Expr, _Type) -> Expr.
+
+-spec ':::'(any(), any()) -> any().
 ':::'(Expr, _Type) -> Expr.
 
 %% Type annotation

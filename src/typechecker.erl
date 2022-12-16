@@ -102,6 +102,7 @@
           functions  = []    :: list()
          }).
 
+-type af_field_name() :: gradualizer_type:af_field_name().
 -type record_field() :: gradualizer_type:af_record_field(expr()).
 -type typed_record_field() :: {typed_record_field, record_field(), type()}.
 
@@ -221,6 +222,7 @@ compat(T1, T2, Seen, Env) ->
             compat_ty(Ty1, Ty2, maps:put({T1, T2}, true, Seen), Env)
     end.
 
+-spec compat_seen({type(), type()}, #{ {type(), type()} := true }) -> boolean().
 compat_seen({T1, T2}, Seen) ->
     maps:get({T1, T2}, Seen, false).
 
@@ -499,10 +501,10 @@ get_maybe_remote_record_fields(RecName, Anno, Env) ->
 
 %% Looks up a record in the supplied type environment and returns its typed
 %% fields.
--spec get_record_fields(RecName :: atom(),
-                        Anno    :: erl_anno:anno(),
-                        Env     :: env()) ->
-                               [{typed_record_field, _, _}].
+-spec get_record_fields(RecName, Anno, Env) -> [typed_record_field()] when
+      RecName :: atom(),
+      Anno    :: erl_anno:anno(),
+      Env     :: env().
 get_record_fields(RecName, _Anno, #env{tenv = #{records := REnv}}) ->
     maps:get(RecName, REnv). % It must exist. Otherwise it's a compile error.
 
@@ -551,6 +553,7 @@ glb(T1, T2, A, Env) ->
     end.
 
 %% A standalone function is easier to debug / trace.
+-spec stop_glb_recursion(type(), type(), #{ {type(), type()} := any() }) -> boolean().
 stop_glb_recursion(T1, T2, A) ->
     maps:is_key({T1, T2}, A).
 
@@ -941,6 +944,7 @@ expand_builtin_aliases(Type) ->
 flatten_unions(Tys, Env) ->
     lists:flatmap(fun (Ty) -> flatten_union(Ty, Env) end, Tys).
 
+-spec flatten_union(type(), env()) -> [type()].
 flatten_union({user_type, _, _, _} = Ty, _Env) ->
     [Ty];
 flatten_union({type, _, none, []}, _Env) ->
@@ -969,6 +973,7 @@ merge_union_types(Types, _Env) ->
     end.
 
 %% Remove all atom listerals if atom() is among the types.
+-spec merge_atom_types([type()]) -> [type()].
 merge_atom_types(Types) ->
     IsAnyAtom = lists:any(fun ({type, _, atom, []}) -> true;
                               (_)                   -> false
@@ -986,6 +991,7 @@ merge_atom_types(Types) ->
 
 %% Input arg must be already normalized!
 %% That being said, we still accept Env in case of other options that might be stored there.
+-spec negate_num_type(type(), env()) -> type().
 negate_num_type({type, _, TyName, []} = Ty, _Env) when
       TyName =:= any;
       TyName =:= integer;
@@ -1010,6 +1016,7 @@ negate_num_type(RangeTy, _Env) ->
     %% some kind of range type like `1..3' or `neg_integer()'
     gradualizer_int:negate_int_type(RangeTy).
 
+-spec negate_bool_type(type()) -> type().
 negate_bool_type({atom, P, true}) ->
     {atom, P, false};
 negate_bool_type({atom, P, false}) ->
@@ -1111,6 +1118,7 @@ expect_list_type({var, _, Var}, _, _) ->
 expect_list_type(Ty, _, _) ->
     {type_error, Ty}.
 
+-spec rewrite_list_to_nonempty_list(type()) -> type().
 rewrite_list_to_nonempty_list({type, Ann, T, [ElemTy]})
   when T == list orelse T == nonempty_list ->
     {type, Ann, nonempty_list, [ElemTy]};
@@ -1156,6 +1164,7 @@ expect_list_union([], AccTy, AccCs, any, _N, _Env) ->
 expect_list_union([], AccTy, AccCs, _NoAny, _N, _Env) ->
     {AccTy, AccCs}.
 
+-spec infer_literal_string(string(), env()) -> type().
 infer_literal_string("", _Env) ->
     type(nil);
 infer_literal_string(Str, Env) ->
@@ -1206,6 +1215,9 @@ expect_tuple_type(Ty, _N, _) ->
     {type_error, Ty}.
 
 
+-spec expect_tuple_union(Tys, Tys, constraints:t(), any | no_any, non_neg_integer(), env()) -> R when
+      Tys :: [type()],
+      R :: {Tys, constraints:t()}.
 expect_tuple_union([Ty|Tys], AccTy, AccCs, Any, N, Env) ->
     case expect_tuple_type(Ty, N, Env) of
         {type_error, _} ->
@@ -1401,6 +1413,9 @@ expect_record_type({type, _, any, []}, _Record, _Env) ->
 expect_record_type(_, Ty, _) ->
     {type_error, Ty}.
 
+-spec expect_record_union(Tys, Tys, constraints:t(), any | no_any, atom(), env()) -> R when
+      Tys :: [type()],
+      R :: {Tys, constraints:t()}.
 expect_record_union([Ty | Tys], AccTy, AccCs, Any, Record, Env) ->
     case expect_record_type(Ty, Record, Env) of
         {type_error, _} ->
@@ -1503,8 +1518,10 @@ solve_bounds(_, _, [{cyclic, Xs} | _], _) ->
     throw({cyclic_dependencies, Xs});
 solve_bounds(_, _, [], Acc) -> Acc.
 
+-spec free_vars(type()) -> #{atom() | string() := true}.
 free_vars(Ty) -> free_vars(Ty, #{}).
 
+-spec free_vars(type(), #{atom() | string() := true}) -> #{atom() | string() := true}.
 free_vars({var, _, '_'}, Vars) ->
     Vars;
 free_vars({var, _, X}, Vars) ->
@@ -1515,6 +1532,7 @@ free_vars({type, _, _, Args}, Vars) ->
     free_vars(Args, Vars);
 free_vars(_, Vars) -> Vars.
 
+-spec subst_ty(#{atom() | string() := type()}, type()) -> type() | [type()].
 subst_ty(Sub, Ty = {var, _, X}) ->
     maps:get(X, Sub, Ty);
 subst_ty(Sub, {type, P, Name, Args}) ->
@@ -2168,6 +2186,7 @@ type_check_call_ty_union(Env, Tys, Args, E) ->
      union_var_binds(VBs, Env),
      constraints:combine(Css)}.
 
+-spec compat_arith_type(type(), type(), env()) -> {type(), constraints:t()} | false.
 compat_arith_type(Any = {type, _, any, []}, {type, _, any, []}, _Env) ->
     {Any, constraints:empty()};
 compat_arith_type(Any = {type, _, any, []}, Ty, Env) ->
@@ -2759,6 +2778,7 @@ type_check_arith_op_in(Env, Kind, ResTy, Op, P, Arg1, Arg2) ->
             end
     end.
 
+-spec arith_op_do_check(type(), type(), expr(), expr(), env()) -> {env(), constraints:t()}.
 arith_op_do_check(ArgTy1, ArgTy2, Arg1, Arg2, Env) ->
     {VarBinds1, Cs1} = type_check_expr_in(Env, ArgTy1, Arg1),
     {VarBinds2, Cs2} = type_check_expr_in(Env, ArgTy2, Arg2),
@@ -2768,6 +2788,10 @@ arith_op_do_check(ArgTy1, ArgTy2, Arg1, Arg2, Env) ->
 %% application against a given type.
 
 %% any() is always fine
+-spec arith_op_arg_types(atom(), type()) -> R when
+      R :: false
+         | {type(), type(), constraints:constraints()}
+         | { {type(), type()}, {type(), type()}, constraints:constraints() }.
 arith_op_arg_types(_Op, Ty = {type, _, any, []}) ->
     {Ty, Ty, constraints:empty()};
 
@@ -3016,6 +3040,7 @@ type_check_unary_op_in(Env, ResTy, Op, P, Arg) ->
 
 %% Which type should we check the argument against if we want the given type
 %% out? We already know that Ty is a subtype of the return type of the operator.
+-spec unary_op_arg_type(atom(), type()) -> type().
 unary_op_arg_type('+', Ty) -> Ty;
 unary_op_arg_type(Op, {type, _, union, Tys}) ->
     type(union, [ unary_op_arg_type(Op, Ty) || Ty <- Tys ]);
@@ -3143,6 +3168,7 @@ type_check_assocs(Env, [{Assoc, _P, Key, Val}| Assocs])
 type_check_assocs(Env, []) ->
     {[], Env, constraints:empty()}.
 
+-spec update_map_type(type(), [type()]) -> type().
 update_map_type(?type(Ty, Arg), AssocTys)
     when Ty == map, Arg == any;
          Ty == any, Arg == [] ->
@@ -3168,6 +3194,7 @@ update_map_type(Type, _AssocTys) ->
 
 %% Override existing key's value types and append those key types
 %% which are not updated
+-spec update_assocs(_, _) -> [type()].
 update_assocs([{type, _, _Assoc, [Key, ValueType]} | AssocTys],
 	      Assocs) ->
     [type(map_field_exact, [Key, ValueType]) |
@@ -3181,6 +3208,7 @@ update_assocs([{type, _, _Assoc, [Key, ValueType]} | AssocTys],
 update_assocs([], Assocs) ->
     Assocs.
 
+-spec take_assoc(_, _, _) -> {value, type(), [type()]} | false.
 take_assoc(Key, [Assoc = ?type(_, [Key, _VTy])|T], L) ->
     {value, Assoc, lists:reverse(L, T)};
 take_assoc(Key, [H|Assocs], L) ->
@@ -3364,6 +3392,7 @@ get_bounded_fun_type_list(Name, Arity, Env, P) ->
             end
     end.
 
+-spec get_imported_bounded_fun_type_list(atom(), arity(), env(), anno()) -> [type()] | error.
 get_imported_bounded_fun_type_list(Name, Arity, Env, P) ->
     case maps:find({Name, Arity}, Env#env.imported) of
         {ok, Module} ->
@@ -3376,6 +3405,7 @@ get_imported_bounded_fun_type_list(Name, Arity, Env, P) ->
         error -> error
     end.
 
+-spec get_atom(env(), _) -> atom().
 get_atom(_Env, Atom = {atom, _, _}) ->
     Atom;
 get_atom(Env, {var, _, Var}) ->
@@ -3444,6 +3474,9 @@ check_clauses_intersect(Env, Tys, Clauses) ->
                                                end, FunTys)),
     check_clauses_intersection(Env, FunTys, {Clauses, #{}, RefinedArgsTyss}, Clauses, bind_vars).
 
+-spec check_clauses_union(env(), [fun_ty()], Clauses) -> R when
+      Clauses :: [gradualizer_type:abstract_clause(), ...],
+      R :: {env(), constraints()}.
 check_clauses_union(_Env, [], _Clauses) ->
     %% TODO: Improve quality of type error
     throw(type_error(check_clauses));
@@ -3563,6 +3596,7 @@ check_clauses(Env, ArgsTy, ResTy, Clauses, Caps) ->
     Env3 = pop_clauses_controls(Env2),
     {union_var_binds(VarBindsList, Env3), constraints:combine(Css)}.
 
+-spec check_clauses_intersection_throw_if_seen(_, _, _, _, _) -> ok | {type_error, _}.
 check_clauses_intersection_throw_if_seen(ArgsTys, RefinedArgsTy, Clause, Seen, Env) ->
     case maps:get({ArgsTys, Clause}, Seen, false) of
         false ->
@@ -3574,6 +3608,11 @@ check_clauses_intersection_throw_if_seen(ArgsTys, RefinedArgsTy, Clause, Seen, E
             {type_error, ClauseError}
     end.
 
+-spec check_reachable_clauses(type(), list(), _Caps, [env()], _Cs, [type()], env()) -> R when
+      R :: {[env()],
+            constraints:constraints(),
+            [type()],
+            env()}.
 check_reachable_clauses(_ResTy, [], _Caps, VBs, Cs, RefinedArgsTys, Env) ->
     {VBs, Cs, RefinedArgsTys, Env};
 check_reachable_clauses(_ResTy, Clauses, _Caps, _, _, [?type(none)|_], _Env) ->
@@ -3584,16 +3623,19 @@ check_reachable_clauses(ResTy, [Clause | Clauses], Caps, VBs, Css, RefinedArgsTy
     check_reachable_clauses(ResTy, Clauses, Caps, [Env2 | VBs], [Cs | Css],
                             NewRefinedArgsTys, Env2#env{venv = VB}).
 
+-spec push_clauses_controls(env(), #clauses_controls{}) -> env().
 push_clauses_controls(#env{} = Env, #clauses_controls{} = CC) ->
     ?verbose(Env, "Pushing ~p~n", [CC]),
     CStack = Env#env.clauses_stack,
     Env#env{clauses_stack = [CC | CStack]}.
 
+-spec pop_clauses_controls(env()) -> env().
 pop_clauses_controls(#env{} = Env) ->
     ?verbose(Env, "Popping clauses controls~n", []),
     [_ | CStack] = Env#env.clauses_stack,
     Env#env{clauses_stack = CStack}.
 
+-spec disable_exhaustiveness_check(env()) -> env().
 disable_exhaustiveness_check(#env{} = Env) ->
     [CC | CStack] = Env#env.clauses_stack,
     NewCC = CC#clauses_controls{exhaust = false},
@@ -3617,6 +3659,8 @@ disable_exhaustiveness_check(#env{} = Env) ->
 %% Currently, exhaustiveness checking is disabled if a clause has any guards.
 %% TODO: Exhaustiveness checking might be improved in the future to handle (some) guards.
 %% @end
+-spec check_arg_exhaustiveness(env(), [type()], Clauses, [type()]) -> ok when
+      Clauses :: [gradualizer_type:abstract_clause(), ...].
 check_arg_exhaustiveness(Env, ArgTys, Clauses, RefinedArgTys) ->
     case exhaustiveness_checking(Env) andalso
          all_refinable(ArgTys, Env) andalso
@@ -3630,18 +3674,22 @@ check_arg_exhaustiveness(Env, ArgTys, Clauses, RefinedArgTys) ->
             ok
     end.
 
+-spec exhaustiveness_checking(env()) -> boolean().
 exhaustiveness_checking(#env{} = Env) ->
     [#clauses_controls{} = B | _] = Env#env.clauses_stack,
     Exhaust = B#clauses_controls.exhaust,
     ?verbose(Env, "Exhaustiveness checking: ~p~n", [Exhaust]),
     Exhaust.
 
+-spec all_refinable(_, env()) -> boolean().
 all_refinable(any, _Env) -> false;
 all_refinable(Types, Env) -> lists:all(fun (Ty) -> refinable(Ty, Env) end, Types).
 
+-spec no_clause_has_guards(_) -> boolean().
 no_clause_has_guards(Clauses) ->
     lists:all(fun no_guards/1, Clauses).
 
+-spec some_type_not_none([type()]) -> boolean().
 some_type_not_none(Types) when is_list(Types) ->
     lists:any(fun (T) -> T =/= type(none) end, Types).
 
@@ -3743,6 +3791,7 @@ type_diff(Ty1, Ty2, Env) ->
 %% Helper for type_diff/3.
 %% Normalize, refine by OrigTy \ Ty, revert normalize if result is
 %% unchanged.  May throw no_refinement.
+-spec refine(type(), type(), map(), env()) -> type().
 refine(OrigTy, Ty, Trace, Env) ->
     %% If we're being called recursively and see OrigTy again throw no_refinement.
     %% This is a safeguard similar to the mutual recurson of glb/glb_ty,
@@ -3938,6 +3987,7 @@ refine_map_field_ty({?type(AssocTag1, _) = Assoc1, ?type(AssocTag2, _)})
     %% TODO: this might lead to duplicates in the resulting type!
     [Assoc1].
 
+-spec deduplicate_list(list()) -> list().
 deduplicate_list(List) ->
     {L, _} = lists:foldl(fun(Elem, {LAcc, SAcc}) ->
                                  case maps:is_key(Elem, SAcc) of
@@ -3958,6 +4008,7 @@ deduplicate_list(List) ->
 %%      [Ty1, Ty2, Ty3, ..., RefTyN]].
 %%
 %% If RefTyI == none() for any I, that list I is excluded.
+-spec pick_one_refinement_each([type()], [type()]) -> [type()].
 pick_one_refinement_each([], []) -> [];
 pick_one_refinement_each([Ty|Tys], [RefTy|RefTys]) ->
     %% The lists (zero or one list) where we refine head and keep tail
@@ -4085,6 +4136,7 @@ mta({user_type, Anno, Name, Args}, Env) ->
 mta(Type, _Env) ->
     Type.
 
+-spec no_guards(_) -> boolean().
 no_guards({clause, _, _, Guards, _}) ->
     Guards == [].
 
@@ -4117,6 +4169,7 @@ refine_vars_by_mismatching_clause({clause, _, Pats, Guards, _Block}, VEnv, Env) 
 %%
 %% See also `should_list_pat_enable_exhaustiveness_check/1', which is similar,
 %% but incomplete and specific to list patterns.
+-spec are_patterns_matching_all_input([pattern()], map()) -> boolean().
 are_patterns_matching_all_input([], _VEnv) ->
     true;
 are_patterns_matching_all_input([{var, _, '_'} | Pats], VEnv) ->
@@ -4159,6 +4212,7 @@ check_guard_call(_Fun, _Vars) -> #{}.
 %%            < tuple < map < nil < list < bitstring
 %%
 %% Note: This function may return non-standard ranges like 10..pos_inf
+-spec type_comp_op(atom(), any()) -> type().
 type_comp_op('=<', I) when is_integer(I) ->
     IntTypes = gradualizer_int:int_range_to_types({neg_inf, I}),
     type(union, [type(float) | IntTypes]);
@@ -4190,6 +4244,7 @@ type_comp_op(_Op, _Val) ->
 
 %% "Mirrors" a comparison operator to preserve equivalence when swapping the left
 %% and right operands. Used for e.g. transforming A < B to B > A.
+-spec mirror_comp_op(atom())  -> atom().
 mirror_comp_op('<')  -> '>';
 mirror_comp_op('>')  -> '<';
 mirror_comp_op('>=') -> '=<';
@@ -4333,6 +4388,7 @@ add_types_pats([Pat | Pats], [Ty | Tys], Env, PatTysAcc, UBoundsAcc, CsAcc) ->
     UBound = denormalize(Ty, UBoundNorm, NormTy),
     add_types_pats(Pats, Tys, Env2, [PatTy|PatTysAcc], [UBound|UBoundsAcc], [Cs1|CsAcc]).
 
+-spec denormalize(type(), type(), type()) -> type().
 denormalize(OrigTy, ComputedTy, NormTy) ->
     case ComputedTy of
         NormTy -> OrigTy;
@@ -4560,6 +4616,11 @@ add_type_pat(OpPat = {op, _Anno, _Op, _Pat}, Ty, Env) ->
 add_type_pat(Pat, Ty, _Env) ->
     throw(type_error(pattern, element(2, Pat), Pat, Ty)).
 
+-spec add_type_pat_union(pattern(), type(), env()) -> R when
+      R :: {PatTy :: type(),
+            UBound :: type(),
+            NewEnv :: env(),
+            constraints:constraints()}.
 add_type_pat_union(Pat, ?type(union, UnionTys) = UnionTy, Env) ->
     {PatTys, UBounds, Envs, Css} =
         lists:foldr(fun (Ty, {PatTysAcc, UBoundsAcc, EnvAcc, CsAcc} = Acc) ->
@@ -4595,6 +4656,7 @@ add_type_pat_union(Pat, ?type(union, UnionTys) = UnionTy, Env) ->
 %%
 %% See also `are_patterns_matching_all_input/2',
 %% which is similar, but limited to variable patterns.
+-spec should_list_pat_enable_exhaustiveness_check(expr()) -> boolean().
 should_list_pat_enable_exhaustiveness_check({nil, _}) -> true;
 should_list_pat_enable_exhaustiveness_check({cons, _, {var, _, _}, {var, _, _}}) -> true;
 should_list_pat_enable_exhaustiveness_check(_) -> false.
@@ -4602,6 +4664,7 @@ should_list_pat_enable_exhaustiveness_check(_) -> false.
 %% TODO: This is incomplete!
 %% To properly check pattern exhaustiveness we have to consider bound variables.
 %% Pattern: `<<>>'
+-spec should_bin_pat_enable_exhaustiveness_check(list()) -> boolean().
 should_bin_pat_enable_exhaustiveness_check([]) ->
     true;
 %% Pattern: `<<_, _/bytes>>'
@@ -4665,13 +4728,15 @@ add_type_pat_literal(Pat, Ty, Env) ->
             end
     end.
 
+-spec find_field_or_create([record_field()], atom(), expr()) -> record_field().
 find_field_or_create([], Name, Default) -> {record_field, erl_anno:new(0), {atom, erl_anno:new(0), Name}, Default};
 find_field_or_create([Field = ?record_field(Name)|_], Name, _Default) -> Field;
 find_field_or_create([_|Fields], Name, Default) -> find_field_or_create(Fields, Name, Default).
 
+-spec find_field_default([record_field()]) -> expr().
 find_field_default([]) -> {var, erl_anno:new(0), '_'};
-find_field_default([{record_field, _, {var, _, '_'}, Exp}|_]) -> Exp;
-find_field_default([_|Fields]) -> find_field_default(Fields).
+find_field_default([{record_field, _, {var, _, '_'}, Exp} | _]) -> Exp;
+find_field_default([_ | Fields]) -> find_field_default(Fields).
 
 -spec add_type_pat_fields(_, _, env()) -> any().
 add_type_pat_fields([], _, Env) ->
@@ -4944,15 +5009,19 @@ top() ->
     {remote_type, erl_anno:new(0), [{atom, erl_anno:new(0), gradualizer}
 				   ,{atom, erl_anno:new(0), top},[]]}.
 
+-spec type_var(atom()) -> type().
 type_var(Name) ->
     {var, erl_anno:new(0), Name}.
 
+-spec type_record(atom()) -> type().
 type_record(Name) ->
     type_record(Name, []).
 
+-spec type_record(atom(), list()) -> type().
 type_record(Name, Fields) ->
     {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Name} | Fields]}.
 
+-spec type_field_type(atom(), type()) -> type().
 type_field_type(Name, Type) ->
     {type, erl_anno:new(0), field_type, [{atom, erl_anno:new(0), Name}, Type]}.
 
@@ -4960,13 +5029,16 @@ type_field_type(Name, Type) ->
 type_fun(Args, ResTy) ->
     type('fun', [type(product, Args), ResTy]).
 
+-spec type_fun(arity()) -> type().
 type_fun(Arity) ->
     Args = [type(any) || _ <- lists:seq(1, Arity)],
     type_fun(Args, type(any)).
 
+-spec type_atom(atom()) -> type().
 type_atom(Name) ->
     {atom, erl_anno:new(0), Name}.
 
+-spec is_power_of_two(_) -> boolean().
 is_power_of_two(0) -> false;
 is_power_of_two(1) -> true;
 is_power_of_two(N) when N rem 2 == 0 ->
@@ -5053,6 +5125,7 @@ update_var_type(Env, A, Ty) ->
     Env#env{venv = VEnv#{A := Ty}}.
 
 %% From a record field name, find the default value from the typed list of record field definitions
+-spec get_rec_field_default(af_field_name(), [typed_record_field()]) -> expr().
 get_rec_field_default({atom, _, FieldName},
                     [{typed_record_field,
                         {record_field, _, {atom, _, FieldName}, Default}, _}|_]) ->
@@ -5062,11 +5135,15 @@ get_rec_field_default(FieldWithAnno, [_|RecFields]) ->
 get_rec_field_default(FieldWithAnno, []) ->
     throw(undef(record_field, FieldWithAnno)).
 
+-spec get_rec_field_type(af_field_name(), [{atom(), type()}]) -> type().
 get_rec_field_type(FieldWithAnno, RecFields) ->
     %% The first field is the second element of the tuple - so start from 2
     {_Index, Ty} = get_rec_field_index_and_type(FieldWithAnno, RecFields, 2),
     Ty.
 
+-spec get_rec_field_type(af_field_name(), FieldTypes, FieldTypes) -> R when
+      FieldTypes :: [{atom(), type()}],
+      R :: type().
 get_rec_field_type(FieldWithAnno, FieldTypes1, FieldTypes2) ->
     {_, _, Name} = FieldWithAnno,
     case lists:keyfind(Name, 1, FieldTypes1) of
@@ -5079,14 +5156,15 @@ get_rec_field_type(FieldWithAnno, FieldTypes1, FieldTypes2) ->
             end
     end.
 
+-spec get_rec_field_index(af_field_name(), [typed_record_field()]) -> pos_integer().
 get_rec_field_index(FieldWithAnno, RecFields) ->
     %% The first field is the second element of the tuple - so start from 2
     {Index, _Ty} = get_rec_field_index_and_type(FieldWithAnno, RecFields, 2),
     Index.
 
-get_rec_field_index_and_type({atom, _, FieldName},
-                   [{typed_record_field,
-                     {record_field, _, {atom, _, FieldName}, _}, Ty}|_], I) ->
+-spec get_rec_field_index_and_type(af_field_name(), [typed_record_field()], pos_integer()) -> R when
+      R :: {pos_integer(), type()}.
+get_rec_field_index_and_type({atom, _, FieldName}, [?typed_record_field(FieldName, Ty) | _], I) ->
     {I, Ty};
 get_rec_field_index_and_type(FieldWithAnno, [_|RecFieldTypes], I) ->
     get_rec_field_index_and_type(FieldWithAnno, RecFieldTypes, I + 1);
@@ -5106,6 +5184,7 @@ get_record_info_type({call, Anno, {atom, _, record_info},
     Fields = get_record_fields(RecName, Anno, Env),
     {integer, erl_anno:new(0), length(Fields) + 1}.
 
+-spec record_field_types(list()) -> [{atom(), type()}].
 record_field_types(Fields) ->
     lists:map(fun
                   (?type_field_type(Name, Type)) ->
@@ -5259,8 +5338,10 @@ create_env(#parsedata{module    = Module
          union_size_limit = proplists:get_value(union_size_limit, Opts,
                                                 default_union_size_limit())}.
 
+-spec default_union_size_limit() -> non_neg_integer().
 default_union_size_limit() -> 30.
 
+-spec create_fenv(list(), list()) -> map().
 create_fenv(Specs, Funs) ->
 % We're taking advantage of the fact that if a key occurs more than once
 % in the list then it right-most occurrence will take precedence. In this
@@ -5276,11 +5357,12 @@ create_fenv(Specs, Funs) ->
      ).
 
 %% Collect the top level parse tree stuff returned by epp:parse_file/2.
--spec collect_specs_types_opaques_and_functions(Forms :: list()) -> #parsedata{}.
+-spec collect_specs_types_opaques_and_functions(forms()) -> #parsedata{}.
 collect_specs_types_opaques_and_functions(Forms) ->
     aux(Forms, #parsedata{}).
 
 %% Helper for collect_specs_types_opaques_and_functions/1
+-spec aux(forms(), #parsedata{}) -> #parsedata{}.
 aux([], Acc) ->
     Acc;
 aux([Fun={function, _, _, _, _} | Forms], Acc) ->
@@ -5324,6 +5406,7 @@ number_of_exported_functions(Forms) ->
         false -> length(ParseData#parsedata.exports)
     end.
 
+-spec line_no(expr()) -> non_neg_integer().
 line_no(Expr) ->
     erl_anno:line(element(2, Expr)).
 
