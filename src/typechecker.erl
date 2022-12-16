@@ -20,7 +20,8 @@
          bounded_type_list_to_type/2,
          unfold_bounded_type/2]).
 
--compile([warn_missing_spec, warnings_as_errors]).
+-compile([warn_missing_spec, warn_missing_spec_all,
+          warnings_as_errors]).
 
 -include("typelib.hrl").
 
