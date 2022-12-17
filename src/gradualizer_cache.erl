@@ -41,7 +41,7 @@ start_link(Opts) ->
 %% GLB Cache
 %%
 
--spec get_glb(module(), type(), type()) -> false | {type(), constraints:constraints()}.
+-spec get_glb(module(), type(), type()) -> false | {type(), constraints:t()}.
 get_glb(Module, T1, T2) ->
     try ets:lookup(?GLB_CACHE, {Module, T1, T2}) of
         [] ->
@@ -53,7 +53,7 @@ get_glb(Module, T1, T2) ->
             false
     end.
 
--spec store_glb(module(), type(), type(), {type(), constraints:constraints()}) -> ok.
+-spec store_glb(module(), type(), type(), {type(), constraints:t()}) -> ok.
 store_glb(Module, T1, T2, TyCs) ->
     try
         ets:insert(?GLB_CACHE, {{Module, T1, T2}, TyCs}),
