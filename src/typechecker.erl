@@ -5112,7 +5112,7 @@ record_field_types(Fields) ->
               end, Fields).
 
 % Helper returning the type of module_info/0 and module_info/1 functions
--spec get_module_info_type(arity()) -> fun_ty().
+-spec get_module_info_type(arity()) -> type() | [type()].
 get_module_info_type(0) ->
     Options = get_module_info_options(),
     DefaultKeys = [module, attributes, compile, exports, md5, native],
@@ -5123,7 +5123,7 @@ get_module_info_type(1) ->
     Options = get_module_info_options(),
     lists:map(fun ({Key, Type}) -> type_fun([type_atom(Key)], Type) end, Options).
 
--spec get_module_info_options() -> #{atom() => type()}.
+-spec get_module_info_options() -> [{atom(), type()}].
 get_module_info_options() ->
     [
         {module, type(module)},
