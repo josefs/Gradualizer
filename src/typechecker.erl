@@ -3407,7 +3407,7 @@ get_bounded_fun_type_list(Name, Arity, Env, P) ->
             end
     end.
 
--spec get_imported_bounded_fun_type_list(atom(), arity(), env(), anno()) -> [type()] | error.
+-spec get_imported_bounded_fun_type_list(atom(), arity(), env(), anno()) -> {ok, [type()]} | error.
 get_imported_bounded_fun_type_list(Name, Arity, Env, P) ->
     case maps:find({Name, Arity}, Env#env.imported) of
         {ok, Module} ->
