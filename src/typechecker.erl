@@ -1547,13 +1547,15 @@ free_vars({type, _, _, Args}, Vars) ->
     free_vars(Args, Vars);
 free_vars(_, Vars) -> Vars.
 
--spec subst_ty(#{atom() | string() := type()}, type()) -> type() | [type()].
+-spec subst_ty(#{atom() | string() := type()}, [type()]) -> [type()];
+              (#{atom() | string() := type()}, [fun_ty()]) -> [fun_ty()];
+              (#{atom() | string() := type()}, type()) -> type().
+subst_ty(Sub, Tys) when is_list(Tys) ->
+    [ subst_ty(Sub, Ty) || Ty <- Tys ];
 subst_ty(Sub, Ty = {var, _, X}) ->
     maps:get(X, Sub, Ty);
 subst_ty(Sub, {type, P, Name, Args}) ->
     {type, P, Name, subst_ty(Sub, Args)};
-subst_ty(Sub, Tys) when is_list(Tys) ->
-    [ subst_ty(Sub, Ty) || Ty <- Tys ];
 subst_ty(_, Ty) -> Ty.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
