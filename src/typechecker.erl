@@ -1480,7 +1480,7 @@ unfold_bounded_type(_Env, Ty) -> Ty.
 
 %% TODO: move tenv to back
 -spec bounded_type_subst(env(), {type, erl_anno:anno(), bounded_fun, [_]}) ->
-        #{ atom() => type() }.
+        #{ atom() | string() := type() }.
 bounded_type_subst(Env, BTy = {type, P, bounded_fun, [_, Bounds]}) ->
     try
         solve_bounds(Env, Bounds)
