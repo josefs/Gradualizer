@@ -1,4 +1,4 @@
--module(recursive_call_with_remote_union_return_type_should_pass).
+-module(recursive_call_with_remote_union_return_type_pass).
 
 -export([recursive/0]).
 

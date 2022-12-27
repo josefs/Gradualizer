@@ -213,13 +213,21 @@ any_subtype([Ty1|Tys], Ty, Env) ->
 compat(T1, T2, Seen, Env) ->
     ?assert_normalized_anno(T1),
     ?assert_normalized_anno(T2),
-    Ty1 = normalize(T1, Env),
-    Ty2 = normalize(T2, Env),
+    Ty1 = fixpoint_normalize(T1, Env),
+    Ty2 = fixpoint_normalize(T2, Env),
     case compat_seen({T1, T2}, Seen) of
         true ->
             ret(Seen);
         false ->
             compat_ty(Ty1, Ty2, maps:put({T1, T2}, true, Seen), Env)
+    end.
+
+-spec fixpoint_normalize(type(), env()) -> type().
+fixpoint_normalize(Ty, Env) ->
+    NormTy = normalize(Ty, Env),
+    case NormTy of
+        Ty -> Ty;
+        _ -> fixpoint_normalize(NormTy, Env)
     end.
 
 -spec compat_seen({type(), type()}, #{ {type(), type()} := true }) -> boolean().
@@ -948,6 +956,13 @@ flatten_unions(Tys, Env) ->
 flatten_union({user_type, _, _, _} = Ty, _Env) ->
     [Ty];
 flatten_union({type, _, none, []}, _Env) ->
+    [];
+flatten_union({type, _, no_return, []}, _Env) ->
+    %% This is an alias for `none()' which should've been removed by `expand_builtin_aliases',
+    %% but there's no guarantee the latter has been called by now.
+    %% If it wasn't, `fixpoint_normalize' might alternate between a union with `none()'
+    %% and without it and never stop.
+    %% Caught thanks to `prop_compatible' test.
     [];
 flatten_union({type, _, union, Tys}, Env) ->
     flatten_unions(Tys, Env);
