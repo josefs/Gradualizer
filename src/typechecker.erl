@@ -1230,9 +1230,9 @@ expect_tuple_type(Ty, _N, _) ->
     {type_error, Ty}.
 
 
--spec expect_tuple_union(Tys, Tys, constraints:t(), any | no_any, non_neg_integer(), env()) -> R when
+-spec expect_tuple_union(Tys, [Tys], constraints:t(), any | no_any, non_neg_integer(), env()) -> R when
       Tys :: [type()],
-      R :: {Tys, constraints:t()}.
+      R :: {[Tys], constraints:t()}.
 expect_tuple_union([Ty|Tys], AccTy, AccCs, Any, N, Env) ->
     case expect_tuple_type(Ty, N, Env) of
         {type_error, _} ->
