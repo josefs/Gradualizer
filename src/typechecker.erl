@@ -1536,7 +1536,7 @@ solve_bounds(_, _, [], Acc) -> Acc.
 -spec free_vars(type()) -> #{atom() | string() := true}.
 free_vars(Ty) -> free_vars(Ty, #{}).
 
--spec free_vars(type(), #{atom() | string() := true}) -> #{atom() | string() := true}.
+-spec free_vars(type() | [type()], #{atom() | string() := true}) -> #{atom() | string() := true}.
 free_vars({var, _, '_'}, Vars) ->
     Vars;
 free_vars({var, _, X}, Vars) ->
