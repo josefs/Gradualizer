@@ -5150,7 +5150,7 @@ get_rec_field_default(FieldWithAnno, [_|RecFields]) ->
 get_rec_field_default(FieldWithAnno, []) ->
     throw(undef(record_field, FieldWithAnno)).
 
--spec get_rec_field_type(af_field_name(), [{atom(), type()}]) -> type().
+-spec get_rec_field_type(af_field_name(), [typed_record_field()]) -> type().
 get_rec_field_type(FieldWithAnno, RecFields) ->
     %% The first field is the second element of the tuple - so start from 2
     {_Index, Ty} = get_rec_field_index_and_type(FieldWithAnno, RecFields, 2),
