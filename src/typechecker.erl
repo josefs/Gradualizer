@@ -1404,9 +1404,6 @@ expect_record_type(Union = {type, _, union, UnionTys}, Record, Env) ->
     {Tyss, Cs} =
         expect_record_union(UnionTys, [], constraints:empty(), no_any, Record, Env),
     case Tyss of
-        Record ->
-            %% expect_record_union failed in every cases
-            {type_error, Union};
         [] ->
             {type_error, Union};
         [Tys] ->
