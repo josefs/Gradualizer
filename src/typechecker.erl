@@ -3442,14 +3442,14 @@ get_atom(_Env, _) ->
 % also.
 
 % We assume that the constraints have been removed at this point.
--spec instantiate_fun_type([type()], type()) -> R when
+-spec instantiate_fun_type([fun_ty_simple()], type()) -> R when
       R :: {{[type()], type()}, constraints:t()}.
-instantiate_fun_type(Args,Res) ->
+instantiate_fun_type(Args, Res) ->
     {NewArgs, ArgVars, Map} = instantiate_inner(Args, #{}),
     {NewRes , ResVars, _Map} = instantiate(Res, Map),
     {{NewArgs, NewRes}, constraints:vars(maps:merge(ArgVars, ResVars))}.
 
--spec instantiate_fun_type([type()]) -> {[type()], constraints:t()}.
+-spec instantiate_fun_type([fun_ty_simple()]) -> {[fun_ty_simple()], constraints:t()}.
 instantiate_fun_type(Tys) ->
     {NewTys, Vars, _Map} = instantiate_inner(Tys, #{}),
     {NewTys, constraints:vars(Vars)}.
