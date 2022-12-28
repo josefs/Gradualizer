@@ -1375,8 +1375,6 @@ expect_fun_type_union(Env, [Ty|Tys], Arity) ->
     Any :: any,
     FieldsTy :: {fields_ty, [typed_record_field()], constraints:t()},
     TypeError :: {type_error, atom() | type()}.
-expect_record_type({user_type, _, record, []}, _Record, _Env) ->
-    any;
 expect_record_type({type, _, record, [{atom, _, Name}|RefinedTypes]}, Record, Env) when Name =:= Record ->
     #env{tenv = #{records := REnv}} = Env,
     case REnv of
@@ -1400,7 +1398,7 @@ expect_record_type(?user_type() = Ty, Record, Env) ->
     expect_record_type(normalize(Ty, Env), Record, Env);
 expect_record_type(Union = {type, _, union, UnionTys}, Record, Env) ->
     {Tyss, Cs} =
-        expect_record_union(UnionTys, [], constraints:empty(), no_any, Record, Env),
+        expect_record_union(UnionTys, [], constraints:empty(), Record, Env),
     case Tyss of
         [] ->
             {type_error, Union};
@@ -1421,22 +1419,20 @@ expect_record_type({type, _, any, []}, _Record, _Env) ->
 expect_record_type(_, Ty, _) ->
     {type_error, Ty}.
 
--spec expect_record_union(Tys, FTyss, constraints:t(), any | no_any, atom(), env()) -> R when
+-spec expect_record_union(Tys, FTyss, constraints:t(), atom(), env()) -> R when
       Tys :: [type()],
-      FTyss :: [[typed_record_field()] | type()],
+      FTyss :: [[typed_record_field()]],
       R :: {FTyss, constraints:t()}.
-expect_record_union([Ty | Tys], AccTy, AccCs, Any, Record, Env) ->
+expect_record_union([Ty | Tys], AccTy, AccCs, Record, Env) ->
     case expect_record_type(Ty, Record, Env) of
         {type_error, _} ->
-            expect_record_union(Tys, AccTy, AccCs, Any, Record, Env);
+            expect_record_union(Tys, AccTy, AccCs, Record, Env);
         any ->
-            expect_record_union(Tys, AccTy, AccCs, any, Record, Env);
+            expect_record_union(Tys, AccTy, AccCs, Record, Env);
         {fields_ty, FTys, Cs} ->
-            expect_record_union(Tys, [FTys | AccTy], constraints:combine(Cs, AccCs), Any, Record, Env)
+            expect_record_union(Tys, [FTys | AccTy], constraints:combine(Cs, AccCs), Record, Env)
     end;
-expect_record_union([], AccTy, AccCs, any, _Record, _Env) ->
-    {[ type(any) | AccTy], AccCs};
-expect_record_union([], AccTy, AccCs, _NoAny, _Record, _Env) ->
+expect_record_union([], AccTy, AccCs, _Record, _Env) ->
     {AccTy, AccCs}.
 
 %% @doc Generate a new type variable.
