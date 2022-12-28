@@ -4393,8 +4393,14 @@ type_check_function(Env, {function, Anno, Name, NArgs, Clauses}) ->
             NewEnv = Env#env{current_spec = FunTy},
             FunTyNoPos = [ typelib:remove_pos(?assert_type(Ty, type())) || Ty <- FunTy ],
             Arity = clause_arity(hd(Clauses)),
-            {_Vars, Cs} = check_clauses_fun(NewEnv, expect_fun_type(NewEnv, FunTyNoPos, Arity), Clauses),
-            maybe_solve_constraints(Cs, Anno, NewEnv);
+            case expect_fun_type(NewEnv, FunTyNoPos, Arity) of
+                {type_error, NotFunTy} ->
+                    %% This can only happen if `create_fenv/2' creates garbage.
+                    erlang:error({invalid_function_type, NotFunTy});
+                FTy ->
+                    {_Vars, Cs} = check_clauses_fun(NewEnv, FTy, Clauses),
+                    maybe_solve_constraints(Cs, Anno, NewEnv)
+            end;
         error ->
             throw(internal_error(missing_type_spec, Name, NArgs))
     end.
