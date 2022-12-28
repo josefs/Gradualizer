@@ -3372,7 +3372,7 @@ get_imported_bounded_fun_type_list(Name, Arity, Env, P) ->
         error -> error
     end.
 
--spec get_atom(env(), _) -> atom().
+-spec get_atom(env(), _) -> gradualizer_type:af_atom() | false.
 get_atom(_Env, Atom = {atom, _, _}) ->
     Atom;
 get_atom(Env, {var, _, Var}) ->
