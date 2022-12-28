@@ -3578,7 +3578,8 @@ check_clauses_intersection_throw_if_seen(ArgsTys, RefinedArgsTy, Clause, Seen, E
             {type_error, ClauseError}
     end.
 
--spec check_reachable_clauses(type(), list(), _Caps, [env()], Css, [type()], env()) -> R when
+-spec check_reachable_clauses(type(), Clauses, _Caps, [env()], Css, [type()], env()) -> R when
+      Clauses :: [gradualizer_type:abstract_clause()],
       Css :: [constraints:t()],
       R :: {[env()],
             [constraints:t()],
@@ -3587,7 +3588,8 @@ check_clauses_intersection_throw_if_seen(ArgsTys, RefinedArgsTy, Clause, Seen, E
 check_reachable_clauses(_ResTy, [], _Caps, VBs, Cs, RefinedArgsTys, Env) ->
     {VBs, Cs, RefinedArgsTys, Env};
 check_reachable_clauses(_ResTy, Clauses, _Caps, _, _, [?type(none)|_], _Env) ->
-    throw(type_error(unreachable_clauses, Clauses));
+    Clauses = ?assert_type(Clauses, [gradualizer_type:abstract_clause(), ...]),
+    throw(type_error(unreachable_clauses, element(2, hd(Clauses))));
 check_reachable_clauses(ResTy, [Clause | Clauses], Caps, VBs, Css, RefinedArgsTys, EnvIn) ->
     {NewRefinedArgsTys, Env2, Cs} = check_clause(EnvIn, RefinedArgsTys, ResTy, Clause, Caps),
     VB = refine_vars_by_mismatching_clause(Clause, EnvIn#env.venv, Env2),
