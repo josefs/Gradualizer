@@ -121,7 +121,6 @@
 -type compatible() :: {true, constraints:t()} | false.
 
 -type anno() :: erl_anno:anno().
--type any_t() :: {type, anno(), any, []}.
 -type binary_op() :: gradualizer_type:binary_op().
 -type bounded_function() :: gradualizer_type:af_constrained_function_type().
 -type unary_op() :: gradualizer_type:unary_op().
@@ -1372,10 +1371,9 @@ expect_fun_type_union(Env, [Ty|Tys], Arity) ->
             [TyOut | expect_fun_type_union(Env, Tys, Arity)]
     end.
 
--spec expect_record_type(type(), atom(), env()) -> Any | FieldsTy | FieldsTys | TypeError when
+-spec expect_record_type(type(), atom(), env()) -> Any | FieldsTy | TypeError when
     Any :: any,
     FieldsTy :: {fields_ty, [typed_record_field()], constraints:t()},
-    FieldsTys :: {fields_tys, [[typed_record_field()]], constraints:t()},
     TypeError :: {type_error, atom() | type()}.
 expect_record_type({user_type, _, record, []}, _Record, _Env) ->
     any;
@@ -1407,9 +1405,7 @@ expect_record_type(Union = {type, _, union, UnionTys}, Record, Env) ->
         [] ->
             {type_error, Union};
         [Tys] ->
-            {fields_ty, Tys, Cs};
-        _ ->
-            {fields_tys, Tyss, Cs}
+            {fields_ty, Tys, Cs}
     end;
 expect_record_type({var, _, Var}, Record, Env) ->
     #env{tenv = #{records := REnv}} = Env,
@@ -1436,9 +1432,7 @@ expect_record_union([Ty | Tys], AccTy, AccCs, Any, Record, Env) ->
         any ->
             expect_record_union(Tys, AccTy, AccCs, any, Record, Env);
         {fields_ty, FTys, Cs} ->
-            expect_record_union(Tys, [FTys | AccTy], constraints:combine(Cs, AccCs), Any, Record, Env);
-        {fields_tys, FTyss, Cs} ->
-            expect_record_union(Tys, FTyss ++ AccTy, constraints:combine(Cs, AccCs), Any, Record, Env)
+            expect_record_union(Tys, [FTys | AccTy], constraints:combine(Cs, AccCs), Any, Record, Env)
     end;
 expect_record_union([], AccTy, AccCs, any, _Record, _Env) ->
     {[ type(any) | AccTy], AccCs};
@@ -2475,14 +2469,6 @@ do_type_check_expr_in(Env, ResTy, {record, Anno, Name, Fields} = Record) ->
         {fields_ty, Rec, Cs1} ->
             {VarBinds, Cs2} = type_check_fields(Env, Rec, Fields),
             {VarBinds, constraints:combine(Cs1, Cs2)};
-        {fields_tys, Tyss, Cs1} ->
-            case type_check_record_union_in(Name, Anno, Tyss, Fields, Env) of
-                none ->
-                    {Ty, _VB, _Cs} = type_check_expr(Env#env{infer = true}, Record),
-                    throw(type_error(Record, Ty, ResTy));
-                {VBs, Cs2} ->
-                    {union_var_binds([VBs], Env), constraints:combine(Cs1, Cs2)}
-            end;
         any ->
             Rec = get_record_fields(Name, Anno, Env),
             type_check_fields(Env, Rec, Fields);
@@ -2506,14 +2492,6 @@ do_type_check_expr_in(Env, ResTy, {record, Anno, Exp, Name, Fields} = Record) ->
             {VarBinds, Cs2} = type_check_expr_in(Env, RecordTy, Exp),
             {union_var_binds([VarBinds|VarBindsList], Env)
                 ,constraints:combine([Cs1, Cs2|Css])};
-        {fields_tys, Tyss, Cs1} ->
-            case type_check_record_union_in(Name, Anno, Tyss, Fields, Env) of
-                none ->
-                    {Ty, _VB, _Cs} = type_check_expr(Env#env{infer = true}, Record),
-                    throw(type_error(Record, Ty, ResTy));
-                {VBs, Cs2} ->
-                    {union_var_binds([VBs], Env), constraints:combine(Cs1, Cs2)}
-            end;
         any ->
             Rec = get_record_fields(Name, Anno, Env),
             type_check_fields(Env, Rec, Fields);
@@ -3364,28 +3342,6 @@ type_check_tuple_union_in(Env, [Tys|Tyss], Elems) ->
             type_check_tuple_union_in(Env, Tyss, Elems)
     end;
 type_check_tuple_union_in(_Env, [], _Elems) ->
-    none.
-
--spec type_check_record_union_in(Name, Anno, Tyss, Fields, Env) -> R when
-      Name :: atom(),
-      Anno :: anno(),
-      Tyss :: [any_t() | [typed_record_field()]],
-      Fields :: [record_field()],
-      Env :: env(),
-      R :: {env(), constraints:t()} | none.
-type_check_record_union_in(Name, Anno, [?type(any) | Tyss], Fields, Env) ->
-    Rec = get_record_fields(Name, Anno, Env),
-    type_check_record_union_in(Name, Anno, [Rec | Tyss], Fields, Env);
-type_check_record_union_in(Name, Anno, [Tys|Tyss], Fields, Env) ->
-    %% We can refine, since any_t() is matched in the previous clause.
-    Tys = ?assert_type(Tys, [typed_record_field()]),
-    try
-        type_check_fields(Env, Tys, Fields)
-    catch
-        E when element(1, E) == type_error ->
-            type_check_record_union_in(Name, Anno, Tyss, Fields, Env)
-    end;
-type_check_record_union_in(_Name, _Anno, [], _Fields, _Env) ->
     none.
 
 -spec get_bounded_fun_type_list(atom(), arity(), env(), anno()) -> [type()].
