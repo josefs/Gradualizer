@@ -1279,9 +1279,13 @@ allow_empty_list(Ty) ->
         false -> Ty
     end.
 
--type fun_ty() :: {fun_ty, [type()], type(), constraints()}
-                | {fun_ty_intersection, [fun_ty()], constraints()}
-                | {fun_ty_union, [fun_ty()], constraints()}.
+-type fun_ty() :: fun_ty_simple()
+                | fun_ty_intersection()
+                | fun_ty_union().
+
+-type fun_ty_simple()       :: {fun_ty, [type()], type(), constraints()}.
+-type fun_ty_intersection() :: {fun_ty_intersection, [fun_ty_simple()], constraints()}.
+-type fun_ty_union()        :: {fun_ty_union, [fun_ty_simple()], constraints()}.
 
 %% Categorizes a function type.
 %% Normalizes the type (expand user-def and remote types). Errors for non-fun
@@ -3533,7 +3537,7 @@ infer_clause(Env, {clause, _, Args, Guards, Block}) ->
 
 -spec check_clauses_fun(Env, FunTy, Clauses) -> R when
       Env :: env(),
-      FunTy :: _,
+      FunTy :: fun_ty(),
       Clauses :: [gradualizer_type:abstract_clause(), ...],
       R :: {env(), constraints:t()}.
 check_clauses_fun(Env, {fun_ty, ArgsTy, FunResTy, Cs1}, Clauses) ->
@@ -3546,7 +3550,7 @@ check_clauses_fun(Env, {fun_ty_union, Tys, Cs1}, Clauses) ->
     {Env1, Cs2} = check_clauses_union(Env, Tys, Clauses),
     {Env1, constraints:combine(Cs1, Cs2)}.
 
--spec check_clauses_intersect(env(), [fun_ty()], Clauses) -> R when
+-spec check_clauses_intersect(env(), [fun_ty_simple()], Clauses) -> R when
       Clauses :: [gradualizer_type:abstract_clause(), ...],
       R :: {env(), constraints()}.
 check_clauses_intersect(Env, Tys, Clauses) ->
