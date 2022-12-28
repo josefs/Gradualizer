@@ -3578,9 +3578,10 @@ check_clauses_intersection_throw_if_seen(ArgsTys, RefinedArgsTy, Clause, Seen, E
             {type_error, ClauseError}
     end.
 
--spec check_reachable_clauses(type(), list(), _Caps, [env()], _Cs, [type()], env()) -> R when
+-spec check_reachable_clauses(type(), list(), _Caps, [env()], Css, [type()], env()) -> R when
+      Css :: [constraints:t()],
       R :: {[env()],
-            constraints:t(),
+            [constraints:t()],
             [type()],
             env()}.
 check_reachable_clauses(_ResTy, [], _Caps, VBs, Cs, RefinedArgsTys, Env) ->
