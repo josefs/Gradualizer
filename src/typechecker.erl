@@ -1631,7 +1631,7 @@ do_type_check_expr(Env, {cons, _, Head, Tail}) ->
                     {type_error, ?type(nil)} ->
                         {[], Cs};
                     {type_error, BadTy} ->
-                        throw(type_error(list, line_no(Tail), BadTy))
+                        throw(type_error(list, element(2, Tail), BadTy))
                         %% We throw a type error here because Tail is not of type list
                         %% (nor is it of type any()).
                         %% TODO: Improper list?
@@ -5376,10 +5376,6 @@ number_of_exported_functions(Forms) ->
         true -> length(ParseData#parsedata.functions);
         false -> length(ParseData#parsedata.exports)
     end.
-
--spec line_no(expr()) -> non_neg_integer().
-line_no(Expr) ->
-    erl_anno:line(element(2, Expr)).
 
 -spec type_error(type_error()) -> error().
 type_error(Kind) ->
