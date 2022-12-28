@@ -3231,9 +3231,8 @@ type_check_fun(Env, {remote, _, _Expr, _}, Arity) ->
     {[FunTy], Env, constraints:empty()};
 type_check_fun(Env, Expr, _Arity) ->
     case type_check_expr(Env, Expr) of
-        {[_|_] = Types, Env1, Cs} ->
-            {Types, Env1, Cs};
         {Type, Env1, Cs} ->
+            ?assert(not is_list(Type)),
             {[Type], Env1, Cs}
     end.
 
