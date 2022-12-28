@@ -3034,7 +3034,11 @@ unary_op_arg_type('+', Ty) -> Ty;
 unary_op_arg_type(Op, {type, _, union, Tys}) ->
     type(union, [ unary_op_arg_type(Op, Ty) || Ty <- Tys ]);
 unary_op_arg_type('not', {atom, _, B}) ->
-    {atom, erl_anno:new(0), not B}; %% boolean() = false | true
+    %% This should only be reachable with B :: boolean(),
+    %% as it's checked with glb() before unary_op_arg_type is called.
+    B == true orelse B == false orelse erlang:error(unreachable),
+    B = ?assert_type(B, boolean()),
+    {atom, erl_anno:new(0), not B};
 unary_op_arg_type(Op, Ty) when ?is_int_type(Ty), Op == '-' orelse Op == 'bnot' ->
     {Lo, Hi} = gradualizer_int:int_type_to_range(Ty),
     %% TODO: Move this logic to gradualizer_int?
