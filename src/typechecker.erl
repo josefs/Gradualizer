@@ -4420,7 +4420,10 @@ arity(I) ->
       Env :: env().
 maybe_solve_constraints(Cs, Anno, #env{solve_constraints = true} = Env) ->
     FixedAnno = erl_anno:set_location(erl_anno:line(Anno), Anno),
-    {NewCs, _Subst} = constraints:solve(Cs, FixedAnno, Env),
+    ?verbose(Env, "Constraints before solving:\n~p\n", [Cs]),
+    {NewCs, Subst} = constraints:solve(Cs, FixedAnno, Env),
+    ?verbose(Env, "Constraints after solving:\n~p\n", [NewCs]),
+    ?verbose(Env, "Substitutions found:\n~p\n", [Subst]),
     {Env, NewCs};
 maybe_solve_constraints(Cs, _Anno, Env) ->
     {Env, Cs}.
