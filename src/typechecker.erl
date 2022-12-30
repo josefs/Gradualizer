@@ -193,11 +193,11 @@ subtype(Ty1, Ty2, Env) ->
 %% Check if at least one of the types in a list is a subtype of a type.
 %% Used when checking intersection types.
 %%
-%% When working on function intersections, `any_subtype/4' combines input parameter constraints
+%% When working on function intersections, `any_subtype/3' combines input parameter constraints
 %% from multiple clauses into a single union type constraint.
--spec any_subtype([type()], type(), constraints:t(), env()) -> compatible().
-any_subtype(Tys, Ty, Cs, Env) ->
-    any_subtype(Tys, Ty, Cs, Env, false).
+-spec any_subtype([type()], type(), env()) -> compatible().
+any_subtype(Tys, Ty, Env) ->
+    any_subtype(Tys, Ty, constraints:empty(), Env, false).
 
 -spec any_subtype([type()], type(), constraints:t(), env(), boolean()) -> compatible().
 any_subtype([], _Ty, Cs, _Env, true) ->
@@ -2639,7 +2639,7 @@ do_type_check_expr_in(Env, ResTy, Expr = {'fun', P, {function, Name, Arity}}) ->
             end;
         BoundedFunTypeList ->
             FunTypeList = unfold_bounded_type_list(Env, BoundedFunTypeList),
-            case any_subtype(FunTypeList, ResTy, constraints:empty(), Env) of
+            case any_subtype(FunTypeList, ResTy, Env) of
                 {true, Cs} ->
                     {Env, Cs};
                 false ->
@@ -2653,7 +2653,7 @@ do_type_check_expr_in(Env, ResTy, Expr = {'fun', P, {function, M, F, A}}) ->
                 {ok, BoundedFunTypeList} ->
                     FunTypeList =
                         unfold_bounded_type_list(Env, BoundedFunTypeList),
-                    case any_subtype(FunTypeList, ResTy, constraints:empty(), Env) of
+                    case any_subtype(FunTypeList, ResTy, Env) of
                         {true, Cs} -> {Env, Cs};
                         false -> throw(type_error(Expr, FunTypeList, ResTy))
                     end;
