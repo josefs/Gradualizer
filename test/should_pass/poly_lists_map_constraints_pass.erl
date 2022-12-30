@@ -1,4 +1,6 @@
--module(lists_map_constraints_pass).
+-module(poly_lists_map_constraints_pass).
+
+-gradualizer([solve_constraints]).
 
 %% This is a minimised problem from type checking `gradualizer_db:collect_specs/1'
 %% with constraint solving enabled.
