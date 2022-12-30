@@ -31,10 +31,12 @@
               af_fun_type/0,
               af_function_type_list/0,
               af_record_field/1,
+              af_singleton_integer_type/0,
               af_string/0,
               af_unary_op/1,
               binary_op/0,
               gr_any_fun_args/0,
+              gr_range_bound/0,
               gr_type_var/0,
               unary_op/0]).
 
@@ -251,7 +253,12 @@
 %% the only place where `{type, _, any}' can occur.
 
 -type af_integer_range_type() ::
-        {'type', anno(), 'range', [af_singleton_integer_type()]}.
+        {'type', anno(), 'range', [gr_range_bound()]}.
+
+-type gr_range_bound() :: gr_infinity()
+                        | af_singleton_integer_type().
+
+-type gr_infinity() :: {integer, anno(), neg_inf | pos_inf}.
 
 -type af_map_type() :: {'type', anno(), 'map', 'any'}
                      | {'type', anno(), 'map', [af_assoc_type()]}.
@@ -321,7 +328,10 @@
 -type af_singleton_integer_type() :: af_integer()
                                    | af_character()
                                    | af_unary_op(af_singleton_integer_type())
-                                   | af_binary_op(af_singleton_integer_type()).
+                                   | af_binary_op(af_singleton_integer_type())
+                                   | gr_integer().
+
+-type gr_integer() :: {'integer', anno(), integer()}.
 
 -type af_literal() :: af_atom()
                     | af_character()
