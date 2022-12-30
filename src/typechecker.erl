@@ -2608,9 +2608,10 @@ do_type_check_expr_in(Env, ResTy, {bc, P, Expr, Qualifiers} = OrigExpr) ->
 %% Functions
 do_type_check_expr_in(Env, Ty, {'fun', _, {clauses, Clauses}} = Fun) ->
     case expect_fun_type(Env, Ty, clause_arity(hd(Clauses))) of
-        {fun_ty, ArgsTy, ResTy, Cs1} ->
-            {Env1, Cs2} = check_clauses(Env, ArgsTy, ResTy, Clauses, bind_vars),
-            {Env1, constraints:combine(Cs1, Cs2)};
+        {fun_ty, ArgsTys, ResTy, Cs1} ->
+            {Env1, Cs2} = check_clauses(Env, ArgsTys, ResTy, Clauses, bind_vars),
+            Cs3 = combine_clauses_argument_constraints(ArgsTys, Cs2, Env),
+            {Env1, constraints:combine(Cs1, Cs3)};
         %% TODO: Can this case actually happen?
         {fun_ty_intersection, Tyss, Cs1} ->
             {Env1, Cs2} = check_clauses_intersect(Env, Tyss, Clauses),
@@ -2762,6 +2763,39 @@ do_type_check_expr_in(Env, ResTy, {'try', _, Block, CaseCs, CatchCs, AfterBlock}
     %% no variable bindings are propagated from a try expression
     %% as that would be "unsafe"
     {Env, constraints:combine([Cs,Cs3,Cs5])}.
+
+-spec combine_clauses_argument_constraints([type()], constraints:t(), env()) -> constraints:t().
+combine_clauses_argument_constraints(ArgsTys, Cs, Env) ->
+    ArgsTyVars = lists:flatmap(fun
+                                   ({var, _, Var}) -> [Var];
+                                   (_) -> []
+                               end, ArgsTys),
+    ArgsCss = lists:flatmap(fun (ArgTyVar) ->
+                                    case constraints:has_upper_bound(ArgTyVar, Cs) of
+                                        true ->
+                                            %% We use none() as we need a placeholder for ArgTyVar
+                                            %% in ArgsCss. none() will be eliminated when it becomes
+                                            %% an element of a union type.
+                                            [constraints:upper(ArgTyVar, type(none))];
+                                        false ->
+                                            %% Don't generate a none() constraint if ArgTyVar is not
+                                            %% constrained already - we don't want none() to be the
+                                            %% only upper bound, we only need it as a placeholder.
+                                            []
+                                    end
+                            end, ArgsTyVars),
+    ArgsCs = constraints:combine(ArgsCss),
+    CombineUpper = fun (Var, UBounds1, UBounds2) ->
+                           case lists:member(Var, ArgsTyVars) of
+                               true ->
+                                   [lub(UBounds1 ++ UBounds2, Env)];
+                               false ->
+                                   constraints:append_values(Var, UBounds1, UBounds2)
+                           end
+                   end,
+    constraints:combine_with(ArgsCs, Cs,
+                             fun constraints:append_values/3,
+                             CombineUpper).
 
 -spec type_check_arith_op_in(env(), type(), _, _, _, _) -> {env(), constraints:t()}.
 type_check_arith_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->

@@ -9,7 +9,8 @@
          combine_with/4,
          add_var/2,
          solve/3,
-         append_values/3]).
+         append_values/3,
+         has_upper_bound/2]).
 
 -export_type([t/0,
               mapset/1,
@@ -142,3 +143,6 @@ solve_loop([I = {E, LB, UB} | WL], Seen, Constraints0, ElimVars, Anno, Env) ->
 
 append_values(_, Xs, Ys) ->
     Xs ++ Ys.
+
+has_upper_bound(Var, Cs) ->
+    maps:is_key(Var, Cs#constraints.upper_bounds).
