@@ -4140,7 +4140,7 @@ deduplicate_list(List) ->
 %%      [Ty1, Ty2, Ty3, ..., RefTyN]].
 %%
 %% If RefTyI == none() for any I, that list I is excluded.
--spec pick_one_refinement_each([type()], [type()]) -> [type()].
+-spec pick_one_refinement_each([type()], [type()]) -> [[type()]].
 pick_one_refinement_each([], []) -> [];
 pick_one_refinement_each([Ty|Tys], [RefTy|RefTys]) ->
     %% The lists (zero or one list) where we refine head and keep tail
@@ -4154,7 +4154,7 @@ pick_one_refinement_each([Ty|Tys], [RefTy|RefTys]) ->
     RefTailCombinations =
         [[Ty|Tail] || Tail <- pick_one_refinement_each(Tys, RefTys)],
     %% The last list is the list where to type is refined.
-    RefHeadCombinations ++ RefTailCombinations.
+    lists:append(RefHeadCombinations, RefTailCombinations).
 
 %% Is a type refinable to the point that we do exhaustiveness checking on it?
 -spec refinable(type(), env()) -> boolean().
