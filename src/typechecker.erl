@@ -2630,11 +2630,13 @@ do_type_check_expr_in(Env, ResTy, Expr = {'fun', P, {function, Name, Arity}}) ->
             %%       That constraint might later lead to a contradiction when solving constraints,
             %%       even though FunTypeList might have another matching clause which would result
             %%       in a valid constraint being registered.
-            %%       To fix this, we temporarily drop the constraints here.
-            %%       This means we're likely also letting some bugs slip through.
+            %%       The contradiction manifests when a higher-order function accepts a function
+            %%       with an intersection type as an argument. The constraints over ResTy's type
+            %%       vars are registered based on the first matching intersection type's clause,
+            %%       which might not be correct.
             case any_subtype(FunTypeList, ResTy, Env) of
-                {true, _Cs} ->
-                    {Env, constraints:empty()};
+                {true, Cs} ->
+                    {Env, Cs};
                 false ->
                     throw(type_error(Expr, FunTypeList, ResTy))
             end
