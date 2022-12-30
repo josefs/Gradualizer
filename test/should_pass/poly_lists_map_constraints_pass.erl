@@ -1,4 +1,4 @@
--module(poly_lists_map_constraints_should_pass).
+-module(poly_lists_map_constraints_pass).
 
 -gradualizer([solve_constraints]).
 
