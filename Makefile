@@ -169,20 +169,22 @@ cli-tests: bin/gradualizer test/arg.beam
 	bin/gradualizer --no_prelude --specs_override_dir priv/prelude \
 	  test/should_pass/cyclic_otp_specs.erl || (echo "CLI 10"; exit 1)
 
+# Cover compile, run eunit, export and generate reports
+define erl_cover_run
+    case cover:compile_beam_directory("ebin") of \
+        {error, _} -> halt(2); \
+        _List      -> ok \
+    end, \
+    $(erl_run_eunit), \
+    cover:export("cover/eunit.coverdata"), \
+    cover:analyse_to_file([{outdir, "cover"}]), \
+    cover:analyse_to_file([{outdir, "cover"}, html])
+endef
+
 .PHONY: cover
 cover: compile-tests
 	mkdir -p cover
-	erl -noinput -pa ebin -pa test -eval \
-	 '%% Cover compile, run eunit, export and generate reports \
-	  case cover:compile_beam_directory("ebin") of % \
-	      {error, _} -> halt(2); % \
-	      _List      -> ok % \
-	  end, % \
-	  $(erl_run_eunit), % \
-	  cover:export("cover/eunit.coverdata"), % \
-	  cover:analyse_to_file([{outdir, "cover"}]), % plain text \
-	  cover:analyse_to_file([{outdir, "cover"}, html]), % \
-	  halt().'
+	erl $(ERL_OPTS) -noinput -pa ebin -pa test -eval '$(erl_cover_run), halt().'
 
 cover/coverage.xml: cover test/covertool.beam
 	erl -noinput -pa test -eval \

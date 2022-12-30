@@ -397,7 +397,7 @@ env(ErlSource, Opts) ->
 %% @see type_of/2
 -spec type_of(string()) -> typechecker:type().
 type_of(Expr) ->
-    type_of(Expr, env([infer])).
+    type_of(Expr, env()).
 
 %% @doc Infer type of an Erlang expression.
 %%
@@ -413,5 +413,6 @@ type_of(Expr) ->
 -spec type_of(string(), typechecker:env()) -> typechecker:type().
 type_of(Expr, Env) ->
     AlwaysInfer = Env#env{infer = true},
-    {Ty, _Env, _Cs} = typechecker:type_check_expr(AlwaysInfer, merl:quote(Expr)),
+    [Form] = gradualizer_lib:ensure_form_list(merl:quote(lists:flatten(Expr))),
+    {Ty, _Env, _Cs} = typechecker:type_check_expr(AlwaysInfer, Form),
     Ty.
