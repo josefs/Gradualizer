@@ -147,6 +147,8 @@ parse_into_list_of_forms(Pretty) ->
 %% Highlights the text between two locations (line and column) in a text.
 highlight_text(Pretty, StartLoc, EndLoc, Color) ->
     Lines = re:split(Pretty, "\\n", [{return, list}]),
+    %% We're safe to assert as we explicitly request `{return, list}'.
+    Lines = ?assert_type(Lines, [string()]),
     HiLines = lists:flatmap(fun ({Line, LineNo}) ->
                                     highlight_line(Line, LineNo, StartLoc, EndLoc, Color)
                             end,
