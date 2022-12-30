@@ -2,7 +2,19 @@
 
 -gradualizer([solve_constraints]).
 
--export([i/1]).
+-export([f/1,
+         i/1]).
+
+-type t1() :: {_, _, _, _}.
+-type t2() :: {_, _, _}.
+
+-spec f([t1() | t2()]) -> ok.
+f(Fields) ->
+    lists:flatmap(fun
+                      ({_, _, _, _}) -> [t1];
+                      ({_, _, _}) -> [t2]
+                  end, Fields),
+    ok.
 
 -spec i([binary() | integer()]) -> [integer()].
 i(L) ->
