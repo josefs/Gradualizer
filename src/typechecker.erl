@@ -192,6 +192,9 @@ subtype(Ty1, Ty2, Env) ->
 
 %% Check if at least one of the types in a list is a subtype of a type.
 %% Used when checking intersection types.
+%%
+%% When working on function intersections, `any_subtype/4' combines input parameter constraints
+%% from multiple clauses into a single union type constraint.
 -spec any_subtype([type()], type(), constraints:t(), env()) -> compatible().
 any_subtype(Tys, Ty, Cs, Env) ->
     any_subtype(Tys, Ty, Cs, Env, false).
@@ -206,7 +209,9 @@ any_subtype([Ty1|Tys], Ty, Cs, Env, AnySubtype) ->
         {true, Cs1} ->
             Cs2 = constraints:combine_with(Cs, Cs1,
                                            fun constraints:append_values/3,
-                                           fun (_, UBounds1, UBounds2) ->
+                                           fun (_Var, UBounds1, UBounds2) ->
+                                                   %% TODO: should we be more careful here and make
+                                                   %% sure Var is Ty1's argument?
                                                    [lub(UBounds1 ++ UBounds2, Env)]
                                            end),
             any_subtype(Tys, Ty, Cs2, Env, true);
@@ -2634,18 +2639,6 @@ do_type_check_expr_in(Env, ResTy, Expr = {'fun', P, {function, Name, Arity}}) ->
             end;
         BoundedFunTypeList ->
             FunTypeList = unfold_bounded_type_list(Env, BoundedFunTypeList),
-            %% TODO: This leads to a problem when solving constraints.
-            %%       FunTypeList is a list of spec clauses.
-            %%       If ResTy has type vars, which accept everything as their subtype, yet the first
-            %%       spec clause we check isn't the best fit, a constraint might be registered on
-            %%       the type var.
-            %%       That constraint might later lead to a contradiction when solving constraints,
-            %%       even though FunTypeList might have another matching clause which would result
-            %%       in a valid constraint being registered.
-            %%       The contradiction manifests when a higher-order function accepts a function
-            %%       with an intersection type as an argument. The constraints over ResTy's type
-            %%       vars are registered based on the first matching intersection type's clause,
-            %%       which might not be correct.
             case any_subtype(FunTypeList, ResTy, constraints:empty(), Env) of
                 {true, Cs} ->
                     {Env, Cs};
