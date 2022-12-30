@@ -6,7 +6,9 @@
          poly_fail/3]).
 
 %% These examples don't come from the above paper.
--export([f/1]).
+-export([f/1,
+         g/1,
+         h/1]).
 
 -gradualizer([solve_constraints]).
 
@@ -29,3 +31,18 @@ poly_fail(F, B, I) -> {F(I), F(B)}.
 -spec f([integer(), ...]) -> atom().
 f(L) ->
     hd(L).
+
+-spec g([integer()]) -> [atom()].
+g(L) ->
+    lists:map(fun helper/1, L).
+
+-spec helper(integer()) -> integer().
+helper(I) -> I * 2.
+
+-spec h(integer()) -> atom().
+h(I) ->
+    app(fun helper/1, I).
+
+-spec app(fun ((A) -> B), A) -> B.
+app(F, A) ->
+    F(A).
