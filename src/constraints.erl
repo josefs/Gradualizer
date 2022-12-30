@@ -1,7 +1,15 @@
 %% @private
 -module(constraints).
 
--export([empty/0, vars/1, upper/2, lower/2, combine/1, combine/2, add_var/2, solve/3]).
+-export([empty/0,
+         vars/1,
+         upper/2,
+         lower/2,
+         combine/1, combine/2,
+         combine_with/4,
+         add_var/2,
+         solve/3,
+         append_values/3]).
 
 -export_type([t/0,
               mapset/1,
@@ -47,21 +55,22 @@ combine([]) ->
 combine([Cs]) ->
     Cs;
 combine([C1, C2 | Cs]) ->
-    LBounds = gradualizer_lib:merge_with(fun (_Var, Tys1, Tys2) ->
-                                                 Tys1 ++ Tys2
-                                         end,
+    C = combine_with(C1, C2, fun append_values/3, fun append_values/3),
+    combine([C | Cs]).
+
+-spec combine_with(t(), t(), BoundsMergeF, BoundsMergeF) -> t() when
+      BoundsMergeF :: fun((var(), [type()], [type()]) -> [type()]).
+combine_with(C1, C2, MergeLBounds, MergeUBounds) ->
+    LBounds = gradualizer_lib:merge_with(MergeLBounds,
                                          C1#constraints.lower_bounds,
                                          C2#constraints.lower_bounds),
-    UBounds = gradualizer_lib:merge_with(fun (_Var, Tys1, Tys2) ->
-                                                 Tys1 ++ Tys2
-                                         end,
+    UBounds = gradualizer_lib:merge_with(MergeUBounds,
                                          C1#constraints.upper_bounds,
                                          C2#constraints.upper_bounds),
     EVars = maps:merge(C1#constraints.exist_vars, C2#constraints.exist_vars),
-    C = #constraints{lower_bounds = LBounds,
-                     upper_bounds = UBounds,
-                     exist_vars = EVars},
-    combine([C | Cs]).
+    #constraints{lower_bounds = LBounds,
+                 upper_bounds = UBounds,
+                 exist_vars = EVars}.
 
 -spec solve(t(), erl_anno:anno(), typechecker:env()) -> R when
       R :: {t(), {#{var() => type()}, #{var() => type()}}}.

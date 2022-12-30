@@ -190,17 +190,28 @@ subtype(Ty1, Ty2, Env) ->
             false
     end.
 
-%% Check if at least on of the types in a list is a subtype of a type.
+%% Check if at least one of the types in a list is a subtype of a type.
 %% Used when checking intersection types.
--spec any_subtype(_, _, env()) -> compatible().
-any_subtype([], _Ty, _Env) ->
+-spec any_subtype([type()], type(), constraints:t(), env()) -> compatible().
+any_subtype(Tys, Ty, Cs, Env) ->
+    any_subtype(Tys, Ty, Cs, Env, false).
+
+-spec any_subtype([type()], type(), constraints:t(), env(), boolean()) -> compatible().
+any_subtype([], _Ty, Cs, _Env, true) ->
+    {true, Cs};
+any_subtype([], _Ty, _Cs, _Env, false) ->
     false;
-any_subtype([Ty1|Tys], Ty, Env) ->
+any_subtype([Ty1|Tys], Ty, Cs, Env, AnySubtype) ->
     case subtype(Ty1, Ty, Env) of
-        R={true, _} ->
-            R;
+        {true, Cs1} ->
+            Cs2 = constraints:combine_with(Cs, Cs1,
+                                           fun constraints:append_values/3,
+                                           fun (_, UBounds1, UBounds2) ->
+                                                   [lub(UBounds1 ++ UBounds2, Env)]
+                                           end),
+            any_subtype(Tys, Ty, Cs2, Env, true);
         false ->
-            any_subtype(Tys, Ty, Env)
+            any_subtype(Tys, Ty, Cs, Env, AnySubtype)
     end.
 
 -type acc(Seen) :: {Seen, constraints:t()}.
@@ -2634,7 +2645,7 @@ do_type_check_expr_in(Env, ResTy, Expr = {'fun', P, {function, Name, Arity}}) ->
             %%       with an intersection type as an argument. The constraints over ResTy's type
             %%       vars are registered based on the first matching intersection type's clause,
             %%       which might not be correct.
-            case any_subtype(FunTypeList, ResTy, Env) of
+            case any_subtype(FunTypeList, ResTy, constraints:empty(), Env) of
                 {true, Cs} ->
                     {Env, Cs};
                 false ->
@@ -2648,7 +2659,7 @@ do_type_check_expr_in(Env, ResTy, Expr = {'fun', P, {function, M, F, A}}) ->
                 {ok, BoundedFunTypeList} ->
                     FunTypeList =
                         unfold_bounded_type_list(Env, BoundedFunTypeList),
-                    case any_subtype(FunTypeList, ResTy, Env) of
+                    case any_subtype(FunTypeList, ResTy, constraints:empty(), Env) of
                         {true, Cs} -> {Env, Cs};
                         false -> throw(type_error(Expr, FunTypeList, ResTy))
                     end;
