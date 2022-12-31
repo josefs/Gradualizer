@@ -2924,17 +2924,17 @@ arith_op_arg_types(Op, {type, _, range, _} = Ty) ->
             TyR = gradualizer_int:int_range_to_type({0, B + 1}),
             {type(non_neg_integer), TyR, constraints:empty()};
         %% bsr and div make things smaller for any non_neg/pos second argument
-        {0, _} when Op == 'bsr' -> {Ty, type(non_neg_integer)
-				   ,constraints:empty()};
-        {0, _} when Op == 'div' -> {Ty, type(pos_integer)
-				   ,constraints:empty()};
+        {0, _} when Op == 'bsr' ->
+            {Ty, type(non_neg_integer), constraints:empty()};
+        {0, _} when Op == 'div' ->
+            {Ty, type(pos_integer), constraints:empty()};
         {0, B} ->
-            case is_power_of_two(B + 1) andalso
-                 lists:member(Op, ['band', 'bor', 'bxor']) of
+            case is_power_of_two(B + 1) andalso lists:member(Op, ['band', 'bor', 'bxor']) of
                 true -> {Ty, Ty, constraints:empty()};
                 false -> false
             end;
-        _ -> false
+        _ ->
+            false
     end;
 
 %% We get normalised types here, so number() is expanded to integer() | float().
@@ -2955,14 +2955,12 @@ arith_op_arg_types(Op, {type, _, union, Tys}) ->
 arith_op_arg_types(_Op, VarTy={var, _, TyVar}) ->
     LTyVar = gradualizer_tyvar:new(TyVar, ?MODULE, ?LINE),
     RTyVar = gradualizer_tyvar:new(TyVar, ?MODULE, ?LINE),
-    {type_var(LTyVar), type_var(RTyVar),
-     constraints:add_var(LTyVar,
-     constraints:add_var(RTyVar,
-     constraints:combine(
-		       [constraints:upper(TyVar, type(number))
-		       ,constraints:upper(LTyVar, VarTy)
-		       ,constraints:upper(RTyVar, VarTy)
-		       ])))};
+    Cs = constraints:add_var(LTyVar,
+                             constraints:add_var(RTyVar,
+                                                 constraints:combine([constraints:upper(TyVar, type(number)),
+                                                                      constraints:upper(LTyVar, VarTy),
+                                                                      constraints:upper(RTyVar, VarTy)]))),
+    {type_var(LTyVar), type_var(RTyVar), Cs};
 
 %% Cases like Op = '-', Ty = neg_integer()
 arith_op_arg_types(_Op, _Ty) ->
