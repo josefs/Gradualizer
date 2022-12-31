@@ -2920,7 +2920,7 @@ arith_op_arg_types(Op, Ty = {type, _, neg_integer, []}) ->
 %%  -type word16() :: 0..65535.
 arith_op_arg_types(Op, {type, _, range, _} = Ty) ->
     case gradualizer_int:int_type_to_range(Ty) of
-        {0, B} when Op == 'rem' ->
+        {0, B} when Op == 'rem' andalso is_integer(B) ->
             TyR = gradualizer_int:int_range_to_type({0, B + 1}),
             {type(non_neg_integer), TyR, constraints:empty()};
         %% bsr and div make things smaller for any non_neg/pos second argument
@@ -2928,7 +2928,7 @@ arith_op_arg_types(Op, {type, _, range, _} = Ty) ->
             {Ty, type(non_neg_integer), constraints:empty()};
         {0, _} when Op == 'div' ->
             {Ty, type(pos_integer), constraints:empty()};
-        {0, B} ->
+        {0, B} when is_integer(B) ->
             case is_power_of_two(B + 1) andalso lists:member(Op, ['band', 'bor', 'bxor']) of
                 true -> {Ty, Ty, constraints:empty()};
                 false -> false
