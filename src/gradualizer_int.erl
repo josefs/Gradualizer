@@ -25,13 +25,6 @@
 -type int_range() :: {int(), int()}.
 -type type() :: gradualizer_type:abstract_type().
 
--type extended_int_type() :: {type, erl_anno:anno(), range, [{integer, erl_anno:anno(), int()}]}
-                           | {'integer', erl_anno:anno(), integer()}.
-%% `extended_int_type' is needed to describe type representations
-%% which are not part of `gradualizer_type:abstract_type()'.
-%% We get rid of it before returning from this module.
-%% TODO: Actually, we don't, though we should :/ https://github.com/josefs/Gradualizer/issues/406
-
 -include("gradualizer.hrl").
 
 %% +----------------------------------------+
@@ -109,13 +102,19 @@ int_type_to_range({type, _, neg_integer, []})          -> {neg_inf, -1};
 int_type_to_range({type, _, non_neg_integer, []})      -> {0, pos_inf};
 int_type_to_range({type, _, pos_integer, []})          -> {1, pos_inf};
 int_type_to_range({type, _, range, [{Tag1, _, I1}, {Tag2, _, I2}]})
-  when Tag1 =:= integer orelse Tag1 =:= char,
-       Tag2 =:= integer orelse Tag2 =:= char           -> {I1, I2};
+  when Tag1 =:= integer orelse
+       Tag1 =:= char orelse
+       (Tag1 =:= atom andalso
+        (I1 =:= neg_inf orelse I1 =:= pos_inf)),
+       Tag2 =:= integer orelse
+       Tag2 =:= char orelse
+       (Tag2 =:= atom andalso
+        (I2 =:= neg_inf orelse I2 =:= pos_inf))        -> {I1, I2};
 int_type_to_range({char, _, I})                        -> {I, I};
 int_type_to_range({integer, _, I})                     -> {I, I}.
 
 %% Converts a range back to a type.
--spec int_range_to_type(int_range()) -> type() | extended_int_type().
+-spec int_range_to_type(int_range()) -> type().
 int_range_to_type(Range) ->
     union(int_range_to_types(Range)).
 
@@ -125,7 +124,7 @@ int_range_to_type(Range) ->
 
 %% Converts a range to a list of types. Creates two types in some cases and zero
 %% types if lower bound is greater than upper bound.
--spec int_range_to_types(int_range()) -> [type() | extended_int_type()].
+-spec int_range_to_types(int_range()) -> [type()].
 int_range_to_types({neg_inf, pos_inf}) ->
     [typechecker:type(integer)];
 int_range_to_types({neg_inf, -1}) ->
@@ -139,37 +138,47 @@ int_range_to_types({neg_inf, I}) when I > 0 ->
      {type, erl_anno:new(0), range, [{integer, erl_anno:new(0), 0}
                                     ,{integer, erl_anno:new(0), I}]}];
 int_range_to_types({neg_inf, I}) when I < -1 ->
-    %% Non-standard - see extended_int_type()
+    %% Non-standard
     %% I < -1 - see the guard - so we can safely assert that
     I = ?assert_type(I, neg_integer()),
-    [{type, erl_anno:new(0), range, [{integer, erl_anno:new(0), neg_inf}
-                                    ,{integer, erl_anno:new(0), I}]}];
+    [{type, erl_anno:new(0), range, [range_bound(neg_inf), range_bound(I)]}];
 int_range_to_types({I, pos_inf}) when I < -1 ->
-    [{type, erl_anno:new(0), range, [{integer, erl_anno:new(0), I}
-                                    ,{integer, erl_anno:new(0), -1}]},
+    I = ?assert_type(I, neg_integer()),
+    [{type, erl_anno:new(0), range, [range_bound(I), range_bound(-1)]},
      typechecker:type(non_neg_integer)];
 int_range_to_types({-1, pos_inf}) ->
-    [{integer, erl_anno:new(0), -1}, typechecker:type(non_neg_integer)];
+    [range_bound(-1), typechecker:type(non_neg_integer)];
 int_range_to_types({0, pos_inf}) ->
     [typechecker:type(non_neg_integer)];
 int_range_to_types({1, pos_inf}) ->
     [typechecker:type(pos_integer)];
 int_range_to_types({I, pos_inf}) when I > 1 ->
     %% Non-standard
+    I = ?assert_type(I, 2..pos_inf),
     [{type, erl_anno:new(0), range, [{integer, erl_anno:new(0), I}
                                     ,{integer, erl_anno:new(0), pos_inf}]}];
 int_range_to_types({I, I}) ->
-    [{integer, erl_anno:new(0), I}];
+    [range_bound(I)];
 int_range_to_types({pos_inf, _}) -> [];
 int_range_to_types({_, neg_inf}) -> [];
 int_range_to_types({I, J}) when is_integer(I) andalso is_integer(J) ->
+    I = ?assert_type(I, integer()),
+    J = ?assert_type(J, integer()),
     if
         I < J ->
-            [{type, erl_anno:new(0), range, [{integer, erl_anno:new(0), I}
-                                             ,{integer, erl_anno:new(0), J}]}];
+            [{type, erl_anno:new(0), range, [range_bound(I), range_bound(J)]}];
         I > J ->
             []
     end.
+
+-spec range_bound(pos_inf | neg_inf) -> gradualizer_type:gr_range_bound();
+                 (integer()) -> gradualizer_type:af_singleton_integer_type().
+range_bound(pos_inf) ->
+    {integer, erl_anno:new(0), pos_inf};
+range_bound(neg_inf) ->
+    {integer, erl_anno:new(0), neg_inf};
+range_bound(I) ->
+    {integer, erl_anno:new(0), I}.
 
 %% Merges ranges and returns a single type (possibly a union).
 -spec int_ranges_to_type([int_range()]) -> type().

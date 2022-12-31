@@ -5,7 +5,8 @@
          pick_values/2, fold_ast/3, get_ast_children/1,
          empty_tenv/0, create_tenv/3,
          remove_pos_typed_record_field/1,
-         ensure_form_list/1]).
+         ensure_form_list/1,
+         zipn/1]).
 -export_type([graph/1, tenv/0]).
 
 -type type() :: gradualizer_type:abstract_type().
@@ -319,3 +320,12 @@ ensure_form_list(List) when is_list(List) ->
     List;
 ensure_form_list(Other) ->
     [Other].
+
+zipn([]) -> [];
+zipn([L | Ls]) ->
+    zipn(Ls, [ [E] || E <- L ]).
+
+zipn([], Acc) ->
+    [ lists:reverse(Zipped) || Zipped <- Acc ];
+zipn([L | Ls], Acc) ->
+    zipn(Ls, lists:zipwith(fun (Z, Zs) -> [Z | Zs] end, L, Acc)).

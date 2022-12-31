@@ -9,8 +9,8 @@ function_type_list_to_fun_types_test() ->
                    "       (atom()) -> any()."),
     FunTypeListNoPos = lists:map(fun typelib:remove_pos/1, FunTypeList),
     BoundedFunTypeList = absform:normalize_function_type_list(FunTypeListNoPos),
-    Ty = typechecker:bounded_type_list_to_type(
-           #env{tenv = gradualizer_lib:create_tenv(?MODULE, [], [])}, BoundedFunTypeList),
+    Env = test_lib:create_env([]),
+    Ty = typechecker:bounded_type_list_to_type(Env, BoundedFunTypeList),
     ?assertMatch({type, 0, union,
                   [{type,0,'fun',
                     [{type,0,product,[{type,0,tuple,any}]},

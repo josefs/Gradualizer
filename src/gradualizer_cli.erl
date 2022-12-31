@@ -99,7 +99,8 @@ print_usage() ->
     io:format("       --fancy                   - Use fancy error messages when possible (on by default)~n"),
     io:format("       --no_fancy                - Don't use fancy error messages.~n"),
     io:format("       --union_size_limit        - Performance hack: Unions larger than this value~n"),
-    io:format("                                   are replaced by any() in normalization (default: 30)~n").
+    io:format("                                   are replaced by any() in normalization (default: 30)~n"),
+    io:format("       --solve_constraints       - Use the experimental constraint solver (off by default)~n").
 
 -spec parse_opts([string()], gradualizer:options()) -> {[string()], gradualizer:options()}.
 parse_opts([], Opts) ->
@@ -127,6 +128,7 @@ parse_opts([A | Args], Opts) ->
         "--fancy"                  -> parse_opts(Args, [fancy | Opts]);
         "--no_fancy"               -> parse_opts(Args, [{fancy, false} | Opts]);
         "--union_size_limit"       -> handle_union_size_limit(A, Args, Opts);
+        "--solve_constraints"      -> parse_opts(Args, [solve_constraints | Opts]);
         "--"                       -> {Args, Opts};
         "-" ++ _                   -> erlang:error(string:join(["Unknown parameter:", A], " "));
         _                          -> {[A | Args], Opts}
