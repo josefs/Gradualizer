@@ -5163,7 +5163,7 @@ top() ->
     {remote_type, erl_anno:new(0), [{atom, erl_anno:new(0), gradualizer}
 				   ,{atom, erl_anno:new(0), top},[]]}.
 
--spec type_var(atom()) -> type().
+-spec type_var(atom() | string()) -> type().
 type_var(Name) ->
     {var, erl_anno:new(0), Name}.
 
