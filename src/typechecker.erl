@@ -5401,8 +5401,7 @@ type_check_forms(Forms, Opts) ->
 %% To avoid the user experience problem, it's better to opportunistically try performing the check,
 %% but in the light of it taking too long, just forcibly break the infinite loop and report
 %% a Gradualizer (NOT the checked program!) error.
--spec type_check_form_with_timeout(expr(), [any()], boolean(), env(), [any()]) -> R when
-      R :: badarg | any | [any()].
+-spec type_check_form_with_timeout(expr(), [any()], boolean(), env(), [any()]) -> [any()].
 type_check_form_with_timeout(Function, Errors, StopOnFirstError, Env, Opts) ->
     %% TODO: make FormCheckTimeOut configurable
     FormCheckTimeOut = ?form_check_timeout_ms,
@@ -5418,11 +5417,13 @@ type_check_form_with_timeout(Function, Errors, StopOnFirstError, Env, Opts) ->
                      ?verbose(Env, "Task reported crash on ~s~n",
                               [gradualizer_fmt:form_info(Function)]),
                      io:format("Crashing...~n"),
-                     erlang:raise(throw, Crash, STrace);
+                     erlang:raise(throw, Crash, STrace),
+                     [];
                  {error_trace, Error, Trace} ->
                      ?verbose(Env, "Task reported error with trace from ~s~n",
                               [gradualizer_fmt:form_info(Function)]),
-                     erlang:raise(error, Error, Trace);
+                     erlang:raise(error, Error, Trace),
+                     [];
                  {errors, Errors1} ->
                      ?verbose(Env, "Task returned from ~s with ~p~n",
                               [gradualizer_fmt:form_info(Function), Errors1]),
@@ -5440,7 +5441,7 @@ type_check_form_with_timeout(Function, Errors, StopOnFirstError, Env, Opts) ->
     erlang:demonitor(MRef, [flush]),
     Result.
 
--spec type_check_form(_, _, _, _, _) -> R when
+-spec type_check_form(_, [_], _, _, _) -> R when
       R :: {errors, list()}
          | {crash, any(), list()}
          | {error_trace, any(), list()}.
@@ -5469,7 +5470,7 @@ type_check_form(Function, Errors, StopOnFirstError, Env, Opts)
             {error_trace, Error, Trace}
     end;
 type_check_form(_Function, Errors, _StopOnFirstError, _Env, _Opts) ->
-    Errors.
+    {errors, Errors}.
 
 -spec create_env(#parsedata{}, proplists:proplist()) -> env().
 create_env(#parsedata{module    = Module
