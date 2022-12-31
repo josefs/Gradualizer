@@ -4,7 +4,8 @@
 
 -export([i/1,
          j/1,
-         k/1]).
+         k/1,
+         l/1]).
 
 -spec i([binary() | integer()]) -> [integer()].
 i(L) ->
@@ -33,3 +34,7 @@ k(L) ->
                            (integer()) -> integer().
 takes_an_intersection(B) when is_binary(B) -> B;
 takes_an_intersection(I) when is_integer(I) -> I.
+
+-spec l([binary() | integer()]) -> [integer()].
+l(L) ->
+    lists:map(fun takes_an_intersection/1, L).
