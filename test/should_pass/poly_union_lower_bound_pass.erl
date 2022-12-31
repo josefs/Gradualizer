@@ -3,6 +3,7 @@
 -gradualizer([solve_constraints]).
 
 -export([f/1,
+         g/1,
          i/1]).
 
 -type t1() :: {_, _, _, _}.
@@ -14,6 +15,14 @@ f(Fields) ->
                       ({_, _, _, _}) -> [t1];
                       ({_, _, _}) -> [t2]
                   end, Fields),
+    ok.
+
+-spec g([t1() | t2()]) -> ok.
+g(Fields) ->
+    lists:foldl(fun
+                    ({_, _, _, _}, Acc) -> [t1 | Acc];
+                    (_, Acc) -> [default | Acc]
+                end, [], Fields),
     ok.
 
 -spec i([binary() | integer()]) -> [integer()].
