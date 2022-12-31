@@ -4162,7 +4162,7 @@ deduplicate_list(List) ->
 %%      [Ty1, Ty2, Ty3, ..., RefTyN]].
 %%
 %% If RefTyI == none() for any I, that list I is excluded.
--spec pick_one_refinement_each([type()], [type()]) -> [[type()]].
+-spec pick_one_refinement_each(list(), list()) -> [[type()]].
 pick_one_refinement_each([], []) -> [];
 pick_one_refinement_each([Ty|Tys], [RefTy|RefTys]) ->
     %% The lists (zero or one list) where we refine head and keep tail
@@ -4173,8 +4173,8 @@ pick_one_refinement_each([Ty|Tys], [RefTy|RefTys]) ->
             _           -> [[RefTy|Tys]] %% refinement possible
         end,
     %% All lists where we keep head and refine one of the rest types
-    RefTailCombinations =
-        [[Ty|Tail] || Tail <- pick_one_refinement_each(Tys, RefTys)],
+    RefTailCombinations = lists:map(fun (Tail) -> [Ty|Tail] end,
+                                    pick_one_refinement_each(Tys, RefTys)),
     %% The last list is the list where to type is refined.
     lists:append(RefHeadCombinations, RefTailCombinations).
 
