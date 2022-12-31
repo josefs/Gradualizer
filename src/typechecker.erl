@@ -2615,7 +2615,7 @@ do_type_check_expr_in(Env, Ty, {'fun', _, {clauses, Clauses}} = Fun) ->
     case expect_fun_type(Env, Ty, clause_arity(hd(Clauses))) of
         {fun_ty, ArgsTys, ResTy, Cs1} ->
             {Env1, Cs2} = check_clauses(Env, ArgsTys, ResTy, Clauses, bind_vars),
-            Cs3 = combine_clauses_argument_constraints(ArgsTys, Cs2, Env),
+            Cs3 = combine_clauses_argument_constraints(ArgsTys, Cs2, catch_all_args(ArgsTys, Clauses), Env),
             {Env1, constraints:combine(Cs1, Cs3)};
         %% TODO: Can this case actually happen?
         {fun_ty_intersection, Tyss, Cs1} ->
@@ -2757,8 +2757,28 @@ do_type_check_expr_in(Env, ResTy, {'try', _, Block, CaseCs, CatchCs, AfterBlock}
     %% as that would be "unsafe"
     {Env, constraints:combine([Cs,Cs3,Cs5])}.
 
--spec combine_clauses_argument_constraints([type()], constraints:t(), env()) -> constraints:t().
-combine_clauses_argument_constraints(ArgsTys, Cs, Env) ->
+-spec catch_all_args([type()], Clauses) -> map() when
+      Clauses :: [gradualizer_type:abstract_clause(), ...].
+catch_all_args(ArgsTys, Clauses) ->
+    ClausesArgs = lists:map(fun ({clause, _, Args, _Guards, _Body}) -> Args end, Clauses),
+    ZippedArgs = gradualizer_lib:zipn(ClausesArgs),
+    CatchAllArgs = lists:map(fun (ArgsColumn) ->
+                                     CatchAll = lists:any(fun
+                                                              ({var, _, '_'}) -> true;
+                                                              (_) -> false
+                                                          end, ArgsColumn),
+                                     if
+                                         CatchAll -> type(any);
+                                         not CatchAll -> false
+                                     end
+                             end, ZippedArgs),
+    maps:from_list(lists:flatmap(fun
+                                     ({{var, _, TVar}, ?type(_) = T}) -> [{TVar, T}];
+                                     (_) -> []
+                                 end, lists:zip(ArgsTys, CatchAllArgs))).
+
+-spec combine_clauses_argument_constraints([type()], constraints:t(), map(), env()) -> constraints:t().
+combine_clauses_argument_constraints(ArgsTys, Cs, CatchAllArgs, Env) ->
     ArgsTyVars = lists:flatmap(fun
                                    ({var, _, Var}) -> [Var];
                                    (_) -> []
@@ -2766,10 +2786,14 @@ combine_clauses_argument_constraints(ArgsTys, Cs, Env) ->
     ArgsCss = lists:flatmap(fun (ArgTyVar) ->
                                     case constraints:has_upper_bound(ArgTyVar, Cs) of
                                         true ->
-                                            %% We use none() as we need a placeholder for ArgTyVar
-                                            %% in ArgsCss. none() will be eliminated when it becomes
-                                            %% an element of a union type.
-                                            [constraints:upper(ArgTyVar, type(none))];
+                                            %% We use none() by default as we need a placeholder for
+                                            %% ArgTyVar in ArgsCss.
+                                            %% none() will be eliminated when it becomes an element
+                                            %% of a union type.
+                                            %% However, we might also use any() if there's a
+                                            %% catch-all pattern for this arg in any of the clauses.
+                                            Ty = maps:get(ArgTyVar, CatchAllArgs, type(none)),
+                                            [constraints:upper(ArgTyVar, Ty)];
                                         false ->
                                             %% Don't generate a none() constraint if ArgTyVar is not
                                             %% constrained already - we don't want none() to be the
