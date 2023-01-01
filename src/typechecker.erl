@@ -1720,7 +1720,8 @@ do_type_check_expr(Env, {call, _, {atom, _, TypeOp}, [Expr, {string, _, TypeStr}
 do_type_check_expr(Env, {call, _, {atom, _, record_info}, [_, _]} = Call) ->
     Ty = get_record_info_type(Call, Env),
     {Ty, Env, constraints:empty()};
-do_type_check_expr(Env, {call, P, {remote, _, _Mod, {atom, _, module_info}} = Name, Args}) ->
+do_type_check_expr(Env, {call, P, {remote, _, _Mod, {atom, _, module_info}} = Name, Args})
+        when length(Args) == 0 orelse length(Args) == 1 ->
     Arity = arity(length(Args)),
     FunTy = get_module_info_type(Arity),
     type_check_call_ty(Env, expect_fun_type(Env, FunTy, Arity), Args, {Name, P, FunTy});
@@ -2594,7 +2595,8 @@ do_type_check_expr_in(Env, ResTy, {call, _, {atom, _, record_info}, [_, _]} = Ca
         false ->
             throw(type_error(Call, ResTy, Ty))
     end;
-do_type_check_expr_in(Env, ResTy, {call, P, {remote, _, _Mod, {atom, _, module_info}} = Name, Args} = Call) ->
+do_type_check_expr_in(Env, ResTy, {call, P, {remote, _, _Mod, {atom, _, module_info}} = Name, Args} = Call)
+        when length(Args) == 0 orelse length(Args) == 1 ->
     Arity = arity(length(Args)),
     FunTy = get_module_info_type(Arity),
     type_check_call(Env, ResTy, Call, expect_fun_type(Env, FunTy, Arity),
