@@ -390,9 +390,14 @@ env(Opts) ->
 -spec env(string(), gradualizer:options()) -> typechecker:env().
 env(ErlSource, Opts) ->
     Forms = gradualizer_lib:ensure_form_list(merl:quote(lists:flatten(ErlSource))),
-    ErlParseForms = lists:map(fun erl_syntax:revert/1, Forms),
+    ErlParseForms = lists:map(fun revert/1, Forms),
     ParseData = typechecker:collect_specs_types_opaques_and_functions(ErlParseForms),
     typechecker:create_env(ParseData, Opts).
+
+-spec revert(erl_syntax:syntaxTree()) -> erl_parse:abstract_form().
+revert(Form) ->
+    erl_syntax:is_form(Form) orelse erlang:error({invalid_form, Form}),
+    ?assert_type(erl_syntax:revert(Form), erl_parse:abstract_form()).
 
 %% @see type_of/2
 -spec type_of(string()) -> typechecker:type().

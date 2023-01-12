@@ -480,7 +480,7 @@ add_entries_to_map(Entries, Map) ->
 %% exported and unexported types
 collect_types(Module, Forms) ->
     %% ExportedTypes :: [{atom(), arity()}]
-    ExportedTypes = lists:concat([Tys || {attribute, _, export_type,
+    ExportedTypes = lists:append([Tys || {attribute, _, export_type,
                                           Tys} <- Forms]),
 
     %% Now all type definitions are easy to extract.
