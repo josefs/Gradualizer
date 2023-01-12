@@ -40,6 +40,8 @@ find1() ->
 %% because the constraint solver can't cope with them.
 %% We should instead define two separate functions: `(a()) -> b()' and `([a()]) -> [b()]',
 %% and check outside of them which to call based on the type of the parameter.
+%%
+%% See also `l/0' in `test/should_pass/poly_pass.erl'.
 -spec l() -> [t1() | t2()].
 l() ->
     lists:map(fun takes_an_intersection/1, return_list_of_unions([])).
