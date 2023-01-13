@@ -28,13 +28,13 @@ takes_a_union(I) when is_integer(I) -> I.
 %%   on line 456 is not a subtype of binary() | integer()
 -spec k([binary() | integer() | string()]) -> list().
 k(L) ->
-    lists:map(fun takes_an_intersection/1, L).
+    lists:map(fun has_intersection_spec/1, L).
 
--spec takes_an_intersection(binary()) -> binary();
+-spec has_intersection_spec(binary()) -> binary();
                            (integer()) -> integer().
-takes_an_intersection(B) when is_binary(B) -> B;
-takes_an_intersection(I) when is_integer(I) -> I.
+has_intersection_spec(B) when is_binary(B) -> B;
+has_intersection_spec(I) when is_integer(I) -> I.
 
 -spec l([binary() | integer()]) -> [integer()].
 l(L) ->
-    lists:map(fun takes_an_intersection/1, L).
+    lists:map(fun has_intersection_spec/1, L).
