@@ -27,9 +27,9 @@ map_specific_list(List) ->
 
 -spec j([binary() | integer()]) -> list().
 j(L) ->
-    lists:map(fun takes_an_intersection/1, L).
+    lists:map(fun has_intersection_spec/1, L).
 
--spec takes_an_intersection(binary()) -> binary();
+-spec has_intersection_spec(binary()) -> binary();
                            (integer()) -> integer().
-takes_an_intersection(B) when is_binary(B) -> B;
-takes_an_intersection(I) when is_integer(I) -> I.
+has_intersection_spec(B) when is_binary(B) -> B;
+has_intersection_spec(I) when is_integer(I) -> I.

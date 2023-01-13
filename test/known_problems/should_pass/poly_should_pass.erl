@@ -28,7 +28,7 @@ find1() ->
 %%
 %% Now, why is that the case?
 %% `return_list_of_unions/1' returns just that - a list of `t1() | t2()' unions.
-%% This means that `takes_an_intersection/1' passed in to `lists:map/2' would be called with
+%% This means that `has_intersection_spec/1' passed in to `lists:map/2' would be called with
 %% a union as the arg, not a list.
 %% This should mean that it would also return a `t1() | t2()' union, so the final return value from
 %% `l/0' should be `[t1() | t2()]'.
@@ -44,13 +44,13 @@ find1() ->
 %% See also `l/0' in `test/should_pass/poly_pass.erl'.
 -spec l() -> [t1() | t2()].
 l() ->
-    lists:map(fun takes_an_intersection/1, return_list_of_unions([])).
+    lists:map(fun has_intersection_spec/1, return_list_of_unions([])).
 
--spec takes_an_intersection(t1() | t2()) -> t1() | t2();
+-spec has_intersection_spec(t1() | t2()) -> t1() | t2();
                            (list()) -> [t1() | t2()].
-takes_an_intersection([]) -> [];
-takes_an_intersection([_|_] = L) -> lists:map(fun takes_an_intersection/1, L);
-takes_an_intersection(T) -> T.
+has_intersection_spec([]) -> [];
+has_intersection_spec([_|_] = L) -> lists:map(fun has_intersection_spec/1, L);
+has_intersection_spec(T) -> T.
 
 -spec return_list_of_unions(list_of_unions()) -> list_of_unions().
 return_list_of_unions(_L) -> [].
