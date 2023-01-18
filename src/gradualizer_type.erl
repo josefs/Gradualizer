@@ -211,7 +211,10 @@
 -type af_record_creation(T) ::
         {'record', anno(), record_name(), [af_record_field(T)]}.
 
--type af_record_field(T) :: {'record_field', anno(), af_field_name(), T}.
+-type af_record_field(T) :: {'record_field', anno(), gr_field_name(), T}.
+
+-type gr_field_name() :: af_field_name()
+                       | af_variable().
 
 -type af_map_pattern() ::
         {'map', anno(), [af_assoc_exact(af_pattern())]}.
