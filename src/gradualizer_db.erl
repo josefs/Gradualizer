@@ -564,8 +564,7 @@ collect_specs(Module, Forms) ->
             {F, A} <- Exports,
             not sets:is_element({F, A},
                         SpecedFunsSet)],
-    [{Key, lists:map(fun typelib:remove_pos/1,
-                     absform:normalize_function_type_list(Types))}
+    [{Key, typelib:remove_pos_all(absform:normalize_function_type_list(Types))}
      || {Key, Types} <- Specs ++ ImplicitSpecs].
 
 normalize_spec({{Func, Arity}, Types}, Module) ->
