@@ -58,19 +58,12 @@ epp_parse_file(File, Includes) ->
             Error1
     end.
 
-% epp:open/5 was removed in OTP-24
-% https://github.com/erlang/otp/commit/5281a8c7f77d45a3c36fca9c1a2e4d3812f6fc3d#diff-580a349c49b1d9b5415166e18f5279728d934efe0cebc4ee5a87823055ec3413
 epp_open(File, Fd, StartLocation, Includes) ->
     code:ensure_loaded(epp),
-    case erlang:function_exported(epp, open, 5) of
-        true ->
-            epp:open(File, Fd, StartLocation, Includes, []);
-        false ->
-            epp:open([{name, File},
-                      {location, StartLocation},
-                      {includes, Includes},
-                      {fd, Fd}])
-    end.
+    epp:open([{name, File},
+              {location, StartLocation},
+              {includes, Includes},
+              {fd, Fd}]).
 
 %% Accepts a filename or the beam code as a binary
 -spec get_forms_from_beam(file:filename_all()) -> parsed_file() | parsed_file_error().
