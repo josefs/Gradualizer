@@ -5,6 +5,7 @@
 -module(typelib).
 
 -export([remove_pos/1,
+         remove_pos_all/1,
          annotate_user_type/2, annotate_user_types/2,
          get_module_from_annotation/1,
          substitute_type_vars/2,
@@ -104,16 +105,11 @@ parse_type(Src) ->
 -type unary_op() :: gradualizer_type:af_unary_op(_).
 -type binary_op() :: gradualizer_type:af_binary_op(_).
 
--spec remove_pos(list()) -> list();
-                (gr_any_fun_args()) -> gr_any_fun_args();
+-spec remove_pos(gr_any_fun_args()) -> gr_any_fun_args();
                 (af_constraint()) -> af_constraint();
                 (type()) -> type();
                 (unary_op()) -> unary_op();
                 (binary_op()) -> binary_op().
-remove_pos([]) ->
-    [];
-remove_pos([_|_] = L) ->
-    lists:map(fun remove_pos/1, L);
 remove_pos({type, _, any}) ->
     {type, erl_anno:new(0), any};
 remove_pos({type, _, constraint, [{atom, _, is_subtype}, Args]}) ->
@@ -132,7 +128,10 @@ remove_pos({type, Anno, record, [Name | TypedFields]}) ->
 remove_pos({type, _, field_type, [FName, FTy]}) ->
     {type, erl_anno:new(0), field_type, [remove_pos(FName), remove_pos(FTy)]};
 remove_pos({type, _, Type, Params}) when is_list(Params) ->
-    {type, erl_anno:new(0), Type, lists:map(fun remove_pos/1, Params)};
+    {type, erl_anno:new(0), Type, lists:map(fun
+                                                (P) when is_list(P) -> remove_pos_all(P);
+                                                (P) -> remove_pos(P)
+                                            end, Params)};
 remove_pos({type, _, Type, any}) when Type == tuple; Type == map ->
     {type, erl_anno:new(0), Type, any};
 remove_pos({type, _, Assoc, Tys})
@@ -150,6 +149,12 @@ remove_pos({op, _, Op, Type}) ->
     {op, erl_anno:new(0), Op, remove_pos(Type)};
 remove_pos({op, _, Op, Type1, Type2}) ->
     {op, erl_anno:new(0), Op, remove_pos(Type1), remove_pos(Type2)}.
+
+-spec remove_pos_all(list()) -> list().
+remove_pos_all([]) ->
+    [];
+remove_pos_all([_|_] = L) ->
+    lists:map(fun remove_pos/1, L).
 
 %% Helper for remove_pos/1. Removes all annotations except filename.
 -spec anno_keep_only_filename(erl_anno:anno()) -> erl_anno:anno().
