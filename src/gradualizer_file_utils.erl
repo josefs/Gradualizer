@@ -58,12 +58,18 @@ epp_parse_file(File, Includes) ->
             Error1
     end.
 
+%% See `priv/extra_specs/epp.specs.erl' for example of handling `erlang:function_exported/3'.
 epp_open(File, Fd, StartLocation, Includes) ->
     code:ensure_loaded(epp),
-    epp:open([{name, File},
-              {location, StartLocation},
-              {includes, Includes},
-              {fd, Fd}]).
+    case erlang:function_exported(epp, open, 5) of
+        true ->
+            epp:open(File, Fd, StartLocation, Includes, []);
+        false ->
+            epp:open([{name, File},
+                      {location, StartLocation},
+                      {includes, Includes},
+                      {fd, Fd}])
+    end.
 
 %% Accepts a filename or the beam code as a binary
 -spec get_forms_from_beam(file:filename_all()) -> parsed_file() | parsed_file_error().

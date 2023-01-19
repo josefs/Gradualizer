@@ -90,7 +90,8 @@ bin/gradualizer: $(beams) ebin/gradualizer.app
 
 .PHONY: gradualize
 gradualize: escript
-	bin/gradualizer --infer --solve_constraints -pa ebin --color ebin | grep -v -f gradualize-ignore.lst
+	bin/gradualizer --infer --solve_constraints --specs_override_dir priv/extra_specs/ \
+        -pa ebin --color ebin | grep -v -f gradualize-ignore.lst
 
 .PHONY: nocrashongradualize
 nocrashongradualize: escript
