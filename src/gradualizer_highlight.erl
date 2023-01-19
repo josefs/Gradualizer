@@ -152,7 +152,8 @@ highlight_text(Pretty, StartLoc, EndLoc, Color) ->
     HiLines = lists:flatmap(fun ({Line, LineNo}) ->
                                     highlight_line(Line, LineNo, StartLoc, EndLoc, Color)
                             end,
-                            lists:zip(Lines, lists:seq(1, length(Lines)))),
+                            lists:zip(Lines,
+                                      ?assert_type( lists:seq(1, length(Lines)), [pos_integer()] ))),
     %% trim leading empty lines
     HiLines1 = lists:dropwhile(fun ("") -> true; (_) -> false end, HiLines),
     [[Line, "\n"] || Line <- HiLines1].
