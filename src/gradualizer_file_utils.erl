@@ -63,8 +63,10 @@ epp_open(File, Fd, StartLocation, Includes) ->
     code:ensure_loaded(epp),
     case erlang:function_exported(epp, open, 5) of
         true ->
+            %% epp:open/5 is dropped since OTP-24.
             epp:open(File, Fd, StartLocation, Includes, []);
         false ->
+            %% Pre-OTP-24 epp:open/1 doesn't return column numbers.
             epp:open([{name, File},
                       {location, StartLocation},
                       {includes, Includes},
