@@ -3950,12 +3950,12 @@ refine(OrigTy, Ty, Trace, Env) ->
     %% If we're being called recursively and see OrigTy again throw no_refinement.
     %% This is a safeguard similar to the mutual recurson of glb/glb_ty,
     %% or to the stop_refinable_recursion loop breaker.
-    case maps:is_key(OrigTy, Trace) of
+    case maps:is_key({OrigTy, Ty}, Trace) of
         true ->
             throw(no_refinement);
         false ->
             NormTy = normalize(OrigTy, Env),
-            case refine_ty(NormTy, normalize(Ty, Env), maps:put(OrigTy, {}, Trace), Env) of
+            case refine_ty(NormTy, normalize(Ty, Env), maps:put({OrigTy, Ty}, {}, Trace), Env) of
                 NormTy -> OrigTy;
                 RefTy  -> RefTy
             end

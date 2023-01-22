@@ -595,6 +595,13 @@ add_type_pat_test_() ->
                                  "f(#r{f = F}) -> F."]))}
     ].
 
+type_diff_test_() ->
+    [{"Can refine a union with another union",
+      ?_assertEqual(?t( a1 | b | b1 | c | c1 | d ),
+                    typechecker:type_diff(?t( (a | a1) | (b | b1) | (c | c1) | (d | d1) ),
+                                          ?t( a | d1), gradualizer:env()))}
+    ].
+
 %%
 %% Helper functions
 %%
