@@ -603,18 +603,19 @@ get_beam_map() ->
     BeamDirs = code:get_path(),
     BeamFiles = lists:flatmap(fun (Dir) -> filelib:wildcard(Dir ++ "/*.beam") end, BeamDirs),
     RE = beam_file_regexp(),
-    BeamPairs = lists:filtermap(
+    BeamPairs0 = lists:map(
         fun (Filename) ->
             case re:run(Filename, RE, [{capture, all_but_first, list}]) of
                 {match, [Mod]} ->
-                    {true, {list_to_atom(Mod), Filename}};
+                    {list_to_atom(Mod), Filename};
                 nomatch ->
-                    false;
+                    {false, false};
                 _ ->
                     erlang:error({unreachable, "check re:run/3 opts above - this should not happen"})
             end
         end,
         BeamFiles),
+    BeamPairs = lists:filter(fun ({false, false}) -> false; (_) -> true end, BeamPairs0),
     maps:from_list(BeamPairs).
 
 -spec beam_file_regexp() -> regexp().
