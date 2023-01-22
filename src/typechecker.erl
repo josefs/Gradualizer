@@ -3950,12 +3950,12 @@ refine(OrigTy, Ty, Trace, Env) ->
     %% If we're being called recursively and see OrigTy again throw no_refinement.
     %% This is a safeguard similar to the mutual recurson of glb/glb_ty,
     %% or to the stop_refinable_recursion loop breaker.
-    case maps:is_key(OrigTy, Trace) of
+    case maps:is_key({OrigTy, Ty}, Trace) of
         true ->
             throw(no_refinement);
         false ->
             NormTy = normalize(OrigTy, Env),
-            case refine_ty(NormTy, normalize(Ty, Env), maps:put(OrigTy, {}, Trace), Env) of
+            case refine_ty(NormTy, normalize(Ty, Env), maps:put({OrigTy, Ty}, {}, Trace), Env) of
                 NormTy -> OrigTy;
                 RefTy  -> RefTy
             end
@@ -5350,7 +5350,7 @@ get_rec_field_index_and_type(FieldWithAnno, [], _) ->
     throw(undef(record_field, FieldWithAnno)).
 
 %% Helper for finding the return type of record_info/2
--spec get_record_info_type(erl_parse:abstract_expr(), env()) -> type().
+-spec get_record_info_type(gradualizer_type:abstract_expr(), env()) -> type().
 get_record_info_type({call, Anno, {atom, _, record_info},
                       [{atom, _, fields}, {atom, _, RecName}]}, Env) ->
     Fields = get_record_fields(RecName, Anno, Env),

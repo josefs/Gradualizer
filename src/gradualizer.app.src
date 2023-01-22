@@ -4,7 +4,8 @@
   {registered, []},
   {applications,
    [kernel,
-    stdlib
+    stdlib,
+    syntax_tools
    ]},
   {licenses, ["MIT License"]},
   {mod, {gradualizer_app, []}},
