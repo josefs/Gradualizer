@@ -100,16 +100,7 @@ parse_type(Src) ->
 %% kept for user-defined types and record types. Filename is used to
 %% disambiguate between types with the same name from different modules.
 %% Annotated types as in Name :: Type are also removed.
-
--type gr_any_fun_args() :: gradualizer_type:gr_any_fun_args().
--type unary_op() :: gradualizer_type:af_unary_op(_).
--type binary_op() :: gradualizer_type:af_binary_op(_).
-
--spec remove_pos(gr_any_fun_args()) -> gr_any_fun_args();
-                (af_constraint()) -> af_constraint();
-                (type()) -> type();
-                (unary_op()) -> unary_op();
-                (binary_op()) -> binary_op().
+-spec remove_pos(any()) -> any().
 remove_pos({type, _, any}) ->
     {type, erl_anno:new(0), any};
 remove_pos({type, _, constraint, [{atom, _, is_subtype}, Args]}) ->
