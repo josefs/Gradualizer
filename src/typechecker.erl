@@ -4018,11 +4018,13 @@ refine_ty(Ty, ?type(union, UnionTys), Trace, Env) ->
 refine_ty(?type(map, _Assocs), ?type(map, [?any_assoc]), _Trace, _Env) ->
     %% #{x => y} \ map() = none()
     type(none);
-refine_ty(?type(map, Assocs1) = Ty1, ?type(map, Assocs2) = Ty2, _Trace, Env) ->
+refine_ty(?type(map, Assocs1) = Ty1, ?type(map, Assocs2) = Ty2, Trace, Env) ->
     case {has_overlapping_keys(Ty1, Env), has_overlapping_keys(Ty2, Env)} of
         {false, false} ->
             FieldTys = lists:flatmap(fun refine_map_field_ty/1,
-                                     [ {As1, As2} || As1 <- Assocs1, As2 <- Assocs2 ]),
+                                     [ {As1, As2, Trace, Env}
+                                       || As1 <- Assocs1,
+                                          As2 <- Assocs2 ]),
             case lists:partition(fun (Ty) -> Ty == type(map, []) end, FieldTys) of
                 {[_|_], []} ->
                     %% All empty map types mean an empty map type should be returned,
@@ -4032,7 +4034,6 @@ refine_ty(?type(map, Assocs1) = Ty1, ?type(map, Assocs2) = Ty2, _Trace, Env) ->
                     %% If apart from the empty map types there are also other fields present,
                     %% make sure no more than one copy of each is returned in the final type.
                     RemainingDeduped = deduplicate_list(RemainingFields),
-                    length(RemainingDeduped) =< length(Assocs1) orelse erlang:error(unreachable),
                     type(map, RemainingDeduped)
             end;
         _ ->
@@ -4109,36 +4110,44 @@ refine_ty(Ty1, Ty2, _, Env) ->
         _NotDisjoint -> throw(no_refinement)  %% imprecision
     end.
 
--spec refine_map_field_ty({_, _}) -> [gradualizer_type:abstract_type()].
-%% For the same key K in both M1 and M2 the diff over its field (ignoring other keys) is:
+-spec refine_map_field_ty({Assoc1 :: type(), Assoc2 :: type(),
+                           Trace :: map(), Env :: env()}) ->
+          [gradualizer_type:abstract_type()].
+%% Produce the diff #{Assoc1} \ #{Assoc2}.
 %%
-%% M1 \ M2    | #{K := V} | #{K => V}
-%% -----------+-----------+--------------
-%% #{K := V}  | none      | #{K => V}
-%% #{K => V}  | #{}       | none
-%%
-%% Please note that we're changing field optionality, but not the types of keys or values.
-%%
-%% We might also see disjoint K1 from M1 and K2 from M2.
-%% In such a case we just leave K1 and its field unmodified.
-refine_map_field_ty({?type(map_field_exact, KVTy), ?type(map_field_exact, KVTy)}) ->
+%% Since Assoc2 is always computed from a pattern, it's always map_field_exact
+%% in practice.
+refine_map_field_ty({?type(map_field_exact, KVTy), ?type(map_field_exact, KVTy),
+                     _Trace, _Env}) ->
     [];
-refine_map_field_ty({?type(map_field_assoc, KVTy), ?type(map_field_assoc, KVTy)}) ->
-    [];
-refine_map_field_ty({?type(map_field_assoc, KVTy), ?type(map_field_exact, KVTy)}) ->
+refine_map_field_ty({?type(map_field_assoc, KVTy), ?type(map_field_exact, KVTy),
+                     _Trace, _Env}) ->
     %% #{x => y} \ #{x := y} = #{} -- i.e. an empty map
     [type(map, [])];
-refine_map_field_ty({?type(map_field_exact, KVTy), ?type(map_field_assoc, KVTy)}) ->
-    %% M1 = #{x := y}
-    %% M2 = #{x => y}
-    %% M1 \ M2 = #{x => y}
-    [type(map_field_assoc, KVTy)];
-refine_map_field_ty({?type(AssocTag1, _) = Assoc1, ?type(AssocTag2, _)})
-  when AssocTag1 == map_field_assoc, AssocTag2 == map_field_assoc;
-       AssocTag1 == map_field_exact, AssocTag2 == map_field_exact;
-       AssocTag1 == map_field_exact, AssocTag2 == map_field_assoc;
-       AssocTag1 == map_field_assoc, AssocTag2 == map_field_exact ->
-    %% TODO: this might lead to duplicates in the resulting type!
+refine_map_field_ty({?type(AssocTag1, [K1, V1]), ?type(map_field_exact, [K2, V2]),
+                     Trace, Env})
+  when AssocTag1 == map_field_assoc;
+       AssocTag1 == map_field_exact ->
+    %% This might lead to duplicates in the resulting type.
+    case refine(type(tuple, [K1, V1]), type(tuple, [K2, V2]), Trace, Env) of
+        ?type(none) ->
+            [];
+        ?type(tuple, [KeyRefined, ValueRefined]) ->
+            [type(AssocTag1, [KeyRefined, ValueRefined])];
+        ?type(union, Tuples) ->
+            %% TODO: Because we use the logic from tuples, this may produce
+            %% assocs with overlapping keys, e.g.
+            %%
+            %%     #{1..2 := 3..4} \ #{1 := 4} ===> #{2 := 3..4, 1..2 := 3}
+            %%
+            %% where we instead would like #{2 := 3..4, 1 := 3}, but another
+            %% problem is that only one key should be mandatory. Currently,
+            %% overlapping keys disable exhaustiveness checking.
+            [type(AssocTag1, [KeyRefined, ValueRefined])
+             || ?type(tuple, [KeyRefined, ValueRefined]) <- Tuples]
+    end;
+refine_map_field_ty({Assoc1, _Assoc2, _Trace, _Env}) ->
+    %% This is probably wrong.
     [Assoc1].
 
 -spec deduplicate_list(list()) -> list().
@@ -4738,24 +4747,30 @@ add_type_pat({map, P, AssocPats} = MapPat, MapTy, Env) ->
         {assoc_tys, AssocTys, Cs0} ->
             AssocTys = ?assert_type(AssocTys, [gradualizer_type:af_assoc_type()]),
             %% Check each Key := Value and bind vars in Value.
-            CheckAssoc = fun ({map_field_exact, _, Key, ValuePat}, {EnvIn, CsAcc}) ->
+            CheckAssoc = fun ({map_field_exact, _, Key, ValuePat},
+                              {EnvIn, ExhaustedAssocsAcc, CsAcc}) ->
                                  case add_type_pat_map_key(Key, AssocTys, EnvIn) of
-                                     {ok, ValueTy, Cs1} ->
-                                         {_ValPatTy, _ValUBound, EnvOut, Cs2} =
-                                         add_type_pat(ValuePat, normalize(ValueTy, EnvIn), EnvIn),
-                                         {EnvOut, [Cs1, Cs2 | CsAcc]};
+                                     {ok, KeyPatTy, ValueTy, Cs1} ->
+                                         {ValPatTy, _ValUBound, EnvOut, Cs2} =
+                                             add_type_pat(ValuePat, normalize(ValueTy, EnvIn), EnvIn),
+                                         ExhaustedAssoc = type(map_field_exact,
+                                                               [KeyPatTy, ValPatTy]),
+                                         {EnvOut,
+                                          [ExhaustedAssoc | ExhaustedAssocsAcc],
+                                          [Cs1, Cs2 | CsAcc]};
                                      error ->
                                          throw(type_error(badkey, Key, MapTy))
                                  end
                          end,
-            {NewEnv, Css} = lists:foldl(CheckAssoc, {Env, [Cs0]}, AssocPats),
+            {NewEnv, ExhaustedAssocs, Css} =
+                lists:foldl(CheckAssoc, {Env, [], [Cs0]}, AssocPats),
             PatTy = case NormMapTy of
                         ?top() ->
                             top();
                         {var, _, _Var} ->
                             type(none);
                         ?type(map, Assocs) when is_list(Assocs) ->
-                            rewrite_map_assocs_to_exacts(NormMapTy)
+                            rewrite_map_assocs_to_exacts(type(map, ExhaustedAssocs))
                     end,
             {PatTy, MapTy, NewEnv, constraints:combine(Css)};
         {type_error, _Type} ->
@@ -4947,17 +4962,20 @@ add_type_pat_fields([{record_field, _, {atom, _, Name} = FieldWithAnno, Pat}|Fie
 -spec add_type_pat_map_key(Key         :: gradualizer_type:abstract_pattern(),
                            MapTyAssocs :: any | [gradualizer_type:af_assoc_type()],
                            Env         :: env()
-                          ) -> {ok, ValueTy :: type(), constraints:t()} |
+                          ) -> {ok,
+                                KeyPatTy :: type(),
+                                ValueTy :: type(),
+                                constraints:t()} |
                                error.
 add_type_pat_map_key(_Key, any, _Env) ->
-    {ok, type(any), constraints:empty()};
+    {ok, type(none), type(any), constraints:empty()};
 add_type_pat_map_key(Key, [{type, _, AssocTag, [KeyTy, ValueTy]} | MapAssocs], Env)
   when AssocTag == map_field_exact; AssocTag == map_field_assoc ->
     try add_types_pats([Key], [KeyTy], Env, capture_vars) of
-        {_, _, _VEnv, Cs} ->
+        {[KeyPatTy], _KeyUBound, _VEnv, Cs} ->
             %% No free vars in Key, so no new variable binds.  (Types in VEnv
             %% can be refined though, so _VEnv doesn't have to match VEenv.)
-            {ok, ValueTy, Cs}
+            {ok, KeyPatTy, ValueTy, Cs}
     catch _TypeError ->
         add_type_pat_map_key(Key, MapAssocs, Env)
     end;

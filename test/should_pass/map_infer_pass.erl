@@ -7,7 +7,8 @@
 -gradualizer([infer]).
 
 -spec not_good(#{good | bad := integer()}) -> integer().
-not_good(#{good := _}) -> 0.
+not_good(#{good := _}) -> 0;
+not_good(#{bad := _}) -> 1.
 
 -spec kaboom1() -> integer().
 kaboom1() ->
