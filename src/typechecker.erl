@@ -672,12 +672,18 @@ glb_ty(Ty1, Ty2, A, Env) when ?is_list_type(Ty1), ?is_list_type(Ty2) ->
     {from_list_view({Empty, Elem, Term}), constraints:combine(Cs1, Cs2)};
 
 %% Tuple types
-glb_ty(Ty1 = {type, _, tuple, Tys1}, Ty2 = {type, _, tuple, Tys2}, A, Env) ->
-    case {Tys1, Tys2} of
-        {any, _} -> ret(Ty2);
-        {_, any} -> ret(Ty1);
-        _ when length(Tys1) /= length(Tys2) -> ret(type(none));
-        _ ->
+glb_ty({type, _, tuple, any}, {type, _, tuple, _} = Ty2, _A, _Env) ->
+    ret(Ty2);
+glb_ty({type, _, tuple, _} = Ty1, {type, _, tuple, any}, _A, _Env) ->
+    ret(Ty1);
+glb_ty({type, _, tuple, Tys1}, {type, _, tuple, Tys2}, A, Env) ->
+    Tys1 = ?assert_type(Tys1, [type()]),
+    Tys2 = ?assert_type(Tys2, [type()]),
+    EqualSizes = length(Tys1) =:= length(Tys2),
+    if
+        not EqualSizes ->
+            ret(type(none));
+        EqualSizes ->
             {Tys, Css} = lists:unzip(lists:zipwith(fun(T1, T2) ->
                                                            glb(T1, T2, A, Env)
                                                    end,
