@@ -1,4 +1,4 @@
--module(any_doesnt_have_type_none_should_pass).
+-module(any_doesnt_have_type_none_pass).
 
 -export([f/2]).
 
