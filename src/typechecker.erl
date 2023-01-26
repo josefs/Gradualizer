@@ -4665,7 +4665,7 @@ add_type_pat(Pat, ?type(union, _) = UnionTy, Env) ->
 add_type_pat(Lit = {Tag, P, Val}, Ty, Env)
   when Tag =:= integer;
        Tag =:= char ->
-    LitTy = {integer, erl_anno:new(0), Val},
+    LitTy = singleton(integer, Val),
     case subtype(LitTy, Ty, Env) of
         {true, Cs} ->
             {LitTy, LitTy, Env, Cs};
@@ -5263,7 +5263,7 @@ type(Name) ->
 -spec singleton(any(), any()) -> type().
 singleton(atom, A) when is_atom(A) -> {atom, erl_anno:new(0), A};
 singleton(char, C) when is_integer(C), C >= 0, C =< 16#10ffff -> {char, erl_anno:new(0), C};
-singleton(integer, I) when is_integer(I), I >= 0 -> {integer, erl_anno:new(0), I}.
+singleton(integer, I) when is_integer(I) -> {integer, erl_anno:new(0), I}.
 
 -spec top() -> type().
 top() ->
