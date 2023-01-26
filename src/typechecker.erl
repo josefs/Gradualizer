@@ -1857,6 +1857,7 @@ do_type_check_expr(Env, {'fun', P, {function, Name, Arity}}) ->
 do_type_check_expr(Env, {'fun', P, {function, M, F, A}}) ->
     case {get_atom(Env, M), get_atom(Env, F), A} of
         {{atom, _, Module}, {atom, _, Function}, {integer, _, Arity}} ->
+            Arity = arity(Arity),
             case gradualizer_db:get_spec(Module, Function, Arity) of
                 {ok, BoundedFunTypeList} ->
                     Ty = bounded_type_list_to_type(Env, BoundedFunTypeList),
@@ -4875,15 +4876,18 @@ add_type_pat_union(Pat, ?type(union, UnionTys) = UnionTy, Env) ->
             throw(type_error(pattern, Anno, Pat, UnionTy));
         _SomeTysMatched ->
             %% TODO: The constraints should be merged with *or* semantics
-            %%       and var binds with intersection
+            %%       and var binds with intersection.
             %% TODO by erszcz: see tuple_union_arg:j/1 for a problem with this.
             %% To solve this we might need to erase var binds gathered in the member patterns and
             %% instead bind the vars to fresh type vars.
             %% The type vars would have upper bounds of LUB(member var binds' types).
             %% This is food for thought, it might or might not work.
+            %% erszcz: I'm not sure why var binds with intersection.
+            %%         LUB on var binds seems to solve some self-check issues
+            %%         (and generate more, but valid ones).
             {lub(PatTys, Env),
              normalize(type(union, UBounds), Env),
-             union_var_binds(Envs, Env),
+             union_var_binds_symmetrical(Envs, Env),
              constraints:combine(Css)}
     end.
 
