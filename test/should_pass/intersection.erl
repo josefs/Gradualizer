@@ -1,5 +1,7 @@
 -module(intersection).
--export([j/1]).
+
+-export([i/2,
+         j/1]).
 
 -spec i(a, b) -> {a, b};
        (d, e) -> {d, e}.
