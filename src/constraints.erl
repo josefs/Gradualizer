@@ -77,7 +77,7 @@ combine_with(C1, C2, MergeLBounds, MergeUBounds) ->
       R :: {t(), {#{var() => type()}, #{var() => type()}}}.
 solve(Constraints, Anno, Env) ->
     ElimVars = Constraints#constraints.exist_vars,
-    WorkList = [ {E, LB, UB} || E <- maps:keys(ElimVars),
+    WorkList = [ {E, LB, UB} || E <- lists:sort(maps:keys(ElimVars)),
                                 LB <- maps:get(E, Constraints#constraints.lower_bounds, []),
                                 UB <- maps:get(E, Constraints#constraints.upper_bounds, []) ],
     Cs = solve_loop(WorkList, maps:new(), Constraints, ElimVars, Anno, Env),
