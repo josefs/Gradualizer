@@ -2176,10 +2176,7 @@ type_check_list_op(Env, Arg1, Arg2) ->
         {false, _} ->
             throw(type_error(Arg1, Ty1, type(list)));
         {_, false} ->
-            throw(type_error(Arg2, Ty2, type(list)));
-        _ ->
-            %% Prevent "Nonexhaustive patterns" when self-gradualizing.
-            erlang:error(unreachable)
+            throw(type_error(Arg2, Ty2, type(list)))
     end.
 
 -spec type_check_call_ty(env(), _, _, _) -> {type(), env(), constraints:t()}.
@@ -4833,11 +4830,10 @@ add_type_pat_union(Pat, ?type(union, UnionTys) = UnionTy, Env) ->
         _SomeTysMatched ->
             %% TODO: The constraints should be merged with *or* semantics
             %%       and var binds with intersection
-            {Ty, Cs} = glb(PatTys, Env),
-            {Ty,
+            {lub(PatTys, Env),
              normalize(type(union, UBounds), Env),
              union_var_binds(Envs, Env),
-             constraints:combine([Cs|Css])}
+             constraints:combine(Css)}
     end.
 
 %% TODO: This is incomplete!

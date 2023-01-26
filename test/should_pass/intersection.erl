@@ -1,17 +1,7 @@
 -module(intersection).
--export([f/1, g/1, j/1]).
 
--spec f(a|b) -> a|b.
-f(V) -> h(V).
-
--spec g(a|b) -> a|b.
-g(V) ->
-    A = h(V),
-    A.
-
--spec h(a) -> a;
-       (b) -> b.
-h(V) -> V.
+-export([i/2,
+         j/1]).
 
 -spec i(a, b) -> {a, b};
        (d, e) -> {d, e}.
