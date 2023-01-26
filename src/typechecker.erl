@@ -2430,7 +2430,7 @@ do_type_check_expr_in(Env, Ty, {match, _, Pat, Expr}) ->
 do_type_check_expr_in(Env, Ty, Singleton = {Tag, _, Value}) when Tag =:= integer;
                                                                  Tag =:= char;
                                                                  Tag =:= atom ->
-    ActualTy = {Tag, erl_anno:new(0), Value},
+    ActualTy = singleton(Tag, Value),
     case subtype(ActualTy, Ty, Env) of
         {true, Cs} ->
             {Env, Cs};
@@ -5253,6 +5253,11 @@ type('fun') ->
     type('fun', [{type, erl_anno:new(0), any}, type(any)]);
 type(Name) ->
     type(Name, []).
+
+-spec singleton(any(), any()) -> type().
+singleton(atom, A) when is_atom(A) -> {atom, erl_anno:new(0), A};
+singleton(char, C) when is_integer(C), C >= 0, C =< 16#10ffff -> {char, erl_anno:new(0), C};
+singleton(integer, I) when is_integer(I), I >= 0 -> {integer, erl_anno:new(0), I}.
 
 -spec top() -> type().
 top() ->
