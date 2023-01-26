@@ -20,6 +20,7 @@
 %%% Parsing and pretty printing types
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+-include_lib("stdlib/include/assert.hrl").
 -include("gradualizer.hrl").
 
 -type constraint() :: {type, erl_anno:anno(),
@@ -56,6 +57,8 @@ pp_type(Type = {type, _, bounded_fun, _}) ->
     TypeDef = erl_pp:form(Form),
     {match, [S]} = re:run(TypeDef, <<"-spec foo\\s*(.*)\\.\\n*$">>,
                           [{capture, all_but_first, list}, dotall]),
+    ?assert(is_list(S), regex_match_not_a_string),
+    S = ?assert_type(S, string()),
     "fun(" ++ S ++ ")";
 pp_type({var, _, TyVar}) ->
     %% See gradualizer_type:af_type_variable/0 and typechecker:new_type_var/0
@@ -70,8 +73,11 @@ pp_type(Type) ->
     TypeDef = erl_pp:form(Form),
     {match, [S]} = re:run(TypeDef, <<"::\\s*(.*)\\.\\n*">>,
                           [{capture, all_but_first, list}, dotall]),
-    case S of "INVALID" ++ _ -> error({badarg, Type});
-              _ -> ok end,
+    ?assert(is_list(S), regex_match_not_a_string),
+    S = ?assert_type(S, string()),
+    case S of
+        "INVALID" ++ _ -> error({badarg, Type});
+        _ -> ok end,
     S.
     %case erl_anno:file(element(2, Type)) of
     %        undefined -> S;

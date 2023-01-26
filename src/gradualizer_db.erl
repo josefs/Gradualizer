@@ -35,6 +35,7 @@
 %% Gen server local registered name
 -define(name, ?MODULE).
 
+-include_lib("stdlib/include/assert.hrl").
 -include("gradualizer.hrl").
 
 %% Internal data
@@ -592,8 +593,9 @@ get_src_map() ->
     SrcFiles = lists:flatmap(fun filelib:wildcard/1, SrcDirs),
     RE = erl_file_regexp(),
     Pairs = [begin
-                 {match, [Mod]} = re:run(Filename, RE,
-                                         [{capture, all_but_first, list}]),
+                 {match, [Mod]} = re:run(Filename, RE, [{capture, all_but_first, list}]),
+                 ?assert(is_list(Mod), regex_match_not_a_string),
+                 Mod = ?assert_type(Mod, string()),
                  {list_to_atom(Mod), Filename}
              end || Filename <- SrcFiles],
     maps:from_list(Pairs).
