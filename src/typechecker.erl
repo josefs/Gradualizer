@@ -132,7 +132,7 @@
 
 %% TODO: Some of these don't seem to be thrown at all, e.g. expected_fun_type
 -type type_error() :: arith_error | badkey | call_arity | call_intersect | check_clauses | cons_pat
-                    | cyclic_type_vars | expected_fun_type | int_error | list | mismatch
+                    | cyclic_type_vars | int_error | list | mismatch
                     | no_type_match_intersection | non_number_argument_to_minus
                     | non_number_argument_to_plus | op_type_too_precise | operator_pattern | pattern
                     | receive_after | record_pattern | rel_error | relop | unary_error

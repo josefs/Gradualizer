@@ -174,15 +174,6 @@ format_type_error({type_error, call_intersect, Anno, ArgsTys, FunTy, Name}, Opts
        length(ArgsTys),
        format_location(Anno, verbose, Opts),
        pp_intersection_type(FunTy, Opts)]);
-format_type_error({type_error, expected_fun_type, Anno, Func, FunTy}, Opts) ->
-    Name = pp_expr(Func, Opts),
-    io_lib:format(
-      "~sExpected function ~s~s to have a function type,~n"
-      "but it has the following type:~n~s~n",
-      [format_location(Anno, brief, Opts),
-       Name,
-       format_location(Anno, verbose, Opts),
-       pp_type(FunTy, Opts)]);
 format_type_error({type_error, no_type_match_intersection, Anno, Func, FunTy}, Opts) ->
     Name = pp_expr(Func, Opts),
     io_lib:format(
