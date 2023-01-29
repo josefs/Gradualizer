@@ -147,7 +147,7 @@
                | {type_error, type_error(), anno(), atom() | pattern(), type()}
                | {type_error, type_error(), unary_op() | binary_op(), anno(), type()}
                | {type_error, type_error(), binary_op(), anno(), type(), type()}
-               | {type_error, call_intersect, anno(), [type()], type(), expr()}
+               | {type_error, call_intersect, anno(), expr(), type(), [type()]}
                | {type_error, call_arity, anno(), atom(), arity(), arity()}
                | {undef, undef(), anno(), {atom(), atom() | non_neg_integer()} | mfa() | expr()}
                | {undef, undef(), expr()}
@@ -5628,6 +5628,7 @@ type_error(Kind, P, Info, Ty) ->
     {type_error, Kind, P, Info, Ty}.
 
 -spec type_error(call_arity, anno(), atom(), arity(), arity()) -> error();
+                (call_intersect, anno(), expr(), type(), [type()]) -> error();
                 (type_error(), binary_op(), anno(), type(), type()) -> error().
 type_error(Kind, Op, P, Ty1, Ty2) ->
     {type_error, Kind, Op, P, Ty1, Ty2}.
