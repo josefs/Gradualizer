@@ -164,25 +164,16 @@ format_type_error({type_error, call_arity, Anno, Fun, TyArity, CallArity}, Opts)
        TyArity,
        ["s" || TyArity /= 1],
        CallArity]);
-format_type_error({type_error, call_intersect, Anno, ArgsTys, FunTy, Name}, Opts) ->
+format_type_error({type_error, call_intersect, Anno, Name, FunTy, ArgTys}, Opts) ->
     io_lib:format(
-      "~sThe arguments ~s to ~s/~p~s don't match "
-      "the function type:~n~s~n",
+      "~s~s/~p call arguments~s don't match the function type:~n~s~n"
+      "Inferred argument types:~n~s~n",
       [format_location(Anno, brief, Opts),
-       string:join([ pp_type(ATy, Opts) || ATy <- ArgsTys ], ", "),
        pp_expr(Name, Opts),
-       length(ArgsTys),
+       length(ArgTys),
        format_location(Anno, verbose, Opts),
-       pp_intersection_type(FunTy, Opts)]);
-format_type_error({type_error, no_type_match_intersection, Anno, Func, FunTy}, Opts) ->
-    Name = pp_expr(Func, Opts),
-    io_lib:format(
-      "~sNone of the types of the function ~s~s matches the "
-      "call site. Here's the types of the function:~n~s~n",
-      [format_location(Anno, brief, Opts),
-       Name,
-       format_location(Anno, verbose, Opts),
-       pp_intersection_type(FunTy, Opts)]);
+       pp_intersection_type(FunTy, Opts),
+       string:join([ pp_type(ATy, Opts) || ATy <- ArgTys ], ", ")]);
 format_type_error({type_error, relop, RelOp, Anno, Ty1, Ty2}, Opts) ->
     io_lib:format(
       "~sThe operator ~p~s requires arguments of "
