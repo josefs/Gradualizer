@@ -163,8 +163,10 @@ anno_keep_only_filename(Anno) ->
         Filename  -> erl_anno:set_file(Filename, NewAnno)
     end.
 
+-type mod_or_file() :: module() | file:filename().
+
 %% Annotate a user-defined type or record type with a file name.
--spec annotate_user_type(module() | file:filename(), type()) -> type().
+-spec annotate_user_type(mod_or_file(), type()) -> type().
 annotate_user_type(ModOrFile, Type) ->
     Filename = ensure_filename(ModOrFile),
     annotate_user_type_(Filename, Type).
@@ -178,16 +180,13 @@ ensure_filename(ModOrFile) ->
     end.
 
 %% Annotate user-defined types and record types with a file name.
--spec annotate_user_types(ModOrFile, TypeOrTypes) -> type() | [type()] when
-      ModOrFile :: module() | file:filename(),
-      TypeOrTypes :: type() | [type()].
-annotate_user_types(ModOrFile, TypeOrTypes) ->
-    case TypeOrTypes of
-        Types when is_list(Types) ->
-            [ annotate_user_type(ModOrFile, Type) || Type <- ?assert_type(Types, [type()]) ];
-        Type ->
-            annotate_user_type(ModOrFile, ?assert_type(Type, type()))
-    end.
+-spec annotate_user_types(mod_or_file(), type()) -> type();
+                         (mod_or_file(), [type()]) -> [type()].
+annotate_user_types(_ModOrFile, []) -> [];
+annotate_user_types(ModOrFile, Types = [_|_]) ->
+    [ annotate_user_type(ModOrFile, Type) || Type <- ?assert_type(Types, [type()]) ];
+annotate_user_types(ModOrFile, Type) ->
+    annotate_user_type(ModOrFile, ?assert_type(Type, type())).
 
 -spec annotate_user_type_(file:filename(), type()) -> type().
 annotate_user_type_(Filename, {user_type, Anno, Name, Params}) ->
@@ -195,11 +194,11 @@ annotate_user_type_(Filename, {user_type, Anno, Name, Params}) ->
     {user_type, erl_anno:set_file(Filename, Anno), Name,
      [annotate_user_type_(Filename, Param) || Param <- Params]};
 annotate_user_type_(Filename, {type, Anno, record, RecName = [_]}) ->
+    RecName = ?assert_type(RecName, [gradualizer_type:af_atom(), ...]),
     %% Annotate local record type
     {type, erl_anno:set_file(Filename, Anno), record, RecName};
 annotate_user_type_(Filename, {type, Anno, T, Params}) when is_list(Params) ->
-    {type, Anno, T, [ annotate_user_types(Filename, Param)
-                      || Param <- ?assert_type(Params, [type()]) ]};
+    {type, Anno, T, [ annotate_user_types(Filename, Param) || Param <- Params ]};
 annotate_user_type_(Filename, {ann_type, Anno, [Var, Type]}) ->
     %% We match Var :: af_anno() and Type :: type() above.
     Type = ?assert_type(Type, type()),
