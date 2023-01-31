@@ -11,7 +11,7 @@
          substitute_type_vars/2,
          pp_type/1, debug_type/3, parse_type/1,
          reduce_type/3]).
--export_type([constraint/0, function_type/0, extended_type/0]).
+-export_type([constraint/0, function_type/0, printable_type/0]).
 
 -type af_constraint() :: gradualizer_type:af_constraint().
 -type anno() :: erl_anno:anno().
@@ -32,15 +32,15 @@
                                 'fun',
                                 [{type, erl_anno:anno(), product, [type()]} |
                                  type()]}.
--type extended_type() :: type() |
+-type printable_type() :: type() |
                           {type, erl_anno:anno(), bounded_fun,
                                  [function_type() | [constraint()]]} |
-                          [extended_type()].
+                          [printable_type()].
 
 %% @doc
 %% Pretty-print a type represented as an Erlang abstract form.
 %% @end
--spec pp_type(extended_type()) -> string().
+-spec pp_type(printable_type()) -> string().
 pp_type(Types = [_|_]) ->
     %% TODO: This is a workaround for the fact that a list is sometimes used in
     %% place of a type. It typically represents a function type with multiple
