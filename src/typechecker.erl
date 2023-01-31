@@ -4210,6 +4210,8 @@ refinable(?type(pos_integer), _Env, _Trace) ->
     true;
 refinable(?type(neg_integer), _Env, _Trace) ->
     true;
+refinable(?type(boolean), _Env, _Trace) ->
+    true;
 refinable({atom, _, _}, _Env, _Trace) ->
     true;
 refinable(?type(nil), _Env, _Trace) ->
