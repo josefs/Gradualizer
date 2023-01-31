@@ -34,17 +34,17 @@
                                  type()]}.
 -type printable_type() :: type() |
                           {type, erl_anno:anno(), bounded_fun,
-                                 [function_type() | [constraint()]]} |
-                          [printable_type()].
+                                 [function_type() | [constraint()]]}.
 
 %% @doc
 %% Pretty-print a type represented as an Erlang abstract form.
 %% @end
--spec pp_type(printable_type()) -> string().
+-spec pp_type(printable_type()) -> string();
+             ([printable_type()]) -> string().
 pp_type(Types = [_|_]) ->
     %% TODO: This is a workaround for the fact that a list is sometimes used in
-    %% place of a type. It typically represents a function type with multiple
-    %% clauses. We should perhaps represented them as a tuples on the form
+    %% place of a type. It typically represents a function type with multiple clauses.
+    %% We should perhaps represent them as a tuples of the form
     %% {type, Anno, intersection, Types} instead.
     lists:join("; ", lists:map(fun pp_type/1, Types));
 pp_type({type, _, bounded_fun, [FunType, []]}) ->
