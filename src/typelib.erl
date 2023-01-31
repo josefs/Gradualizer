@@ -14,6 +14,7 @@
 -export_type([constraint/0, function_type/0, extended_type/0]).
 
 -type af_constraint() :: gradualizer_type:af_constraint().
+-type anno() :: erl_anno:anno().
 -type type() :: gradualizer_type:abstract_type().
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -229,11 +230,7 @@ substitute_type_vars({Tag, L, T, Params}, TVars)
   when Tag == type orelse
        Tag == user_type,
        is_list(Params) ->
-    %% We have to assert the type below as we're running into the problem documented
-    %% with test/known_problems/should_pass/lc_cannot_glb_different_variants.erl.
-    %% In other words, the 4th element of a `type()' tuple doesn't have to be a list
-    %% and Gradualizer cannot yet use the `is_list(Params)' guard to refine the type.
-    {Tag, L, T, [substitute_type_vars(P, TVars) || P <- ?assert_type(Params, list())]};
+    type(Tag, L, T, [substitute_type_vars(P, TVars) || P <- Params]);
 substitute_type_vars({remote_type, L, [M, T, Params]}, TVars) ->
     {remote_type, L, [M, T, [substitute_type_vars(P, TVars) || P <- Params]]};
 substitute_type_vars({ann_type, L, [Var = {var, _, _}, Type]}, TVars) ->
@@ -257,6 +254,10 @@ substitute_type_vars(Other = {op, _, _Op, _Arg1, _Arg2}, _) ->
 substitute_type_vars(Other = {T, _, _}, _)
   when T == atom; T == integer; T == char ->
     Other.
+
+-spec type(any(), anno(), atom(), [type()]) -> type().
+type(Tag, L, TyName, Params) when Tag =:= type; Tag =:= user_type ->
+    {Tag, L, TyName, Params}.
 
 -type walkable_type() :: gradualizer_type:abstract_type() | {type, _, any} | pos_inf | neg_inf.
 %% `gradualizer_type:abstract_type()' defines the abstract representation of a type.
