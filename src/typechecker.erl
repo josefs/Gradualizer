@@ -4946,7 +4946,10 @@ expect_map_type(Ty, _Env) ->
 %% then the map field is exact (:=), not assoc (=>).
 %% There isn't even syntax for optional fields in map patterns.
 -spec rewrite_map_assocs_to_exacts(type()) -> type().
+rewrite_map_assocs_to_exacts(?type(map, any)) ->
+    type(map, any);
 rewrite_map_assocs_to_exacts(?type(map, Assocs)) ->
+    Assocs = ?assert_type(Assocs, [gradualizer_type:af_assoc_type()]),
     type(map, lists:map(fun ({type, Ann, _, KVTy}) ->
                                 {type, Ann, map_field_exact, KVTy}
                         end, Assocs)).
