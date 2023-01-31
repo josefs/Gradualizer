@@ -132,8 +132,8 @@
 
 %% TODO: Some of these don't seem to be thrown at all, e.g. expected_fun_type
 -type type_error() :: arith_error | badkey | call_arity | call_intersect | check_clauses | cons_pat
-                    | cyclic_type_vars | expected_fun_type | int_error | list | mismatch
-                    | no_type_match_intersection | non_number_argument_to_minus
+                    | cyclic_type_vars | int_error | list | mismatch
+                    | non_number_argument_to_minus
                     | non_number_argument_to_plus | op_type_too_precise | operator_pattern | pattern
                     | receive_after | record_pattern | rel_error | relop | unary_error
                     | unreachable_clauses.
@@ -147,6 +147,7 @@
                | {type_error, type_error(), anno(), atom() | pattern(), type()}
                | {type_error, type_error(), unary_op() | binary_op(), anno(), type()}
                | {type_error, type_error(), binary_op(), anno(), type(), type()}
+               | {type_error, call_intersect, anno(), expr(), type(), [type()]}
                | {type_error, call_arity, anno(), atom(), arity(), arity()}
                | {undef, undef(), anno(), {atom(), atom() | non_neg_integer()} | mfa() | expr()}
                | {undef, undef(), expr()}
@@ -2205,8 +2206,8 @@ type_check_call_ty(_Env, {type_error, _}, _Args, {Name, _P, FunTy}) ->
     throw(type_error(Name, FunTy, type('fun'))).
 
 -spec type_check_call_ty_intersect(env(), _, _, _) -> {type(), env(), constraints:t()}.
-type_check_call_ty_intersect(_Env, [], _Args, {Name, P, FunTy}) ->
-    throw(type_error(call_intersect, P, FunTy, Name));
+type_check_call_ty_intersect(Env, [], Args, {Name, P, FunTy}) ->
+    throw(type_error(call_intersect, P, Name, FunTy, infer_arg_types(Args, Env)));
 type_check_call_ty_intersect(Env, [Ty | Tys], Args, E) ->
     try
         type_check_call_ty(Env, Ty, Args, E)
@@ -2214,6 +2215,13 @@ type_check_call_ty_intersect(Env, [Ty | Tys], Args, E) ->
         Error when element(1,Error) == type_error ->
             type_check_call_ty_intersect(Env, Tys, Args, E)
     end.
+
+-spec infer_arg_types([expr()], env()) -> [type()].
+infer_arg_types(Args, Env) ->
+    lists:map(fun (Arg) ->
+                      {ArgTy, _VB, _Cs} = type_check_expr(Env#env{infer = true}, Arg),
+                      ArgTy
+              end, Args).
 
 -spec type_check_call_ty_union(env(), _, _, _) -> {type(), env(), constraints:t()}.
 type_check_call_ty_union(Env, Tys, Args, E) ->
@@ -3333,8 +3341,8 @@ type_check_call_intersection(Env, ResTy, OrigExpr, Tys, Args, E) ->
     type_check_call_intersection_(Env, ResTy, OrigExpr, Tys, Args, E).
 
 -spec type_check_call_intersection_(env(), type(), _, _, _, _) -> {env(), constraints:t()}.
-type_check_call_intersection_(_Env, _ResTy, _, [], _Args, {P, Name, Ty}) ->
-    throw(type_error(no_type_match_intersection, P, Name, Ty));
+type_check_call_intersection_(Env, _ResTy, _, [], Args, {P, Name, FunTy}) ->
+    throw(type_error(call_intersect, P, Name, FunTy, infer_arg_types(Args, Env)));
 type_check_call_intersection_(Env, ResTy, OrigExpr, [Ty | Tys], Args, E) ->
     try
         type_check_call(Env, ResTy, OrigExpr, Ty, Args, E)
@@ -5620,6 +5628,7 @@ type_error(Kind, P, Info, Ty) ->
     {type_error, Kind, P, Info, Ty}.
 
 -spec type_error(call_arity, anno(), atom(), arity(), arity()) -> error();
+                (call_intersect, anno(), expr(), type(), [type()]) -> error();
                 (type_error(), binary_op(), anno(), type(), type()) -> error().
 type_error(Kind, Op, P, Ty1, Ty2) ->
     {type_error, Kind, Op, P, Ty1, Ty2}.
