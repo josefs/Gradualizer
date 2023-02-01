@@ -2196,8 +2196,8 @@ type_check_call_ty(Env, {fun_ty, ArgsTy, ResTy, Cs}, Args, E) ->
             P = element(2, E),
             throw(argument_length_mismatch(P, arity(LenTy), arity(LenArgs)))
     end;
-type_check_call_ty(Env, {fun_ty_intersection, Tyss, Cs}, Args, E) ->
-    {ResTy, VarBinds, CsI} = type_check_call_ty_intersect(Env, Tyss, Args, E),
+type_check_call_ty(Env, {fun_ty_intersection, ClauseTys, Cs}, Args, E) ->
+    {ResTy, VarBinds, CsI} = type_check_call_ty_intersect(Env, ClauseTys, Args, E),
     {ResTy, VarBinds, constraints:combine(Cs, CsI)};
 type_check_call_ty(Env, {fun_ty_union, Tyss, Cs}, Args, E) ->
     {ResTy, VarBinds, CsI} = type_check_call_ty_union(Env, Tyss, Args, E),
@@ -2206,18 +2206,48 @@ type_check_call_ty(_Env, {type_error, _}, _Args, {Name, _P, FunTy}) ->
     throw(type_error(Name, FunTy, type('fun'))).
 
 -spec type_check_call_ty_intersect(env(), _, _, _) -> {type(), env(), constraints:t()}.
-type_check_call_ty_intersect(Env, [], Args, {Name, P, FunTy}) ->
-    throw(type_error(call_intersect, P, Name, FunTy, infer_arg_types(Args, Env)));
-type_check_call_ty_intersect(Env, [Ty | Tys], Args, E) ->
-    try
-        type_check_call_ty(Env, Ty, Args, E)
-    catch
-        Error when element(1,Error) == type_error ->
-            type_check_call_ty_intersect(Env, Tys, Args, E)
+type_check_call_ty_intersect(Env, ClauseTys, Args, E = {Name, P, FunTy}) ->
+    check_call_arity(hd(ClauseTys), Args, E),
+    MatchingClausesCss = lists:foldr(fun ({fun_ty, ClauseParamTys, _, _} = Clause, Acc) ->
+                                             case args_match_clause(Args, ClauseParamTys, Env) of
+                                                 {true, Cs} ->
+                                                     [{Clause, Cs} | Acc];
+                                                 false ->
+                                                     Acc
+                                             end
+                                     end, [], ClauseTys),
+    case MatchingClausesCss of
+        [_|_] ->
+            {MatchingClauses, Css} = lists:unzip(MatchingClausesCss),
+            {ResTys, Css1} = lists:unzip([ {ResTy, Cs} || {fun_ty, _, ResTy, Cs} <- MatchingClauses ]),
+            {lub(ResTys, Env), Env, constraints:combine(Css ++ Css1)};
+        [] ->
+            throw(type_error(call_intersect, P, Name, FunTy, infer_arg_types(Args, Env)))
     end.
+
+-spec args_match_clause(_, [type()], env()) -> {true, constraints:t()} | false.
+args_match_clause(Args, ClauseParamTys, Env) ->
+    lists:foldl(fun ({_Arg, _ClauseArgTy}, false) ->
+                        false;
+                    ({Arg, ClauseArgTy}, {true, AccCs}) ->
+                        %% TODO: don't drop the constraints from infer_arg_types
+                        Subtype = case infer_arg_types([Arg], Env) of
+                                      [?type(union, Tys)] ->
+                                          any_subtype(Tys, ClauseArgTy, Env);
+                                      [Ty] ->
+                                          subtype(Ty, ClauseArgTy, Env)
+                                  end,
+                        case Subtype of
+                            {true, Cs} ->
+                                {true, constraints:combine(Cs, AccCs)};
+                            false ->
+                                false
+                        end
+                end, {true, constraints:empty()}, lists:zip(Args, ClauseParamTys)).
 
 -spec infer_arg_types([expr()], env()) -> [type()].
 infer_arg_types(Args, Env) ->
+    %% TODO: don't drop the constraints
     lists:map(fun (Arg) ->
                       {ArgTy, _VB, _Cs} = type_check_expr(Env#env{infer = true}, Arg),
                       ArgTy
@@ -3335,20 +3365,23 @@ type_check_fun(Env, Expr, _Arity) ->
     end.
 
 -spec type_check_call_intersection(env(), type(), _, _, _, _) -> {env(), constraints:t()}.
-type_check_call_intersection(Env, ResTy, OrigExpr, [Ty], Args, E) ->
-    type_check_call(Env, ResTy, OrigExpr, Ty, Args, E);
-type_check_call_intersection(Env, ResTy, OrigExpr, Tys, Args, E) ->
-    type_check_call_intersection_(Env, ResTy, OrigExpr, Tys, Args, E).
+type_check_call_intersection(Env, ResTy, OrigExpr, ClauseTys, Args, {P, Name, FunTy}) ->
+    {FunResTy, Env1, Cs} = type_check_call_ty_intersect(Env, ClauseTys, Args, {Name, P, FunTy}),
+    case subtype(FunResTy, ResTy, Env) of
+        {true, Cs1} ->
+            {union_var_binds([Env1], Env), constraints:combine([Cs, Cs1])};
+        false ->
+            throw(type_error(OrigExpr, FunResTy, ResTy))
+    end.
 
--spec type_check_call_intersection_(env(), type(), _, _, _, _) -> {env(), constraints:t()}.
-type_check_call_intersection_(Env, _ResTy, _, [], Args, {P, Name, FunTy}) ->
-    throw(type_error(call_intersect, P, Name, FunTy, infer_arg_types(Args, Env)));
-type_check_call_intersection_(Env, ResTy, OrigExpr, [Ty | Tys], Args, E) ->
-    try
-        type_check_call(Env, ResTy, OrigExpr, Ty, Args, E)
-    catch
-        Error when element(1, Error) == type_error ->
-            type_check_call_intersection_(Env, ResTy, OrigExpr, Tys, Args, E)
+-spec check_call_arity(_, _, _) -> ok.
+check_call_arity({fun_ty, ArgsTy, _FunResTy, _Cs}, Args, {P, Name, _}) ->
+    case length(ArgsTy) =:= length(Args) of
+        true -> ok;
+        false ->
+            LenTys = arity(length(ArgsTy)),
+            LenArgs = arity(length(Args)),
+            throw(type_error(call_arity, P, Name, LenTys, LenArgs))
     end.
 
 -spec type_check_call(env(), type(), _, _, _, _) -> {env(), constraints:t()}.
