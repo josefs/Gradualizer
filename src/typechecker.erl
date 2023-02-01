@@ -3585,7 +3585,15 @@ instantiate({var, _, TyVar}, Map) ->
 instantiate(T = ?type(_), Map) ->
     {T, maps:new(), Map};
 instantiate(?type(Ty, Args), Map) ->
-    {NewArgs, Set, NewMap} = instantiate_inner(Args, Map),
+    %% TODO: Ugly, but until we have better support for union args to intersection-typed funs,
+    %%       it fixes the type-check error.
+    {NewArgs, Set, NewMap} = case Args of
+                                 any ->
+                                     instantiate_inner(?assert_type(Args, any), Map);
+                                 _ when is_list(Args) ->
+                                     instantiate_inner(?assert_type(Args, list()), Map)
+                             end,
+    %% TODO: Another case of union arg to an intersection-typed fun :(
     {type(Ty, NewArgs), Set, NewMap};
 instantiate(T = {Tag, _,_}, Map)
   when Tag == integer orelse Tag == atom orelse Tag == char ->
@@ -5236,13 +5244,8 @@ type_of_bin_element({bin_element, _P, Expr, _Size, Specifiers}, OccursAs) ->
 
 %%% Helper functions
 
--spec type(atom(), any | [any()]) -> type().
-type(map, any) -> type_(map, any);
-type(tuple, any) -> type_(tuple, any);
-type(Name, Args) -> type_(Name, Args).
-
--spec type_(_, _) -> type().
-type_(Name, Args) ->
+-spec type(_, _) -> type().
+type(Name, Args) ->
     {type, erl_anno:new(0), Name, Args}.
 
 %% Helper to create a type, typically a normalized type
