@@ -1,4 +1,4 @@
--module(call_intersection_function_with_union_arg_should_pass).
+-module(call_intersection_function_with_union_arg_pass).
 
 -export([f1/1,
          f2/1,
