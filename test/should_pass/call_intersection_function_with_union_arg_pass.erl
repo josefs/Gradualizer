@@ -4,8 +4,7 @@
          f2/1,
          g1/1,
          g2/1,
-         i1/2,
-         i2/2]).
+         i1/2]).
 
 -spec f1(a) -> a.
 f1(V) ->
@@ -34,10 +33,6 @@ h(V) -> V.
 
 -spec i1(t2, u2) -> two.
 i1(T, U) ->
-    j(T, U).
-
--spec i2(t(), u()) -> one | two.
-i2(T, U) ->
     j(T, U).
 
 -spec j(t1, u1) -> one;
