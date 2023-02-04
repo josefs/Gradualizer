@@ -6,7 +6,8 @@
          empty_tenv/0, create_tenv/3,
          remove_pos_typed_record_field/1,
          ensure_form_list/1,
-         zipn/1]).
+         zipn/1,
+         cartesian_product/1]).
 -export_type([graph/1, tenv/0]).
 
 -type type() :: gradualizer_type:abstract_type().
@@ -329,3 +330,10 @@ zipn([], Acc) ->
     [ lists:reverse(Zipped) || Zipped <- Acc ];
 zipn([L | Ls], Acc) ->
     zipn(Ls, lists:zipwith(fun (Z, Zs) -> [Z | Zs] end, L, Acc)).
+
+cartesian_product(ListOfLists) ->
+    lists:foldr(fun (L, []) ->
+                        [ [E] || E <- L ];
+                    (L2, Acc) ->
+                        [ [E | L1] || L1 <- Acc, E <- L2 ]
+                end, [], ListOfLists).
