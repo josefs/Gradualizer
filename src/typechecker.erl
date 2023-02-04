@@ -2208,42 +2208,38 @@ type_check_call_ty(_Env, {type_error, _}, _Args, {Name, _P, FunTy}) ->
 -spec type_check_call_ty_intersect(env(), _, _, _) -> {type(), env(), constraints:t()}.
 type_check_call_ty_intersect(Env, ClauseTys, Args, E = {Name, P, FunTy}) ->
     check_call_arity(hd(ClauseTys), Args, E),
-    MatchingClausesCss = lists:foldr(fun ({fun_ty, ClauseParamTys, _, _} = Clause, Acc) ->
-                                             case args_match_clause(Args, ClauseParamTys, Env) of
-                                                 {true, Cs} ->
-                                                     [{Clause, Cs} | Acc];
-                                                 false ->
-                                                     Acc
-                                             end
-                                     end, [], ClauseTys),
-    case MatchingClausesCss of
-        [_|_] ->
-            {MatchingClauses, Css} = lists:unzip(MatchingClausesCss),
+    ArgTypes = infer_arg_types(Args, Env),
+    ArgExpandedUnions = lists:map(fun
+                                      (?type(union, Tys)) -> Tys;
+                                      (Ty) -> [Ty]
+                                  end, ArgTypes),
+    ArgTyCombinations = gradualizer_lib:cartesian_product(ArgExpandedUnions),
+    Matches = [ {Clause, Cs}
+                || {fun_ty, ClauseParamTys, _, _} = Clause <- ClauseTys,
+                   ArgTys <- ArgTyCombinations,
+                   {true, Cs} <- [
+                                  lists:foldl(fun
+                                                  (_, false) -> false;
+                                                  ({ArgTy, ParamTy}, {true, AccCs}) ->
+                                                      case subtype(ArgTy, ParamTy, Env) of
+                                                          false -> false;
+                                                          {true, Cs} ->
+                                                              {true, constraints:combine(Cs, AccCs)}
+                                                      end
+                                              end,
+                                              {true, constraints:empty()},
+                                              lists:zip(ArgTys, ClauseParamTys))
+                                 ] ],
+    NMatches = length(Matches),
+    NArgTyCombinations = length(ArgTyCombinations),
+    if
+        NMatches < NArgTyCombinations ->
+            throw(type_error(call_intersect, P, Name, FunTy, ArgTypes));
+        NMatches >= NArgTyCombinations ->
+            {MatchingClauses, Css} = lists:unzip(Matches),
             {ResTys, Css1} = lists:unzip([ {ResTy, Cs} || {fun_ty, _, ResTy, Cs} <- MatchingClauses ]),
-            {lub(ResTys, Env), Env, constraints:combine(Css ++ Css1)};
-        [] ->
-            throw(type_error(call_intersect, P, Name, FunTy, infer_arg_types(Args, Env)))
+            {lub(ResTys, Env), Env, constraints:combine(Css ++ Css1)}
     end.
-
--spec args_match_clause(_, [type()], env()) -> {true, constraints:t()} | false.
-args_match_clause(Args, ClauseParamTys, Env) ->
-    lists:foldl(fun ({_Arg, _ClauseArgTy}, false) ->
-                        false;
-                    ({Arg, ClauseArgTy}, {true, AccCs}) ->
-                        %% TODO: don't drop the constraints from infer_arg_types
-                        Subtype = case infer_arg_types([Arg], Env) of
-                                      [?type(union, Tys)] ->
-                                          any_subtype(Tys, ClauseArgTy, Env);
-                                      [Ty] ->
-                                          subtype(Ty, ClauseArgTy, Env)
-                                  end,
-                        case Subtype of
-                            {true, Cs} ->
-                                {true, constraints:combine(Cs, AccCs)};
-                            false ->
-                                false
-                        end
-                end, {true, constraints:empty()}, lists:zip(Args, ClauseParamTys)).
 
 -spec infer_arg_types([expr()], env()) -> [type()].
 infer_arg_types(Args, Env) ->
