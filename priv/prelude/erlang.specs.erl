@@ -18,39 +18,6 @@
 
 -spec erlang:'--'(list(), list()) -> list().
 
-%% The original spec is:
-%%
-%% -spec erlang:'++'(list(), term()) -> term().
-%%
-%% Now, this is funny:
-%%
-%%   > [] ++ b.
-%%   b
-%%   > [a] ++ b.
-%%   [a|b]
-%%   > [a, b] ++ c.
-%%   [a,b|c]
-%%   > [a|b] ++ c.
-%%   ** exception error: bad argument
-%%     in operator  ++/2
-%%        called as [a|b] ++ c
-%%   > [] ++ [a].
-%%   [a]
-%%   > [a,b] ++ [c].
-%%   [a,b,c]
-%%   > [a|b] ++ [c].
-%%   ** exception error: bad argument
-%%        in operator  ++/2
-%%           called as [a|b] ++ [c]
-%%
--spec erlang:'++'([], T)                                     -> T;
-                 ([T1, ...], [T2])                           -> [T1 | T2, ...];
-                 ([T1], [T2])                                -> [T1 | T2];
-                 ([T1, ...], nonempty_improper_list(T2, T3)) -> nonempty_improper_list(T1 | T2, T3);
-                 ([T1], nonempty_improper_list(T2, T3))      -> nonempty_improper_list(T1 | T2, T3);
-                 ([T1, ...], T2)                             -> nonempty_improper_list(T1, T2).
-
-
 %% Prior to OTP 24.1 the spec does not list `none' as valid `Args',
 %% but the function accepts it and works properly.
 -spec erlang:error(Reason, Args) -> no_return() when
