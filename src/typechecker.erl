@@ -5218,10 +5218,13 @@ type_of_bin_element({bin_element, _P, Expr, _Size, Specifiers}, OccursAs) ->
 
 %%% Helper functions
 
--spec type(map, any) -> type();
-          (tuple, any) -> type();
-          (atom(), [any()]) -> type().
-type(Name, Args) ->
+-spec type(atom(), any | [any()]) -> type().
+type(map, any) -> type_(map, any);
+type(tuple, any) -> type_(tuple, any);
+type(Name, Args) -> type_(Name, Args).
+
+-spec type_(_, _) -> type().
+type_(Name, Args) ->
     {type, erl_anno:new(0), Name, Args}.
 
 %% Helper to create a type, typically a normalized type
