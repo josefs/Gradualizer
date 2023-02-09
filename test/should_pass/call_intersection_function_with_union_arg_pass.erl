@@ -4,7 +4,9 @@
          f2/1,
          g1/1,
          g2/1,
-         i1/2]).
+         i1/2,
+         k1/2,
+         k2/2]).
 
 -spec f1(a) -> a.
 f1(V) ->
@@ -39,3 +41,11 @@ i1(T, U) ->
        (t2, u2) -> two.
 j(t1, u1) -> one;
 j(t2, u2) -> two.
+
+-spec k1(_, _) -> any().
+k1(T, U) ->
+    j(T, U).
+
+%% intentionally no spec
+k2(T, U) ->
+    j(T, U).
