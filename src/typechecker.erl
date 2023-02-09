@@ -183,12 +183,21 @@ compatible(Ty1, Ty2, Env) ->
 
 -spec subtype(type(), type(), env()) -> compatible().
 subtype(Ty1, Ty2, Env) ->
-    try compat(Ty1, Ty2, maps:new(), Env) of
-        {_Memoization, Constraints} ->
-            {true, Constraints}
-    catch
-        nomatch ->
-            false
+    Module = maps:get(module, Env#env.tenv),
+    case gradualizer_cache:get(?FUNCTION_NAME, {Module, Ty1, Ty2}) of
+        none ->
+            R = try compat(Ty1, Ty2, maps:new(), Env) of
+                    {_Memoization, Constraints} ->
+                        {true, Constraints}
+                catch
+                    nomatch ->
+                        false
+                end,
+            gradualizer_cache:store(?FUNCTION_NAME, {Module, Ty1, Ty2}, R),
+            R;
+        {some, R} ->
+            %% these two types have already been seen and calculated
+            R
     end.
 
 %% Check if at least one of the types in a list is a subtype of a type.
@@ -571,15 +580,15 @@ glb(T1, T2, A, Env) ->
         true -> {type(none), constraints:empty()};
         false ->
             Module = maps:get(module, Env#env.tenv),
-            case gradualizer_cache:get_glb(Module, T1, T2) of
-                false ->
+            case gradualizer_cache:get(?FUNCTION_NAME, {Module, T1, T2}) of
+                none ->
                     Ty1 = normalize(T1, Env),
                     Ty2 = normalize(T2, Env),
                     {Ty, Cs} = glb_ty(Ty1, Ty2, A#{ {T1, T2} => 0 }, Env),
                     NormTy = normalize(Ty, Env),
-                    gradualizer_cache:store_glb(Module, T1, T2, {NormTy, Cs}),
+                    gradualizer_cache:store(?FUNCTION_NAME, {Module, T1, T2}, {NormTy, Cs}),
                     {NormTy, Cs};
-                TyCs ->
+                {some, TyCs} ->
                     %% these two types have already been seen and calculated
                     TyCs
             end

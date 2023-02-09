@@ -9,9 +9,8 @@
 
 %% API
 -export([start_link/1,
-         get_glb/3,
-         store_glb/4
-        ]).
+         get/2,
+         store/3]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -19,11 +18,9 @@
 
 -define(SERVER, ?MODULE).
 -define(GLB_CACHE, gradualizer_glb_cache).
+-define(SUB_CACHE, gradualizer_sub_cache).
 
 -record(state, {}).
-
-%% give shorter alias
--type type() :: gradualizer_type:abstract_type().
 
 %%===================================================================
 %% API
@@ -41,26 +38,32 @@ start_link(Opts) ->
 %% GLB Cache
 %%
 
--spec get_glb(module(), type(), type()) -> false | {type(), constraints:t()}.
-get_glb(Module, T1, T2) ->
-    try ets:lookup(?GLB_CACHE, {Module, T1, T2}) of
+-spec get(atom(), any()) -> none | {some, any()}.
+get(glb, Key) -> get_(?GLB_CACHE, Key);
+get(subtype, Key) -> get_(?SUB_CACHE, Key).
+
+get_(Cache, Key) ->
+    try ets:lookup(Cache, Key) of
         [] ->
-            false;
-        [{_, TyCs}] ->
-            TyCs
+            none;
+        [{_, Value}] ->
+            {some, Value}
     catch error:badarg ->
-            %% cache not initialized
-            false
+        %% cache not initialized
+        none
     end.
 
--spec store_glb(module(), type(), type(), {type(), constraints:t()}) -> ok.
-store_glb(Module, T1, T2, TyCs) ->
+-spec store(atom(), any(), any()) -> ok.
+store(glb, Key, Value) -> store_(?GLB_CACHE, Key, Value);
+store(subtype, Key, Value) -> store_(?SUB_CACHE, Key, Value).
+
+store_(Cache, Key, Value) ->
     try
-        ets:insert(?GLB_CACHE, {{Module, T1, T2}, TyCs}),
+        ets:insert(Cache, {Key, Value}),
         ok
     catch error:badarg ->
-            %% cache not initialized
-            ok
+        %% cache not initialized
+        ok
     end.
 
 %%===================================================================
@@ -69,6 +72,7 @@ store_glb(Module, T1, T2, TyCs) ->
 
 init([_Opts]) ->
     ets:new(?GLB_CACHE, [set, public, named_table]),
+    ets:new(?SUB_CACHE, [set, public, named_table]),
     {ok, #state{}}.
 
 handle_call(_Request, _From, State) ->
