@@ -4876,6 +4876,11 @@ add_type_pat_union(Pat, ?type(union, UnionTys) = UnionTy, Env) ->
         _SomeTysMatched ->
             %% TODO: The constraints should be merged with *or* semantics
             %%       and var binds with intersection
+            %% TODO by erszcz: see tuple_union_arg:j/1 for a problem with this.
+            %% To solve this we might need to erase var binds gathered in the member patterns and
+            %% instead bind the vars to fresh type vars.
+            %% The type vars would have upper bounds of LUB(member var binds' types).
+            %% This is food for thought, it might or might not work.
             {lub(PatTys, Env),
              normalize(type(union, UBounds), Env),
              union_var_binds(Envs, Env),
