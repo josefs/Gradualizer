@@ -178,6 +178,7 @@ type_check_file(File, Opts) ->
                 ".beam" ->
                     case gradualizer_file_utils:get_forms_from_beam(File) of
                         {ok, Forms} ->
+                            ok = gradualizer_db:import_beam_files([File]),
                             type_check_forms(File, Forms, Opts);
                         Error ->
                             throw(Error)
@@ -195,6 +196,10 @@ type_check_file(File, Opts) ->
 lint_and_check_forms(Forms, File, Opts) ->
     case erl_lint:module(Forms, File, [return_errors]) of
         {ok, _Warnings} ->
+            % import the currently checked file so that it can
+            % reference itself even without adding its path via --pa
+            ok = gradualizer_db:import_erl_files([File]),
+
             type_check_forms(File, Forms, Opts);
         {error, Errors, _Warnings} ->
             %% If there are lint errors (i.e. compile errors like undefined
