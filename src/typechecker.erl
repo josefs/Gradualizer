@@ -4100,14 +4100,22 @@ refine_ty(?type(map, Assocs1) = Ty1, ?type(map, Assocs2) = Ty2, Trace, Env) ->
 refine_ty(?type(tuple, _Tys), ?type(tuple, any), _Trace, _Env) ->
     %% {x,y,z} \ tuple() = none()
     type(none);
-refine_ty(?type(tuple, Tys1), ?type(tuple, Tys2), Trace, Env)
-  when length(Tys1) > 0, length(Tys1) == length(Tys2) ->
-    %% Non-empty tuple
-    RefTys = [refine(Ty1, Ty2, Trace, Env) || {Ty1, Ty2} <- lists:zip(Tys1, Tys2)],
-    %% {a|b, a|b} \ {a,a} => {b, a|b}, {a|b, b}
-    TuplesElems = pick_one_refinement_each(Tys1, RefTys),
-    Tuples = [type(tuple, TupleElems) || TupleElems <- TuplesElems],
-    normalize(type(union, Tuples), Env);
+refine_ty(?type(tuple, [_|_] = Tys1) = Ty1, ?type(tuple, [_|_] = Tys2) = Ty2, Trace, Env) ->
+    Tys1 = ?assert_type(Tys1, [type()]),
+    Tys2 = ?assert_type(Tys2, [type()]),
+    if
+        length(Tys1) /= length(Tys2) ->
+            refine_ty_catch_all(Ty1, Ty2, Env);
+        length(Tys1) == length(Tys2) ->
+            %% Non-empty tuple
+            RefTys = [refine(Ty1_, Ty2_, Trace, Env) || {Ty1_, Ty2_} <- lists:zip(Tys1, Tys2)],
+            %% {a|b, a|b} \ {a,a} => {b, a|b}, {a|b, b}
+            TuplesElems = pick_one_refinement_each(Tys1, RefTys),
+            Tuples = [type(tuple, TupleElems) || TupleElems <- TuplesElems],
+            normalize(type(union, Tuples), Env)
+    end;
+refine_ty(?type(tuple, any) = Ty1, ?type(tuple, _) = Ty2, _Trace, Env) ->
+    refine_ty_catch_all(Ty1, Ty2, Env);
 refine_ty({atom, _, At}, {atom, _, At}, _, _) ->
     type(none);
 refine_ty({atom, _, _}, ?type(atom), _, _) ->
@@ -4163,6 +4171,14 @@ refine_ty({user_type, Anno, Name, Args}, {user_type, Anno, Name, Args}, _, _Env)
     % If it has the same annotation, name and args, it's the same.
     type(none);
 refine_ty(Ty1, Ty2, _, Env) ->
+    refine_ty_catch_all(Ty1, Ty2, Env).
+
+%% This is the catch-all clause of refine_ty/4.
+%% TODO: Since we want to self-check Gradualizer and type-checking guard patterns is not perfect yet,
+%% instead of using sophisticated guards not to enter a clause and finally fall into a catch-all
+%% we sometimes enter that clause, but then call this function if certain conditions are met.
+-spec refine_ty_catch_all(type(), type(), env()) -> type().
+refine_ty_catch_all(Ty1, Ty2, Env) ->
     case glb(Ty1, Ty2, Env) of
         {?type(none), _} -> throw(disjoint);  %% disjoint
         _NotDisjoint -> throw(no_refinement)  %% imprecision
