@@ -180,15 +180,21 @@ ensure_filename(ModOrFile) ->
     end.
 
 %% Annotate user-defined types and record types with a file name.
+%%
+%% Please note that once we recurse down the gradualizer_type:abstract_type() tree,
+%% the lists of type arguments might contain types, but might also contain other non-type nodes.
+%% For a top-level type() we guarantee to return a type(),
+%% but for an inner node we'll return that node unchanged.
 -spec annotate_user_types(mod_or_file(), type()) -> type();
-                         (mod_or_file(), [type()]) -> [type()].
+                         (mod_or_file(), list()) -> list().
 annotate_user_types(_ModOrFile, []) -> [];
 annotate_user_types(ModOrFile, Types = [_|_]) ->
     [ annotate_user_type(ModOrFile, Type) || Type <- ?assert_type(Types, [type()]) ];
 annotate_user_types(ModOrFile, Type) ->
     annotate_user_type(ModOrFile, ?assert_type(Type, type())).
 
--spec annotate_user_type_(file:filename(), type()) -> type().
+%% @see annotate_user_types/2
+-spec annotate_user_type_(file:filename(), any()) -> any().
 annotate_user_type_(Filename, {user_type, Anno, Name, Params}) ->
     %% Annotate local user-defined type.
     {user_type, erl_anno:set_file(Filename, Anno), Name,
@@ -197,7 +203,7 @@ annotate_user_type_(Filename, {type, Anno, record, RecName = [_]}) ->
     RecName = ?assert_type(RecName, [gradualizer_type:af_atom(), ...]),
     %% Annotate local record type
     {type, erl_anno:set_file(Filename, Anno), record, RecName};
-annotate_user_type_(Filename, {type, Anno, T, Params}) when is_list(Params) ->
+annotate_user_type_(Filename, {type, Anno, T, Params} = OuterT) when is_list(Params) ->
     {type, Anno, T, [ annotate_user_types(Filename, Param) || Param <- Params ]};
 annotate_user_type_(Filename, {ann_type, Anno, [Var, Type]}) ->
     %% We match Var :: af_anno() and Type :: type() above.
