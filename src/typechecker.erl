@@ -4287,6 +4287,8 @@ refinable(?type(record, [_ | Fields]) = Ty0, Env, Trace) ->
 refinable(?type(map, _) = Ty0, Env, Trace) ->
     ?assert_normalized_anno(Ty0),
     ?type(map, Assocs) = Ty = normalize(Ty0, Env),
+    %% normalize/2 will not return Assocs=any
+    Assocs = ?assert_type(Assocs, [gradualizer_type:af_assoc_type()]),
     case stop_refinable_recursion(Ty, Env, Trace) of
         stop -> true;
         {proceed, NewTrace} ->
