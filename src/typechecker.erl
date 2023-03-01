@@ -1183,11 +1183,13 @@ expect_list_type(Ty, _, _) ->
     {type_error, Ty}.
 
 -spec rewrite_list_to_nonempty_list(type()) -> type().
-rewrite_list_to_nonempty_list({type, Ann, T, [ElemTy]})
-  when T == list orelse T == nonempty_list ->
+rewrite_list_to_nonempty_list({type, Ann, list, [ElemTy]}) ->
     {type, Ann, nonempty_list, [ElemTy]};
-rewrite_list_to_nonempty_list({type, Ann, T, [ElemTy, SentinelTy]})
-  when T == maybe_improper_list orelse T == nonempty_improper_list ->
+rewrite_list_to_nonempty_list({type, Ann, nonempty_list, [ElemTy]}) ->
+    {type, Ann, nonempty_list, [ElemTy]};
+rewrite_list_to_nonempty_list({type, Ann, maybe_improper_list, [ElemTy, SentinelTy]}) ->
+    {type, Ann, nonempty_improper_list, [ElemTy, SentinelTy]};
+rewrite_list_to_nonempty_list({type, Ann, nonempty_improper_list, [ElemTy, SentinelTy]}) ->
     {type, Ann, nonempty_improper_list, [ElemTy, SentinelTy]};
 rewrite_list_to_nonempty_list({type, _, any, _} = Ty) ->
     Ty;
