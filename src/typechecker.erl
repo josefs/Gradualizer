@@ -1341,6 +1341,7 @@ expect_fun_type(Env, Type, Arity) ->
 -spec expect_fun_type1(env(), type() | [type()], arity()) -> fun_ty() | type_error.
 expect_fun_type1(Env, BTy = {type, _, bounded_fun, [Ft, _Fc]}, Arity) ->
     Sub = bounded_type_subst(Env, BTy),
+    Ft = ?assert_type(Ft, type()),
     case expect_fun_type1(Env, Ft, Arity) of
         {fun_ty, ArgsTy, ResTy, Cs} ->
             {{Args, Res}, CsI} = instantiate_fun_type(subst_ty(Sub, ArgsTy),
