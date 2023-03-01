@@ -1557,7 +1557,9 @@ solve_bounds(Env, Defs, [{acyclic, X} | SCCs], Acc) ->
     {Ty1, _Cs} =
         case Defs of
             #{X := Tys} ->
-                Tys1 = subst_ty(Acc, Tys),
+                %% Tys is a list, so Tys1 is a list, too
+                %% TODO: but cannot it be a [fun_ty()], too?
+                Tys1 = ?assert_type(subst_ty(Acc, Tys), [type()]),
                 %% Take intersection after substitution to
                 %% get rid of type variables.
                 lists:foldl(fun(S, {T, Css}) ->
