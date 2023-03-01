@@ -108,6 +108,7 @@
 
 -type af_field_name() :: gradualizer_type:af_field_name().
 -type record_field() :: gradualizer_type:af_record_field(expr()).
+-type record_field_type() :: gradualizer_type:af_record_field_type().
 -type typed_record_field() :: {typed_record_field, record_field(), type()}.
 
 %% The environment passed around during typechecking.
@@ -4040,15 +4041,23 @@ refine_ty(?type(record, [{atom, _, Name} | _]), ?type(record, [{atom, _, Name}])
     type(none);
 refine_ty(?type(record, [{atom, Anno, Name}]), Refined = ?type(record, [{atom, _, Name} | _]), Trace, Env) ->
     refine_ty(expand_record(Name, Anno, Env), Refined, Trace, Env);
-refine_ty(?type(record, [Name|FieldTys1]), ?type(record, [Name|FieldTys2]), Trace, Env)
+refine_ty(?type(record, [Name | FieldTys1]), ?type(record, [Name | FieldTys2]), Trace, Env)
   when length(FieldTys1) > 0, length(FieldTys1) == length(FieldTys2) ->
+    %% TODO: without these assertions the constraint solver goes crazy with ?type_field_type()
+    FieldTys1 = ?assert_type(FieldTys1, [record_field_type()]),
+    FieldTys2 = ?assert_type(FieldTys2, [record_field_type()]),
     % Record without just the name
     Tys1 = [Ty || ?type_field_type(_, Ty) <- FieldTys1],
     Tys2 = [Ty || ?type_field_type(_, Ty) <- FieldTys2],
     RefTys = [refine(Ty1, Ty2, Trace, Env) || {Ty1, Ty2} <- lists:zip(Tys1, Tys2)],
     RecordsTys = pick_one_refinement_each(Tys1, RefTys),
-    RecordsElems = [ [ type_field_type(FieldName, RecordTy) || {?type_field_type(FieldName, _), RecordTy} <- lists:zip(FieldTys1, RecordTys)]
-        || RecordTys <- RecordsTys],
+    RecordsElems = [ lists:map(fun ({Field, RecordTy}) ->
+                                       %% TODO: same thing about the constraint solver
+                                       Field = ?assert_type(Field, record_field_type()),
+                                       ?type_field_type(FieldName, _) = Field,
+                                       type_field_type(FieldName, RecordTy)
+                               end, lists:zip(FieldTys1, RecordTys))
+                     || RecordTys <- RecordsTys ],
     Records = [type(record, [Name|RecordElems]) || RecordElems <- RecordsElems],
     normalize(type(union, Records), Env);
 refine_ty(?type(union, UnionTys), Ty, Trace, Env) ->
@@ -5306,7 +5315,7 @@ type_record(Name) ->
 type_record(Name, Fields) ->
     {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Name} | Fields]}.
 
--spec type_field_type(atom(), type()) -> type().
+-spec type_field_type(atom(), type()) -> record_field_type().
 type_field_type(Name, Type) ->
     {type, erl_anno:new(0), field_type, [{atom, erl_anno:new(0), Name}, Type]}.
 
