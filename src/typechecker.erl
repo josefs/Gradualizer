@@ -855,7 +855,7 @@ normalize(Ty, Env) ->
 %% The third argument is a set of user types that we've already unfolded.
 %% It's important that we don't keep unfolding such types because it will
 %% lead to infinite recursion.
--spec normalize_rec(type(), env()) -> type().
+-spec normalize_rec(type() | gradualizer_type:gr_range_bound(), env()) -> type().
 normalize_rec({type, _, union, Tys}, Env) ->
     UnionSizeLimit = Env#env.union_size_limit,
     Types = flatten_unions(Tys, Env),
@@ -906,7 +906,7 @@ normalize_rec(Type, _Env) ->
     expand_builtin_aliases(Type).
 
 %% Replace built-in type aliases
--spec expand_builtin_aliases(type()) -> type().
+-spec expand_builtin_aliases(type() | gradualizer_type:gr_range_bound()) -> type().
 expand_builtin_aliases({var, Ann, '_'}) ->
     {type, Ann, any, []};
 expand_builtin_aliases({type, Ann, term, []}) ->
