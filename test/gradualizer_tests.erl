@@ -5,12 +5,23 @@
 -define(passing, "test/should_pass/any.erl").
 -define(failing, "test/should_fail/arg.erl").
 
+setup_app() ->
+    {ok, Apps} = application:ensure_all_started(gradualizer),
+    Apps.
+
+cleanup_app(Apps) ->
+    [ok = application:stop(App) || App <- Apps],
+    ok.
+
 type_check_erl_file_test_() ->
-    [?_assertEqual(ok, gradualizer:type_check_file(?passing)),
-     ?_assertEqual([], gradualizer:type_check_file(?passing, [return_errors])),
-     ?_assertEqual(nok, gradualizer:type_check_file(?failing)),
-     ?_assertMatch([_|_], gradualizer:type_check_file(?failing, [return_errors]))
-    ].
+    {setup,
+     fun setup_app/0,
+     fun cleanup_app/1,
+     [?_assertEqual(ok, gradualizer:type_check_file(?passing)),
+      ?_assertEqual([], gradualizer:type_check_file(?passing, [return_errors])),
+      ?_assertEqual(nok, gradualizer:type_check_file(?failing)),
+      ?_assertMatch([_|_], gradualizer:type_check_file(?failing, [return_errors]))
+     ]}.
 
 type_check_erl_files_test_() ->
     [
