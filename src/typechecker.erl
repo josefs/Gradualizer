@@ -2648,6 +2648,7 @@ do_type_check_expr_in(Env, ResTy, {call, P, {remote, _, _Mod, {atom, _, module_i
     type_check_call(Env, ResTy, Call, expect_fun_type(Env, FunTy, Arity),
                     Args, {P, Name, FunTy});
 do_type_check_expr_in(Env, ResTy, {call, P, Name, Args} = OrigExpr) ->
+    Name = ?assert_type(Name, expr()),
     Arity = arity(length(Args)),
     {FunTy, VarBinds, Cs} = type_check_fun(Env, Name, Arity),
     {VarBinds2, Cs2} = type_check_call(Env, ResTy, OrigExpr, expect_fun_type(Env, FunTy, Arity),
@@ -2697,7 +2698,7 @@ do_type_check_expr_in(Env, ResTy, Expr = {'fun', P, {function, Name, Arity}}) ->
 do_type_check_expr_in(Env, ResTy, Expr = {'fun', P, {function, M, F, A}}) ->
     case {get_atom(Env, M), get_atom(Env, F), A} of
         {{atom, _, Module}, {atom, _, Function}, {integer, _,Arity}} ->
-            case gradualizer_db:get_spec(Module, Function, Arity) of
+            case gradualizer_db:get_spec(Module, Function, arity(Arity)) of
                 {ok, BoundedFunTypeList} ->
                     FunTypeList =
                         unfold_bounded_type_list(Env, BoundedFunTypeList),
@@ -2706,7 +2707,7 @@ do_type_check_expr_in(Env, ResTy, Expr = {'fun', P, {function, M, F, A}}) ->
                         false -> throw(type_error(Expr, FunTypeList, ResTy))
                     end;
                 not_found ->
-                    throw(call_undef(P, Module, Function, Arity))
+                    throw(call_undef(P, Module, Function, arity(Arity)))
             end;
         _ -> % We don't have enough information to check the type.
             {Env, constraints:empty()}
@@ -3794,7 +3795,7 @@ check_clauses_intersection(Env, [{ArgsTys, ResTy} = SpecClause | SpecClauses],
       Env :: env(),
       ArgsTy :: [type()],
       ResTy :: type(),
-      Clauses :: [gradualizer_type:abstract_clause(), ...],
+      Clauses :: [gradualizer_type:abstract_clause()],
       Caps :: capture_vars | bind_vars,
       R :: {env(), constraints:t()}.
 check_clauses(Env, ArgsTy, ResTy, Clauses, Caps) ->
@@ -3873,7 +3874,7 @@ disable_exhaustiveness_check(#env{} = Env) ->
 %% TODO: Exhaustiveness checking might be improved in the future to handle (some) guards.
 %% @end
 -spec check_arg_exhaustiveness(env(), [type()], Clauses, [type()]) -> ok when
-      Clauses :: [gradualizer_type:abstract_clause(), ...].
+      Clauses :: [gradualizer_type:abstract_clause()].
 check_arg_exhaustiveness(Env, ArgTys, Clauses, RefinedArgTys) ->
     case exhaustiveness_checking(Env) andalso
          all_refinable(ArgTys, Env) andalso
