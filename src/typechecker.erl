@@ -1742,6 +1742,7 @@ do_type_check_expr(Env, {call, P, {remote, _, _Mod, {atom, _, module_info}} = Na
     FunTy = get_module_info_type(Arity),
     type_check_call_ty(Env, expect_fun_type(Env, FunTy, Arity), Args, {Name, P, FunTy});
 do_type_check_expr(Env, {call, P, Name, Args}) ->
+    Name = ?assert_type(Name, expr()),
     Arity = arity(length(Args)),
     {FunTy, VarBinds1, Cs1} = type_check_fun(Env, Name, Arity),
     {ResTy, VarBinds2, Cs2} = type_check_call_ty(Env, expect_fun_type(Env, FunTy, Arity),
