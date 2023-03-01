@@ -1555,20 +1555,20 @@ solve_bounds(Env, Cs) ->
 solve_bounds(Env, Defs, [{acyclic, X} | SCCs], Acc) ->
     %% TODO: Don't drop the constraints.
     {Ty1, _Cs} =
-      case Defs of
-	  #{X := Tys} ->
-	      Tys1 = subst_ty(Acc, Tys),
-	      %% Take intersection after substitution to
-	      %% get rid of type variables.
-	      lists:foldl(fun(S, {T, Css}) ->
-				  {Ty, Cs} = glb(S, T, Env),
-				  {Ty, constraints:combine(Cs, Css)}
-			  end,
-			  {top(), constraints:empty()}, Tys1);
-          _NoBoundsForX ->
-              %% Unconstrained type variables are kept as type variables.
-              {{var, erl_anno:new(0), X}, constraints:empty()}
-      end,
+        case Defs of
+            #{X := Tys} ->
+                Tys1 = subst_ty(Acc, Tys),
+                %% Take intersection after substitution to
+                %% get rid of type variables.
+                lists:foldl(fun(S, {T, Css}) ->
+                                    {Ty, Cs} = glb(S, T, Env),
+                                    {Ty, constraints:combine(Cs, Css)}
+                            end,
+                            {top(), constraints:empty()}, Tys1);
+            _NoBoundsForX ->
+                %% Unconstrained type variables are kept as type variables.
+                {{var, erl_anno:new(0), X}, constraints:empty()}
+        end,
     solve_bounds(Env, maps:remove(X, Defs), SCCs, Acc#{ X => Ty1 });
 solve_bounds(_, _, [{cyclic, Xs} | _], _) ->
     throw({cyclic_dependencies, Xs});
