@@ -1516,7 +1516,7 @@ unfold_bounded_type_list(Env, Types) when is_list(Types) ->
 -spec unfold_bounded_type(env(), type()) -> any().
 unfold_bounded_type(Env, BTy = {type, _, bounded_fun, [Ty, _]}) ->
     Sub = bounded_type_subst(Env, BTy),
-    subst_ty(Sub, Ty);
+    subst_ty(Sub, ?assert_type(Ty, type()));
 unfold_bounded_type(_Env, Ty) -> Ty.
 
 %% TODO: move tenv to back
