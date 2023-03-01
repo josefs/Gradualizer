@@ -2237,10 +2237,15 @@ type_check_call_ty_intersect(Env, ClauseTys, Args, E = {Name, P, FunTy}) ->
                    ArgTys <- ArgTyCombinations,
                    {true, Cs} <- [
                                   lists:foldl(fun
-                                                  (_, false) -> false;
+                                                  (_, {false, {}}) ->
+                                                      %% TODO: we have to use `{false, {}}` instead of
+                                                      %% just `false` to please the constraint solver;
+                                                      %% it's "sensitive" to the shape of the param
+                                                      %% on the same position in different clauses
+                                                      {false, {}};
                                                   ({ArgTy, ParamTy}, {true, AccCs}) ->
                                                       case subtype(ArgTy, ParamTy, Env) of
-                                                          false -> false;
+                                                          false -> {false, {}};
                                                           {true, Cs} ->
                                                               {true, constraints:combine(Cs, AccCs)}
                                                       end
