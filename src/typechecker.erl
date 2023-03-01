@@ -3952,7 +3952,8 @@ refine_clause_arg_tys(Tys, MatchedTys, [], Env) ->
     MatchedTy = type(tuple, MatchedTys),
     case type_diff(Ty, MatchedTy, Env) of
         ?type(tuple, RefTys) ->
-            RefTys;
+            %% type_diff/3 will never return type(tuple, any), so RefTys :: [type()]
+            ?assert_type(RefTys, [type()]);
         ?type(none) ->
             lists:duplicate(length(Tys), type(none));
         ?type(union, _) ->
