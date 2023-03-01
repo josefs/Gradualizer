@@ -12,12 +12,11 @@
               (string() | atom() | deep_list()) -> string().
 
 -type name() :: string() | atom() | deep_list().
--type bname() :: string() | atom() | deep_list() | binary().
 
 -spec join([name()]) -> string();
-          ([bname()]) -> binary().
+          ([binary()]) -> binary().
 
--spec join(name(),  name())  -> string();
-          (bname(), name())  -> binary();
-          (name(),  bname()) -> binary();
-          (bname(), bname()) -> binary().
+-spec join(name(), name()) -> string();
+          (binary(), name()) -> binary();
+          (name(), binary()) -> binary();
+          (binary(), binary()) -> binary().

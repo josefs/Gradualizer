@@ -183,12 +183,21 @@ compatible(Ty1, Ty2, Env) ->
 
 -spec subtype(type(), type(), env()) -> compatible().
 subtype(Ty1, Ty2, Env) ->
-    try compat(Ty1, Ty2, maps:new(), Env) of
-        {_Memoization, Constraints} ->
-            {true, Constraints}
-    catch
-        nomatch ->
-            false
+    Module = maps:get(module, Env#env.tenv),
+    case gradualizer_cache:get(?FUNCTION_NAME, {Module, Ty1, Ty2}) of
+        none ->
+            R = try compat(Ty1, Ty2, maps:new(), Env) of
+                    {_Memoization, Constraints} ->
+                        {true, Constraints}
+                catch
+                    nomatch ->
+                        false
+                end,
+            gradualizer_cache:store(?FUNCTION_NAME, {Module, Ty1, Ty2}, R),
+            R;
+        {some, R} ->
+            %% these two types have already been seen and calculated
+            R
     end.
 
 %% Check if at least one of the types in a list is a subtype of a type.
@@ -571,15 +580,15 @@ glb(T1, T2, A, Env) ->
         true -> {type(none), constraints:empty()};
         false ->
             Module = maps:get(module, Env#env.tenv),
-            case gradualizer_cache:get_glb(Module, T1, T2) of
-                false ->
+            case gradualizer_cache:get(?FUNCTION_NAME, {Module, T1, T2}) of
+                none ->
                     Ty1 = normalize(T1, Env),
                     Ty2 = normalize(T2, Env),
                     {Ty, Cs} = glb_ty(Ty1, Ty2, A#{ {T1, T2} => 0 }, Env),
                     NormTy = normalize(Ty, Env),
-                    gradualizer_cache:store_glb(Module, T1, T2, {NormTy, Cs}),
+                    gradualizer_cache:store(?FUNCTION_NAME, {Module, T1, T2}, {NormTy, Cs}),
                     {NormTy, Cs};
-                TyCs ->
+                {some, TyCs} ->
                     %% these two types have already been seen and calculated
                     TyCs
             end
@@ -2196,8 +2205,8 @@ type_check_call_ty(Env, {fun_ty, ArgsTy, ResTy, Cs}, Args, E) ->
             P = element(2, E),
             throw(argument_length_mismatch(P, arity(LenTy), arity(LenArgs)))
     end;
-type_check_call_ty(Env, {fun_ty_intersection, Tyss, Cs}, Args, E) ->
-    {ResTy, VarBinds, CsI} = type_check_call_ty_intersect(Env, Tyss, Args, E),
+type_check_call_ty(Env, {fun_ty_intersection, ClauseTys, Cs}, Args, E) ->
+    {ResTy, VarBinds, CsI} = type_check_call_ty_intersect(Env, ClauseTys, Args, E),
     {ResTy, VarBinds, constraints:combine(Cs, CsI)};
 type_check_call_ty(Env, {fun_ty_union, Tyss, Cs}, Args, E) ->
     {ResTy, VarBinds, CsI} = type_check_call_ty_union(Env, Tyss, Args, E),
@@ -2206,18 +2215,44 @@ type_check_call_ty(_Env, {type_error, _}, _Args, {Name, _P, FunTy}) ->
     throw(type_error(Name, FunTy, type('fun'))).
 
 -spec type_check_call_ty_intersect(env(), _, _, _) -> {type(), env(), constraints:t()}.
-type_check_call_ty_intersect(Env, [], Args, {Name, P, FunTy}) ->
-    throw(type_error(call_intersect, P, Name, FunTy, infer_arg_types(Args, Env)));
-type_check_call_ty_intersect(Env, [Ty | Tys], Args, E) ->
-    try
-        type_check_call_ty(Env, Ty, Args, E)
-    catch
-        Error when element(1,Error) == type_error ->
-            type_check_call_ty_intersect(Env, Tys, Args, E)
+type_check_call_ty_intersect(Env, ClauseTys, Args, E = {Name, P, FunTy}) ->
+    check_call_arity(hd(ClauseTys), Args, E),
+    ArgTypes = infer_arg_types(Args, Env),
+    ArgExpandedUnions = lists:map(fun
+                                      (?type(union, Tys)) -> Tys;
+                                      (Ty) -> [Ty]
+                                  end, ArgTypes),
+    ArgTyCombinations = gradualizer_lib:cartesian_product(ArgExpandedUnions),
+    Matches = [ {Clause, Cs}
+                || {fun_ty, ClauseParamTys, _, _} = Clause <- ClauseTys,
+                   ArgTys <- ArgTyCombinations,
+                   {true, Cs} <- [
+                                  lists:foldl(fun
+                                                  (_, false) -> false;
+                                                  ({ArgTy, ParamTy}, {true, AccCs}) ->
+                                                      case subtype(ArgTy, ParamTy, Env) of
+                                                          false -> false;
+                                                          {true, Cs} ->
+                                                              {true, constraints:combine(Cs, AccCs)}
+                                                      end
+                                              end,
+                                              {true, constraints:empty()},
+                                              lists:zip(ArgTys, ClauseParamTys))
+                                 ] ],
+    NMatches = length(Matches),
+    NArgTyCombinations = length(ArgTyCombinations),
+    if
+        NMatches < NArgTyCombinations ->
+            throw(type_error(call_intersect, P, Name, FunTy, ArgTypes));
+        NMatches >= NArgTyCombinations ->
+            {MatchingClauses, Css} = lists:unzip(Matches),
+            {ResTys, Css1} = lists:unzip([ {ResTy, Cs} || {fun_ty, _, ResTy, Cs} <- MatchingClauses ]),
+            {lub(ResTys, Env), Env, constraints:combine(Css ++ Css1)}
     end.
 
 -spec infer_arg_types([expr()], env()) -> [type()].
 infer_arg_types(Args, Env) ->
+    %% TODO: don't drop the constraints
     lists:map(fun (Arg) ->
                       {ArgTy, _VB, _Cs} = type_check_expr(Env#env{infer = true}, Arg),
                       ArgTy
@@ -3335,20 +3370,23 @@ type_check_fun(Env, Expr, _Arity) ->
     end.
 
 -spec type_check_call_intersection(env(), type(), _, _, _, _) -> {env(), constraints:t()}.
-type_check_call_intersection(Env, ResTy, OrigExpr, [Ty], Args, E) ->
-    type_check_call(Env, ResTy, OrigExpr, Ty, Args, E);
-type_check_call_intersection(Env, ResTy, OrigExpr, Tys, Args, E) ->
-    type_check_call_intersection_(Env, ResTy, OrigExpr, Tys, Args, E).
+type_check_call_intersection(Env, ResTy, OrigExpr, ClauseTys, Args, {P, Name, FunTy}) ->
+    {FunResTy, Env1, Cs} = type_check_call_ty_intersect(Env, ClauseTys, Args, {Name, P, FunTy}),
+    case subtype(FunResTy, ResTy, Env) of
+        {true, Cs1} ->
+            {union_var_binds([Env1], Env), constraints:combine([Cs, Cs1])};
+        false ->
+            throw(type_error(OrigExpr, FunResTy, ResTy))
+    end.
 
--spec type_check_call_intersection_(env(), type(), _, _, _, _) -> {env(), constraints:t()}.
-type_check_call_intersection_(Env, _ResTy, _, [], Args, {P, Name, FunTy}) ->
-    throw(type_error(call_intersect, P, Name, FunTy, infer_arg_types(Args, Env)));
-type_check_call_intersection_(Env, ResTy, OrigExpr, [Ty | Tys], Args, E) ->
-    try
-        type_check_call(Env, ResTy, OrigExpr, Ty, Args, E)
-    catch
-        Error when element(1, Error) == type_error ->
-            type_check_call_intersection_(Env, ResTy, OrigExpr, Tys, Args, E)
+-spec check_call_arity(_, _, _) -> ok.
+check_call_arity({fun_ty, ArgsTy, _FunResTy, _Cs}, Args, {P, Name, _}) ->
+    case length(ArgsTy) =:= length(Args) of
+        true -> ok;
+        false ->
+            LenTys = arity(length(ArgsTy)),
+            LenArgs = arity(length(Args)),
+            throw(type_error(call_arity, P, Name, LenTys, LenArgs))
     end.
 
 -spec type_check_call(env(), type(), _, _, _, _) -> {env(), constraints:t()}.
@@ -4838,6 +4876,11 @@ add_type_pat_union(Pat, ?type(union, UnionTys) = UnionTy, Env) ->
         _SomeTysMatched ->
             %% TODO: The constraints should be merged with *or* semantics
             %%       and var binds with intersection
+            %% TODO by erszcz: see tuple_union_arg:j/1 for a problem with this.
+            %% To solve this we might need to erase var binds gathered in the member patterns and
+            %% instead bind the vars to fresh type vars.
+            %% The type vars would have upper bounds of LUB(member var binds' types).
+            %% This is food for thought, it might or might not work.
             {lub(PatTys, Env),
              normalize(type(union, UBounds), Env),
              union_var_binds(Envs, Env),
@@ -5180,10 +5223,13 @@ type_of_bin_element({bin_element, _P, Expr, _Size, Specifiers}, OccursAs) ->
 
 %%% Helper functions
 
--spec type(map, any) -> type();
-          (tuple, any) -> type();
-          (atom(), [any()]) -> type().
-type(Name, Args) ->
+-spec type(atom(), any | [any()]) -> type().
+type(map, any) -> type_(map, any);
+type(tuple, any) -> type_(tuple, any);
+type(Name, Args) -> type_(Name, Args).
+
+-spec type_(_, _) -> type().
+type_(Name, Args) ->
     {type, erl_anno:new(0), Name, Args}.
 
 %% Helper to create a type, typically a normalized type

@@ -8,7 +8,9 @@
 
 -export([j/1]).
 
--spec map_many({_, nonempty_list()}) -> nonempty_list().
+%% We cannot preserve the nonempty-property across calls to lists:map/2 anymore :(
+%% This interferes with the clause choice when calling an intersection-typed function.
+-spec map_many({_, nonempty_list()}) -> list().
 map_many({_Key, Types}) ->
     lists:map(fun map_elem/1,
               map_specific_list(Types)).
@@ -19,7 +21,7 @@ map_elem(L) when is_list(L) -> L;
 map_elem(a) -> a;
 map_elem(b) -> a.
 
--type t_list() :: [a | b, ...].
+-type t_list() :: [a | b].
 
 -spec map_specific_list(t_list()) -> t_list().
 map_specific_list(List) ->
