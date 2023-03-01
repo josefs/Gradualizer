@@ -1783,7 +1783,7 @@ do_type_check_expr(#env{infer = true} = Env, {Tag, _, Value})
   when Tag =:= atom;
        Tag =:= integer;
        Tag =:= char ->
-    {{Tag, erl_anno:new(0), Value}, Env, constraints:empty()};
+    {singleton(Tag, Value), Env, constraints:empty()};
 do_type_check_expr(#env{infer = true} = Env, {float, _, _F}) ->
     {type(float), Env, constraints:empty()};
 
