@@ -1152,8 +1152,9 @@ expect_list_type({type, _, T, []}, _, _)
   when T == 'list' orelse T == 'any' orelse
        T == 'nonempty_list' orelse T == 'maybe_improper_list' ->
     any;
-expect_list_type({type, _, T, [ElemTy]}, _, _)
-  when T == 'list' orelse T == 'nonempty_list' ->
+expect_list_type({type, _, list, [ElemTy]}, _, _) ->
+    {elem_ty, ElemTy, constraints:empty()};
+expect_list_type({type, _, nonempty_list, [ElemTy]}, _, _) ->
     {elem_ty, ElemTy, constraints:empty()};
 expect_list_type(?top() = TermTy, _EmptyOrNot, _) ->
     {elem_ty, TermTy, constraints:empty()};
