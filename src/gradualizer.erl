@@ -168,6 +168,7 @@ type_check_file(File, Opts) ->
         false ->
             case filename:extension(File) of
                 ".erl" ->
+                    ok = gradualizer_db:import_erl_files([File]),
                     Includes = proplists:get_all_values(i, Opts),
                     case gradualizer_file_utils:get_forms_from_erl(File, Includes) of
                         {ok, Forms} ->
@@ -176,6 +177,7 @@ type_check_file(File, Opts) ->
                             throw(Error)
                     end;
                 ".beam" ->
+                    ok = gradualizer_db:import_beam_files([File]),
                     case gradualizer_file_utils:get_forms_from_beam(File) of
                         {ok, Forms} ->
                             type_check_forms(File, Forms, Opts);
