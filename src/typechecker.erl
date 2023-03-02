@@ -195,7 +195,9 @@ subtype(Ty1, Ty2, Env) ->
                         false
                 end,
             gradualizer_cache:store(?FUNCTION_NAME, {Module, Ty1, Ty2}, R),
-            R;
+            %% TODO: Gradualizer cannot tell that even if we get compat_acc() from compat(),
+            %% we rewrite it to {true, Constraints} :: compatible()
+            ?assert_type(R, compatible());
         {some, R} ->
             %% these two types have already been seen and calculated
             R
