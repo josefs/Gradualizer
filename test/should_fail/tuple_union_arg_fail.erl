@@ -1,4 +1,4 @@
--module(tuple_union_arg).
+-module(tuple_union_arg_fail).
 
 -export([j/1]).
 

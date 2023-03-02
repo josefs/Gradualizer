@@ -378,8 +378,8 @@ form_info({function, _, Name, Arity, _}) ->
     io_lib:format("function ~s/~p", [Name, Arity]).
 
 -spec format_expr_type_error(gradualizer_type:abstract_expr(),
-			typelib:extended_type(),
-			typelib:extended_type(),
+			typelib:printable_type(),
+			typelib:printable_type(),
 			proplists:proplist()) -> io_lib:chars().
 format_expr_type_error(Expression, ActualType, ExpectedType, Opts) ->
     FancyExpr = try_highlight_in_context(Expression, Opts),

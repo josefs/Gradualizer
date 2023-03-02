@@ -31,6 +31,7 @@
               af_fun_type/0,
               af_function_type_list/0,
               af_record_field/1,
+              af_record_field_type/0,
               af_singleton_integer_type/0,
               af_string/0,
               af_unary_op/1,
@@ -381,7 +382,7 @@
 -type binary_op() :: '/' | '*' | 'div' | 'rem' | 'band' | 'and' | '+' | '-'
                    | 'bor' | 'bxor' | 'bsl' | 'bsr' | 'or' | 'xor' | '++'
                    | '--' | '==' | '/=' | '=<' | '<'  | '>=' | '>' | '=:='
-                   | '=/='.
+                   | '=/=' | '!'.
 
 -type af_unary_op(T) :: {'op', anno(), unary_op(), T}.
 

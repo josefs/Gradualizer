@@ -11,15 +11,17 @@
          substitute_type_vars/2,
          pp_type/1, debug_type/3, parse_type/1,
          reduce_type/3]).
--export_type([constraint/0, function_type/0, extended_type/0]).
+-export_type([constraint/0, function_type/0, printable_type/0]).
 
 -type af_constraint() :: gradualizer_type:af_constraint().
+-type anno() :: erl_anno:anno().
 -type type() :: gradualizer_type:abstract_type().
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% Parsing and pretty printing types
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+-include_lib("stdlib/include/assert.hrl").
 -include("gradualizer.hrl").
 
 -type constraint() :: {type, erl_anno:anno(),
@@ -30,19 +32,19 @@
                                 'fun',
                                 [{type, erl_anno:anno(), product, [type()]} |
                                  type()]}.
--type extended_type() :: type() |
+-type printable_type() :: type() |
                           {type, erl_anno:anno(), bounded_fun,
-                                 [function_type() | [constraint()]]} |
-                          [extended_type()].
+                                 [function_type() | [constraint()]]}.
 
 %% @doc
 %% Pretty-print a type represented as an Erlang abstract form.
 %% @end
--spec pp_type(extended_type()) -> string().
+-spec pp_type(printable_type()) -> string();
+             ([printable_type()]) -> string().
 pp_type(Types = [_|_]) ->
     %% TODO: This is a workaround for the fact that a list is sometimes used in
-    %% place of a type. It typically represents a function type with multiple
-    %% clauses. We should perhaps represented them as a tuples on the form
+    %% place of a type. It typically represents a function type with multiple clauses.
+    %% We should perhaps represent them as a tuples of the form
     %% {type, Anno, intersection, Types} instead.
     lists:join("; ", lists:map(fun pp_type/1, Types));
 pp_type({type, _, bounded_fun, [FunType, []]}) ->
@@ -56,6 +58,8 @@ pp_type(Type = {type, _, bounded_fun, _}) ->
     TypeDef = erl_pp:form(Form),
     {match, [S]} = re:run(TypeDef, <<"-spec foo\\s*(.*)\\.\\n*$">>,
                           [{capture, all_but_first, list}, dotall]),
+    ?assert(is_list(S), regex_match_not_a_string),
+    S = ?assert_type(S, string()),
     "fun(" ++ S ++ ")";
 pp_type({var, _, TyVar}) ->
     %% See gradualizer_type:af_type_variable/0 and typechecker:new_type_var/0
@@ -70,8 +74,11 @@ pp_type(Type) ->
     TypeDef = erl_pp:form(Form),
     {match, [S]} = re:run(TypeDef, <<"::\\s*(.*)\\.\\n*">>,
                           [{capture, all_but_first, list}, dotall]),
-    case S of "INVALID" ++ _ -> error({badarg, Type});
-              _ -> ok end,
+    ?assert(is_list(S), regex_match_not_a_string),
+    S = ?assert_type(S, string()),
+    case S of
+        "INVALID" ++ _ -> error({badarg, Type});
+        _ -> ok end,
     S.
     %case erl_anno:file(element(2, Type)) of
     %        undefined -> S;
@@ -156,8 +163,10 @@ anno_keep_only_filename(Anno) ->
         Filename  -> erl_anno:set_file(Filename, NewAnno)
     end.
 
+-type mod_or_file() :: module() | file:filename().
+
 %% Annotate a user-defined type or record type with a file name.
--spec annotate_user_type(module() | file:filename(), type()) -> type().
+-spec annotate_user_type(mod_or_file(), type()) -> type().
 annotate_user_type(ModOrFile, Type) ->
     Filename = ensure_filename(ModOrFile),
     annotate_user_type_(Filename, Type).
@@ -171,28 +180,31 @@ ensure_filename(ModOrFile) ->
     end.
 
 %% Annotate user-defined types and record types with a file name.
--spec annotate_user_types(ModOrFile, TypeOrTypes) -> type() | [type()] when
-      ModOrFile :: module() | file:filename(),
-      TypeOrTypes :: type() | [type()].
-annotate_user_types(ModOrFile, TypeOrTypes) ->
-    case TypeOrTypes of
-        Types when is_list(Types) ->
-            [ annotate_user_type(ModOrFile, Type) || Type <- ?assert_type(Types, [type()]) ];
-        Type ->
-            annotate_user_type(ModOrFile, ?assert_type(Type, type()))
-    end.
+%%
+%% Please note that once we recurse down the gradualizer_type:abstract_type() tree,
+%% the lists of type arguments might contain types, but might also contain other non-type nodes.
+%% For a top-level type() we guarantee to return a type(),
+%% but for an inner node we'll return that node unchanged.
+-spec annotate_user_types(mod_or_file(), type()) -> type();
+                         (mod_or_file(), list()) -> list().
+annotate_user_types(_ModOrFile, []) -> [];
+annotate_user_types(ModOrFile, Types = [_|_]) ->
+    [ annotate_user_type(ModOrFile, Type) || Type <- ?assert_type(Types, [type()]) ];
+annotate_user_types(ModOrFile, Type) ->
+    annotate_user_type(ModOrFile, ?assert_type(Type, type())).
 
--spec annotate_user_type_(file:filename(), type()) -> type().
+%% @see annotate_user_types/2
+-spec annotate_user_type_(file:filename(), any()) -> any().
 annotate_user_type_(Filename, {user_type, Anno, Name, Params}) ->
     %% Annotate local user-defined type.
     {user_type, erl_anno:set_file(Filename, Anno), Name,
      [annotate_user_type_(Filename, Param) || Param <- Params]};
 annotate_user_type_(Filename, {type, Anno, record, RecName = [_]}) ->
+    RecName = ?assert_type(RecName, [gradualizer_type:af_atom(), ...]),
     %% Annotate local record type
     {type, erl_anno:set_file(Filename, Anno), record, RecName};
-annotate_user_type_(Filename, {type, Anno, T, Params}) when is_list(Params) ->
-    {type, Anno, T, [ annotate_user_types(Filename, Param)
-                      || Param <- ?assert_type(Params, [type()]) ]};
+annotate_user_type_(Filename, {type, Anno, T, Params} = OuterT) when is_list(Params) ->
+    {type, Anno, T, [ annotate_user_types(Filename, Param) || Param <- Params ]};
 annotate_user_type_(Filename, {ann_type, Anno, [Var, Type]}) ->
     %% We match Var :: af_anno() and Type :: type() above.
     Type = ?assert_type(Type, type()),
@@ -223,11 +235,7 @@ substitute_type_vars({Tag, L, T, Params}, TVars)
   when Tag == type orelse
        Tag == user_type,
        is_list(Params) ->
-    %% We have to assert the type below as we're running into the problem documented
-    %% with test/known_problems/should_pass/lc_cannot_glb_different_variants.erl.
-    %% In other words, the 4th element of a `type()' tuple doesn't have to be a list
-    %% and Gradualizer cannot yet use the `is_list(Params)' guard to refine the type.
-    {Tag, L, T, [substitute_type_vars(P, TVars) || P <- ?assert_type(Params, list())]};
+    type(Tag, L, T, [substitute_type_vars(P, TVars) || P <- Params]);
 substitute_type_vars({remote_type, L, [M, T, Params]}, TVars) ->
     {remote_type, L, [M, T, [substitute_type_vars(P, TVars) || P <- Params]]};
 substitute_type_vars({ann_type, L, [Var = {var, _, _}, Type]}, TVars) ->
@@ -251,6 +259,10 @@ substitute_type_vars(Other = {op, _, _Op, _Arg1, _Arg2}, _) ->
 substitute_type_vars(Other = {T, _, _}, _)
   when T == atom; T == integer; T == char ->
     Other.
+
+-spec type(any(), anno(), atom(), [type()]) -> type().
+type(Tag, L, TyName, Params) when Tag =:= type; Tag =:= user_type ->
+    {Tag, L, TyName, Params}.
 
 -type walkable_type() :: gradualizer_type:abstract_type() | {type, _, any} | pos_inf | neg_inf.
 %% `gradualizer_type:abstract_type()' defines the abstract representation of a type.

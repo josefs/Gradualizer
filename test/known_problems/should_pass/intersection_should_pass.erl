@@ -1,7 +1,6 @@
--module(intersection).
+-module(intersection_should_pass).
 
--export([i/2,
-         j/1]).
+-export([j/1]).
 
 -spec i(a, b) -> {a, b};
        (d, e) -> {d, e}.

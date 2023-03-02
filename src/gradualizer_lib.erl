@@ -217,12 +217,12 @@ pick_value(?type(binary, _), _Env) ->
 %% The ?type(range) is a different case because the type range
 %% ..information is not encoded as an abstract_type()
 %% i.e. {type, Anno, range, [{integer, Anno2, Low}, {integer, Anno3, High}]}
-pick_value(?type(range, [{_TagLo, _, neg_inf}, Hi = {_TagHi, _, _Hi}]), _Env) ->
+pick_value(?type(range, [{_TagLo, _, neg_inf}, Hi = {_TagHi, _, _Hi}]), Env) ->
     %% pick_value(Hi, Env);
-    Hi;
-pick_value(?type(range, [Lo = {_TagLo, _, _Lo}, {_TagHi, _, _Hi}]), _Env) ->
+    pick_value_range_bound(Hi, Env);
+pick_value(?type(range, [Lo = {_TagLo, _, _Lo}, {_TagHi, _, _Hi}]), Env) ->
     %% pick_value(Lo, Env).
-    Lo;
+    pick_value_range_bound(Lo, Env);
 pick_value(?remote_type(_, _, _) = Type, Env) ->
     pick_remote_or_user_type_value(Type, Env);
 pick_value(?user_type(_, _, _) = Type, Env) ->
@@ -244,6 +244,17 @@ pick_remote_or_user_type_value(Type, Env) ->
         not_found ->
             throw({undef, Kind, Anno, {Name, length(Args)}})
     end.
+
+-spec pick_value_range_bound(any(), typechecker:env()) -> gradualizer_type:abstract_expr().
+pick_value_range_bound({integer, _, neg_inf}, _Env) ->
+    {atom, erl_anno:new(0), neg_inf};
+pick_value_range_bound({integer, _, pos_inf}, _Env) ->
+    {atom, erl_anno:new(0), pos_inf};
+pick_value_range_bound({integer, L, I}, _Env) when I < 0 ->
+    {op, L, '-', {integer, L, -I}};
+pick_value_range_bound({integer, L, I}, _Env) ->
+    I = ?assert_type(I, non_neg_integer()),
+    {integer, L, I}.
 
 %% ------------------------------------------------
 %% Functions for working with abstract syntax trees
