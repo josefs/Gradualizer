@@ -1256,8 +1256,14 @@ expect_tuple_type({type, _, any, []}, _N, _Env) ->
     any;
 expect_tuple_type({type, _, tuple, any}, _N, _Env) ->
     any;
-expect_tuple_type({type, _, tuple, Tys}, N, _Env) when length(Tys) == N ->
-    {elem_ty, Tys, constraints:empty()};
+expect_tuple_type({type, _, tuple, Tys} = Ty, N, _Env) ->
+    Tys = ?assert_type(Tys, [type()]),
+    if
+        length(Tys) == N ->
+            {elem_ty, Tys, constraints:empty()};
+        length(Tys) /= N ->
+            {type_error, Ty}
+    end;
 expect_tuple_type(?top() = TermTy, N, _Env) ->
     {elem_ty, lists:duplicate(N, TermTy), constraints:empty()};
 expect_tuple_type(Union = {type, _, union, UnionTys}, N, Env) ->
