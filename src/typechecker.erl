@@ -293,15 +293,14 @@ compat_ty(Ty, {var, _, Var}, Seen, _Env) ->
 compat_ty({type, _, 'fun', [_, Res1]},
           {type, _, 'fun', [{type, _, any}, Res2]},
           Seen, Env) ->
-    %% We can assert the below,
-    %% as we know Res2 is not {type, _, any}, which is explicitely matched on above.
-    Res2 = ?assert_type(Res2, type()),
-    compat(Res1, Res2, Seen, Env);
+    %% We can assert the below, as we know Res1/Res2 are not {type, _, any},
+    %% as they're not the first list element.
+    compat(?assert_type(Res1, type()), ?assert_type(Res2, type()), Seen, Env);
 compat_ty({type, _, 'fun', [{type, _, product, Args1}, Res1]},
           {type, _, 'fun', [{type, _, product, Args2}, Res2]},
           Seen, Env) ->
     {Ap, Cs} = compat_tys(Args2, Args1, Seen, Env),
-    {Aps, Css} = compat(Res1, Res2, Ap, Env),
+    {Aps, Css} = compat(?assert_type(Res1, type()), ?assert_type(Res2, type()), Ap, Env),
     {Aps, constraints:combine(Cs, Css)};
 
 %% Unions
