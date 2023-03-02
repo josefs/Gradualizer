@@ -738,6 +738,11 @@ glb_ty(?type(AssocTag1, [Key1, Val1]), ?type(AssocTag2, [Key2, Val2]), A, Env)
        AssocTag1 == map_field_exact, AssocTag2 == map_field_assoc;
        AssocTag1 == map_field_assoc, AssocTag2 == map_field_exact ->
 
+    Key1 = ?assert_type(Key1, type()),
+    Val1 = ?assert_type(Val1, type()),
+    Key2 = ?assert_type(Key2, type()),
+    Val2 = ?assert_type(Val2, type()),
+
     AssocTag = case {AssocTag1, AssocTag2} of
                    {map_field_exact, map_field_exact} -> map_field_exact;
                    {map_field_exact, map_field_assoc} -> map_field_exact;
@@ -786,6 +791,8 @@ glb_ty(Ty1 = {type, _, binary, _},
 %% For now pick biggest arguments when comparable and none() otherwise.
 glb_ty({type, _, 'fun', [{type, _, product, Args1}, Res1]},
        {type, _, 'fun', [{type, _, product, Args2}, Res2]}, A, Env) ->
+    Res1 = ?assert_type(Res1, type()),
+    Res2 = ?assert_type(Res2, type()),
     NoConstraints = constraints:empty(),
     {Res, Cs} = glb(Res1, Res2, A, Env),
     Subtype =
@@ -805,6 +812,8 @@ glb_ty({type, _, 'fun', [{type, _, product, Args1}, Res1]},
     end;
 glb_ty({type, _, 'fun', [{type, _, any} = Any, Res1]},
        {type, _, 'fun', [{type, _, any}, Res2]}, A, Env) ->
+    Res1 = ?assert_type(Res1, type()),
+    Res2 = ?assert_type(Res2, type()),
     {Res, Cs} = glb(Res1, Res2, A, Env),
     {type('fun', [Any, Res]), Cs};
 
@@ -816,13 +825,21 @@ glb_ty({type, _, 'fun', [{type, _, product, _} = TArgs1, _]} = T1,
     glb(T1, type('fun', [TArgs1, Res2]), A, Env);
 
 %% normalize only does the top layer
-glb_ty({type, _, Name, Args1}, {type, _, Name, Args2}, A, Env)
-        when length(Args1) == length(Args2) ->
-    {Args, Css} = lists:unzip([ glb(Arg1, Arg2, A, Env) || {Arg1, Arg2} <- lists:zip(Args1, Args2) ]),
-    {type(Name, Args), constraints:combine(Css)};
+glb_ty({type, _, Name, Args1}, {type, _, Name, Args2}, A, Env) ->
+    Args1 = ?assert_type(Args1, [type()]),
+    Args2 = ?assert_type(Args2, [type()]),
+    if
+        length(Args1) == length(Args2) ->
+            {Args, Css} = lists:unzip([ glb(Arg1, Arg2, A, Env) || {Arg1, Arg2} <- lists:zip(Args1, Args2) ]),
+            {type(Name, Args), constraints:combine(Css)};
+        length(Args1) /= length(Args2) ->
+            %% Incompatible
+            {type(none), constraints:empty()}
+    end;
 
 %% Incompatible
-glb_ty(_Ty1, _Ty2, _A, _Env) -> {type(none), constraints:empty()}.
+glb_ty(_Ty1, _Ty2, _A, _Env) ->
+    {type(none), constraints:empty()}.
 
 -spec has_overlapping_keys(type(), env()) -> boolean().
 has_overlapping_keys({type, _, map, Assocs}, Env) ->
