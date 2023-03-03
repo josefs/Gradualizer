@@ -3622,7 +3622,7 @@ instantiate({var, _, TyVar}, Map) ->
     end;
 instantiate(T = ?type(_), Map) ->
     {T, maps:new(), Map};
-instantiate(?type(Ty, Args), Map) ->
+instantiate({type, P, Ty, Args}, Map) ->
     %% TODO: Ugly, but until we have better support for union args to intersection-typed funs,
     %%       it fixes the type-check error.
     {NewArgs, Set, NewMap} = case Args of
@@ -3632,7 +3632,7 @@ instantiate(?type(Ty, Args), Map) ->
                                      instantiate_inner(?assert_type(Args, list()), Map)
                              end,
     %% TODO: Another case of union arg to an intersection-typed fun :(
-    {type(Ty, NewArgs), Set, NewMap};
+    {{type, P, Ty, NewArgs}, Set, NewMap};
 instantiate(T = {Tag, _,_}, Map)
   when Tag == integer orelse Tag == atom orelse Tag == char ->
     {T, maps:new(), Map};
