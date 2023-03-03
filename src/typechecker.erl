@@ -3631,8 +3631,7 @@ instantiate({type, P, Ty, Args}, Map) ->
                                  _ when is_list(Args) ->
                                      instantiate_inner(?assert_type(Args, list()), Map)
                              end,
-    %% TODO: Another case of union arg to an intersection-typed fun :(
-    {{type, P, Ty, NewArgs}, Set, NewMap};
+    {type(Ty, P, NewArgs), Set, NewMap};
 instantiate(T = {Tag, _,_}, Map)
   when Tag == integer orelse Tag == atom orelse Tag == char ->
     {T, maps:new(), Map};
@@ -5312,6 +5311,10 @@ type_of_bin_element({bin_element, _P, Expr, _Size, Specifiers}, OccursAs) ->
 -spec type(_, _) -> type().
 type(Name, Args) ->
     {type, erl_anno:new(0), Name, Args}.
+
+-spec type(_, _, _) -> type().
+type(Name, Anno, Args) ->
+    {type, Anno, Name, Args}.
 
 %% Helper to create a type, typically a normalized type
 -spec type(atom()) -> type().
