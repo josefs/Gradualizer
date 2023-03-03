@@ -13,7 +13,6 @@
          reduce_type/3]).
 -export_type([constraint/0, function_type/0, printable_type/0]).
 
--type af_constraint() :: gradualizer_type:af_constraint().
 -type anno() :: erl_anno:anno().
 -type type() :: gradualizer_type:abstract_type().
 
@@ -203,7 +202,7 @@ annotate_user_type_(Filename, {type, Anno, record, RecName = [_]}) ->
     RecName = ?assert_type(RecName, [gradualizer_type:af_atom(), ...]),
     %% Annotate local record type
     {type, erl_anno:set_file(Filename, Anno), record, RecName};
-annotate_user_type_(Filename, {type, Anno, T, Params} = OuterT) when is_list(Params) ->
+annotate_user_type_(Filename, {type, Anno, T, Params}) when is_list(Params) ->
     {type, Anno, T, [ annotate_user_types(Filename, Param) || Param <- Params ]};
 annotate_user_type_(Filename, {ann_type, Anno, [Var, Type]}) ->
     %% We match Var :: af_anno() and Type :: type() above.
