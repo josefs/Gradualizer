@@ -5,6 +5,16 @@
 -define(passing, "test/should_pass/any.erl").
 -define(failing, "test/should_fail/arg.erl").
 
+type_check_test_() ->
+    {setup,
+     fun setup_app/0,
+     fun cleanup_app/1,
+     [
+      {generator, fun gen_type_check_erl_file/0},
+      {generator, fun gen_type_check_erl_files/0},
+      {generator, fun gen_type_check_forms/0}
+     ]}.
+
 setup_app() ->
     {ok, Apps} = application:ensure_all_started(gradualizer),
     Apps.
@@ -13,7 +23,7 @@ cleanup_app(Apps) ->
     [ok = application:stop(App) || App <- Apps],
     ok.
 
-type_check_erl_file_test_() ->
+gen_type_check_erl_file() ->
     {setup,
      fun setup_app/0,
      fun cleanup_app/1,
@@ -23,7 +33,7 @@ type_check_erl_file_test_() ->
       ?_assertMatch([_|_], gradualizer:type_check_file(?failing, [return_errors]))
      ]}.
 
-type_check_erl_files_test_() ->
+gen_type_check_erl_files() ->
     [
      ?_assertEqual(ok, gradualizer:type_check_files([?passing, ?passing])),
      ?_assertEqual(nok, gradualizer:type_check_files([?failing, ?failing])),
@@ -35,7 +45,7 @@ type_check_erl_files_test_() ->
      ?_assertEqual([], gradualizer:type_check_files([?passing, ?passing], [return_errors]))
     ].
 
-type_check_forms_test_() ->
+gen_type_check_forms() ->
     {ok, PassingForms} = epp:parse_file(?passing, []),
     %% Drop the file attribute to check that type_check_forms works without it
     [{attribute, _, file, _} | PassingFormsNoFile] = PassingForms,
@@ -50,11 +60,21 @@ type_check_beam_file_test() ->
     ?_assertEqual(ok, gradualizer:type_check_file(BeamFile)).
 
 type_check_module_test() ->
-    {module, Mod} = code:load_file(any),
-    ?assertEqual(ok, gradualizer:type_check_module(Mod)).
+    Apps = setup_app(),
+    try
+        {module, Mod} = code:load_file(any),
+        ?assertEqual(ok, gradualizer:type_check_module(Mod))
+    after
+        cleanup_app(Apps)
+    end.
 
 type_check_dir_test() ->
-    ?assertEqual(nok, gradualizer:type_check_dir("test/dir/")).
+    Apps = setup_app(),
+    try
+        ?assertEqual(nok, gradualizer:type_check_dir("test/dir/"))
+    after
+        cleanup_app(Apps)
+    end.
 
 not_found_test_() ->
     [
