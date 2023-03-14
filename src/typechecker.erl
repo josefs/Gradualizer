@@ -406,6 +406,10 @@ compat_ty({type, _, map, Assocs1}, {type, _, map, Assocs2}, Seen, Env) ->
                       ({type, _, map_field_exact, _}) -> true;
                       (_) -> false
                   end,
+    %% We can assert because {type, _, map, any} is normalized away by normalize/2,
+    %% whereas ?any_assoc associations are matched out explicitly in the previous clauses.
+    Assocs1 = ?assert_type(Assocs1, [gradualizer_type:af_assoc_type()]),
+    Assocs2 = ?assert_type(Assocs2, [gradualizer_type:af_assoc_type()]),
     MandatoryAssocs1 = lists:filter(IsMandatory, Assocs1),
     MandatoryAssocs2 = lists:filter(IsMandatory, Assocs2),
     {Seen3, Cs3} = lists:foldl(fun ({type, _, map_field_exact, _} = Assoc2, {Seen2, Cs2}) ->
