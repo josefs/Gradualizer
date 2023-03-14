@@ -443,6 +443,10 @@ compat_ty({type, _, AssocTag1, [Key1, Val1]},
              AssocTag1 == map_field_exact, AssocTag2 == map_field_exact;
              AssocTag1 == map_field_exact, AssocTag2 == map_field_assoc ->
     %% For M1 <: M2, mandatory fields in M2 must be mandatory fields in M1
+    Key1 = ?assert_type(Key1, type()),
+    Key2 = ?assert_type(Key2, type()),
+    Val1 = ?assert_type(Val1, type()),
+    Val2 = ?assert_type(Val2, type()),
     {Seen1, Cs1} = compat(Key1, Key2, Seen, Env),
     {Seen2, Cs2} = compat(Val1, Val2, Seen1, Env),
     {Seen2, constraints:combine(Cs1, Cs2)};
