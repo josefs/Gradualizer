@@ -161,7 +161,7 @@ int_range_to_types({I, pos_inf}) when I > 1 ->
     [{type, erl_anno:new(0), range, [{integer, erl_anno:new(0), I}
                                     ,{integer, erl_anno:new(0), pos_inf}]}];
 int_range_to_types({I, I}) ->
-    [range_bound(I)];
+    [range_bound(?assert_type(I, integer()))];
 int_range_to_types({pos_inf, _}) -> [];
 int_range_to_types({_, neg_inf}) -> [];
 int_range_to_types({I, J}) when is_integer(I) andalso is_integer(J) ->
