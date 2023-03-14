@@ -418,16 +418,19 @@ compat_ty({type, _, map, Assocs1}, {type, _, map, Assocs2}, Seen, Env) ->
                                     %% if that's not the case, let's throw now.
                                     length(MandatoryAssocs1) == 0 andalso throw(nomatch),
                                     case lists:foldl(fun
-                                                         (_Assoc1, {Seen1, Cs1}) -> {Seen1, Cs1};
-                                                         (Assoc1, nomatch) ->
+                                                         %% TODO: {no, match} is yet another case of
+                                                         %% the constraint solver "shape" limitation
+                                                         (Assoc1, {no, match}) ->
                                                              try
                                                                  compat(Assoc1, Assoc2, Seen2, Env)
                                                              catch
-                                                                 nomatch -> nomatch
-                                                             end
-                                                     end, nomatch, MandatoryAssocs1)
+                                                                 nomatch -> {no, match}
+                                                             end;
+                                                         (_Assoc1, {Seen1, Cs1}) ->
+                                                             {Seen1, Cs1}
+                                                     end, {no, match}, MandatoryAssocs1)
                                     of
-                                        nomatch -> throw(nomatch);
+                                        {no, match} -> throw(nomatch);
                                         {Seen1, Cs1} -> {Seen1, constraints:combine(Cs1, Cs2)}
                                     end
                             end, ret(Seen), MandatoryAssocs2),
