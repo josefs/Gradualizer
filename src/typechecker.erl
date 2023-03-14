@@ -888,7 +888,7 @@ normalize(Ty, Env) ->
 %% The third argument is a set of user types that we've already unfolded.
 %% It's important that we don't keep unfolding such types because it will
 %% lead to infinite recursion.
--spec normalize_rec(type() | gradualizer_type:gr_range_bound(), env()) -> type().
+-spec normalize_rec(type(), env()) -> type().
 normalize_rec({type, _, union, Tys}, Env) ->
     UnionSizeLimit = Env#env.union_size_limit,
     Types = flatten_unions(Tys, Env),
@@ -933,13 +933,16 @@ normalize_rec({op, _, _, _Arg} = Op, _Env) ->
 normalize_rec({op, _, _, _Arg1, _Arg2} = Op, _Env) ->
     erl_eval:partial_eval(Op);
 normalize_rec({type, Ann, range, [T1, T2]}, Env) ->
-    {type, Ann, range, [normalize_rec(T1, Env),
-                        normalize_rec(T2, Env)]};
+    %% We can assert that T1 and T2 are valid type() instances, because they must be expressed in
+    %% Erlang type syntax. Infinities are not allowed there - it's a Gradualizer extension to allow
+    %% them as range bounds.
+    {type, Ann, range, [normalize_rec(?assert_type(T1, type()), Env),
+                        normalize_rec(?assert_type(T2, type()), Env)]};
 normalize_rec(Type, _Env) ->
     expand_builtin_aliases(Type).
 
 %% Replace built-in type aliases
--spec expand_builtin_aliases(type() | gradualizer_type:gr_range_bound()) -> type().
+-spec expand_builtin_aliases(type()) -> type().
 expand_builtin_aliases({var, Ann, '_'}) ->
     {type, Ann, any, []};
 expand_builtin_aliases({type, Ann, term, []}) ->
