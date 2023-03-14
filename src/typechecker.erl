@@ -1366,7 +1366,7 @@ allow_empty_list(Ty) ->
 
 -type fun_ty_simple()       :: {fun_ty, [type()], type(), constraints()}.
 -type fun_ty_intersection() :: {fun_ty_intersection, [fun_ty_simple()], constraints()}.
--type fun_ty_union()        :: {fun_ty_union, [fun_ty_simple()], constraints()}.
+-type fun_ty_union()        :: {fun_ty_union, [fun_ty()], constraints()}.
 
 %% Categorizes a function type.
 %% Normalizes the type (expand user-def and remote types). Errors for non-fun
@@ -1390,22 +1390,12 @@ expect_fun_type(Env, Type, Arity) ->
 expect_fun_type1(Env, BTy = {type, _, bounded_fun, [Ft, _Fc]}, Arity) ->
     Sub = bounded_type_subst(Env, BTy),
     Ft = ?assert_type(Ft, type()),
-    case expect_fun_type1(Env, Ft, Arity) of
-        {fun_ty, ArgsTy, ResTy, Cs} ->
-            {{Args, Res}, CsI} = instantiate_fun_type(subst_ty(Sub, ArgsTy),
-                                                      subst_ty(Sub, ResTy)),
-            {fun_ty, Args, Res, constraints:combine(Cs, CsI)};
-        {fun_ty_intersection, Tys, Cs} ->
-            {InstTys, CsI} = instantiate_fun_type(subst_ty(Sub, Tys)),
-            {fun_ty_intersection, InstTys, constraints:combine(Cs, CsI)};
-        {fun_ty_union, Tys, Cs} ->
-            {InstTys, CsI} = instantiate_fun_type(subst_ty(Sub, Tys)),
-            {fun_ty_union, InstTys, constraints:combine(Cs, CsI)};
-        Err ->
-            Err
-    end;
+    {fun_ty, ArgsTy, ResTy, Cs} = expect_fun_type1(Env, Ft, Arity),
+    {{Args, Res}, CsI} = instantiate_fun_type(subst_ty(Sub, ArgsTy),
+                                              subst_ty(Sub, ResTy)),
+    {fun_ty, Args, Res, constraints:combine(Cs, CsI)};
 expect_fun_type1(_Env, {type, _, 'fun', [{type, _, product, ArgsTy}, ResTy]}, _Arity) ->
-    {fun_ty, ArgsTy, ResTy, constraints:empty()};
+    {fun_ty, ArgsTy, ?assert_type(ResTy, type()), constraints:empty()};
 expect_fun_type1(_Env, {type, _, 'fun', []}, Arity) ->
     ArgsTy = lists:duplicate(Arity, type(any)),
     ResTy = type(any),
@@ -1439,8 +1429,8 @@ expect_fun_type1(_Env, {var, _, Var}, Arity) ->
     ArgsTy = lists:duplicate(Arity, type(any)),
     ResTyVar = gradualizer_tyvar:new(Var, ?MODULE, ?LINE),
     ResTy = {var, erl_anno:new(0), ResTyVar},
-    ResTyUpper = {type, erl_anno:new(0), 'fun', [{type, erl_anno:new(0), any},
-                                                 {var,  erl_anno:new(0), ResTy}]},
+    AnyArgs = {type, erl_anno:new(0), any},
+    ResTyUpper = {type, erl_anno:new(0), 'fun', [AnyArgs, ResTy]},
     Cs = constraints:add_var(ResTyVar, constraints:upper(Var, ResTyUpper)),
     {fun_ty, ArgsTy, ResTy, Cs};
 expect_fun_type1(_Env, {type, _, any, []}, Arity) ->
@@ -1453,19 +1443,26 @@ expect_fun_type1(_Env, ?top(), Arity) ->
 expect_fun_type1(_Env, _Ty, _Arity) ->
     type_error.
 
--spec expect_intersection_type(env(), [tuple()], arity()) -> [fun_ty()] | type_error.
+-spec expect_intersection_type(env(), [tuple()], arity()) -> [fun_ty_simple()] | type_error.
 expect_intersection_type(_Env, [], _Arity) ->
     [];
 expect_intersection_type(Env, [FunTy|Tys], Arity) ->
     case expect_fun_type1(Env, FunTy, Arity) of
         type_error ->
             type_error;
+        {fun_ty_intersection, _, _} ->
+            %% We can't have a multi-clause spec clause within a multi-clause spec
+            type_error;
+        {fun_ty_union, _, _} ->
+            %% We can't have a union of functions as a spec clause
+            type_error;
         Ty ->
+            Ty = ?assert_type(Ty, fun_ty_simple()),
             case expect_intersection_type(Env, Tys, Arity) of
                 type_error ->
                     type_error;
                 Tyss ->
-                    [Ty|Tyss]
+                    [Ty | Tyss]
             end
     end.
 
@@ -3623,11 +3620,6 @@ instantiate_fun_type(Args, Res) ->
     {NewArgs, ArgVars, Map} = instantiate_inner(Args, #{}),
     {NewRes , ResVars, _Map} = instantiate(Res, Map),
     {{NewArgs, NewRes}, constraints:vars(maps:merge(ArgVars, ResVars))}.
-
--spec instantiate_fun_type([type()]) -> {[type()], constraints:t()}.
-instantiate_fun_type(Tys) ->
-    {NewTys, Vars, _Map} = instantiate_inner(Tys, #{}),
-    {NewTys, constraints:vars(Vars)}.
 
 -type instantiate_retval(T) :: {T,
                                 constraints:mapset(constraints:var()),
