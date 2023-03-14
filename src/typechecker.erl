@@ -4914,7 +4914,8 @@ add_type_pat({map, P, AssocPats} = MapPat, MapTy, Env) ->
                         {var, _, _Var} ->
                             type(none);
                         ?type(map, Assocs) when is_list(Assocs) ->
-                            type(map, ExhaustedAssocs)
+                            PatTy0 = type(map, ExhaustedAssocs),
+                            handle_possible_none_map_keys(PatTy0)
                     end,
             {PatTy, MapTy, NewEnv, constraints:combine(Css)};
         {type_error, _Type} ->
@@ -5122,6 +5123,20 @@ add_type_pat_map_key(Key, [{type, _, AssocTag, [KeyTy, ValueTy]} | MapAssocs], E
 add_type_pat_map_key(_Key, [], _Env) ->
     %% Key is not defined in this map type.
     error.
+
+%% If any of the key types is none(), replace the map type with none().
+%% This can happen because of imprecision. E.g., when a pattern #{"abc" := abc}
+%% is used to match against the type #{string() => atom()}.
+-spec handle_possible_none_map_keys(gradualizer_type:af_map_type()) -> type().
+handle_possible_none_map_keys(?type(map, any) = Ty) ->
+    Ty;
+handle_possible_none_map_keys(?type(map, Assocs) = Ty) when Assocs /= any ->
+    case lists:any(fun(?type(_Tag, [?type(none), _Value])) -> true;
+                      (_) -> false
+                   end, Assocs) of
+        true -> type(none);
+        false -> Ty
+    end.
 
 -spec add_any_types_pats([gradualizer_type:abstract_pattern()], Env :: env()) ->
                              NewEnv :: env().

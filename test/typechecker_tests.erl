@@ -612,6 +612,8 @@ add_type_pat_test_() ->
       ?_assertEqual(?t(#{x := a}),         type_pat(?e(#{x := a}),         ?t(#{x := a}))),
       ?_assertEqual(?t(#{x := a}),         type_pat(?e(Var),               ?t(#{x := a}))),
 
+      ?_assertEqual(?t(none()),            type_pat(?e(#{"abc" := abc}),    ?t(#{string() => atom()}))),
+
       ?_assertThrow({type_error, pattern, _, {atom, _, b}, {atom, _, a}},
                                            type_pat(?e(#{x := b}),         ?t(#{x := a}))),
       ?_assertThrow({type_error, badkey, {atom, _, y}, _MapTy},
