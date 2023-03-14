@@ -358,10 +358,14 @@ compat_ty({type, P1, record, [{atom, _, Name}]},
     compat_record_fields(Fields1, Fields2, Seen, Env);
 
 %% Records that have been refined on one side or the other
-compat_ty({type, Anno1, record, [{atom, _, Name}|Fields1]},
-          {type, Anno2, record, [{atom, _, Name}|Fields2]}, Seen, Env) ->
+compat_ty({type, Anno1, record, [{atom, _, Name} | Fields1]},
+          {type, Anno2, record, [{atom, _, Name} | Fields2]}, Seen, Env) ->
     AllFields1 = case Fields1 of [] -> get_record_fields_types(Name, Anno1, Env); _ -> Fields1 end,
     AllFields2 = case Fields2 of [] -> get_record_fields_types(Name, Anno2, Env); _ -> Fields2 end,
+    %% We can assert because we explicitly match {atom, _, Name}
+    %% out of the field list in both cases above.
+    AllFields1 = ?assert_type(AllFields1, [record_field_type()]),
+    AllFields2 = ?assert_type(AllFields2, [record_field_type()]),
     compat_record_tys(AllFields1, AllFields2, Seen, Env);
 compat_ty({type, _, record, _}, {type, _, tuple, any}, Seen, _Env) ->
     ret(Seen);
@@ -460,7 +464,7 @@ compat_tys(_Tys1, _Tys2, _, _) ->
     throw(nomatch).
 
 
--spec compat_record_tys([type()], [type()], map(), env()) -> compat_acc().
+-spec compat_record_tys(list(), list(), map(), env()) -> compat_acc().
 compat_record_tys([], [], Seen, _Env) ->
     ret(Seen);
 compat_record_tys([?type_field_type(Name, Field1)|Fields1], [?type_field_type(Name, Field2)|Fields2], Seen, Env) ->
@@ -4059,7 +4063,7 @@ refine(OrigTy, Ty, Trace, Env) ->
             end
     end.
 
--spec get_record_fields_types(atom(), erl_anno:anno(), env()) -> [_].
+-spec get_record_fields_types(atom(), erl_anno:anno(), env()) -> [record_field_type()].
 get_record_fields_types(Name, Anno, Env) ->
     RecordFields = get_maybe_remote_record_fields(Name, Anno, Env),
     [type_field_type(FieldName, Type) || ?typed_record_field(FieldName, Type) <- RecordFields].
