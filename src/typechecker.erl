@@ -387,7 +387,10 @@ compat_ty({type, _, tuple, any}, {type, _, tuple, _Args}, Seen, _Env) ->
 compat_ty({type, _, tuple, _Args}, {type, _, tuple, any}, Seen, _Env) ->
     ret(Seen);
 compat_ty({type, _, tuple, Args1}, {type, _, tuple, Args2}, Seen, Env) ->
-    compat_tys(Args1, Args2, Seen, Env);
+    %% We can assert because we match out `any' in previous clauses.
+    %% TODO: it would be perfect if Gradualizer could refine this type automatically in such a case
+    compat_tys(?assert_type(Args1, [type()]),
+               ?assert_type(Args2, [type()]), Seen, Env);
 
 %% Maps
 compat_ty({type, _, map, [?any_assoc]}, {type, _, map, _Assocs}, Seen, _Env) ->
