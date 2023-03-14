@@ -109,7 +109,10 @@ int_type_to_range({type, _, range, [{Tag1, _, I1}, {Tag2, _, I2}]})
        Tag2 =:= integer orelse
        Tag2 =:= char orelse
        (Tag2 =:= atom andalso
-        (I2 =:= neg_inf orelse I2 =:= pos_inf))        -> {I1, I2};
+        (I2 =:= neg_inf orelse I2 =:= pos_inf))        ->
+    I1 = ?assert_type(I1, integer() | neg_inf | pos_inf),
+    I2 = ?assert_type(I2, integer() | neg_inf | pos_inf),
+    {I1, I2};
 int_type_to_range({char, _, I})                        -> {I, I};
 int_type_to_range({integer, _, I})                     -> {I, I}.
 
