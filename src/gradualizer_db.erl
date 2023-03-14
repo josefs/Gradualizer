@@ -609,7 +609,8 @@ get_beam_map() ->
         fun (Filename) ->
             case re:run(Filename, RE, [{capture, all_but_first, list}]) of
                 {match, [Mod]} ->
-                    {list_to_atom(Mod), Filename};
+                    %% We can assert because we request re:run() to return a `list`
+                    {list_to_atom(?assert_type(Mod, string())), Filename};
                 nomatch ->
                     {false, false};
                 _ ->
