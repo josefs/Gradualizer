@@ -4913,7 +4913,7 @@ add_type_pat({map, P, AssocPats} = MapPat, MapTy, Env) ->
                         {var, _, _Var} ->
                             type(none);
                         ?type(map, Assocs) when is_list(Assocs) ->
-                            rewrite_map_assocs_to_exacts(type(map, ExhaustedAssocs))
+                            type(map, ExhaustedAssocs)
                     end,
             {PatTy, MapTy, NewEnv, constraints:combine(Css)};
         {type_error, _Type} ->
@@ -5032,20 +5032,6 @@ expect_map_type(?type(map, AssocTys), _Env) ->
     {assoc_tys, AssocTys, constraints:empty()};
 expect_map_type(Ty, _Env) ->
     {type_error, Ty}.
-
-%% Rewrite map_field_assoc to map_field_exact to return in pattern types.
-%%
-%% Similarly to map field type inference on map creation - if a pattern matches,
-%% then the map field is exact (:=), not assoc (=>).
-%% There isn't even syntax for optional fields in map patterns.
--spec rewrite_map_assocs_to_exacts(type()) -> type().
-rewrite_map_assocs_to_exacts(?type(map, any)) ->
-    type(map, any);
-rewrite_map_assocs_to_exacts(?type(map, Assocs)) ->
-    Assocs = ?assert_type(Assocs, [gradualizer_type:af_assoc_type()]),
-    type(map, lists:map(fun ({type, Ann, _, KVTy}) ->
-                                {type, Ann, map_field_exact, KVTy}
-                        end, Assocs)).
 
 -spec add_type_pat_var(_, _, type(), env()) -> any().
 add_type_pat_var(Pat, PatVar, Ty, Env) ->
