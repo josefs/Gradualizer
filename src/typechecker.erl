@@ -3168,6 +3168,8 @@ type_check_list_op_in(Env, ResTy, {op, P, Op, Arg1, Arg2} = Expr) ->
                     {union_var_binds(VarBinds1, VarBinds2, Env),
                      constraints:combine([Cs, Cs1, Cs2])};
                 false ->
+                    %% TODO: we're getting this because of a type var, so if we solve constraints
+                    %% here and get a substitution for this type var, we should be able to tell more
                     throw(type_error(op_type_too_precise, Op, P, ResTy1))
             end
     end.
