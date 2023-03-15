@@ -1,7 +1,9 @@
 %% @private
-%% This file was automatically generated from the file "erl_parse.yrl".
+%% This file is closely resembles Erlang/OTP's "erl_parse.yrl", the Erlang yecc grammar.
+%% However, it contains Gradualizer-specific modifications.
+%% These are denoted by a `gr_' prefix, instead of an `af_' prefix.
 %%
-%% Copyright Ericsson AB 1996-2018. All Rights Reserved.
+%% Copyright Ericsson AB 1996-2023. All Rights Reserved.
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License");
 %% you may not use this file except in compliance with the License.
