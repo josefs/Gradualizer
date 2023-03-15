@@ -3191,6 +3191,10 @@ list_op_arg_types(ListOp, {type, _, union, Tys}) ->
             {Arg1Tys, Arg2Tys} = lists:unzip(Pairs),
             {type(union, Arg1Tys), type(union, Arg2Tys)}
     end;
+list_op_arg_types(_ListOp, {var, _, _TyVar}) ->
+    %% TODO: we should create new type vars for the operands like arith_op_arg_types/2 does
+    %% and constrain them appropriately, but for now we just approximate with any()
+    {type(any), type(any)};
 list_op_arg_types('++', Ty) ->
     case list_view(Ty) of
         false            -> false;
