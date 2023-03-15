@@ -3,7 +3,8 @@
 -gradualizer([solve_constraints]).
 
 -export([find1/0,
-         l/0]).
+         l/0,
+         solver_sensitive_to_shape/1]).
 
 -spec lookup(T1, [{T1, T2}]) -> (none | T2).
 lookup(_, []) -> none;
@@ -54,3 +55,10 @@ has_intersection_spec(T) -> T.
 
 -spec return_list_of_unions(list_of_unions()) -> list_of_unions().
 return_list_of_unions(_L) -> [].
+
+-spec solver_sensitive_to_shape(#{tuple := {a, b}}) -> ok.
+solver_sensitive_to_shape(M) ->
+    case maps:get(tuple, M, not_found) of
+        not_found -> ok;
+        {a, b} -> ok
+    end.
