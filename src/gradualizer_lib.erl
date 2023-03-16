@@ -122,7 +122,11 @@ get_type_definition({user_type, Anno, Name, Args}, Env, Opts) ->
             gradualizer_db:get_type(Module, Name, Args);
         none ->
             %% Let's check if the type is defined in the context of this module.
-            case maps:get({Name, length(Args)}, maps:get(types, Env#env.tenv), not_found) of
+            case maps:get({Name, length(Args)}, maps:get(types, Env#env.tenv), {not_, found}) of
+                %% TODO: the constraint solver requires the "shape" of a Default to be the same as
+                %% of an actual Value
+                {not_, found} ->
+                    not_found;
                 {Params, Type0} ->
                     VarMap = maps:from_list(lists:zip(Params, Args)),
                     Type2 = case proplists:is_defined(annotate_user_types, Opts) of
@@ -133,9 +137,7 @@ get_type_definition({user_type, Anno, Name, Args}, Env, Opts) ->
                                 false ->
                                     typelib:substitute_type_vars(Type0, VarMap)
                             end,
-                    {ok, Type2};
-                not_found ->
-                    not_found
+                    {ok, Type2}
             end
     end.
 

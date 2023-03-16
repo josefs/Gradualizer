@@ -26,10 +26,10 @@ jobs:
       - name: "Assess self check result"
         run: |
           ERROR_LINES=$(wc -l gradualize.log | awk '{print $1}')
-          if [ $ERROR_LINES -lt 100 ]; then
-            echo "ok, self reported errors are in check: $ERROR_LINES < 100"
+          if [ $ERROR_LINES -eq 0 ]; then
+            echo "ok, there are no self-check errors: $ERROR_LINES == 0"
             exit 0
           else
-            echo "we've regressed, failing the job: $ERROR_LINES >= 100"
+            echo "we've regressed, failing the job: $ERROR_LINES != 0"
             exit 1
           fi

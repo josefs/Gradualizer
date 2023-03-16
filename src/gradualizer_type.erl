@@ -1,7 +1,9 @@
 %% @private
-%% This file was automatically generated from the file "erl_parse.yrl".
+%% This file is closely resembles Erlang/OTP's "erl_parse.yrl", the Erlang yecc grammar.
+%% However, it contains Gradualizer-specific modifications.
+%% These are denoted by a `gr_' prefix, instead of an `af_' prefix.
 %%
-%% Copyright Ericsson AB 1996-2018. All Rights Reserved.
+%% Copyright Ericsson AB 1996-2023. All Rights Reserved.
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License");
 %% you may not use this file except in compliance with the License.
@@ -47,6 +49,7 @@
 
 -type abstract_expr() :: af_literal()
                        | af_match(abstract_expr())
+                       | af_maybe_match()
                        | af_variable()
                        | af_tuple(abstract_expr())
                        | af_nil()
@@ -73,7 +76,9 @@
                        | af_local_fun()
                        | af_remote_fun()
                        | af_fun()
-                       | af_named_fun().
+                       | af_named_fun()
+                       | af_maybe()
+                       | af_maybe_else().
 
 -type af_record_update(T) :: {'record',
                               anno(),
@@ -220,6 +225,9 @@
 -type af_map_pattern() ::
         {'map', anno(), [af_assoc_exact(af_pattern())]}.
 
+-type af_maybe() :: {'maybe', anno(), af_body()}.
+-type af_maybe_else() :: {'maybe', anno(), af_body(), {'else', anno(), af_clause_seq()}}.
+
 -type abstract_type() :: af_annotated_type()
                        | af_atom()
                        | af_bitstring_type()
@@ -356,6 +364,8 @@
 -type af_string() :: {'string', anno(), string()}.
 
 -type af_match(T) :: {'match', anno(), af_pattern(), T}.
+
+-type af_maybe_match() :: {'maybe_match', anno(), af_pattern(), abstract_expr()}.
 
 -type af_variable() :: {'var', anno(), atom()}. % | af_anon_variable()
 

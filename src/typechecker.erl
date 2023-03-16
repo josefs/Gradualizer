@@ -358,10 +358,14 @@ compat_ty({type, P1, record, [{atom, _, Name}]},
     compat_record_fields(Fields1, Fields2, Seen, Env);
 
 %% Records that have been refined on one side or the other
-compat_ty({type, Anno1, record, [{atom, _, Name}|Fields1]},
-          {type, Anno2, record, [{atom, _, Name}|Fields2]}, Seen, Env) ->
+compat_ty({type, Anno1, record, [{atom, _, Name} | Fields1]},
+          {type, Anno2, record, [{atom, _, Name} | Fields2]}, Seen, Env) ->
     AllFields1 = case Fields1 of [] -> get_record_fields_types(Name, Anno1, Env); _ -> Fields1 end,
     AllFields2 = case Fields2 of [] -> get_record_fields_types(Name, Anno2, Env); _ -> Fields2 end,
+    %% We can assert because we explicitly match {atom, _, Name}
+    %% out of the field list in both cases above.
+    AllFields1 = ?assert_type(AllFields1, [record_field_type()]),
+    AllFields2 = ?assert_type(AllFields2, [record_field_type()]),
     compat_record_tys(AllFields1, AllFields2, Seen, Env);
 compat_ty({type, _, record, _}, {type, _, tuple, any}, Seen, _Env) ->
     ret(Seen);
@@ -383,7 +387,10 @@ compat_ty({type, _, tuple, any}, {type, _, tuple, _Args}, Seen, _Env) ->
 compat_ty({type, _, tuple, _Args}, {type, _, tuple, any}, Seen, _Env) ->
     ret(Seen);
 compat_ty({type, _, tuple, Args1}, {type, _, tuple, Args2}, Seen, Env) ->
-    compat_tys(Args1, Args2, Seen, Env);
+    %% We can assert because we match out `any' in previous clauses.
+    %% TODO: it would be perfect if Gradualizer could refine this type automatically in such a case
+    compat_tys(?assert_type(Args1, [type()]),
+               ?assert_type(Args2, [type()]), Seen, Env);
 
 %% Maps
 compat_ty({type, _, map, [?any_assoc]}, {type, _, map, _Assocs}, Seen, _Env) ->
@@ -399,6 +406,10 @@ compat_ty({type, _, map, Assocs1}, {type, _, map, Assocs2}, Seen, Env) ->
                       ({type, _, map_field_exact, _}) -> true;
                       (_) -> false
                   end,
+    %% We can assert because {type, _, map, any} is normalized away by normalize/2,
+    %% whereas ?any_assoc associations are matched out explicitly in the previous clauses.
+    Assocs1 = ?assert_type(Assocs1, [gradualizer_type:af_assoc_type()]),
+    Assocs2 = ?assert_type(Assocs2, [gradualizer_type:af_assoc_type()]),
     MandatoryAssocs1 = lists:filter(IsMandatory, Assocs1),
     MandatoryAssocs2 = lists:filter(IsMandatory, Assocs2),
     {Seen3, Cs3} = lists:foldl(fun ({type, _, map_field_exact, _} = Assoc2, {Seen2, Cs2}) ->
@@ -407,16 +418,19 @@ compat_ty({type, _, map, Assocs1}, {type, _, map, Assocs2}, Seen, Env) ->
                                     %% if that's not the case, let's throw now.
                                     length(MandatoryAssocs1) == 0 andalso throw(nomatch),
                                     case lists:foldl(fun
-                                                         (_Assoc1, {Seen1, Cs1}) -> {Seen1, Cs1};
-                                                         (Assoc1, nomatch) ->
+                                                         %% TODO: {no, match} is yet another case of
+                                                         %% the constraint solver "shape" limitation
+                                                         (Assoc1, {no, match}) ->
                                                              try
                                                                  compat(Assoc1, Assoc2, Seen2, Env)
                                                              catch
-                                                                 nomatch -> nomatch
-                                                             end
-                                                     end, nomatch, MandatoryAssocs1)
+                                                                 nomatch -> {no, match}
+                                                             end;
+                                                         (_Assoc1, {Seen1, Cs1}) ->
+                                                             {Seen1, Cs1}
+                                                     end, {no, match}, MandatoryAssocs1)
                                     of
-                                        nomatch -> throw(nomatch);
+                                        {no, match} -> throw(nomatch);
                                         {Seen1, Cs1} -> {Seen1, constraints:combine(Cs1, Cs2)}
                                     end
                             end, ret(Seen), MandatoryAssocs2),
@@ -432,6 +446,10 @@ compat_ty({type, _, AssocTag1, [Key1, Val1]},
              AssocTag1 == map_field_exact, AssocTag2 == map_field_exact;
              AssocTag1 == map_field_exact, AssocTag2 == map_field_assoc ->
     %% For M1 <: M2, mandatory fields in M2 must be mandatory fields in M1
+    Key1 = ?assert_type(Key1, type()),
+    Key2 = ?assert_type(Key2, type()),
+    Val1 = ?assert_type(Val1, type()),
+    Val2 = ?assert_type(Val2, type()),
     {Seen1, Cs1} = compat(Key1, Key2, Seen, Env),
     {Seen2, Cs2} = compat(Val1, Val2, Seen1, Env),
     {Seen2, constraints:combine(Cs1, Cs2)};
@@ -460,7 +478,7 @@ compat_tys(_Tys1, _Tys2, _, _) ->
     throw(nomatch).
 
 
--spec compat_record_tys([type()], [type()], map(), env()) -> compat_acc().
+-spec compat_record_tys(list(), list(), map(), env()) -> compat_acc().
 compat_record_tys([], [], Seen, _Env) ->
     ret(Seen);
 compat_record_tys([?type_field_type(Name, Field1)|Fields1], [?type_field_type(Name, Field2)|Fields2], Seen, Env) ->
@@ -873,7 +891,7 @@ normalize(Ty, Env) ->
 %% The third argument is a set of user types that we've already unfolded.
 %% It's important that we don't keep unfolding such types because it will
 %% lead to infinite recursion.
--spec normalize_rec(type() | gradualizer_type:gr_range_bound(), env()) -> type().
+-spec normalize_rec(type(), env()) -> type().
 normalize_rec({type, _, union, Tys}, Env) ->
     UnionSizeLimit = Env#env.union_size_limit,
     Types = flatten_unions(Tys, Env),
@@ -918,13 +936,16 @@ normalize_rec({op, _, _, _Arg} = Op, _Env) ->
 normalize_rec({op, _, _, _Arg1, _Arg2} = Op, _Env) ->
     erl_eval:partial_eval(Op);
 normalize_rec({type, Ann, range, [T1, T2]}, Env) ->
-    {type, Ann, range, [normalize_rec(T1, Env),
-                        normalize_rec(T2, Env)]};
+    %% We can assert that T1 and T2 are valid type() instances, because they must be expressed in
+    %% Erlang type syntax. Infinities are not allowed there - it's a Gradualizer extension to allow
+    %% them as range bounds.
+    {type, Ann, range, [normalize_rec(?assert_type(T1, type()), Env),
+                        normalize_rec(?assert_type(T2, type()), Env)]};
 normalize_rec(Type, _Env) ->
     expand_builtin_aliases(Type).
 
 %% Replace built-in type aliases
--spec expand_builtin_aliases(type() | gradualizer_type:gr_range_bound()) -> type().
+-spec expand_builtin_aliases(type()) -> type().
 expand_builtin_aliases({var, Ann, '_'}) ->
     {type, Ann, any, []};
 expand_builtin_aliases({type, Ann, term, []}) ->
@@ -1345,7 +1366,7 @@ allow_empty_list(Ty) ->
 
 -type fun_ty_simple()       :: {fun_ty, [type()], type(), constraints()}.
 -type fun_ty_intersection() :: {fun_ty_intersection, [fun_ty_simple()], constraints()}.
--type fun_ty_union()        :: {fun_ty_union, [fun_ty_simple()], constraints()}.
+-type fun_ty_union()        :: {fun_ty_union, [fun_ty()], constraints()}.
 
 %% Categorizes a function type.
 %% Normalizes the type (expand user-def and remote types). Errors for non-fun
@@ -1369,22 +1390,12 @@ expect_fun_type(Env, Type, Arity) ->
 expect_fun_type1(Env, BTy = {type, _, bounded_fun, [Ft, _Fc]}, Arity) ->
     Sub = bounded_type_subst(Env, BTy),
     Ft = ?assert_type(Ft, type()),
-    case expect_fun_type1(Env, Ft, Arity) of
-        {fun_ty, ArgsTy, ResTy, Cs} ->
-            {{Args, Res}, CsI} = instantiate_fun_type(subst_ty(Sub, ArgsTy),
-                                                      subst_ty(Sub, ResTy)),
-            {fun_ty, Args, Res, constraints:combine(Cs, CsI)};
-        {fun_ty_intersection, Tys, Cs} ->
-            {InstTys, CsI} = instantiate_fun_type(subst_ty(Sub, Tys)),
-            {fun_ty_intersection, InstTys, constraints:combine(Cs, CsI)};
-        {fun_ty_union, Tys, Cs} ->
-            {InstTys, CsI} = instantiate_fun_type(subst_ty(Sub, Tys)),
-            {fun_ty_union, InstTys, constraints:combine(Cs, CsI)};
-        Err ->
-            Err
-    end;
+    {fun_ty, ArgsTy, ResTy, Cs} = expect_fun_type1(Env, Ft, Arity),
+    {{Args, Res}, CsI} = instantiate_fun_type(subst_ty(Sub, ArgsTy),
+                                              subst_ty(Sub, ResTy)),
+    {fun_ty, Args, Res, constraints:combine(Cs, CsI)};
 expect_fun_type1(_Env, {type, _, 'fun', [{type, _, product, ArgsTy}, ResTy]}, _Arity) ->
-    {fun_ty, ArgsTy, ResTy, constraints:empty()};
+    {fun_ty, ArgsTy, ?assert_type(ResTy, type()), constraints:empty()};
 expect_fun_type1(_Env, {type, _, 'fun', []}, Arity) ->
     ArgsTy = lists:duplicate(Arity, type(any)),
     ResTy = type(any),
@@ -1418,8 +1429,8 @@ expect_fun_type1(_Env, {var, _, Var}, Arity) ->
     ArgsTy = lists:duplicate(Arity, type(any)),
     ResTyVar = gradualizer_tyvar:new(Var, ?MODULE, ?LINE),
     ResTy = {var, erl_anno:new(0), ResTyVar},
-    ResTyUpper = {type, erl_anno:new(0), 'fun', [{type, erl_anno:new(0), any},
-                                                 {var,  erl_anno:new(0), ResTy}]},
+    AnyArgs = {type, erl_anno:new(0), any},
+    ResTyUpper = {type, erl_anno:new(0), 'fun', [AnyArgs, ResTy]},
     Cs = constraints:add_var(ResTyVar, constraints:upper(Var, ResTyUpper)),
     {fun_ty, ArgsTy, ResTy, Cs};
 expect_fun_type1(_Env, {type, _, any, []}, Arity) ->
@@ -1432,19 +1443,26 @@ expect_fun_type1(_Env, ?top(), Arity) ->
 expect_fun_type1(_Env, _Ty, _Arity) ->
     type_error.
 
--spec expect_intersection_type(env(), [tuple()], arity()) -> [fun_ty()] | type_error.
+-spec expect_intersection_type(env(), [tuple()], arity()) -> [fun_ty_simple()] | type_error.
 expect_intersection_type(_Env, [], _Arity) ->
     [];
 expect_intersection_type(Env, [FunTy|Tys], Arity) ->
     case expect_fun_type1(Env, FunTy, Arity) of
         type_error ->
             type_error;
+        {fun_ty_intersection, _, _} ->
+            %% We can't have a multi-clause spec clause within a multi-clause spec
+            type_error;
+        {fun_ty_union, _, _} ->
+            %% We can't have a union of functions as a spec clause
+            type_error;
         Ty ->
+            Ty = ?assert_type(Ty, fun_ty_simple()),
             case expect_intersection_type(Env, Tys, Arity) of
                 type_error ->
                     type_error;
                 Tyss ->
-                    [Ty|Tyss]
+                    [Ty | Tyss]
             end
     end.
 
@@ -3153,6 +3171,8 @@ type_check_list_op_in(Env, ResTy, {op, P, Op, Arg1, Arg2} = Expr) ->
                     {union_var_binds(VarBinds1, VarBinds2, Env),
                      constraints:combine([Cs, Cs1, Cs2])};
                 false ->
+                    %% TODO: we're getting this because of a type var, so if we solve constraints
+                    %% here and get a substitution for this type var, we should be able to tell more
                     throw(type_error(op_type_too_precise, Op, P, ResTy1))
             end
     end.
@@ -3171,6 +3191,10 @@ list_op_arg_types(ListOp, {type, _, union, Tys}) ->
             {Arg1Tys, Arg2Tys} = lists:unzip(Pairs),
             {type(union, Arg1Tys), type(union, Arg2Tys)}
     end;
+list_op_arg_types(_ListOp, {var, _, _TyVar}) ->
+    %% TODO: we should create new type vars for the operands like arith_op_arg_types/2 does
+    %% and constrain them appropriately, but for now we just approximate with any()
+    {type(any), type(any)};
 list_op_arg_types('++', Ty) ->
     case list_view(Ty) of
         false            -> false;
@@ -3600,11 +3624,6 @@ instantiate_fun_type(Args, Res) ->
     {NewArgs, ArgVars, Map} = instantiate_inner(Args, #{}),
     {NewRes , ResVars, _Map} = instantiate(Res, Map),
     {{NewArgs, NewRes}, constraints:vars(maps:merge(ArgVars, ResVars))}.
-
--spec instantiate_fun_type([type()]) -> {[type()], constraints:t()}.
-instantiate_fun_type(Tys) ->
-    {NewTys, Vars, _Map} = instantiate_inner(Tys, #{}),
-    {NewTys, constraints:vars(Vars)}.
 
 -type instantiate_retval(T) :: {T,
                                 constraints:mapset(constraints:var()),
@@ -4059,7 +4078,7 @@ refine(OrigTy, Ty, Trace, Env) ->
             end
     end.
 
--spec get_record_fields_types(atom(), erl_anno:anno(), env()) -> [_].
+-spec get_record_fields_types(atom(), erl_anno:anno(), env()) -> [record_field_type()].
 get_record_fields_types(Name, Anno, Env) ->
     RecordFields = get_maybe_remote_record_fields(Name, Anno, Env),
     [type_field_type(FieldName, Type) || ?typed_record_field(FieldName, Type) <- RecordFields].
