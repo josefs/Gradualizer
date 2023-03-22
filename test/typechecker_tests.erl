@@ -10,6 +10,9 @@
 -define(t(T), t(??T)).
 t(T) -> typelib:remove_pos(typelib:parse_type(T)).
 
+%% Macro to convert expression to abstract form
+-define(e(E), merl:quote(??E)).
+
 subtype_test_() ->
     [
      %% The unknown type, both directions
@@ -592,7 +595,27 @@ add_type_pat_test_() ->
       ?_assert(type_check_forms(["f([E|_]) -> E."]))},
      {"Pattern matching record against any()",
       ?_assert(type_check_forms(["-record(r, {f}).",
-                                 "f(#r{f = F}) -> F."]))}
+                                 "f(#r{f = F}) -> F."]))},
+
+      ?_assertEqual(?t(a),                 type_pat(?e(a),                 ?t(a))),
+      ?_assertEqual(?t(a),                 type_pat(?e(Var),               ?t(a))),
+      ?_assertEqual(?t(42),                type_pat(?e(42),                ?t(integer()))),
+      ?_assertEqual(?t(integer()),         type_pat(?e(Var),               ?t(integer()))),
+      ?_assertEqual(?t({3, true}),         type_pat(?e({3, true}),         ?t({integer(), boolean()}))),
+      ?_assertEqual(?t({3, boolean()}),    type_pat(?e({3, _}),            ?t({integer(), boolean()}))),
+
+      ?_assertThrow({type_error, pattern, _, {atom, _, a}, {atom, _, b}},
+                                           type_pat(?e(a),                 ?t(b))),
+
+      %% Maps
+      ?_assertEqual(?t(#{}),               type_pat(?e(#{}),               ?t(#{}))),
+      ?_assertEqual(?t(#{x := a}),         type_pat(?e(#{x := a}),         ?t(#{x := a}))),
+      ?_assertEqual(?t(#{x := a}),         type_pat(?e(Var),               ?t(#{x := a}))),
+
+      ?_assertThrow({type_error, pattern, _, {atom, _, b}, {atom, _, a}},
+                                           type_pat(?e(#{x := b}),         ?t(#{x := a}))),
+      ?_assertThrow({type_error, badkey, {atom, _, y}, _MapTy},
+                                           type_pat(?e(#{y := c}),         ?t(#{x := a})))
     ].
 
 type_diff_test_() ->
@@ -652,3 +675,8 @@ type_check_expr(EnvStr, ExprString, Opts) ->
     Expr = merl:quote(ExprString),
     {Ty, _VarBinds, _Cs} = typechecker:type_check_expr(Env, Expr),
     typelib:pp_type(Ty).
+
+type_pat(Pat, Ty) ->
+    {[PatTy], _UBounds, _Env, _Css} =
+        typechecker:add_types_pats([Pat], [Ty], gradualizer:env(), capture_vars),
+        PatTy.

@@ -18,6 +18,7 @@
          type/1, type/2,
          type_diff/3,
          refinable/2,
+         add_types_pats/4,
          compatible/3,
          collect_specs_types_opaques_and_functions/1,
          number_of_exported_functions/1,
