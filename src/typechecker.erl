@@ -111,6 +111,7 @@
 -type record_field() :: gradualizer_type:af_record_field(expr()).
 -type record_field_type() :: gradualizer_type:af_record_field_type().
 -type typed_record_field() :: {typed_record_field, record_field(), type()}.
+-type af_assoc_type() :: gradualizer_type:af_assoc_type().
 
 %% The environment passed around during typechecking.
 %% TODO: See https://github.com/josefs/Gradualizer/issues/364 for details.
@@ -4892,29 +4893,36 @@ add_type_pat({map, P, AssocPats} = MapPat, MapTy, Env) ->
             AssocTys = ?assert_type(AssocTys, [gradualizer_type:af_assoc_type()]),
             %% Check each Key := Value and bind vars in Value.
             CheckAssoc = fun ({map_field_exact, _, Key, ValuePat},
-                              {EnvIn, ExhaustedAssocsAcc, CsAcc}) ->
-                                 case add_type_pat_map_key(Key, AssocTys, EnvIn) of
-                                     {ok, KeyPatTy, ValueTy, Cs1} ->
+                              {EnvIn, ExhaustedAssocsAcc, RemainingAssocsIn, CsAcc}) ->
+                                 case add_type_pat_map_key(Key, RemainingAssocsIn, EnvIn, []) of
+                                     {ok, KeyPatTy, ValueTy, RemainingAssocsOut, Cs1} ->
                                          {ValPatTy, _ValUBound, EnvOut, Cs2} =
                                              add_type_pat(ValuePat, normalize(ValueTy, EnvIn), EnvIn),
-                                         ExhaustedAssoc = type(map_field_exact,
+                                         ExhaustedAssoc = type_assoc(map_field_exact,
                                                                [KeyPatTy, ValPatTy]),
                                          {EnvOut,
                                           [ExhaustedAssoc | ExhaustedAssocsAcc],
+                                          RemainingAssocsOut,
                                           [Cs1, Cs2 | CsAcc]};
                                      error ->
+                                         %% TODO: allow patterns like #{x := a, x := a}
                                          throw(type_error(badkey, Key, MapTy))
                                  end
                          end,
-            {NewEnv, ExhaustedAssocs, Css} =
-                lists:foldl(CheckAssoc, {Env, [], [Cs0]}, AssocPats),
+            {NewEnv, ExhaustedAssocsRev, RemainingAssocs, Css} =
+                lists:foldl(CheckAssoc, {Env, [], AssocTys, [Cs0]}, AssocPats),
             PatTy = case NormMapTy of
                         ?top() ->
                             top();
                         {var, _, _Var} ->
                             type(none);
                         ?type(map, Assocs) when is_list(Assocs) ->
-                            PatTy0 = type(map, ExhaustedAssocs),
+                            ExhaustedAssocs = lists:reverse(ExhaustedAssocsRev),
+                            AllExhaustedAssocs = case RemainingAssocs of
+                                any -> ExhaustedAssocs;
+                                _List -> ExhaustedAssocs ++ RemainingAssocs
+                            end,
+                            PatTy0 = type(map, AllExhaustedAssocs),
                             handle_possible_none_map_keys(PatTy0)
                     end,
             {PatTy, MapTy, NewEnv, constraints:combine(Css)};
@@ -5101,26 +5109,46 @@ add_type_pat_fields([{record_field, _, {atom, _, Name} = FieldWithAnno, Pat}|Fie
 %% Given a pattern for a key, finds the matching association in the map type and
 %% returns the value type. Returns 'error' if the key is not valid in the map.
 -spec add_type_pat_map_key(Key         :: gradualizer_type:abstract_pattern(),
-                           MapTyAssocs :: any | [gradualizer_type:af_assoc_type()],
-                           Env         :: env()
+                           MapTyAssocs :: any | [af_assoc_type()],
+                           Env         :: env(),
+                           PrevAssocs  :: [af_assoc_type()]
                           ) -> {ok,
                                 KeyPatTy :: type(),
                                 ValueTy :: type(),
+                                RemainingAssocs :: any | [af_assoc_type()],
                                 constraints:t()} |
                                error.
-add_type_pat_map_key(_Key, any, _Env) ->
-    {ok, type(none), type(any), constraints:empty()};
-add_type_pat_map_key(Key, [{type, _, AssocTag, [KeyTy, ValueTy]} | MapAssocs], Env)
+add_type_pat_map_key(_Key, any, _Env, _PrevAssocs) ->
+    {ok, type(none), type(any), any, constraints:empty()};
+add_type_pat_map_key(Key, [{type, _, AssocTag, [KeyTy, ValueTy]} = Assoc | NextAssocs],
+                     Env, PrevAssocs)
   when AssocTag == map_field_exact; AssocTag == map_field_assoc ->
     try add_types_pats([Key], [KeyTy], Env, capture_vars) of
         {[KeyPatTy], _KeyUBound, _VEnv, Cs} ->
             %% No free vars in Key, so no new variable binds.  (Types in VEnv
             %% can be refined though, so _VEnv doesn't have to match VEenv.)
-            {ok, KeyPatTy, ValueTy, Cs}
+
+            %% Remove KeyPatTy from the assoc or remove it completely.
+            %% Motivation. If we have the type #{x|y := a} then the pattern
+            %% #{x := a} matches the value #{x := a} but also #{x := a, y := a}
+            %% as the all instances of the key type can appear together as keys
+            %% of the map. Thus after matching x := a, we have to keep y => a.
+            MaybeRemainingAssoc = case type_diff(KeyTy, KeyPatTy, Env) of
+                %% If KeyPatTy covers KeyTy completely, remove the assoc.
+                ?type(none) -> [];
+                %% The remaining association is always map_field_assoc as one key
+                %% of that type has just been found, and that is enough to satisfy
+                %% the requirement of map_field_exact.
+                RemKeyTy -> [type_assoc(map_field_assoc, [RemKeyTy, ValueTy])]
+            end,
+            UpdatedTail = MaybeRemainingAssoc ++ NextAssocs,
+            UpdatedAssocs = lists:reverse(PrevAssocs) ++ UpdatedTail,
+
+            {ok, KeyPatTy, ValueTy, UpdatedAssocs, Cs}
     catch _TypeError ->
-        add_type_pat_map_key(Key, MapAssocs, Env)
+        add_type_pat_map_key(Key, NextAssocs, Env, [Assoc | PrevAssocs])
     end;
-add_type_pat_map_key(_Key, [], _Env) ->
+add_type_pat_map_key(_Key, [], _Env, _PrevAssocs) ->
     %% Key is not defined in this map type.
     error.
 
@@ -5382,6 +5410,15 @@ type_record(Name, Fields) ->
 -spec type_field_type(atom(), type()) -> record_field_type().
 type_field_type(Name, Type) ->
     {type, erl_anno:new(0), field_type, [{atom, erl_anno:new(0), Name}, Type]}.
+
+-spec type_assoc(map_field_assoc | map_field_exact, [type()]) -> af_assoc_type().
+type_assoc(AssocKind, KeyAndValueTy) ->
+    % af_assoc_type() is defined using a top-level union,
+    % and Gradualizer sees it as a different thing than
+    % the inferred type that has an inner union instead:
+    % {type, anno(), map_field_assoc | map_field_exact, [type()]}
+    ?assert_type({type, erl_anno:new(0), AssocKind, KeyAndValueTy},
+                 af_assoc_type()).
 
 -spec type_fun([type()], type()) -> type().
 type_fun(Args, ResTy) ->

@@ -611,6 +611,52 @@ add_type_pat_test_() ->
       ?_assertEqual(?t(#{}),               type_pat(?e(#{}),               ?t(#{}))),
       ?_assertEqual(?t(#{x := a}),         type_pat(?e(#{x := a}),         ?t(#{x := a}))),
       ?_assertEqual(?t(#{x := a}),         type_pat(?e(Var),               ?t(#{x := a}))),
+      ?_assertEqual(?t(#{x := a}),         type_pat(?e(#{}),               ?t(#{x := a}))),
+
+      ?_assertEqual(?t(#{x := a, y := b}), type_pat(?e(#{}),               ?t(#{x := a, y := b}))),
+      ?_assertEqual(?t(#{x := a, y := b}), type_pat(?e(#{x := a}),         ?t(#{x := a, y := b}))),
+      ?_assertEqual(?t(#{x := a, y := b}), type_pat(?e(#{x := a, y := b}), ?t(#{x := a, y := b}))),
+
+      ?_assertEqual(?t(#{x := a}),         type_pat(?e(#{x := a}),         ?t(#{x => a}))),
+      ?_assertEqual(?t(#{x => a}),         type_pat(?e(Var),               ?t(#{x => a}))),
+      ?_assertEqual(?t(#{x => a}),         type_pat(?e(#{}),               ?t(#{x => a}))),
+
+      ?_assertEqual(?t(#{x := a}),         type_pat(?e(#{x := a}),         ?t(#{x := a|b}))),
+      ?_assertEqual(?t(#{x := a}),         type_pat(?e(#{x := a}),         ?t(#{x => a|b}))),
+      ?_assertEqual(?t(#{x := 1}),         type_pat(?e(#{x := 1}),         ?t(#{x => 1..3}))),
+
+      ?_assertEqual(?t(#{x => a, y := b}), type_pat(?e(#{}),               ?t(#{x => a, y := b}))),
+      ?_assertEqual(?t(#{x := a, y := b}), type_pat(?e(#{x := a}),         ?t(#{x => a, y := b}))),
+      ?_assertEqual(?t(#{y := b, x => a}), type_pat(?e(#{y := b}),         ?t(#{x => a, y := b}))),
+
+      ?_assertEqual(?t(#{x := 42}),        type_pat(?e(#{x := 42}),        ?t(#{x := integer()}))),
+      ?_assertEqual(?t(#{x := integer()}), type_pat(?e(#{x := Var}),       ?t(#{x := integer()}))),
+
+      ?_assertEqual(?t(#{y := b, x => a}), type_pat(?e(#{y := b}),         ?t(#{x => a, y => b} | #{z := c}))),
+      ?_assertEqual(?t(#{y := b, x => a}), type_pat(?e(#{y := b}),         ?t(#{x => a, y => b} | #{y := c, z := c}))),
+      ?_assertEqual(?t(#{y := b, x => a} | #{y := b, z := c}),
+                                           type_pat(?e(#{y := b}),         ?t(#{x => a, y => b} | #{y := b, z := c}))),
+
+      ?_assertEqual(?t(none()),            type_pat(?e(#{x := a}),         ?t(any()))),
+      ?_assertEqual(?t(none()),            type_pat(?e(#{}),               ?t(any()))),
+
+      ?_assertEqual(?t(#{x := a, y => a}), type_pat(?e(#{x := a}),         ?t(#{x|y := a}))),
+      ?_assertEqual(?t(#{x := a, y => a}), type_pat(?e(#{x := a}),         ?t(#{x|y => a}))),
+      ?_assertEqual(?t(#{x := a, atom() => a}),
+                                           type_pat(?e(#{x := a}),         ?t(#{atom() := a}))),
+      ?_assertEqual(?t(#{x := a, atom() => a}),
+                                           type_pat(?e(#{x := a}),         ?t(#{atom() => a}))),
+      ?_assertEqual(?t(#{x := a, y => a|b}),
+                                           type_pat(?e(#{x := a}),         ?t(#{x|y := a|b}))),
+      ?_assertEqual(?t(#{x := a, y => a|b, z => c}),
+                                           type_pat(?e(#{x := a}),         ?t(#{x|y := a|b, z => c}))),
+
+      ?_assertEqual(?t(#{x := a, y := a, atom() => a}),
+                                           type_pat(?e(#{x := a, y := a}), ?t(#{atom() => a}))),
+      ?_assertEqual(?t(#{x := a, y := a}),
+                                           type_pat(?e(#{x := a, y := a}), ?t(#{x|y => a}))),
+      ?_assertEqual(?t(#{x := a, y := a, atom() => a}),
+                                           type_pat(?e(#{x := a, y := a}), ?t(#{x|y => a, atom() => a}))),
 
       ?_assertEqual(?t(none()),            type_pat(?e(#{"abc" := abc}),    ?t(#{string() => atom()}))),
 
