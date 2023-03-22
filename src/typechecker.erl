@@ -4922,7 +4922,7 @@ add_type_pat({map, P, AssocPats} = MapPat, MapTy, Env) ->
                                 any -> ExhaustedAssocs;
                                 _List -> ExhaustedAssocs ++ RemainingAssocs
                             end,
-                            PatTy0 = type(map, AllExhaustedAssocs),
+                            PatTy0 = type_map(AllExhaustedAssocs),
                             handle_possible_none_map_keys(PatTy0)
                     end,
             {PatTy, MapTy, NewEnv, constraints:combine(Css)};
@@ -5410,6 +5410,10 @@ type_record(Name, Fields) ->
 -spec type_field_type(atom(), type()) -> record_field_type().
 type_field_type(Name, Type) ->
     {type, erl_anno:new(0), field_type, [{atom, erl_anno:new(0), Name}, Type]}.
+
+-spec type_map(any | [af_assoc_type()]) -> gradualizer_type:af_map_type().
+type_map(Assocs) ->
+    ?assert_type(type(map, Assocs), gradualizer_type:af_map_type()).
 
 -spec type_assoc(map_field_assoc | map_field_exact, [type()]) -> af_assoc_type().
 type_assoc(AssocKind, KeyAndValueTy) ->
