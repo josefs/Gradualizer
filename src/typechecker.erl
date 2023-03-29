@@ -875,6 +875,19 @@ has_overlapping_keys({type, _, map, Assocs}, Env) ->
                 As1 /= As2 ],
     lists:any(fun(X) -> X end, Cart).
 
+%% Non-singleton required (alias exact) keys are hard to work with
+%% because they express that at least one value of that type should
+%% be present in the map, but not necessarily all of them.
+-spec has_non_singleton_required_keys(gradualizer_type:af_map_type()) -> boolean().
+has_non_singleton_required_keys(?type(map, any)) -> false;
+has_non_singleton_required_keys(?type(map, Assocs)) ->
+    lists:any(
+        fun(?type(map_field_exact, [KeyTy, _ValTy])) -> not is_singleton_type(KeyTy);
+           (?type(map_field_assoc, _)) -> false
+        end,
+        Assocs
+    ).
+
 -spec lub([type()], env()) -> type().
 lub(Tys, Env) ->
     normalize(type(union, Tys), Env).
@@ -1077,6 +1090,18 @@ merge_union_types(Types, _Env) ->
 -spec is_top(gradualizer:top()) -> boolean().
 is_top(?top()) -> true;
 is_top(_) -> false.
+
+%% Decides whether the type expresses exactly one value.
+-spec is_singleton_type(type()) -> boolean().
+is_singleton_type({atom, _, _Atom}) -> true;
+is_singleton_type({integer, _, _Integer}) -> true;
+is_singleton_type({char, _, _Char}) -> true;
+is_singleton_type(?type(range, [{integer, _, N}, {integer, _, N}])) -> true;
+is_singleton_type(?type(tuple, [])) -> true;
+is_singleton_type(?type(map, [])) -> true;
+is_singleton_type(?type(nil)) -> true;
+is_singleton_type(?type(binary, [{integer, _, 0},{integer, _, 0}])) -> true; % empty binary
+is_singleton_type(_) -> false. % TODO: add more cases
 
 %% Remove all atom listerals if atom() is among the types.
 -spec merge_atom_types([type()]) -> [type()].
@@ -4146,22 +4171,52 @@ refine_ty(?type(map, _Assocs), ?type(map, [?any_assoc]), _Trace, _Env) ->
     %% #{x => y} \ map() = none()
     type(none);
 refine_ty(?type(map, Assocs1) = Ty1, ?type(map, Assocs2) = Ty2, Trace, Env) ->
-    case {has_overlapping_keys(Ty1, Env), has_overlapping_keys(Ty2, Env)} of
-        {false, false} ->
-            FieldTys = lists:flatmap(fun refine_map_field_ty/1,
-                                     [ {As1, As2, Trace, Env}
-                                       || As1 <- Assocs1,
-                                          As2 <- Assocs2 ]),
-            case lists:partition(fun (Ty) -> Ty == type(map, []) end, FieldTys) of
-                {[_|_], []} ->
-                    %% All empty map types mean an empty map type should be returned,
-                    %% since there are no meaningful fields in the map anymore.
-                    type(map, []);
-                {_, RemainingFields} ->
-                    %% If apart from the empty map types there are also other fields present,
-                    %% make sure no more than one copy of each is returned in the final type.
-                    RemainingDeduped = deduplicate_list(RemainingFields),
-                    type(map, RemainingDeduped)
+    %% Ty1 and Ty2 are normalized so they always have a list of assocs.
+    Ty1 = ?assert_type(Ty1, {type, anno(), map, [af_assoc_type()]}),
+    Ty2 = ?assert_type(Ty2, {type, anno(), map, [af_assoc_type()]}),
+    Assocs1 = ?assert_type(Assocs1, [af_assoc_type()]),
+    Assocs2 = ?assert_type(Assocs2, [af_assoc_type()]),
+
+    case {has_overlapping_keys(Ty1, Env), has_overlapping_keys(Ty2, Env),
+                                          has_non_singleton_required_keys(Ty1)} of
+        {false, false, false} ->
+            %% The MissingTy is a bit of a hack but it allows us to treat
+            %% the case when an assoc is missing as if it was one of the
+            %% assoc possible values (which is quite convenient)
+            MissingTy = type_atom('__gradualizer_missing_assoc'),
+
+            Pairs = pair_assocs(Assocs1, Assocs2, MissingTy, Env),
+            {Keys, Values1, Values2} = lists:unzip3(Pairs),
+            Tuple1 = type(tuple, Values1),
+            Tuple2 = type(tuple, Values2),
+
+            %% Determines which assocs to keep and what tag to use for them,
+            %% and constructs the resulting map type.
+            ValuesToMap = fun(?type(tuple, ResValues)) ->
+                    KeyValues = lists:zip(Keys, ResValues),
+                    ResAssocsRev = lists:foldl(fun({Key, ValOrig}, AssocsIn) ->
+                        case process_assoc_value(ValOrig, MissingTy, Env) of
+                            {keep, {Tag, Val}} -> [type(Tag, [Key, Val]) | AssocsIn];
+                            leave_out -> AssocsIn
+                        end
+                    end, [], KeyValues),
+                    ResAssocs = lists:reverse(ResAssocsRev),
+                    type(map, ResAssocs)
+            end,
+
+            %% The excellent type_diff algorithm for tuples gives us not only
+            %% the comfort of diffing all values at once but also computes
+            %% all possible combinations that are covered by the difference.
+            %% E.g., #{x := a|b, y => c} \ #{x := a, y := c} should result
+            %% in the union of #{x := b, y => c} and #{x := a|b}.
+            case refine_ty(Tuple1, Tuple2, Trace, Env) of
+                ?type(tuple, _) = Tuple ->
+                    ValuesToMap(Tuple);
+                ?type(union, Tuples) ->
+                    NewTuples = lists:map(ValuesToMap, Tuples),
+                    type(union, NewTuples);
+                ?type(none) ->
+                    type(none)
             end;
         _ ->
             throw(no_refinement)
@@ -4253,57 +4308,69 @@ refine_ty_catch_all(Ty1, Ty2, Env) ->
         _NotDisjoint -> throw(no_refinement)  %% imprecision
     end.
 
--spec refine_map_field_ty({Assoc1 :: type(), Assoc2 :: type(),
-                           Trace :: map(), Env :: env()}) ->
-          [gradualizer_type:abstract_type()].
-%% Produce the diff #{Assoc1} \ #{Assoc2}.
+%% Finds a corresponding assoc from Assocs1 to every assoc from Assocs2.
 %%
-%% Since Assoc2 is always computed from a pattern, it's always map_field_exact
-%% in practice.
-refine_map_field_ty({?type(map_field_exact, KVTy), ?type(map_field_exact, KVTy),
-                     _Trace, _Env}) ->
-    [];
-refine_map_field_ty({?type(map_field_assoc, KVTy), ?type(map_field_exact, KVTy),
-                     _Trace, _Env}) ->
-    %% #{x => y} \ #{x := y} = #{} -- i.e. an empty map
-    [type(map, [])];
-refine_map_field_ty({?type(AssocTag1, [K1, V1]), ?type(map_field_exact, [K2, V2]),
-                     Trace, Env})
-  when AssocTag1 == map_field_assoc;
-       AssocTag1 == map_field_exact ->
-    %% This might lead to duplicates in the resulting type.
-    case refine(type(tuple, [K1, V1]), type(tuple, [K2, V2]), Trace, Env) of
-        ?type(none) ->
-            [];
-        ?type(tuple, [KeyRefined, ValueRefined]) ->
-            [type(AssocTag1, [KeyRefined, ValueRefined])];
-        ?type(union, Tuples) ->
-            %% TODO: Because we use the logic from tuples, this may produce
-            %% assocs with overlapping keys, e.g.
-            %%
-            %%     #{1..2 := 3..4} \ #{1 := 4} ===> #{2 := 3..4, 1..2 := 3}
-            %%
-            %% where we instead would like #{2 := 3..4, 1 := 3}, but another
-            %% problem is that only one key should be mandatory. Currently,
-            %% overlapping keys disable exhaustiveness checking.
-            [type(AssocTag1, [KeyRefined, ValueRefined])
-             || ?type(tuple, [KeyRefined, ValueRefined]) <- Tuples]
-    end;
-refine_map_field_ty({Assoc1, _Assoc2, _Trace, _Env}) ->
-    %% This is probably wrong.
-    [Assoc1].
+%% All keys from Assoc1 should be mentioned in Assocs2 if Assocs2 was
+%% constructed using add_types_pats (as there is no way how to express
+%% that a map shouldn't have a particular field filled in using a pattern).
+%% Thus it is safe to reduce the Assocs1 and Assocs2 to just list of Assocs2
+%% paired with their corresponding value types in Assocs1. Nothing from
+%% Assocs1 should be lost in this way.
+-spec pair_assocs([af_assoc_type()], [af_assoc_type()], type(), env())
+        -> [{Key :: type(), Value1 :: type(), Value2 :: type()}].
+pair_assocs(Assocs1, Assocs2, MissingTy, Env) ->
+    %% The MissingTy is later on handled in process_assoc_value.
+    AugmentValueTy = fun(map_field_exact, Value)
+                            -> Value;
+                        (map_field_assoc, Value)
+                            -> normalize(type(union, [Value, MissingTy]), Env)
+    end,
+    lists:map(fun(?type(Tag2, [K2, V2Orig])) ->
+        V2 = AugmentValueTy(Tag2, V2Orig),
+        case lists:search(fun(?type(_Tag1, [K1, _V1])) ->
+            %% Most of the time, the keys will be equal, but the subtype
+            %% condition allows us to handle non-singleton keys as well.
+            %% For example, both x and y of Assocs2 should pair with x|y
+            %% from Assocs1.
+            case subtype(K2, K1, Env) of
+                {true, _Cs} -> true;
+                false -> false
+            end
+        end, Assocs1) of
+            {value, ?type(Tag1, [_K1, V1Orig])} ->
+                V1 = AugmentValueTy(Tag1, V1Orig),
+                {K2, V1, V2};
+            false ->
+                %% If Assocs2 mentions a key that is not a subtype of any key
+                %% from Assocs1, then the corresponding maps are disjoint.
+                throw(disjoint)
+        end
+    end, Assocs2).
 
--spec deduplicate_list(list()) -> list().
-deduplicate_list(List) ->
-    {L, _} = lists:foldl(fun(Elem, {LAcc, SAcc}) ->
-                                 case maps:is_key(Elem, SAcc) of
-                                     true ->
-                                         {LAcc, SAcc};
-                                     false ->
-                                         {[Elem | LAcc], maps:put(Elem, {}, SAcc)}
-                                 end
-                         end, {[], #{}}, List),
-    lists:reverse(L).
+%% Handles the MissingTy in assoc values and decides whether
+%% to keep the assoc and which tag to use for it.
+%%
+%% MissingTy denotes the possibility of the assoc being left
+%% out from the type, so it corresponds to the "=>" assoc.
+%% If the value type does not contain MissingTy, it should
+%% be the ":=" assoc that must be always present.
+%% If the value is precisely MissingTy, it means that the
+%% assoc should never be present, and thus should be left out.
+-spec process_assoc_value(type(), type(), env())
+        -> {keep, {map_field_assoc | map_field_exact, type()}} | leave_out.
+process_assoc_value(MissingTy, MissingTy, _Env) -> leave_out;
+process_assoc_value(?type(union, ItemsIn), MissingTy, Env) ->
+    {Tag, ItemsOutRev} = lists:foldl(
+        fun(Item, {Tag, Items}) ->
+            if
+                Item == MissingTy -> {map_field_assoc, Items};
+                true -> {Tag, [Item | Items]}
+            end
+        end,
+        {map_field_exact, []}, ItemsIn),
+    ItemsOut = lists:reverse(ItemsOutRev),
+    {keep, {Tag, normalize(type(union, ItemsOut), Env)}};
+process_assoc_value(Value, _EmptyTyVar, _Env) -> {keep, {map_field_exact, Value}}.
 
 %% Returns a nested list on the form
 %%
@@ -4373,19 +4440,20 @@ refinable(?type(map, _) = Ty0, Env, Trace) ->
     ?assert_normalized_anno(Ty0),
     ?type(map, Assocs) = Ty = normalize(Ty0, Env),
     %% normalize/2 will not return Assocs=any
-    Assocs = ?assert_type(Assocs, [gradualizer_type:af_assoc_type()]),
+    Assocs = ?assert_type(Assocs, [af_assoc_type()]),
+    Ty = ?assert_type(Ty, {type, anno(), map, [af_assoc_type()]}),
     case stop_refinable_recursion(Ty, Env, Trace) of
         stop -> true;
         {proceed, NewTrace} ->
-            case has_overlapping_keys(Ty, Env) of
-                true ->
-                    false;
-                false ->
+            case {has_overlapping_keys(Ty, Env), has_non_singleton_required_keys(Ty)} of
+                {false, false} ->
                     lists:all(fun ({type, _, _AssocTag, [KTy, VTy]}) ->
                                       refinable(KTy, Env, NewTrace)
                                       andalso
                                       refinable(VTy, Env, NewTrace)
-                              end, Assocs)
+                              end, Assocs);
+                _ ->
+                    false
             end
     end;
 refinable(?type(string), _Env, _Trace) ->

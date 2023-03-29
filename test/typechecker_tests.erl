@@ -667,11 +667,112 @@ add_type_pat_test_() ->
     ].
 
 type_diff_test_() ->
+    {setup,
+      fun setup_app/0,
+      fun cleanup_app/1,
+
     [{"Can refine a union with another union",
       ?_assertEqual(?t( a1 | b | b1 | c | c1 | d ),
                     typechecker:type_diff(?t( (a | a1) | (b | b1) | (c | c1) | (d | d1) ),
-                                          ?t( a | d1), gradualizer:env()))}
-    ].
+                                          ?t( a | d1), gradualizer:env()))},
+
+      ?_assertEqual(?t(none()),
+                    typechecker:type_diff(?t(#{x := integer()}),
+                                          ?t(#{x := integer()}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(#{}),
+                    typechecker:type_diff(?t(#{x => integer()}),
+                                          ?t(#{x := integer()}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(none()),
+                    typechecker:type_diff(?t(#{x => integer()}),
+                                          ?t(#{x => integer()}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(#{x := b}),
+                    typechecker:type_diff(?t(#{x := a|b}),
+                                          ?t(#{x := a}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(#{x => b}),
+                    typechecker:type_diff(?t(#{x => a|b}),
+                                          ?t(#{x := a}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(#{x := 2..3}),
+                    typechecker:type_diff(?t(#{x := 1..3}),
+                                          ?t(#{x := 1}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(none()),
+                    typechecker:type_diff(?t(#{x := a, y := b}),
+                                          ?t(#{x := a, y := b}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(none()),
+                    typechecker:type_diff(?t(#{x := a, y := b}),
+                                          ?t(#{y := b, x := a}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(#{x := b, y := c}),
+                    typechecker:type_diff(?t(#{x := a|b, y := c}),
+                                          ?t(#{x := a, y := c}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(#{x := b, y => c} | #{x := a|b}),
+                    typechecker:type_diff(?t(#{x := a|b, y => c}),
+                                          ?t(#{x := a, y := c}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(#{x := b, y => c|d} | #{x := a|b, y => d}),
+                    typechecker:type_diff(?t(#{x := a|b, y => c|d}),
+                                          ?t(#{x := a, y := c}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(#{x => b, y := c}),
+                    typechecker:type_diff(?t(#{x => a|b, y := c}),
+                                          ?t(#{x := a, y := c}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(#{y => b}),
+                    typechecker:type_diff(?t(#{x => a, y => b}),
+                                          ?t(#{x := a, y => b}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(#{y => a}),
+                    typechecker:type_diff(?t(#{x|y => a}),
+                                          ?t(#{x := a, y => a}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(none()),
+                    typechecker:type_diff(?t(#{x|y => a}),
+                                          ?t(#{x => a, y => a}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(#{x => a|b, y => b} | #{x => b, y => a|b}),
+                    typechecker:type_diff(?t(#{x|y => a|b}),
+                                          ?t(#{x := a, y := a}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(#{y := b}),
+                    typechecker:type_diff(?t(#{x := atom()} | #{y := b}),
+                                          ?t(#{x := atom()}),
+                                          gradualizer:env())),
+
+      % disjoint
+      ?_assertEqual(?t(#{x := a}),
+                    typechecker:type_diff(?t(#{x := a}),
+                                          ?t(#{y := a}),
+                                          gradualizer:env())),
+
+      % has non-singleton required key
+      ?_assertEqual(?t(#{x|y := a}),
+                    typechecker:type_diff(?t(#{x|y := a}),
+                                          ?t(#{x := a}),
+                                          gradualizer:env()))
+    ]}.
 
 %%
 %% Helper functions
