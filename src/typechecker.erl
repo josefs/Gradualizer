@@ -4583,11 +4583,10 @@ check_guard_expression(Env, Guard) ->
 %% The different guards use glb
 -spec check_guard(env(), list()) -> env().
 check_guard(Env, GuardSeq) ->
-    RefTys = union_var_binds(
-               lists:map(fun (Guard) ->
-                                 check_guard_expression(Env, Guard)
-                         end, GuardSeq),
-               Env),
+    RefTys = lists:foldl(fun(Guard, E) ->
+                             Ne = check_guard_expression(E, Guard),
+                             union_var_binds([Ne], E)
+                         end, Env, GuardSeq),
     Env#env{venv = maps:merge(Env#env.venv, RefTys#env.venv)}.
 
 %% TODO: implement proper checking of guards.
