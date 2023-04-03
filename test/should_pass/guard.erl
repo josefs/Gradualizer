@@ -114,8 +114,14 @@ good_andalso(_, _) -> 42.
 -spec guard_chain(integer() | binary()) -> integer().
 guard_chain(I) when is_binary(I), size(I) > 3 ->
     3;
-guard_chain(_) ->
-    8.
+guard_chain(I) ->
+    8 * I.
+
+-spec guard_on_two_vars(integer() | binary(), atom()) -> integer().
+guard_on_two_vars(I, J) when is_binary(I), is_atom(J) ->
+    3;
+guard_on_two_vars(I, _) ->
+    8 * I.
 
 -spec all(All) -> All when
     All :: atom()
