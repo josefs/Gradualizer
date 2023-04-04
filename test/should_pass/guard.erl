@@ -111,6 +111,18 @@ andalso2(_) -> not_integer.
 good_andalso(X, Y) when is_integer(X) andalso is_integer(Y) -> X + Y;
 good_andalso(_, _) -> 42.
 
+-spec guard_chain(integer() | binary()) -> integer().
+guard_chain(I) when is_binary(I), size(I) > 3 ->
+    3;
+guard_chain(I) ->
+    I.
+
+-spec guard_on_two_vars(integer() | binary(), atom()) -> integer().
+guard_on_two_vars(I, J) when is_binary(I), is_atom(J) ->
+    3;
+guard_on_two_vars(I, _) ->
+    I.
+
 -spec all(All) -> All when
     All :: atom()
         | binary()
