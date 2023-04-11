@@ -263,6 +263,25 @@ fixpoint_normalize(Ty, Env) ->
         _ -> fixpoint_normalize(NormTy, Env)
     end.
 
+%% Stop the recursion if we've already been queried whether T1 <: T2.
+%%
+%% This is because of recursive types. For example, suppose we have
+%% two binary tree types defined like so:
+%%   -type tree_int() :: leaf | {node, integer(), tree_int(), tree_int()}.
+%%   -type tree_5() :: leaf | {node, 5, tree_5(), tree_5()}.
+%% Now, if we want to check whether tree_5() <: tree_int(), we have to make
+%% the following recursive calls:
+%%   - leaf <: tree_int()
+%%     - leaf <: leaf
+%%   - {node, 5, tree_5(), tree_5()} <: tree_int()
+%%     - {node, 5, tree_5(), tree_5()} <: leaf (fails)
+%%     - {node, 5, tree_5(), tree_5()} <: {node, integer(), tree_int(), tree_int()}
+%%       - node <: node
+%%       - 5 <: integer()
+%%       - tree_5() <: tree_int() <-- and this is the problem!
+%%       - tree_5() <: tree_int() (for the right child; would cause the same problem)
+%% If we didn't stop when querying for tree_5() <: tree_int() again,
+%% we would have an infinite loop.
 -spec compat_seen({type(), type()}, #{ {type(), type()} := true }) -> boolean().
 compat_seen({T1, T2}, Seen) ->
     maps:get({T1, T2}, Seen, false).
