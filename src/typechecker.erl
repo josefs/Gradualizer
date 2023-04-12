@@ -4760,11 +4760,11 @@ add_type_pat({var, _, A} = Var, Ty, Env) ->
                     %% TODO: Better type error (it's a pattern, not an expression)
                     throw(type_error(Var, VarTy, Ty));
                 {RefinedTy, Cs} ->
-                    {type(none), RefinedTy, update_var_type(Env, A, RefinedTy), Cs}
+                    {type(none), RefinedTy, update_var_type(Env, Var, RefinedTy), Cs}
             end;
         _FreeVar ->
             %% Match all
-            {Ty, Ty, set_var_type(Env, A, Ty), constraints:empty()}
+            {Ty, Ty, set_var_type(Env, Var, Ty), constraints:empty()}
     end;
 add_type_pat(Pat, ?type(union, _) = UnionTy, Env) ->
     add_type_pat_union(Pat, UnionTy, Env);
@@ -5483,13 +5483,17 @@ add_var_binds(#env{venv = VB1}, #env{venv = VB2}, #env{} = Env) ->
 
 %% Set the type of a new variable.
 -spec set_var_type(env(), atom() | string(), type()) -> env().
-set_var_type(Env, A, Ty) ->
+set_var_type(Env, {var, _, A} = V, Ty) ->
+    ?verbose(Env, "~sSetting var type ~s :: ~s~n",
+             [gradualizer_fmt:format_location(V, brief), A, typelib:pp_type(Ty)]),
     VEnv = Env#env.venv,
     Env#env{venv = VEnv#{A => Ty}}.
 
 %% Update the type of an already seen variable.
--spec update_var_type(env(), atom() | string(), type()) -> env().
-update_var_type(Env, A, Ty) ->
+-spec update_var_type(env(), _, type()) -> env().
+update_var_type(Env, {var, _, A} = V, Ty) ->
+    ?verbose(Env, "~sUpdating var type ~s :: ~s~n",
+             [gradualizer_fmt:format_location(V, brief), A, typelib:pp_type(Ty)]),
     VEnv = Env#env.venv,
     Env#env{venv = VEnv#{A := Ty}}.
 
