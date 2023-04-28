@@ -5,7 +5,7 @@
 %%
 %% ```
 %% {plugins, [
-%%   {gradualizer, {git, "git@github.com:josefs/Gradualizer.git", {branch, "master"}}}
+%%   {gradualizer, {git, "https://github.com/josefs/Gradualizer.git", {branch, "master"}}}
 %% ]}.
 %% '''
 %%
