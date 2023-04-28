@@ -1,6 +1,6 @@
 ebin/gradualizer_file_utils.beam: Call to undefined function epp:open/5 on line 66 at column 16
-ebin/rebar_prv_gradualizer.beam: Undefined remote type rebar_state:t/0 on line 20 at column 11
-ebin/rebar_prv_gradualizer.beam: Undefined remote type rebar_state:t/0 on line 34 at column 9
-ebin/rebar_prv_gradualizer.beam: Undefined remote type rebar_app_info:t/0 on line 49 at column 28
-ebin/rebar_prv_gradualizer.beam: Undefined remote type rebar_app_info:t/0 on line 61 at column 21
-ebin/rebar_prv_gradualizer.beam: Call to undefined function rebar_dir:src_dirs/2 on line 102 at column 24
+ebin/rebar_prv_gradualizer.beam: Undefined remote type rebar_state:t/0 on line 23 at column 11
+ebin/rebar_prv_gradualizer.beam: Undefined remote type rebar_state:t/0 on line 37 at column 9
+ebin/rebar_prv_gradualizer.beam: Undefined remote type rebar_app_info:t/0 on line 52 at column 28
+ebin/rebar_prv_gradualizer.beam: Undefined remote type rebar_app_info:t/0 on line 70 at column 21
+ebin/rebar_prv_gradualizer.beam: Call to undefined function rebar_dir:src_dirs/2 on line 111 at column 24

@@ -17,6 +17,9 @@
 -define(PROVIDER, gradualizer).
 -define(DEPS, [compile]).
 
+%% This is borrowed from the private upstream rebar.hrl
+-define(DEBUG(Str, Args), rebar_log:log(debug, Str, Args)).
+
 -spec init(rebar_state:t()) -> {ok, rebar_state:t()}.
 init(State) ->
     Provider = providers:create([
@@ -52,9 +55,15 @@ gradualizer_check_app(App, UseBeams) ->
     case UseBeams of
         false ->
             Files = files_to_check(App),
+            ?DEBUG("Running gradualizer:type_check_files/2 with args:", []),
+            ?DEBUG("\tFiles = ~p", [Files]),
+            ?DEBUG("\tOpts = ~p", [GOpts]),
             gradualizer:type_check_files(Files, GOpts);
         true ->
             EBinDir = rebar_app_info:ebin_dir(App),
+            ?DEBUG("Running gradualizer:type_check_dir/2 with args:", []),
+            ?DEBUG("\tDir = ~p", [EBinDir]),
+            ?DEBUG("\tOpts = ~p", [GOpts]),
             gradualizer:type_check_dir(EBinDir, GOpts)
     end.
 
