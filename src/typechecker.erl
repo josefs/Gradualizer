@@ -4593,7 +4593,7 @@ mirror_comp_op(Comm) -> Comm.
 -spec check_guard_expression(env(), term()) -> env().
 check_guard_expression(Env, {call, _, {atom, _, Fun}, Vars}) ->
     Env#env{venv = check_guard_call(Fun, Vars)};
-check_guard_expression(Env, {call, _, {remote,_, {atom, _, erlang},{atom, _, Fun}}, Vars}) ->
+check_guard_expression(Env, {call, _, {remote,_, {atom, _, erlang}, {atom, _, Fun}}, Vars}) ->
     Env#env{venv = check_guard_call(Fun, Vars)};
 check_guard_expression(Env, {op, _, Op, {var, _, Var}, {Tag, _, Value}})
   when ?is_comp_op(Op), Tag =:= integer orelse Tag =:= atom ->
@@ -4617,8 +4617,14 @@ check_guard_expression(Env, Guard) ->
 -spec check_guard(env(), list()) -> env().
 check_guard(Env, GuardSeq) ->
     RefTys = lists:foldl(fun(Guard, E) ->
-                             Ne = check_guard_expression(E, Guard),
-                             union_var_binds([Ne], E)
+                             NEnv = check_guard_expression(E, Guard),
+                             %% This is somewhat tricky.
+                             %% check_guard_expression/2 will return an env with just
+                             %% the types of vars used in the guard expression - we want these to
+                             %% override any types previously in the env.
+                             %% We still want to keep types of vars not used in the guard expression,
+                             %% though, so we pass both NEnv and E to union_var_binds/2.
+                             union_var_binds([NEnv, E], E)
                          end, Env, GuardSeq),
     Env#env{venv = maps:merge(Env#env.venv, RefTys#env.venv)}.
 
