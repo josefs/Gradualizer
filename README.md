@@ -91,7 +91,7 @@ To run Gradualizer from rebar3, add it as a plugin in your `rebar.config`:
 
 ```erlang
 {plugins, [
-  {gradualizer, {git, "git@github.com:josefs/Gradualizer.git", {branch, "master"}}}
+  {gradualizer, {git, "https://github.com/josefs/Gradualizer.git", {branch, "master"}}}
 ]}.
 ```
 
