@@ -202,7 +202,7 @@ format_type_error({type_error, op_type_too_precise, Op, Anno, Ty}, Opts) ->
        pp_type(Ty, Opts)]);
 format_type_error({type_error, arith_error, ArithOp, Anno, Ty1, Ty2}, Opts) ->
     io_lib:format(
-      "~sThe operator ~p~s is requires numeric arguments, but "
+      "~sThe operator ~p~s requires numeric arguments, but "
       "has arguments of type ~s and ~s~n",
       [format_location(Anno, brief, Opts),
        ArithOp,
@@ -211,7 +211,7 @@ format_type_error({type_error, arith_error, ArithOp, Anno, Ty1, Ty2}, Opts) ->
        pp_type(Ty2, Opts)]);
 format_type_error({type_error, int_error, ArithOp, Anno, Ty1, Ty2}, Opts) ->
     io_lib:format(
-      "~sThe operator ~p~s is requires integer arguments, but "
+      "~sThe operator ~p~s requires integer arguments, but "
       " has arguments of type ~s and ~s~n",
       [format_location(Anno, brief, Opts),
        ArithOp,
