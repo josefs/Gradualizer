@@ -4621,7 +4621,7 @@ check_guard(Env, GuardSeq) ->
                              %% This is somewhat tricky.
                              %% check_guard_expression/2 will return an env with just
                              %% the types of vars used in the guard expression - we want these to
-                             %% override any types previously in the env.
+                             %% refine any types previously in the env.
                              %% We still want to keep types of vars not used in the guard expression,
                              %% though, so we pass both NEnv and E to union_var_binds/2.
                              union_var_binds([NEnv, E], E)
