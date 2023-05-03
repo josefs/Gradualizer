@@ -41,6 +41,8 @@ gen_should_fail() ->
             fun(File) ->
                 fun() ->
                     Errors = gradualizer:type_check_file(File, [return_errors]),
+                    Timeouts = [ E || {_File, {form_check_timeout, _}} = E <- Errors],
+                    ?assertEqual(0, length(Timeouts)),
                     %% Test that error formatting doesn't crash
                     Opts = [{fmt_location, brief},
                             {fmt_expr_fun, fun erl_prettypr:format/1}],
@@ -63,12 +65,21 @@ gen_known_problem_should_pass() ->
               ?_assertEqual(ExpectedErrors, ReturnedErrors)
       end, "test/known_problems/should_pass").
 
-% Test succeeds if Gradualizer crashes or if it does type check.
+% Test succeeds if Gradualizer crashes, times out, or if it does type check.
 % Doing so makes the test suite notify us whenever a known problem is resolved.
 gen_known_problem_should_fail() ->
     map_erl_files(
       fun(File) ->
-              ?_assertNotEqual(nok, safe_type_check_file(File))
+            Result = safe_type_check_file(File, [return_errors]),
+            case Result of
+                crash ->
+                    ok;
+                Errors ->
+                    ErrorsExceptTimeouts = lists:filter(
+                        fun ({_File, {form_check_timeout, _}}) -> false; (_) -> true end,
+                        Errors),
+                    ?_assertEqual(0, length(ErrorsExceptTimeouts))
+            end
       end, "test/known_problems/should_fail").
 
 %%
