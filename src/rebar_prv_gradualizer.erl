@@ -28,7 +28,10 @@ init(State) ->
             {bare, true},
             {deps, ?DEPS},
             {example, "rebar gradualizer"},
-            {opts, [{use_beams, $b, "use_beams", boolean, "use beam files as input"}]},
+            {opts, [
+                {use_beams, $b, "use_beams", boolean, "use beam files as input"},
+                {apps, $a, "apps", string, "Comma separated list of applications to perform type check"}
+            ]},
             {short_desc, "typecheck the project with gradualizer"},
             {desc, ""}
     ]),
@@ -39,10 +42,13 @@ do(State) ->
     {ok, _} = application:ensure_all_started(gradualizer),
     {Opts, _} = rebar_state:command_parsed_args(State),
     UseBeams = proplists:get_value(use_beams, Opts, false),
+
+    Apps = get_apps(proplists:get_value(apps, Opts, ""), State),
+
     code:add_pathsa(rebar_state:code_paths(State, all_deps)),
     CheckedApps = lists:map(
         fun (App) -> gradualizer_check_app(App, UseBeams) end,
-        rebar_state:project_apps(State)),
+        Apps),
     HasNok = lists:member(nok, CheckedApps),
     if
         HasNok -> {error, {?MODULE, undefined}};
@@ -102,7 +108,9 @@ files_to_check(App) ->
             not lists:member(File, ExpandedExclude)
         end, ExpandedFiles).
 
--spec format_error(any()) -> string().
+-spec format_error(any()) -> iolist().
+format_error({unknown_application, App}) ->
+    lists:flatten(io_lib:format("Unknown app: ~p", [App]));
 format_error(_) ->
     "Gradualizer found errors.".
 
@@ -119,3 +127,34 @@ normalize_src_dirs(SrcDirs, ExtraDirs) ->
     S = lists:usort(SrcDirs),
     E = lists:subtract(lists:usort(ExtraDirs), S),
     {S, E}.
+
+get_apps("", State) ->
+    % if no apps have been given to the command, check rebar.config for defined apps
+    Config = rebar_state:get(State, gradualizer_opts, []),
+    case proplists:get_value(apps, Config, []) of
+        [] ->
+            rebar_state:project_apps(State);
+        OnlyApps ->
+           filter_apps(OnlyApps, State)
+    end;
+get_apps(CommandApps, State) ->
+    Only = [list_to_atom(App)|| App <- string:lexemes(CommandApps, [$,])],
+    filter_apps(Only, State).
+
+filter_apps(Apps, State) ->
+    AllApps = maps:from_list(
+        [
+            {binary_to_atom(rebar_app_info:name(App)), App}
+            || App <- rebar_state:project_apps(State)
+        ]
+    ),
+    lists:map(
+        fun(App) ->
+            case AllApps of
+                #{App := AppState} -> AppState;
+                #{} ->
+                    throw({error, {?MODULE, {unknown_application, App}}})
+            end
+        end,
+        Apps
+    ).

@@ -44,3 +44,24 @@ Files to not type check. Subtracts the list of included files
 type: `boolean()`
 
 if 'true' stop type checking at the first error, if 'false' continue checking all functions in the given file and all files in the given directory
+
+## apps
+
+types: `string()`
+
+Apps to type check. In the case of umbrella projects, it would only run the type check on the list of apps defined. The list should be a comma separated list.
+
+For example:
+```
+rebar3 gradualizer --apps=app1,app2
+```
+
+It can also be defined in `rebar.config`. Note that the list of apps defined in this file will only be used if no other app is passed to the `rebar3 gradualizer` command.
+```
+{gradualizer_opts, [
+  {apps, [
+    app1,
+    app2
+  ]}
+]}.
+```
