@@ -10,6 +10,9 @@
 -define(t(T), t(??T)).
 t(T) -> typelib:remove_pos(typelib:parse_type(T)).
 
+%% Macro to convert expression to abstract form
+-define(e(E), merl:quote(??E)).
+
 subtype_test_() ->
     [
      %% The unknown type, both directions
@@ -592,15 +595,184 @@ add_type_pat_test_() ->
       ?_assert(type_check_forms(["f([E|_]) -> E."]))},
      {"Pattern matching record against any()",
       ?_assert(type_check_forms(["-record(r, {f}).",
-                                 "f(#r{f = F}) -> F."]))}
+                                 "f(#r{f = F}) -> F."]))},
+
+      ?_assertEqual(?t(a),                 type_pat(?e(a),                 ?t(a))),
+      ?_assertEqual(?t(a),                 type_pat(?e(Var),               ?t(a))),
+      ?_assertEqual(?t(42),                type_pat(?e(42),                ?t(integer()))),
+      ?_assertEqual(?t(integer()),         type_pat(?e(Var),               ?t(integer()))),
+      ?_assertEqual(?t({3, true}),         type_pat(?e({3, true}),         ?t({integer(), boolean()}))),
+      ?_assertEqual(?t({3, boolean()}),    type_pat(?e({3, _}),            ?t({integer(), boolean()}))),
+
+      ?_assertThrow({type_error, pattern, _, {atom, _, a}, {atom, _, b}},
+                                           type_pat(?e(a),                 ?t(b))),
+
+      %% Maps
+      ?_assertEqual(?t(#{}),               type_pat(?e(#{}),               ?t(#{}))),
+      ?_assertEqual(?t(#{x := a}),         type_pat(?e(#{x := a}),         ?t(#{x := a}))),
+      ?_assertEqual(?t(#{x := a}),         type_pat(?e(Var),               ?t(#{x := a}))),
+      ?_assertEqual(?t(#{x := a}),         type_pat(?e(#{}),               ?t(#{x := a}))),
+
+      ?_assertEqual(?t(#{x := a, y := b}), type_pat(?e(#{}),               ?t(#{x := a, y := b}))),
+      ?_assertEqual(?t(#{x := a, y := b}), type_pat(?e(#{x := a}),         ?t(#{x := a, y := b}))),
+      ?_assertEqual(?t(#{x := a, y := b}), type_pat(?e(#{x := a, y := b}), ?t(#{x := a, y := b}))),
+
+      ?_assertEqual(?t(#{x := a}),         type_pat(?e(#{x := a}),         ?t(#{x => a}))),
+      ?_assertEqual(?t(#{x => a}),         type_pat(?e(Var),               ?t(#{x => a}))),
+      ?_assertEqual(?t(#{x => a}),         type_pat(?e(#{}),               ?t(#{x => a}))),
+
+      ?_assertEqual(?t(#{x := a}),         type_pat(?e(#{x := a}),         ?t(#{x := a|b}))),
+      ?_assertEqual(?t(#{x := a}),         type_pat(?e(#{x := a}),         ?t(#{x => a|b}))),
+      ?_assertEqual(?t(#{x := 1}),         type_pat(?e(#{x := 1}),         ?t(#{x => 1..3}))),
+
+      ?_assertEqual(?t(#{x => a, y := b}), type_pat(?e(#{}),               ?t(#{x => a, y := b}))),
+      ?_assertEqual(?t(#{x := a, y := b}), type_pat(?e(#{x := a}),         ?t(#{x => a, y := b}))),
+      ?_assertEqual(?t(#{y := b, x => a}), type_pat(?e(#{y := b}),         ?t(#{x => a, y := b}))),
+
+      ?_assertEqual(?t(#{x := 42}),        type_pat(?e(#{x := 42}),        ?t(#{x := integer()}))),
+      ?_assertEqual(?t(#{x := integer()}), type_pat(?e(#{x := Var}),       ?t(#{x := integer()}))),
+
+      ?_assertEqual(?t(#{y := b, x => a}), type_pat(?e(#{y := b}),         ?t(#{x => a, y => b} | #{z := c}))),
+      ?_assertEqual(?t(#{y := b, x => a}), type_pat(?e(#{y := b}),         ?t(#{x => a, y => b} | #{y := c, z := c}))),
+      ?_assertEqual(?t(#{y := b, x => a} | #{y := b, z := c}),
+                                           type_pat(?e(#{y := b}),         ?t(#{x => a, y => b} | #{y := b, z := c}))),
+
+      ?_assertEqual(?t(none()),            type_pat(?e(#{x := a}),         ?t(any()))),
+      ?_assertEqual(?t(none()),            type_pat(?e(#{}),               ?t(any()))),
+
+      ?_assertEqual(?t(#{x := a, y => a}), type_pat(?e(#{x := a}),         ?t(#{x|y := a}))),
+      ?_assertEqual(?t(#{x := a, y => a}), type_pat(?e(#{x := a}),         ?t(#{x|y => a}))),
+      ?_assertEqual(?t(#{x := a, atom() => a}),
+                                           type_pat(?e(#{x := a}),         ?t(#{atom() := a}))),
+      ?_assertEqual(?t(#{x := a, atom() => a}),
+                                           type_pat(?e(#{x := a}),         ?t(#{atom() => a}))),
+      ?_assertEqual(?t(#{x := a, y => a|b}),
+                                           type_pat(?e(#{x := a}),         ?t(#{x|y := a|b}))),
+      ?_assertEqual(?t(#{x := a, y => a|b, z => c}),
+                                           type_pat(?e(#{x := a}),         ?t(#{x|y := a|b, z => c}))),
+
+      ?_assertEqual(?t(#{x := a, y := a, atom() => a}),
+                                           type_pat(?e(#{x := a, y := a}), ?t(#{atom() => a}))),
+      ?_assertEqual(?t(#{x := a, y := a}),
+                                           type_pat(?e(#{x := a, y := a}), ?t(#{x|y => a}))),
+      ?_assertEqual(?t(#{x := a, y := a, atom() => a}),
+                                           type_pat(?e(#{x := a, y := a}), ?t(#{x|y => a, atom() => a}))),
+
+      ?_assertEqual(?t(none()),            type_pat(?e(#{"abc" := abc}),    ?t(#{string() => atom()}))),
+
+      ?_assertThrow({type_error, pattern, _, {atom, _, b}, {atom, _, a}},
+                                           type_pat(?e(#{x := b}),         ?t(#{x := a}))),
+      ?_assertThrow({type_error, badkey, {atom, _, y}, _MapTy},
+                                           type_pat(?e(#{y := c}),         ?t(#{x := a})))
     ].
 
 type_diff_test_() ->
+    {setup,
+      fun setup_app/0,
+      fun cleanup_app/1,
+
     [{"Can refine a union with another union",
       ?_assertEqual(?t( a1 | b | b1 | c | c1 | d ),
                     typechecker:type_diff(?t( (a | a1) | (b | b1) | (c | c1) | (d | d1) ),
-                                          ?t( a | d1), gradualizer:env()))}
-    ].
+                                          ?t( a | d1), gradualizer:env()))},
+
+      ?_assertEqual(?t(none()),
+                    typechecker:type_diff(?t(#{x := integer()}),
+                                          ?t(#{x := integer()}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(#{}),
+                    typechecker:type_diff(?t(#{x => integer()}),
+                                          ?t(#{x := integer()}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(none()),
+                    typechecker:type_diff(?t(#{x => integer()}),
+                                          ?t(#{x => integer()}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(#{x := b}),
+                    typechecker:type_diff(?t(#{x := a|b}),
+                                          ?t(#{x := a}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(#{x => b}),
+                    typechecker:type_diff(?t(#{x => a|b}),
+                                          ?t(#{x := a}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(#{x := 2..3}),
+                    typechecker:type_diff(?t(#{x := 1..3}),
+                                          ?t(#{x := 1}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(none()),
+                    typechecker:type_diff(?t(#{x := a, y := b}),
+                                          ?t(#{x := a, y := b}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(none()),
+                    typechecker:type_diff(?t(#{x := a, y := b}),
+                                          ?t(#{y := b, x := a}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(#{x := b, y := c}),
+                    typechecker:type_diff(?t(#{x := a|b, y := c}),
+                                          ?t(#{x := a, y := c}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(#{x := b, y => c} | #{x := a|b}),
+                    typechecker:type_diff(?t(#{x := a|b, y => c}),
+                                          ?t(#{x := a, y := c}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(#{x := b, y => c|d} | #{x := a|b, y => d}),
+                    typechecker:type_diff(?t(#{x := a|b, y => c|d}),
+                                          ?t(#{x := a, y := c}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(#{x => b, y := c}),
+                    typechecker:type_diff(?t(#{x => a|b, y := c}),
+                                          ?t(#{x := a, y := c}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(#{y => b}),
+                    typechecker:type_diff(?t(#{x => a, y => b}),
+                                          ?t(#{x := a, y => b}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(#{y => a}),
+                    typechecker:type_diff(?t(#{x|y => a}),
+                                          ?t(#{x := a, y => a}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(none()),
+                    typechecker:type_diff(?t(#{x|y => a}),
+                                          ?t(#{x => a, y => a}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(#{x => a|b, y => b} | #{x => b, y => a|b}),
+                    typechecker:type_diff(?t(#{x|y => a|b}),
+                                          ?t(#{x := a, y := a}),
+                                          gradualizer:env())),
+
+      ?_assertEqual(?t(#{y := b}),
+                    typechecker:type_diff(?t(#{x := atom()} | #{y := b}),
+                                          ?t(#{x := atom()}),
+                                          gradualizer:env())),
+
+      % disjoint
+      ?_assertEqual(?t(#{x := a}),
+                    typechecker:type_diff(?t(#{x := a}),
+                                          ?t(#{y := a}),
+                                          gradualizer:env())),
+
+      % has non-singleton required key
+      ?_assertEqual(?t(#{x|y := a}),
+                    typechecker:type_diff(?t(#{x|y := a}),
+                                          ?t(#{x := a}),
+                                          gradualizer:env()))
+    ]}.
 
 %%
 %% Helper functions
@@ -652,3 +824,8 @@ type_check_expr(EnvStr, ExprString, Opts) ->
     Expr = merl:quote(ExprString),
     {Ty, _VarBinds, _Cs} = typechecker:type_check_expr(Env, Expr),
     typelib:pp_type(Ty).
+
+type_pat(Pat, Ty) ->
+    {[PatTy], _UBounds, _Env, _Css} =
+        typechecker:add_types_pats([Pat], [Ty], gradualizer:env(), capture_vars),
+        PatTy.
