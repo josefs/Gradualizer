@@ -1056,6 +1056,34 @@ expand_builtin_aliases({type, Ann, no_return, []}) ->
 %% TODO: This is a kludge by which lists of types slip through calls to normalize().
 %%       Specifically, lists of Types representing bounded fun clauses.
 expand_builtin_aliases(Type) ->
+    dnf(Type).
+    %Type.
+
+-spec dnf(_) -> any().
+dnf(?type(union, _) = Ty) ->
+    Ty;
+dnf({type, _, _, any} = Ty) ->
+    Ty;
+%% A list of unions is not the same as a union of lists.
+dnf({type, _, list, _} = Ty) ->
+    Ty;
+dnf({type, Anno, Tag, Args} = Ty0) ->
+    {ArgExpandedUnions, AnyExpanded} =
+        lists:foldr(fun
+                        (?type(union, Tys), {Acc, _}) ->
+                            {[Tys | Acc], true};
+                        (Ty, {Acc, AnyExpanded}) ->
+                            {[[Ty] | Acc], AnyExpanded}
+                    end,
+                    {[], false}, Args),
+    ArgTyCombinations = gradualizer_lib:cartesian_product(ArgExpandedUnions),
+    if
+        AnyExpanded ->
+            {type, Anno, union, [ {type, Anno, Tag, A} || A <- ArgTyCombinations ]};
+        not AnyExpanded ->
+            Ty0
+    end;
+dnf(Type) ->
     Type.
 
 %% Flattens nested unions
