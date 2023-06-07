@@ -1022,6 +1022,7 @@ expand_builtin_aliases({type, Ann, iolist, []}) ->
              {type, Ann, iolist, []}],
     Tail = [{type, Ann, nil, []},
             {type, Ann, binary, []}],
+    %% TODO: dnf
     {type, Ann, maybe_improper_list, [{type, Ann, union, Union},
                                       {type, Ann, union, Tail}]};
 expand_builtin_aliases({type, Ann, map, any}) ->
