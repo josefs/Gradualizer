@@ -2630,14 +2630,16 @@ do_type_check_expr_in(Env, ResTy, {tuple, _, TS} = Tup) ->
             {VBs, Css} = lists:unzip([ type_check_expr_in(Env, Ty, Expr)
                                     || {Ty, Expr} <- lists:zip(Tys, TS) ]),
             {union_var_binds(VBs, Env), constraints:combine([Cs|Css])};
-        {elem_tys, Tyss, Cs} ->
-            case type_check_tuple_union_in(Env, Tyss, TS) of
-                none ->
-                    {Ty, _VB, _Cs} = type_check_expr(Env#env{infer = true}, Tup),
-                    throw(type_error(Tup, Ty, ResTy));
-                {VBs, Css} ->
-                    {union_var_binds(VBs, Env), constraints:combine([Cs|Css])}
-            end;
+        {elem_tys, _Tyss, Cs1} ->
+            %% ResTy dictates that we expect a union of tuples.
+            {TupTy, VB, Cs2} = type_check_expr(Env, Tup),
+            Cs3 = case subtype(TupTy, ResTy, Env) of
+                      {true, Cs} ->
+                          Cs;
+                      false ->
+                          throw(type_error(Tup, TupTy, ResTy))
+                  end,
+            {VB, constraints:combine([Cs1, Cs2, Cs3])};
         any ->
             {_Tys, VBs, Css} = lists:unzip3([type_check_expr(Env, Expr)
                                            || Expr <- TS ]),
@@ -3610,19 +3612,6 @@ type_check_union_in1(Env, [Ty|Tys], Expr) ->
             type_check_union_in1(Env, Tys, Expr)
     end;
 type_check_union_in1(_Env, [], _Expr) ->
-    none.
-
--spec type_check_tuple_union_in(env(), [[type()]], [expr()]) -> R when
-      R :: {[env()], [constraints:t()]} | none.
-type_check_tuple_union_in(Env, [Tys|Tyss], Elems) ->
-    try
-        lists:unzip([type_check_expr_in(Env, Ty, Expr)
-                   || {Ty, Expr} <- lists:zip(Tys, Elems)])
-    catch
-        E when element(1,E) == type_error ->
-            type_check_tuple_union_in(Env, Tyss, Elems)
-    end;
-type_check_tuple_union_in(_Env, [], _Elems) ->
     none.
 
 -spec get_bounded_fun_type_list(atom(), arity(), env(), anno()) -> [type()].
