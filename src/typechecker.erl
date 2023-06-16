@@ -1415,41 +1415,26 @@ expect_binary_type(Union = {type, _, union, UnionTys}, Env) ->
     end;
 expect_binary_type({var, _, Var}, _) ->
     TyVar = gradualizer_tyvar:new(Var, ?MODULE, ?LINE),
-    {elem_ty
-    ,{var, erl_anno:new(0), TyVar}
-    ,constraints:add_var(TyVar,
-      constraints:upper(Var, {type, erl_anno:new(0), binary,
-                              [{integer, erl_anno:new(0), 0},
-                               {integer, erl_anno:new(0), 1}]}
-                       ))
-    };
+    {elem_ty,
+     {var, erl_anno:new(0), TyVar},
+     constraints:add_var(TyVar,
+                         constraints:upper(Var, {type, erl_anno:new(0), binary,
+                                                 [{integer, erl_anno:new(0), 0},
+                                                  {integer, erl_anno:new(0), 1}]}))};
 expect_binary_type(Ty, _) ->
     {type_error, Ty}.
 
--spec expect_binary_union([type()], _, _, env()) -> R when
-      R :: any
-         | {elem_ty, type(), constraints()}
-         | {elem_tys, [type()], constraints()}
-         | {type_error, type()}.
+-spec expect_binary_union([type()], [type()], constraints(), env()) -> {[type()], constraints()}.
 expect_binary_union([Ty|Tys], AccTy, AccCs, Env) ->
     case expect_binary_type(normalize(Ty, Env), Env) of
         {type_error, _} ->
             expect_binary_union(Tys, AccTy, AccCs, Env);
         any ->
-            expect_binary_union(Tys
-                                ,[type(any) | AccTy]
-                                ,AccCs
-                                ,Env);
+            expect_binary_union(Tys, [type(any) | AccTy], AccCs, Env);
         {elem_ty, NTy, Cs} ->
-            expect_binary_union(Tys
-                                ,[NTy | AccTy]
-                                ,constraints:combine(Cs, AccCs)
-                                ,Env);
+            expect_binary_union(Tys, [NTy | AccTy], constraints:combine(Cs, AccCs), Env);
         {elem_tys, NTys, Cs} ->
-            expect_binary_union(Tys
-                                ,NTys ++ AccTy
-                                ,constraints:combine(Cs, AccCs)
-                                ,Env)
+            expect_binary_union(Tys, NTys ++ AccTy, constraints:combine(Cs, AccCs), Env)
     end;
 expect_binary_union([], AccTy, AccCs, _Env) ->
     {AccTy, AccCs}.
@@ -3398,7 +3383,7 @@ type_check_comprehension_in(Env, ResTy, OrigExpr, bc, Expr, _P, []) ->
     case expect_binary_type(ResTy, Env) of
         any ->
             {_Ty, _VB, Cs} = type_check_expr(Env, Expr),
-            {#{}, Cs};
+            {Env, Cs};
         {elem_ty, ElemTy, Cs1} ->
             ExprTy = case ElemTy of
                          {type, _, binary, [{integer, _, 0}, {integer, _, _N}]} ->
@@ -3422,7 +3407,7 @@ type_check_comprehension_in(Env, ResTy, OrigExpr, bc, Expr, _P, []) ->
                              throw({type_error, OrigExpr, Ty, ElemTy})
                      end,
             {_VB, Cs2} = type_check_expr_in(Env, ExprTy, Expr),
-            {#{}, constraints:combine(Cs1, Cs2)};
+            {Env, constraints:combine(Cs1, Cs2)};
         {elem_tys, ElemTys, Cs1} ->
             {VB, Cs2} = type_check_union_in(Env, ElemTys, Expr),
             {VB, constraints:combine(Cs1, Cs2)};
