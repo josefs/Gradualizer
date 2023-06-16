@@ -1394,6 +1394,52 @@ expect_tuple_union([], AccTy, AccCs, _NoAny, _N, _Env) ->
     {AccTy, AccCs}.
 
 
+-spec expect_binary_type(type(), env()) -> R when
+      R :: any
+         | {elem_ty, type(), constraints()}
+         | {elem_tys, [type()], constraints()}
+         | {type_error, type()}.
+expect_binary_type(?type(any), _) ->
+    any;
+expect_binary_type(ElemTy = {type, _, binary, _}, _) ->
+    {elem_ty, ElemTy, constraints:empty()};
+expect_binary_type(Union = {type, _, union, UnionTys}, Env) ->
+    {Tys, Cs} = expect_binary_union(UnionTys, [], constraints:empty(), Env),
+    case Tys of
+        [] ->
+            {type_error, Union};
+        [Ty] ->
+            {elem_ty, Ty, Cs};
+        _ ->
+            {elem_tys, Tys, Cs}
+    end;
+expect_binary_type({var, _, Var}, _) ->
+    TyVar = gradualizer_tyvar:new(Var, ?MODULE, ?LINE),
+    {elem_ty,
+     {var, erl_anno:new(0), TyVar},
+     constraints:add_var(TyVar,
+                         constraints:upper(Var, {type, erl_anno:new(0), binary,
+                                                 [{integer, erl_anno:new(0), 0},
+                                                  {integer, erl_anno:new(0), 1}]}))};
+expect_binary_type(Ty, _) ->
+    {type_error, Ty}.
+
+-spec expect_binary_union([type()], [type()], constraints(), env()) -> {[type()], constraints()}.
+expect_binary_union([Ty|Tys], AccTy, AccCs, Env) ->
+    case expect_binary_type(normalize(Ty, Env), Env) of
+        {type_error, _} ->
+            expect_binary_union(Tys, AccTy, AccCs, Env);
+        any ->
+            expect_binary_union(Tys, [type(any) | AccTy], AccCs, Env);
+        {elem_ty, NTy, Cs} ->
+            expect_binary_union(Tys, [NTy | AccTy], constraints:combine(Cs, AccCs), Env);
+        {elem_tys, NTys, Cs} ->
+            expect_binary_union(Tys, NTys ++ AccTy, constraints:combine(Cs, AccCs), Env)
+    end;
+expect_binary_union([], AccTy, AccCs, _Env) ->
+    {AccTy, AccCs}.
+
+
 -spec allow_empty_list(type()) -> type().
 allow_empty_list({type, P, nonempty_list, []}) ->
     {type, P, list, []};
@@ -3334,28 +3380,40 @@ type_check_comprehension_in(Env, ResTy, OrigExpr, lc, Expr, _P, []) ->
             throw(type_error(OrigExpr, type(list), ResTy))
     end;
 type_check_comprehension_in(Env, ResTy, OrigExpr, bc, Expr, _P, []) ->
-    ExprTy = case ResTy of
-                 {type, _, binary, [{integer, _, 0}, {integer, _, _N}]} ->
-                     %% The result is a multiple of N bits.
-                     %% Expr must be a multiple of N bits too.
-                     ResTy;
-                 {type, _, binary, [{integer, _, M}, {integer, _, _N}]}
-                   when M > 0 ->
-                     %% The result is a binary with a minimum size of M. This
-                     %% requires that the generators are non-empty. We don't
-                     %% check that. At least, we can check that Gen is a
-                     %% bitstring.
-                     {type, erl_anno:new(0), binary,
-                            [{integer, erl_anno:new(0), 0},
-                             {integer, erl_anno:new(0), 1}]};
-                 _ ->
-                     Ty = {type, erl_anno:new(0), binary,
-                            [{integer, erl_anno:new(0), 0},
-                             {integer, erl_anno:new(0), 1}]},
-                     throw(type_error(OrigExpr, Ty, ResTy))
-             end,
-    {_VB, Cs} = type_check_expr_in(Env, ExprTy, Expr),
-    {Env, Cs};
+    case expect_binary_type(ResTy, Env) of
+        any ->
+            {_Ty, _VB, Cs} = type_check_expr(Env, Expr),
+            {Env, Cs};
+        {elem_ty, ElemTy, Cs1} ->
+            ExprTy = case ElemTy of
+                         {type, _, binary, [{integer, _, 0}, {integer, _, _N}]} ->
+                             %% The result is a multiple of N bits.
+                             %% Expr must be a multiple of N bits too.
+                             ElemTy;
+                         {type, _, binary, [{integer, _, M}, {integer, _, _N}]}
+                           when M > 0 ->
+                             %% The result is a binary with a minimum size of M. This
+                             %% requires that the generators are non-empty. We don't
+                             %% check that. At least, we can check that Gen is a
+                             %% bitstring.
+                             %% TODO: Actually typecheck this case
+                             {type, erl_anno:new(0), binary,
+                              [{integer, erl_anno:new(0), 0},
+                               {integer, erl_anno:new(0), 1}]};
+                         _ ->
+                             Ty = {type, erl_anno:new(0), binary,
+                                   [{integer, erl_anno:new(0), 0},
+                                    {integer, erl_anno:new(0), 1}]},
+                             throw({type_error, OrigExpr, Ty, ElemTy})
+                     end,
+            {_VB, Cs2} = type_check_expr_in(Env, ExprTy, Expr),
+            {Env, constraints:combine(Cs1, Cs2)};
+        {elem_tys, ElemTys, Cs1} ->
+            {VB, Cs2} = type_check_union_in(Env, ElemTys, Expr),
+            {VB, constraints:combine(Cs1, Cs2)};
+        {type_error, Ty} ->
+            throw({type_error, OrigExpr, Ty, ResTy})
+    end;
 type_check_comprehension_in(Env, ResTy, OrigExpr, Compr, Expr, P,
                             [{generate, _, Pat, Gen} | Quals]) ->
     {Ty, _VB1, Cs1} = type_check_expr(Env, Gen),
