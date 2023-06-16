@@ -8,6 +8,48 @@ changelog -m --branch master josefs gradualizer 0.1.3 0.2.0 >> CHANGELOG.md
 ```
 
 
+## 2023-06-16 - [0.3.0](https://github.com/josefs/Gradualizer/compare/0.2.0...0.3.0)
+
+Release highlights:
+
+- Improve map exhaustiveness checking [#524](https://github.com/josefs/gradualizer/pull/524) by @xxdavid
+- Fix all remaining self-check errors [#521](https://github.com/josefs/gradualizer/pull/521) by @erszcz
+- Fix intersection-typed function calls with union-typed arguments [#514](https://github.com/josefs/gradualizer/pull/514) by @erszcz
+- Experimental constraint solver [#450](https://github.com/josefs/gradualizer/pull/450) by @erszcz
+
+Full list of merged PRs:
+
+- Binary comprehension [#201](https://github.com/josefs/gradualizer/pull/201) by @NelsonVides
+- Improve map exhaustiveness checking [#524](https://github.com/josefs/gradualizer/pull/524) by @xxdavid
+- Log changes to variable types in #env.venv [#541](https://github.com/josefs/gradualizer/pull/541) by @erszcz
+- Disallow timeouts in tests [#535](https://github.com/josefs/gradualizer/pull/535) by @xxdavid
+- Add known problem: not checking for unreachable clauses with intersections [#539](https://github.com/josefs/gradualizer/pull/539) by @xxdavid
+- Add `apps` option to rebar3 commands [#538](https://github.com/josefs/gradualizer/pull/538) by @gonzalobf
+- Add some Rebar3 plugin debug logging [#532](https://github.com/josefs/gradualizer/pull/532) by @erszcz
+- Fix var binds in guard sequences [#533](https://github.com/josefs/gradualizer/pull/533) by @erszcz
+- Document the compat_seen function [#528](https://github.com/josefs/gradualizer/pull/528) by @xxdavid
+- fold guard chain [#525](https://github.com/josefs/gradualizer/pull/525) by @bartekgorny
+- Fix all remaining self-check errors [#521](https://github.com/josefs/gradualizer/pull/521) by @erszcz
+- New known problem: refine bound vars with guards [#520](https://github.com/josefs/gradualizer/pull/520) by @erszcz
+- Fix handling of module_info for arities > 1 [#500](https://github.com/josefs/gradualizer/pull/500) by @xxdavid
+- Don't discard annotation in instantiate/2 [#517](https://github.com/josefs/gradualizer/pull/517) by @erszcz
+- Join var binds in add_type_pat_union/3 with least upper bound not greatest lower bound [#512](https://github.com/josefs/gradualizer/pull/512) by @erszcz
+- Fix intersection-typed function calls with union-typed arguments [#514](https://github.com/josefs/gradualizer/pull/514) by @erszcz
+- Print inferred argument types on call_intersect error [#491](https://github.com/josefs/gradualizer/pull/491) by @erszcz
+- Fix exhaustiveness checking for union types [#505](https://github.com/josefs/gradualizer/pull/505) by @xxdavid
+- Make the solver results deterministic [#511](https://github.com/josefs/gradualizer/pull/511) by @erszcz
+- Type refinement of map keys and values [#509](https://github.com/josefs/gradualizer/pull/509) by @zuiderkwast
+- Drop invalid lists:filtermap/2 known problem [#506](https://github.com/josefs/gradualizer/pull/506) by @erszcz
+- Fix yet more self check errors [#504](https://github.com/josefs/gradualizer/pull/504) by @erszcz
+- Constraint solver limitation known problem test and a workaround [#503](https://github.com/josefs/gradualizer/pull/503) by @erszcz
+- Fix more self check errors [#502](https://github.com/josefs/gradualizer/pull/502) by @erszcz
+- Experimental constraint solver [#450](https://github.com/josefs/gradualizer/pull/450) by @erszcz
+- Require all functions in src/typechecker.erl to have specs [#499](https://github.com/josefs/gradualizer/pull/499) by @erszcz
+- Fix specs introduced with Mod:module_info/1,2 support [#498](https://github.com/josefs/Gradualizer/pull/498) by @erszcz
+- Add support for module_info functions [#496](https://github.com/josefs/Gradualizer/pull/496) by @xxdavid
+- Add a Hex badge to README [#495](https://github.com/josefs/Gradualizer/pull/495) by @erszcz
+
+
 ## 2022-12-02 - [0.2.0](https://github.com/josefs/Gradualizer/compare/0.1.3...0.2.0)
 
 Release highlights:
