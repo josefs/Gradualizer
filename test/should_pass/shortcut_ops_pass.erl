@@ -38,6 +38,26 @@ orelse_infer2(B, N) -> B orelse N.
 -spec orelse_infer3(boolean(), boolean()) -> _.
 orelse_infer3(B, X) -> B orelse X.
 
+-spec andalso_infer_and_check1(boolean(), number()) -> false | number().
+andalso_infer_and_check1(B, N) ->
+    X = B andalso N,
+    X.
+
+-spec andalso_infer_and_check2(boolean(), false | number()) -> false | number().
+andalso_infer_and_check2(B, N) ->
+    X = B andalso N,
+    X.
+
+-spec orelse_infer_and_check1(boolean(), number()) -> true | number().
+orelse_infer_and_check1(B, N) ->
+    X = B orelse N,
+    X.
+
+-spec orelse_infer_and_check2(boolean(), true | number()) -> true | number().
+orelse_infer_and_check2(B, N) ->
+    X = B orelse N,
+    X.
+
 -spec is_false_number(false | number()) -> ok.
 is_false_number(_) -> ok.
 

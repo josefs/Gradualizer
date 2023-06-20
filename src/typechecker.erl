@@ -2257,8 +2257,8 @@ type_check_logic_op(Env, Op, Arg1, Arg2) ->
                 {true, Cs4} ->
                     Inferred =
                         case Op of
-                            'andalso' -> type(union, [Ty1, {atom, erl_anno:new(0), false}]);
-                            'orelse'  -> type(union, [Ty1, {atom, erl_anno:new(0), true}]);
+                            'andalso' -> type(union, [Ty2, {atom, erl_anno:new(0), false}]);
+                            'orelse'  -> type(union, [Ty2, {atom, erl_anno:new(0), true}]);
                             _         -> type(boolean)
                         end,
                     {normalize(Inferred, Env)
