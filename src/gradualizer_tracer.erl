@@ -204,8 +204,11 @@ start() ->
     ok.
 
 %% @doc Stop tracing.
-stop() ->
-    dbg:stop_clear().
+-if(?OTP_RELEASE>=26).
+    stop() -> dbg:stop().
+-else.
+    stop() -> dbg:stop_clear().
+-endif.
 
 %% @doc `debug/1' is a trace point to trace when pinpointing issues across several candidate
 %% locations. Uncomment the below in `start/0':
