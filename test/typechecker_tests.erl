@@ -76,7 +76,14 @@ subtype_test_() ->
      ?_assert(subtype(?t( 1..5              ), ?t( 1..3|4..6        ))),
      ?_assert(subtype(?t( 1..5|a            ), ?t( 1..3|4..6|atom() ))),
      ?_assert(subtype(?t( a|b               ), ?t( atom()           ))),
-     ?_assert(subtype(?t( (A :: boolean())|(B :: boolean()) ), ?t( boolean() ))),
+     ?_assert(subtype(?t( (A :: boolean())|(B :: boolean()) ),
+                      ?t( boolean() ))),
+     ?_assert(subtype(?t( {t, a|b}          ), ?t( {t, a} | {t, b}  ))),
+     ?_assert(subtype(?t( {t, a} | {t, b}   ), ?t( {t, a|b}         ))),
+     ?_assert(subtype(?t( {t, a|b, 1|2}     ),
+                      ?t( {t, a, 1} | {t, a, 2} | {t, b, 1} | {t, b, 2} ))),
+     ?_assert(subtype(?t( {t, a, 1} | {t, a, 2} | {t, b, 1} | {t, b, 2} ),
+                      ?t( {t, a|b, 1|2} ))),
 
      %% Lists
      ?_assert(subtype(?t( [a]               ), ?t( list()           ))),
@@ -163,6 +170,13 @@ not_subtype_test_() ->
      %% Tuples
      ?_assertNot(subtype(?t( {}             ), ?t( {any()}          ))),
      ?_assertNot(subtype(?t( {1..2, 3..4}   ), ?t( {1, 3}           ))),
+
+     ?_assertNot(subtype(?t( {t, a|b}           ), ?t( {t, a}       ))),
+     ?_assertNot(subtype(?t( {t, a} | {t, b}    ), ?t( {t, a}       ))),
+     ?_assertNot(subtype(?t( {t, a|b, 1|2}      ),
+                         ?t( {t, a, 1} | {t, b, 1}                  ))),
+     ?_assertNot(subtype(?t( {t, a, 1} | {t, a, 2} | {t, b, 1} | {t, b, 2} ),
+                         ?t( {t, a|b, 1}                            ))),
 
      %% Maps
      ?_assertNot(subtype(?t( #{}            ), ?t( #{a := b}                            ))),

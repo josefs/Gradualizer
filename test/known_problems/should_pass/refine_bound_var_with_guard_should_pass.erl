@@ -1,6 +1,6 @@
 -module(refine_bound_var_with_guard_should_pass).
 
--export([f/1]).
+-export([f/1, g/1]).
 
 %% This type is simpler than gradualizer_type:abstract_type() by having less variants
 %% and by using tuples to contain deeper nodes. The latter frees us from having to deal
