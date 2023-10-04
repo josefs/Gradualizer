@@ -28,3 +28,20 @@ compatom1(_) -> ok.
 -spec compatom2(a | b | c | pid()) -> a | c | pid().
 compatom2(X) when X =/= b -> X;
 compatom2(_) -> a.
+
+-spec compatom3(a | b | c | pid()) -> a | c | pid().
+compatom3(X) when X /= b -> X;
+compatom3(_) -> a.
+
+-type my_map() :: #{value := integer() | nil}.
+
+-spec comp_map_value1(my_map()) -> integer().
+comp_map_value1(State) when map_get(value, State) /= nil ->
+    Val = map_get(value, State),
+    Val + 1;
+comp_map_value1(#{value := nil}) -> 0.
+
+-spec comp_map_value2(my_map()) -> integer().
+comp_map_value2(#{value := Val}) when Val /= nil ->
+    Val + 1;
+comp_map_value2(#{value := nil}) -> 0.
