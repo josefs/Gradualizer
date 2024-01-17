@@ -35,6 +35,7 @@
               af_function_type_list/0,
               af_record_field/1,
               af_record_field_type/0,
+              gr_any_type/0,
               af_singleton_integer_type/0,
               af_string/0,
               af_unary_op/1,
@@ -337,6 +338,8 @@
 -type af_constraint() :: {'type', anno(), 'constraint',
                           [af_lit_atom('is_subtype') |
                            [af_type_variable() | abstract_type()]]}. % [IsSubtype, [V, T]]
+
+-type gr_any_type() :: {'type', anno(), 'any', []}.
 
 -type af_singleton_integer_type() :: af_integer()
                                    | af_character()
