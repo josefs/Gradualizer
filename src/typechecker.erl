@@ -527,8 +527,8 @@ compat_record_fields(_, _, _, _) ->
 
 %% Returns a successful matching of two types. Convenience function for when
 %% there were no type variables involved.
--spec ret(Seen) -> acc(Seen) when
-      Seen :: map() | type().
+-spec ret(map()) -> acc(map());
+         (type()) -> acc(type()).
 ret(Seen) ->
     {Seen, constraints:empty()}.
 
@@ -1729,14 +1729,21 @@ free_vars({type, _, _, Args}, Vars) ->
 free_vars(_, Vars) -> Vars.
 
 -spec subst_ty(#{atom() | string() := type()}, [type()]) -> [type()];
-              (#{atom() | string() := type()}, [fun_ty()]) -> [fun_ty()];
               (#{atom() | string() := type()}, type()) -> type().
 subst_ty(Sub, Tys) when is_list(Tys) ->
     [ subst_ty(Sub, Ty) || Ty <- Tys ];
 subst_ty(Sub, Ty = {var, _, X}) ->
     maps:get(X, Sub, Ty);
+subst_ty(Sub, Ty = {rigid_var, _, X}) ->
+    maps:get(X, Sub, Ty);
 subst_ty(Sub, {type, P, Name, Args}) ->
     {type, P, Name, subst_ty(Sub, Args)};
+subst_ty(Sub, {user_type, P, Name, Args}) ->
+    {user_type, P, Name, subst_ty(Sub, Args)};
+subst_ty(Sub, {remote_type, P, [Mod, Fun, Args]}) ->
+    {remote_type, P, [Mod, Fun, subst_ty(Sub, Args)]};
+subst_ty(Sub, {ann_type, P, [AnnoVar, Type]}) ->
+    {ann_type, P, [AnnoVar, subst_ty(Sub, Type)]};
 subst_ty(_, Ty) -> Ty.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -3745,6 +3752,8 @@ instantiate({var, _, TyVar}, Map) ->
         Ty ->
             {Ty, maps:new(), Map}
     end;
+instantiate(T = {rigid_var, _, _}, Map) ->
+    {T, maps:new(), Map};
 instantiate(T = ?type(_), Map) ->
     {T, maps:new(), Map};
 instantiate({type, P, Ty, Args}, Map) ->
@@ -3790,6 +3799,37 @@ instantiate_inner([Ty | Tys], Map) ->
     {NewTys, MoreVars, EvenNewerMap} = instantiate_inner(Tys, NewMap),
     {[NewTy|NewTys], maps:merge(Vars, MoreVars), EvenNewerMap}.
 
+
+%% Turns all type variables in a given type into rigid type variables.
+%%
+%% We want to use rigid type variables when typechecking a polymorphic
+%% function because type variables used in its spec can be instantiated
+%% to anything by the caller, so the polymorphic function cannot make
+%% any assumptions about their type or value.
+%%
+%% Variables inside function constraints (e.g., `List' in the type fragment
+%% `when List :: [term()]') are kept as they are, i.e., `var'.
+-spec make_rigid_type_vars(type()) -> type();
+                          ([type()]) -> [type()].
+make_rigid_type_vars(Tys) when is_list(Tys) ->
+    [ make_rigid_type_vars(Ty) || Ty <- Tys ];
+make_rigid_type_vars({var, _, '_'} = T) ->
+    T;
+make_rigid_type_vars({var, P, Var}) when is_atom(Var) ->
+    {rigid_var, P, Var};
+make_rigid_type_vars({type, _, constraint, _Args} = T) ->
+    % do no descent into function constraints (bounds)
+    T;
+make_rigid_type_vars({type, P, Tag, Args}) ->
+    {type, P, Tag, make_rigid_type_vars(Args)};
+make_rigid_type_vars({user_type, P, Tag, Args}) ->
+    {user_type, P, Tag, make_rigid_type_vars(Args)};
+make_rigid_type_vars({remote_type, P, [Mod, Fun, Args]}) ->
+    {remote_type, P, [Mod, Fun, make_rigid_type_vars(Args)]};
+make_rigid_type_vars({ann_type, P, [AnnoVar, Type]}) ->
+    {ann_type, P, [AnnoVar, make_rigid_type_vars(Type)]};
+make_rigid_type_vars(T) ->
+    T.
 
 %% Infers (or at least propagates types from) fun/receive/try/case/if clauses.
 -spec infer_clauses(env(), [gradualizer_type:abstract_clause()]) -> R when
@@ -3979,8 +4019,9 @@ check_clauses_intersection_throw_if_seen(ArgsTys, RefinedArgsTy, Clause, Seen, E
             {type_error, ClauseError}
     end.
 
--spec check_reachable_clauses(type(), Clauses, _Caps, [env()], Css, [type()], env()) -> R when
+-spec check_reachable_clauses(type(), Clauses, Caps, [env()], Css, [type()], env()) -> R when
       Clauses :: [gradualizer_type:abstract_clause()],
+      Caps :: capture_vars | bind_vars,
       Css :: [constraints:t()],
       R :: {[env()],
             [constraints:t()],
@@ -4100,7 +4141,7 @@ check_clause(Env, ArgsTy, ResTy, C = {clause, P, Args, Guards, Block}, Caps) ->
 
 %% Refine types by matching clause. MatchedTys are the types exhausted by
 %% each pattern in the previous clause.
--spec refine_clause_arg_tys([type()], [type()], _Guards, env()) -> [type()].
+-spec refine_clause_arg_tys([type()], [type()], gradualizer_type:af_guard_seq(), env()) -> [type()].
 refine_clause_arg_tys(Tys, MatchedTys, [], Env) ->
     Ty        = type(tuple, Tys),
     MatchedTy = type(tuple, MatchedTys),
@@ -4134,7 +4175,7 @@ refine_mismatch_using_guards(PatTys,
             PatTys
     end.
 
--spec do_refine_mismatch_using_guards(_Guards, [type()], _, _, env()) -> [type()].
+-spec do_refine_mismatch_using_guards(gradualizer_type:af_guard() | [], [type()], _, _, env()) -> [type()].
 do_refine_mismatch_using_guards([], PatTys, _, _, _) -> PatTys;
 do_refine_mismatch_using_guards([{call, _, {atom, _, Fun}, Args = [{var, _, Var}]} | Tail],
                                 PatTys, Pats, VEnv, Env) ->
@@ -4609,7 +4650,7 @@ no_guards({clause, _, _, Guards, _}) ->
 
 %% Refines the types of bound variables using the assumption that a clause has
 %% mismatched.
--spec refine_vars_by_mismatching_clause(_Clause, VEnv, env()) -> VEnv.
+-spec refine_vars_by_mismatching_clause(gradualizer_type:af_clause(), venv(), env()) -> venv().
 refine_vars_by_mismatching_clause({clause, _, Pats, Guards, _Block}, VEnv, Env) ->
     PatternCantFail = are_patterns_matching_all_input(Pats, VEnv),
     case Guards of
@@ -4771,7 +4812,8 @@ type_check_function(Env, {function, Anno, Name, NArgs, Clauses}) ->
     case maps:find({Name, NArgs}, Env#env.fenv) of
         {ok, FunTy} ->
             NewEnv = Env#env{current_spec = FunTy},
-            FunTyNoPos = [ typelib:remove_pos(?assert_type(Ty, type())) || Ty <- FunTy ],
+            FunTyRigid = make_rigid_type_vars(FunTy),
+            FunTyNoPos = [ typelib:remove_pos(?assert_type(Ty, type())) || Ty <- FunTyRigid ],
             Arity = clause_arity(hd(Clauses)),
             case expect_fun_type(NewEnv, FunTyNoPos, Arity) of
                 {type_error, NotFunTy} ->

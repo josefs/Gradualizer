@@ -3,7 +3,10 @@
 
 -record(clauses_controls, {exhaust}).
 
--record(env, {fenv              = #{}   :: map(),
+-record(env, {fenv              = #{}   :: #{{atom(), arity()} =>
+                                                  [gradualizer_type:af_constrained_function_type()]
+                                                | [gradualizer_type:gr_any_type()]
+                                            },
               imported          = #{}   :: #{{atom(), arity()} => module()},
               venv              = #{}   :: typechecker:venv(),
               tenv                      :: gradualizer_lib:tenv(),

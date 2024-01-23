@@ -30,11 +30,15 @@
               af_binary_op/1,
               af_constrained_function_type/0,
               af_constraint/0,
+              af_clause/0,
+              af_guard_seq/0,
+              af_guard/0,
               af_field_name/0,
               af_fun_type/0,
               af_function_type_list/0,
               af_record_field/1,
               af_record_field_type/0,
+              gr_any_type/0,
               af_singleton_integer_type/0,
               af_string/0,
               af_unary_op/1,
@@ -244,6 +248,7 @@
                        | af_tuple_type()
                        | af_type_union()
                        | af_type_variable()
+                       | gr_rigid_type_variable()
                        | af_user_defined_type().
 
 -type af_annotated_type() ::
@@ -308,6 +313,14 @@
 -type gr_type_var() :: atom() | string().
 -type af_type_variable() :: {'var', anno(), gr_type_var()}.
 
+%% Gradualizer: `rigid_var' is used for type variables (instead of plain `var')
+%% originating from specs of the currently checked function. They are rigid
+%% in the sense that they are fixed but completely unknown from the perspective
+%% of the function definition. We want to be able to differentiate between
+%% flexible (`var') and rigid type variables, and therefore we add this new
+%% syntactic form although they are syntactically the same.
+-type gr_rigid_type_variable() :: {'rigid_var', anno(), atom()}.
+
 -type af_user_defined_type() ::
         {'user_type', anno(), type_name(),  [abstract_type()]}.
 
@@ -337,6 +350,8 @@
 -type af_constraint() :: {'type', anno(), 'constraint',
                           [af_lit_atom('is_subtype') |
                            [af_type_variable() | abstract_type()]]}. % [IsSubtype, [V, T]]
+
+-type gr_any_type() :: {'type', anno(), 'any', []}.
 
 -type af_singleton_integer_type() :: af_integer()
                                    | af_character()
