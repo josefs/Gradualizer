@@ -28,14 +28,13 @@ normalize_record_field({typed_record_field,
                         _Type} = Complete) ->
     Complete.
 
+-type bounded_fun() :: gradualizer_type:af_constrained_function_type().
+
 %% @doc Turns all function types into bounded function types. Add default empty
 %% constraints if missing.
--spec normalize_function_type_list(FunTypeList) -> FunTypeList when
-      FunTypeList :: gradualizer_type:af_function_type_list().
+-spec normalize_function_type_list(gradualizer_type:af_function_type_list()) -> [bounded_fun()].
 normalize_function_type_list(FunTypeList) ->
     ?assert_type(lists:map(fun normalize_function_type/1, FunTypeList), nonempty_list()).
-
--type bounded_fun() :: gradualizer_type:af_constrained_function_type().
 
 -spec normalize_function_type(bounded_fun()) -> bounded_fun();
                              (gradualizer_type:af_fun_type()) -> bounded_fun().
