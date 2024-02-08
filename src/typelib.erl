@@ -38,8 +38,7 @@
 %% @doc
 %% Pretty-print a type represented as an Erlang abstract form.
 %% @end
--spec pp_type(printable_type()) -> string();
-             ([printable_type()]) -> string().
+-spec pp_type(printable_type() | [printable_type()]) -> io_lib:chars().
 pp_type(Types = [_|_]) ->
     %% TODO: This is a workaround for the fact that a list is sometimes used in
     %% place of a type. It typically represents a function type with multiple clauses.

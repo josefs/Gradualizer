@@ -527,8 +527,8 @@ compat_record_fields(_, _, _, _) ->
 
 %% Returns a successful matching of two types. Convenience function for when
 %% there were no type variables involved.
--spec ret(Seen) -> acc(Seen) when
-      Seen :: map() | type().
+-spec ret(map()) -> acc(map());
+         (type()) -> acc(type()).
 ret(Seen) ->
     {Seen, constraints:empty()}.
 
@@ -4011,8 +4011,9 @@ check_clauses_intersection_throw_if_seen(ArgsTys, RefinedArgsTy, Clause, Seen, E
             {type_error, ClauseError}
     end.
 
--spec check_reachable_clauses(type(), Clauses, _Caps, [env()], Css, [type()], env()) -> R when
+-spec check_reachable_clauses(type(), Clauses, Caps, [env()], Css, [type()], env()) -> R when
       Clauses :: [gradualizer_type:abstract_clause()],
+      Caps :: capture_vars | bind_vars,
       Css :: [constraints:t()],
       R :: {[env()],
             [constraints:t()],
@@ -4132,7 +4133,7 @@ check_clause(Env, ArgsTy, ResTy, C = {clause, P, Args, Guards, Block}, Caps) ->
 
 %% Refine types by matching clause. MatchedTys are the types exhausted by
 %% each pattern in the previous clause.
--spec refine_clause_arg_tys([type()], [type()], _Guards, env()) -> [type()].
+-spec refine_clause_arg_tys([type()], [type()], gradualizer_type:af_guard_seq(), env()) -> [type()].
 refine_clause_arg_tys(Tys, MatchedTys, [], Env) ->
     Ty        = type(tuple, Tys),
     MatchedTy = type(tuple, MatchedTys),
@@ -4166,7 +4167,7 @@ refine_mismatch_using_guards(PatTys,
             PatTys
     end.
 
--spec do_refine_mismatch_using_guards(_Guards, [type()], _, _, env()) -> [type()].
+-spec do_refine_mismatch_using_guards(gradualizer_type:af_guard() | [], [type()], _, _, env()) -> [type()].
 do_refine_mismatch_using_guards([], PatTys, _, _, _) -> PatTys;
 do_refine_mismatch_using_guards([{call, _, {atom, _, Fun}, Args = [{var, _, Var}]} | Tail],
                                 PatTys, Pats, VEnv, Env) ->
@@ -4641,7 +4642,7 @@ no_guards({clause, _, _, Guards, _}) ->
 
 %% Refines the types of bound variables using the assumption that a clause has
 %% mismatched.
--spec refine_vars_by_mismatching_clause(_Clause, VEnv, env()) -> VEnv.
+-spec refine_vars_by_mismatching_clause(gradualizer_type:af_clause(), venv(), env()) -> venv().
 refine_vars_by_mismatching_clause({clause, _, Pats, Guards, _Block}, VEnv, Env) ->
     PatternCantFail = are_patterns_matching_all_input(Pats, VEnv),
     case Guards of
