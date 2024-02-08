@@ -19,6 +19,3 @@ add_to_opaque() ->
 
 -spec return_opaque() -> user_types:my_opaque().
 return_opaque() -> 3.
-
--spec abc(A) -> A.
-abc(X) -> X.
