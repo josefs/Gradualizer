@@ -1729,14 +1729,21 @@ free_vars({type, _, _, Args}, Vars) ->
 free_vars(_, Vars) -> Vars.
 
 -spec subst_ty(#{atom() | string() := type()}, [type()]) -> [type()];
-              (#{atom() | string() := type()}, [fun_ty()]) -> [fun_ty()];
               (#{atom() | string() := type()}, type()) -> type().
 subst_ty(Sub, Tys) when is_list(Tys) ->
     [ subst_ty(Sub, Ty) || Ty <- Tys ];
 subst_ty(Sub, Ty = {var, _, X}) ->
     maps:get(X, Sub, Ty);
+subst_ty(Sub, Ty = {rigid_var, _, X}) ->
+    maps:get(X, Sub, Ty);
 subst_ty(Sub, {type, P, Name, Args}) ->
     {type, P, Name, subst_ty(Sub, Args)};
+subst_ty(Sub, {user_type, P, Name, Args}) ->
+    {user_type, P, Name, subst_ty(Sub, Args)};
+subst_ty(Sub, {remote_type, P, [Mod, Fun, Args]}) ->
+    {remote_type, P, [Mod, Fun, subst_ty(Sub, Args)]};
+subst_ty(Sub, {ann_type, P, [AnnoVar, Type]}) ->
+    {ann_type, P, [AnnoVar, subst_ty(Sub, Type)]};
 subst_ty(_, Ty) -> Ty.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -3745,6 +3752,8 @@ instantiate({var, _, TyVar}, Map) ->
         Ty ->
             {Ty, maps:new(), Map}
     end;
+instantiate(T = {rigid_var, _, _}, Map) ->
+    {T, maps:new(), Map};
 instantiate(T = ?type(_), Map) ->
     {T, maps:new(), Map};
 instantiate({type, P, Ty, Args}, Map) ->
@@ -3790,6 +3799,29 @@ instantiate_inner([Ty | Tys], Map) ->
     {NewTys, MoreVars, EvenNewerMap} = instantiate_inner(Tys, NewMap),
     {[NewTy|NewTys], maps:merge(Vars, MoreVars), EvenNewerMap}.
 
+
+% maybe extract to traverse_type/2, maybe with some accumulator
+-spec make_rigid_type_vars(type()) -> type();
+                          ([type()]) -> [type()].
+make_rigid_type_vars(Tys) when is_list(Tys) ->
+    [ make_rigid_type_vars(Ty) || Ty <- Tys ];
+make_rigid_type_vars({var, _, '_'} = T) ->
+    T;
+make_rigid_type_vars({var, P, Var}) when is_atom(Var) ->
+    {rigid_var, P, Var};
+make_rigid_type_vars({type, _, constraint, _Args} = T) ->
+    % do no descent into function constraints (bounds)
+    T;
+make_rigid_type_vars({type, P, Tag, Args}) ->
+    {type, P, Tag, make_rigid_type_vars(Args)};
+make_rigid_type_vars({user_type, P, Tag, Args}) ->
+    {user_type, P, Tag, make_rigid_type_vars(Args)};
+make_rigid_type_vars({remote_type, P, [Mod, Fun, Args]}) ->
+    {remote_type, P, [Mod, Fun, make_rigid_type_vars(Args)]};
+make_rigid_type_vars({ann_type, P, [AnnoVar, Type]}) ->
+    {ann_type, P, [AnnoVar, make_rigid_type_vars(Type)]};
+make_rigid_type_vars(T) ->
+    T.
 
 %% Infers (or at least propagates types from) fun/receive/try/case/if clauses.
 -spec infer_clauses(env(), [gradualizer_type:abstract_clause()]) -> R when
@@ -4771,7 +4803,8 @@ type_check_function(Env, {function, Anno, Name, NArgs, Clauses}) ->
     case maps:find({Name, NArgs}, Env#env.fenv) of
         {ok, FunTy} ->
             NewEnv = Env#env{current_spec = FunTy},
-            FunTyNoPos = [ typelib:remove_pos(?assert_type(Ty, type())) || Ty <- FunTy ],
+            FunTyRigid = make_rigid_type_vars(FunTy),
+            FunTyNoPos = [ typelib:remove_pos(?assert_type(Ty, type())) || Ty <- FunTyRigid ],
             Arity = clause_arity(hd(Clauses)),
             case expect_fun_type(NewEnv, FunTyNoPos, Arity) of
                 {type_error, NotFunTy} ->

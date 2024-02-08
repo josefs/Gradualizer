@@ -31,9 +31,9 @@
                                 'fun',
                                 [{type, erl_anno:anno(), product, [type()]} |
                                  type()]}.
--type printable_type() :: type() |
-                          {type, erl_anno:anno(), bounded_fun,
+-type bounded_fun() :: {type, erl_anno:anno(), bounded_fun,
                                  [function_type() | [constraint()]]}.
+-type printable_type() :: type() | bounded_fun().
 
 %% @doc
 %% Pretty-print a type represented as an Erlang abstract form.
@@ -53,7 +53,8 @@ pp_type({type, _, bounded_fun, [FunType, []]}) ->
 pp_type(Type = {type, _, bounded_fun, _}) ->
     %% erl_pp can't handle bounded_fun in type definitions
     %% We invent our own syntax here, e.g. "fun((A) -> ok when A :: atom())"
-    Form = {attribute, erl_anno:new(0), spec, {{foo, 0}, [Type]}},
+    TypePp = type_for_erl_pp(Type),
+    Form = {attribute, erl_anno:new(0), spec, {{foo, 0}, [TypePp]}},
     TypeDef = erl_pp:form(Form),
     {match, [S]} = re:run(TypeDef, <<"-spec foo\\s*(.*)\\.\\n*$">>,
                           [{capture, all_but_first, list}, dotall]),
@@ -66,10 +67,13 @@ pp_type({var, _, TyVar}) ->
         is_atom(TyVar) -> atom_to_list(TyVar);
         is_list(TyVar) -> TyVar
     end;
+pp_type([]) ->
+    error({badarg, []});
 pp_type(Type) ->
     %% erl_pp can handle type definitions, so wrap Type in a type definition
     %% and then take the type from that.
-    Form = {attribute, erl_anno:new(0), type, {t, Type, []}},
+    TypePp = type_for_erl_pp(Type),
+    Form = {attribute, erl_anno:new(0), type, {t, TypePp, []}},
     TypeDef = erl_pp:form(Form),
     {match, [S]} = re:run(TypeDef, <<"::\\s*(.*)\\.\\n*">>,
                           [{capture, all_but_first, list}, dotall]),
@@ -83,6 +87,21 @@ pp_type(Type) ->
     %        undefined -> S;
     %        File      -> S ++ " in " ++ File
     %end.
+
+
+%% Transform our `type()' into the standard `erl_parse:abstract_type()' that erl_pp accepts.
+-spec type_for_erl_pp(type()) -> type();
+                     (bounded_fun()) -> bounded_fun().
+type_for_erl_pp({rigid_var, P, Var}) ->
+    {var, P, Var};
+type_for_erl_pp({type, P, Tag, Args}) when is_list(Args) ->
+    {type, P, Tag, [type_for_erl_pp(Arg) || Arg <- Args]};
+type_for_erl_pp({user_type, P, Tag, Args}) ->
+    {user_type, P, Tag, [type_for_erl_pp(Arg) || Arg <- Args]};
+type_for_erl_pp({remote_type, P, [Mod, Fun, Args]}) ->
+    {remote_type, P, [Mod, Fun, [type_for_erl_pp(Arg) || Arg <- Args]]};
+type_for_erl_pp(Type) ->
+    Type.
 
 %% Looks up and prints the type M:N(P1, ..., Pn).
 debug_type(M, N, P) ->
@@ -114,7 +133,7 @@ remove_pos({type, _, constraint, [{atom, _, is_subtype}, Args]}) ->
     L = erl_anno:new(0),
     {type, L, constraint, [{atom, L, is_subtype}, lists:map(fun remove_pos/1, Args)]};
 remove_pos({Type, _, Value})
-  when Type == atom; Type == integer; Type == char; Type == var ->
+  when Type == atom; Type == integer; Type == char; Type == var; Type == rigid_var ->
     {Type, erl_anno:new(0), Value};
 remove_pos({user_type, Anno, Name, Params}) when is_list(Params) ->
     {user_type, anno_keep_only_filename(Anno), Name,
@@ -246,6 +265,11 @@ substitute_type_vars({var, L, Var}, TVars) ->
         #{Var := Type} -> Type;
         _              -> {var, L, Var}
     end;
+substitute_type_vars({rigid_var, L, Var}, TVars) when is_atom(Var) ->
+    case TVars of
+        #{Var := Type} -> Type;
+        _              -> {var, L, Var}
+    end;
 substitute_type_vars(Other = {type, _, T, any}, _)
   when T == tuple; T == map ->
     Other;
@@ -317,6 +341,7 @@ reduce(Fun, _, Acc, {'type', _Anno, any} = Ty)        -> Fun(Ty, Acc);
 reduce(Fun, _, Acc, pos_inf = Ty)                     -> Fun(Ty, Acc);
 reduce(Fun, _, Acc, neg_inf = Ty)                     -> Fun(Ty, Acc);
 reduce(Fun, _, Acc, {var, _, _} = Ty)                 -> Fun(Ty, Acc);
+reduce(Fun, _, Acc, {rigid_var, _, _} = Ty)           -> Fun(Ty, Acc);
 reduce(Fun, apply, Acc, Ty) ->
     {NewTy, Acc1} = Fun(Ty, Acc),
     reduce(Fun, recurse, Acc1, NewTy);
