@@ -313,6 +313,12 @@
 -type gr_type_var() :: atom() | string().
 -type af_type_variable() :: {'var', anno(), gr_type_var()}.
 
+%% Gradualizer: `rigid_var' is used for type variables (instead of plain `var')
+%% originating from specs of the currently checked function. They are rigid
+%% in the sense that they are fixed but completely unknown from the perspective
+%% of the function definition. We want to be able to differentiate between
+%% flexible (`var') and rigid type variables, and therefore we add this new
+%% syntactic form although they are syntactically the same.
 -type gr_rigid_type_variable() :: {'rigid_var', anno(), atom()}.
 
 -type af_user_defined_type() ::

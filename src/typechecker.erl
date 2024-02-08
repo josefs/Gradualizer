@@ -3800,7 +3800,15 @@ instantiate_inner([Ty | Tys], Map) ->
     {[NewTy|NewTys], maps:merge(Vars, MoreVars), EvenNewerMap}.
 
 
-% maybe extract to traverse_type/2, maybe with some accumulator
+%% Turns all type variables in a given type into rigid type variables.
+%%
+%% We want to use rigid type variables when typechecking a polymorphic
+%% function because type variables used in its spec can be instantiated
+%% to anything by the caller, so the polymorphic function cannot make
+%% any assumptions about their type or value.
+%%
+%% Variables inside function constraints (e.g., `List' in the type fragment
+%% `when List :: [term()]') are kept as they are, i.e., `var'.
 -spec make_rigid_type_vars(type()) -> type();
                           ([type()]) -> [type()].
 make_rigid_type_vars(Tys) when is_list(Tys) ->
