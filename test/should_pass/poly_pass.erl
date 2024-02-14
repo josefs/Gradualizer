@@ -1,6 +1,5 @@
 -module(poly_pass).
 
-%% These examples don't come from the above paper.
 -export([f/1,
          l/0]).
 
