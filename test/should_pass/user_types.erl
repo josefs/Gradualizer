@@ -31,3 +31,7 @@ f({A, _}) ->
 -spec new_opaque() -> my_opaque().
 new_opaque() ->
     0.
+
+-spec update_opaque(my_opaque()) -> my_opaque().
+update_opaque(N) ->
+    N + 1.

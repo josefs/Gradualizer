@@ -3,7 +3,9 @@
 %% See "Bidirectional Typing for Erlang", N. Rajendrakumar, A. Bieniusa, 2021, Section 2. Examples.
 -export([find1/0,
          poly_2/1,
-         poly_fail/3]).
+         poly_2b/1,
+         poly_fail/3,
+         poly_fail_2/3]).
 
 %% These examples don't come from the above paper.
 -export([f/1,
@@ -25,8 +27,14 @@ find1() ->
 -spec poly_2(fun((A) -> A)) -> {integer(), boolean()}.
 poly_2(F) -> {F(42), F(false)}.
 
+-spec poly_2b(fun((A) -> A)) -> {integer(), integer()}.
+poly_2b(F) -> {F(42), F(84)}.
+
 -spec poly_fail(fun((A) -> A), boolean(), integer()) -> {boolean(), integer()}.
 poly_fail(F, B, I) -> {F(I), F(B)}.
+
+-spec poly_fail_2(fun((A) -> A), boolean(), boolean()) -> {boolean(), boolean()}.
+poly_fail_2(F, B1, B2) -> {F(B2), F(B1)}.
 
 -spec f([integer(), ...]) -> atom().
 f(L) ->

@@ -54,6 +54,7 @@ is_int_subtype(Ty1, Ty2) ->
         upper_bound_more_or_eq(R2, R1).
 
 %% Greatest lower bound of two integer types.
+-spec int_type_glb(type(), type()) -> type().
 int_type_glb(Ty1, Ty2) ->
     {Lo1, Hi1} = int_type_to_range(Ty1),
     {Lo2, Hi2} = int_type_to_range(Ty2),
