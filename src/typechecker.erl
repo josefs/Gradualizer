@@ -1728,8 +1728,8 @@ free_vars({type, _, _, Args}, Vars) ->
     free_vars(Args, Vars);
 free_vars(_, Vars) -> Vars.
 
--spec subst_ty(#{atom() | string() := type()}, [type()]) -> [type()];
-              (#{atom() | string() := type()}, type()) -> type().
+-spec subst_ty(#{atom() | string() => type()}, [type()]) -> [type()];
+              (#{atom() | string() => type()}, type()) -> type().
 subst_ty(Sub, Tys) when is_list(Tys) ->
     [ subst_ty(Sub, Ty) || Ty <- Tys ];
 subst_ty(Sub, Ty = {var, _, X}) ->
