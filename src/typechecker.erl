@@ -1639,8 +1639,29 @@ expect_record_union([], AccTy, AccCs, _Record, _Env) ->
 bounded_type_list_to_type(Env, Types) ->
     case unfold_bounded_type_list(Env, Types) of
         [Ty] -> Ty;
-        Tys  -> type(union, Tys)
+        Tys ->
+            Tys = ?assert_type(Tys, [type(),...]),
+            merge_intersection_fun_tys(Tys, Env)
     end.
+
+%% Makes a single function type out of multi-clause function types.
+%% Performs union over parameter types and union over result types.
+%% E.g. [fun((a) -> b), fun((c) -> d)] results in fun((a | c) -> b | d).
+%% A better way would be to use intersection types, but we don't have those.
+-spec merge_intersection_fun_tys([type(),...], env()) -> type().
+merge_intersection_fun_tys(FunTys, Env) ->
+    [FirstFunTy | RestFunTys] = FunTys,
+    ?type('fun', [?type(product, InitAccArgTys), InitAccResTy]) = FirstFunTy,
+    InitAcc = {InitAccArgTys, InitAccResTy},
+    CombineTys = fun (Ty1, Ty2) -> lub([Ty1, Ty2], Env) end,
+    MergeFunTy = fun
+        (?type('fun', [?type(product, ArgTys), ResTy]), {AccArgTys, AccResTy}) ->
+            NewArgTys = lists:zipwith(CombineTys, AccArgTys, ArgTys),
+            NewResTy = CombineTys(AccResTy, ResTy),
+            {NewArgTys, NewResTy}
+    end,
+    {ArgTys, ResTy} = lists:foldl(MergeFunTy, InitAcc, RestFunTys),
+    type_fun(ArgTys, ResTy).
 
 %% TODO: move tenv to back
 -spec unfold_bounded_type_list(env(), [type()]) -> [type()].
