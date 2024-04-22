@@ -1,6 +1,7 @@
--module(inner_union_subtype_of_root_union).
+-module(inner_union_subtype_of_root_union_pass).
 
--export([map_case/1]).
+-export([tuple_case1/0,
+         tuple_case2/0]).
 
 % The problem is that {t, a|b} is not subtype of {t, a} | {t, b}.
 
@@ -10,11 +11,16 @@
 %     {'type', anno(), 'map_field_assoc', [abstract_type()]}
 %   | {'type', anno(), 'map_field_exact', [abstract_type()]}
 
-% See also test/should_pass/inner_union_subtype_of_root_union_pass.erl
+% See also test/known_problems/should_pass/inner_union_subtype_of_root_union.erl
 
 -spec g() -> a | b.
 g() -> a.
 
-% The same thing holds for maps.
--spec map_case(#{a => b | c}) -> #{a => b} | #{a => c}.
-map_case(M) -> M.
+-spec tuple_case1() -> {t, a} | {t, b}.
+tuple_case1() ->
+    R = {t, g()},
+    R.
+
+-spec tuple_case2() -> {t, a} | {t, b}.
+tuple_case2() ->
+    {t, g()}.

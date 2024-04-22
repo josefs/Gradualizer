@@ -1022,6 +1022,7 @@ expand_builtin_aliases({type, Ann, iolist, []}) ->
              {type, Ann, iolist, []}],
     Tail = [{type, Ann, nil, []},
             {type, Ann, binary, []}],
+    %% TODO: dnf
     {type, Ann, maybe_improper_list, [{type, Ann, union, Union},
                                       {type, Ann, union, Tail}]};
 expand_builtin_aliases({type, Ann, map, any}) ->
@@ -1055,6 +1056,34 @@ expand_builtin_aliases({type, Ann, no_return, []}) ->
 %% TODO: This is a kludge by which lists of types slip through calls to normalize().
 %%       Specifically, lists of Types representing bounded fun clauses.
 expand_builtin_aliases(Type) ->
+    dnf(Type).
+    %Type.
+
+-spec dnf(_) -> any().
+dnf(?type(union, _) = Ty) ->
+    Ty;
+dnf({type, _, _, any} = Ty) ->
+    Ty;
+%% A list of unions is not the same as a union of lists.
+dnf({type, _, list, _} = Ty) ->
+    Ty;
+dnf({type, Anno, Tag, Args} = Ty0) ->
+    {ArgExpandedUnions, AnyExpanded} =
+        lists:foldr(fun
+                        (?type(union, Tys), {Acc, _}) ->
+                            {[Tys | Acc], true};
+                        (Ty, {Acc, AnyExpanded}) ->
+                            {[[Ty] | Acc], AnyExpanded}
+                    end,
+                    {[], false}, Args),
+    ArgTyCombinations = gradualizer_lib:cartesian_product(ArgExpandedUnions),
+    if
+        AnyExpanded ->
+            {type, Anno, union, [ {type, Anno, Tag, A} || A <- ArgTyCombinations ]};
+        not AnyExpanded ->
+            Ty0
+    end;
+dnf(Type) ->
     Type.
 
 %% Flattens nested unions
@@ -2654,14 +2683,16 @@ do_type_check_expr_in(Env, ResTy, {tuple, _, TS} = Tup) ->
             {VBs, Css} = lists:unzip([ type_check_expr_in(Env, Ty, Expr)
                                     || {Ty, Expr} <- lists:zip(Tys, TS) ]),
             {union_var_binds(VBs, Env), constraints:combine([Cs|Css])};
-        {elem_tys, Tyss, Cs} ->
-            case type_check_tuple_union_in(Env, Tyss, TS) of
-                none ->
-                    {Ty, _VB, _Cs} = type_check_expr(Env#env{infer = true}, Tup),
-                    throw(type_error(Tup, Ty, ResTy));
-                {VBs, Css} ->
-                    {union_var_binds(VBs, Env), constraints:combine([Cs|Css])}
-            end;
+        {elem_tys, _Tyss, Cs1} ->
+            %% ResTy dictates that we expect a union of tuples.
+            {TupTy, VB, Cs2} = type_check_expr(Env, Tup),
+            Cs3 = case subtype(TupTy, ResTy, Env) of
+                      {true, Cs} ->
+                          Cs;
+                      false ->
+                          throw(type_error(Tup, TupTy, ResTy))
+                  end,
+            {VB, constraints:combine([Cs1, Cs2, Cs3])};
         any ->
             {_Tys, VBs, Css} = lists:unzip3([type_check_expr(Env, Expr)
                                            || Expr <- TS ]),
@@ -3646,19 +3677,6 @@ type_check_union_in1(Env, [Ty|Tys], Expr) ->
             type_check_union_in1(Env, Tys, Expr)
     end;
 type_check_union_in1(_Env, [], _Expr) ->
-    none.
-
--spec type_check_tuple_union_in(env(), [[type()]], [expr()]) -> R when
-      R :: {[env()], [constraints:t()]} | none.
-type_check_tuple_union_in(Env, [Tys|Tyss], Elems) ->
-    try
-        lists:unzip([type_check_expr_in(Env, Ty, Expr)
-                   || {Ty, Expr} <- lists:zip(Tys, Elems)])
-    catch
-        E when element(1,E) == type_error ->
-            type_check_tuple_union_in(Env, Tyss, Elems)
-    end;
-type_check_tuple_union_in(_Env, [], _Elems) ->
     none.
 
 -spec get_bounded_fun_type_list(atom(), arity(), env(), anno()) -> [type()].

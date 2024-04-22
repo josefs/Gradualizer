@@ -3,6 +3,8 @@
 -export([f/0]).
 -export([tuple_union/0]).
 
+-gradualizer([infer]).
+
 -spec f() -> {integer()} | {boolean()}.
 f() ->
     {apa}.
