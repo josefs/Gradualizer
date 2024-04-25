@@ -350,14 +350,27 @@ format_type_error({unsupported_expression, Anno, Expr}, Opts) ->
       [format_location(Anno, brief, Opts),
        atom_to_list(element(1, Expr)),
        format_location(Anno, verbose, Opts)]);
-format_type_error({constraint_error, Anno, E, LB, UB}, Opts) ->
+format_type_error({constraint_error, TyVar, LB, UB, {call, Anno, Name, Args} = Expr, FunTy, ArgTys}, Opts) ->
+    FancyExpr = try_highlight_in_context(Expr, Opts),
+    FunExpr = {'fun', Anno, absform:extract_function_from_call(Expr)},
+    FormattedName = [pp_expr(Name, Opts), "/", integer_to_list(length(Args))],
+    ArgsWithTypes = lists:zip(Args, ArgTys),
+    Bindings = [{FunExpr, FunTy} | ArgsWithTypes],
+    FormattedBindings = lists:map(fun ({Arg, ArgTy}) ->
+        io_lib:format("    ~s :: ~s~n", [pp_expr(Arg, Opts), pp_type(ArgTy, Opts)])
+    end, Bindings),
     io_lib:format(
-      "~sLower bound ~s of type variable ~s~s is not a subtype of ~s~n",
+      "~sThe type variable ~s in the call to ~s~s is instantiated to both ~s and ~s."
+      ++ " The former should be a subtype of the latter, but it is not."
+      ++ "~n~tsRelevant bindings:~n~s~n",
       [format_location(Anno, brief, Opts),
-       pp_type(LB, Opts),
-       E,
+       maybe_colorize(atom_to_list(TyVar), Opts),
+       maybe_colorize(FormattedName, Opts),
        format_location(Anno, verbose, Opts),
-       pp_type(UB, Opts)]);
+       pp_type(LB, Opts),
+       pp_type(UB, Opts),
+       FancyExpr,
+       FormattedBindings]);
 format_type_error({Location, Module, ErrorDescription}, Opts)
   when is_integer(Location) orelse is_tuple(Location),
        is_atom(Module) ->
@@ -509,9 +522,12 @@ pp_type(Ty, Opts) ->
              Fun when is_function(Fun) -> Fun(Ty);
              _                         -> typelib:pp_type(Ty)
          end,
+    maybe_colorize(PP, Opts).
+
+maybe_colorize(IoList, Opts) ->
     case use_color(Opts) of
-        true  -> [?color_type, PP, ?color_end];
-        false -> PP
+        true  -> [?color_type, IoList, ?color_end];
+        false -> IoList
     end.
 
 print_errors(Errors, Opts) ->

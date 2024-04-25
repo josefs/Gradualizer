@@ -2,9 +2,7 @@
 
 -export([foo/1]).
 
-%% _X is assigned a type variable, e.g. _TyVar-57293823
-%% Since type varialbes are not handled in glb, we get
-%% glb(T, {a, _TyVar-57293823}) -> none(), thus no refinement occurs.
+%% Since _X gets the type any(), no refinement occurs.
 -spec foo([{a|b, a|b}]) -> boolean().
 foo(Xs) ->
     lists_any(fun ({a, _X}) -> false;

@@ -30,7 +30,7 @@ start_application(Opts) ->
     ok = application:load(gradualizer),
     application:set_env(gradualizer, options, Opts),
     %% We could start the tracer based on a CLI flag, but it's config is compile-time anyway.
-    %gradualizer_tracer:start(),
+    % gradualizer_tracer:start(),
     {ok, _} = application:ensure_all_started(gradualizer).
 
 -spec handle_args([string()]) -> help | version | {error, string()} |

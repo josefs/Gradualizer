@@ -22,3 +22,17 @@ function_type_list_to_fun_types_test() ->
                     ]}
                   ]}, Ty),
     ok.
+
+extract_function_from_call_test() ->
+  CallExpr = merl:quote("add(5, Pi)"),
+  FunExpr = merl:quote("fun add/2"),
+  {'fun', _, ExpectedFunction} = FunExpr,
+  Function = absform:extract_function_from_call(CallExpr),
+  ?assertEqual(ExpectedFunction, Function).
+
+extract_function_from_call_remote_test() ->
+  CallExpr = merl:quote("nums:add(5, Pi)"),
+  FunExpr = merl:quote("fun nums:add/2"),
+  {'fun', _, ExpectedFunction} = FunExpr,
+  Function = absform:extract_function_from_call(CallExpr),
+  ?assertEqual(ExpectedFunction, Function).

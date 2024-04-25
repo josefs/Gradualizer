@@ -7,8 +7,11 @@
 
 -spec g([integer()]) -> [atom()].
 g(L) ->
-    lists:map(fun (I) -> I * 2 end, L).
+    lists:map(fun times_two/1, L).
 
 -spec h([string()]) -> [integer()].
 h(L) ->
-	lists:map(fun (I) -> I * 2 end, L).
+	lists:map(fun times_two/1, L).
+
+-spec times_two(integer()) -> integer().
+times_two(N) -> N * 2.

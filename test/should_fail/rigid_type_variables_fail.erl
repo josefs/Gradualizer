@@ -52,3 +52,23 @@ bad_map([X | Xs], F) -> [F([X]) | bad_map(Xs, F)].
 -spec bad_add_tag(Value) -> tagged(Value) when Value :: map().
 bad_add_tag(Value) ->
     {tag, {inner_tag, Value}}.
+
+
+
+%% All four these poly_2 examples come from the paper
+%% "Bidirectional Typing for Erlang", N. Rajendrakumar, A. Bieniusa, 2021, Section 2. Examples.
+%% These functions are not well typed according to Gradualizer, as we adopt the standard interpretation
+%% of type variables (i.e., for-alls are always at the outer-most scope), and we thus do not support
+%% rank-2 polymorphism. In all these examples the type variable A is chosen by the caller (not callee),
+%% so it can be anything and the poly_2 functions cannot assume anything about it.
+-spec poly_2_different(fun((A) -> A)) -> {integer(), boolean()}.
+poly_2_different(F) -> {F(42), F(false)}.
+
+-spec poly_2_same(fun((A) -> A)) -> {integer(), integer()}.
+poly_2_same(F) -> {F(42), F(84)}.
+
+-spec poly_2_args_different(fun((A) -> A), boolean(), integer()) -> {boolean(), integer()}.
+poly_2_args_different(F, B, I) -> {F(I), F(B)}.
+
+-spec poly_2_args_same(fun((A) -> A), boolean(), boolean()) -> {boolean(), boolean()}.
+poly_2_args_same(F, B1, B2) -> {F(B2), F(B1)}.
