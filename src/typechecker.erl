@@ -3984,7 +3984,8 @@ get_atom(_Env, _) ->
 %% Variables inside function constraints (e.g., `List' in the type fragment
 %% `when List :: [term()]') are kept as they are, i.e., `var'.
 -spec make_rigid_type_vars(type()) -> type();
-                          ([type()]) -> [type()].
+                          ([type()]) -> [type()];
+                          (fun_ty()) -> fun_ty().
 make_rigid_type_vars(Tys) when is_list(Tys) ->
     [ make_rigid_type_vars(Ty) || Ty <- Tys ];
 make_rigid_type_vars({var, _, '_'} = T) ->
@@ -4002,6 +4003,12 @@ make_rigid_type_vars({remote_type, P, [Mod, Fun, Args]}) ->
     {remote_type, P, [Mod, Fun, make_rigid_type_vars(Args)]};
 make_rigid_type_vars({ann_type, P, [AnnoVar, Type]}) ->
     {ann_type, P, [AnnoVar, make_rigid_type_vars(Type)]};
+make_rigid_type_vars({fun_ty, ArgTys, ResTy, Cs}) ->
+    {fun_ty, make_rigid_type_vars(ArgTys), make_rigid_type_vars(ResTy), Cs};
+make_rigid_type_vars({fun_ty_intersection, FunTys, Cs}) ->
+    {fun_ty_intersection, make_rigid_type_vars(FunTys), Cs};
+make_rigid_type_vars({fun_ty_union, FunTys, Cs}) ->
+    {fun_ty_union, make_rigid_type_vars(FunTys), Cs};
 make_rigid_type_vars(T) ->
     T.
 
@@ -4989,15 +4996,15 @@ type_check_function(Env, {function, _Anno, Name, NArgs, Clauses}) ->
     case maps:find({Name, NArgs}, Env#env.fenv) of
         {ok, FunTy} ->
             NewEnv = Env#env{current_spec = FunTy},
-            FunTyRigid = make_rigid_type_vars(FunTy),
-            FunTyNoPos = [ typelib:remove_pos(?assert_type(Ty, type())) || Ty <- FunTyRigid ],
+            FunTyNoPos = [ typelib:remove_pos(?assert_type(Ty, type())) || Ty <- FunTy ],
             Arity = clause_arity(hd(Clauses)),
             case expect_fun_type(NewEnv, FunTyNoPos, Arity) of
                 {type_error, NotFunTy} ->
                     %% This can only happen if `create_fenv/2' creates garbage.
                     erlang:error({invalid_function_type, NotFunTy});
                 FTy ->
-                    {_Vars, Cs} = check_clauses_fun(NewEnv, FTy, Clauses),
+                    FTy1 = make_rigid_type_vars(FTy),
+                    {_Vars, Cs} = check_clauses_fun(NewEnv, FTy1, Clauses),
                     {NewEnv, Cs}
             end;
         error ->

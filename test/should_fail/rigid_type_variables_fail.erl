@@ -47,13 +47,18 @@ bad_filter([X | Xs], F) ->
 bad_map([], _F) -> [];
 bad_map([X | Xs], F) -> [F([X]) | bad_map(Xs, F)].
 
+% gets rewritten to (integer()) -> integer()
+-spec rewrite_bound(atom()) -> Int when Int :: integer().
+rewrite_bound(Atom) -> Atom.
+
+-spec bad_id_with_bound(A) -> R when R :: A.
+bad_id_with_bound(_X) -> 42.
+
 -type tagged(Value) :: {tag, Value}.
 % fails due to {inner_tag, _} not being a subtype of map()
 -spec bad_add_tag(Value) -> tagged(Value) when Value :: map().
 bad_add_tag(Value) ->
     {tag, {inner_tag, Value}}.
-
-
 
 %% All four these poly_2 examples come from the paper
 %% "Bidirectional Typing for Erlang", N. Rajendrakumar, A. Bieniusa, 2021, Section 2. Examples.

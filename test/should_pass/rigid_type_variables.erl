@@ -45,6 +45,9 @@ map([X | Xs], F) -> [F(X) | map(Xs, F)].
 -spec rewrite_bound(Int) -> Int when Int :: integer().
 rewrite_bound(N) -> N + 1.
 
+-spec id_with_bound(A) -> R when R :: A.
+id_with_bound(X) -> X.
+
 -type tagged(Value) :: {tag, Value}.
 % gets rewritten to (map()) -> {tag, map()}
 -spec add_tag(Value) -> tagged(Value) when Value :: map().
