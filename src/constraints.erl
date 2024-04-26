@@ -11,16 +11,13 @@
          upper/2,
          lower/2,
          combine/2, combine/3,
-         satisfiable/2,
-         combine_with/4, add_var/2, append_values/3, has_upper_bound/2, combine/1]).
+         satisfiable/2]).
 
 -export_type([t/0, var/0]).
 
 -type type() :: gradualizer_type:abstract_type().
 
 -include("constraints.hrl").
-
--include_lib("stdlib/include/assert.hrl").
 
 -type t() :: #constraints{}.
 -type var() :: gradualizer_type:gr_type_var().
@@ -42,27 +39,19 @@ lower(Var, Ty) ->
 combine(Cs1, Cs2, Env) ->
     combine([Cs1, Cs2], Env).
 
--spec combine([t()], env()) -> t();
-             (t(), t()) -> t(). %% TODO: remove
+-spec combine([t()], env()) -> t().
 combine([], _Env) ->
     empty();
 combine([Cs], _Env) ->
     Cs;
 combine([Cs1, Cs2 | Css], Env) ->
     Cs = do_combine(Cs1, Cs2, Env),
-    combine([Cs | Css], Env);
-
-% dummy implementation to not crash on the old API. (TODO: remove)
-combine(Cs1, _Cs2) -> Cs1.
+    combine([Cs | Css], Env).
 
 -spec do_combine(t(), t(), env()) -> t().
 do_combine(Cs1, Cs2, Env) ->
     MergeLBounds = fun (_Var, T1, T2) -> typechecker:lub([T1, T2], Env) end,
-    MergeUBounds = fun (_Var, T1, T2) ->
-        {Type, Cs} = typechecker:glb(T1, T2, Env),
-        ?assert(Cs == constraints:empty()),
-        Type
-    end,
+    MergeUBounds = fun (_Var, T1, T2) -> typechecker:glb(T1, T2, Env) end,
     LBounds = gradualizer_lib:merge_with(MergeLBounds,
                                          Cs1#constraints.lower_bounds,
                                          Cs2#constraints.lower_bounds),
@@ -89,27 +78,10 @@ satisfiable(Cs, Env) ->
             UBound = maps:get(Var, Cs#constraints.upper_bounds, typechecker:type(top)),
             case typechecker:subtype(LBound, UBound, Env) of
                 false -> throw({not_subtype, Var, LBound, UBound});
-                {true, _Cs} -> ok
+                true -> ok
             end
         end, Vars),
         true
     catch
         {not_subtype, Var, LBound, UBound} -> {false, Var, LBound, UBound}
     end.
-
-%% Dummy functions to preserve the old API (TODO: remove).
-
--spec combine_with(t(), t(), _, _) -> t().
-combine_with(_, _, _, _) -> empty().
-
--spec add_var(var(), t()) -> t().
-add_var(_, Cs) -> Cs.
-
-append_values(_, Xs, Ys) ->
-    Xs ++ Ys.
-
--spec has_upper_bound(var(), t()) -> boolean().
-has_upper_bound(_, _) -> false.
-
--spec combine([t()]) -> t().
-combine(_Css) -> empty().

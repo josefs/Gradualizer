@@ -193,8 +193,8 @@ not_subtype_test_() ->
     ].
 
 -define(glb(T1, T2, R),
-    [ ?_assertEqual(deep_normalize(R), deep_normalize(element(1,glb(T1, T2)))),
-      ?_assertEqual(deep_normalize(R), deep_normalize(element(1,glb(T2, T1)))) ]).
+    [ ?_assertEqual(deep_normalize(R), deep_normalize(glb(T1, T2))),
+      ?_assertEqual(deep_normalize(R), deep_normalize(glb(T2, T1))) ]).
 
 glb_test_() ->
 
@@ -873,12 +873,7 @@ cleanup_app(Apps) ->
     ok.
 
 subtype(T1, T2) ->
-    case typechecker:subtype(T1, T2, test_lib:create_env([])) of
-        {true, _} ->
-            true;
-        false ->
-            false
-    end.
+    typechecker:subtype(T1, T2, test_lib:create_env([])).
 
 subtype_cs(T1, T2) ->
     typechecker:subtype_with_constraints(T1, T2, test_lib:create_env([])).
@@ -917,11 +912,11 @@ type_check_expr(EnvStr, ExprString) ->
 type_check_expr(EnvStr, ExprString, Opts) ->
     Env = test_lib:create_env(EnvStr, Opts),
     Expr = merl:quote(ExprString),
-    {Ty, _VarBinds, _Cs} = typechecker:type_check_expr(Env, Expr),
+    {Ty, _VarBinds} = typechecker:type_check_expr(Env, Expr),
     typelib:pp_type(Ty).
 
 type_pat(Pat, Ty) ->
-    {[PatTy], _UBounds, _Env, _Css} =
+    {[PatTy], _UBounds, _Env} =
         typechecker:add_types_pats([Pat], [Ty], gradualizer:env(), capture_vars),
         PatTy.
 

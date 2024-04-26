@@ -424,5 +424,5 @@ type_of(Expr) ->
 type_of(Expr, Env) ->
     AlwaysInfer = Env#env{infer = true},
     [Form] = gradualizer_lib:ensure_form_list(merl:quote(lists:flatten(Expr))),
-    {Ty, _Env, _Cs} = typechecker:type_check_expr(AlwaysInfer, Form),
+    {Ty, _Env} = typechecker:type_check_expr(AlwaysInfer, Form),
     Ty.
