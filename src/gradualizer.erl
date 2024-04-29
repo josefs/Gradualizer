@@ -265,7 +265,10 @@ type_check_files(Files, Opts) ->
             lists:foldl(
               fun(File, Errors) when Errors =:= [];
                                      not StopOnFirstError ->
-                      type_check_file_or_dir(File, Opts) ++ Errors;
+                      NewErrors = type_check_file_or_dir(File, Opts),
+                      % we can assert because we pass in the return_errors option
+                      NewErrors = ?assert_type(NewErrors, [any()]),
+                      NewErrors ++ Errors;
                  (_, Errors) ->
                       Errors
               end, [], Files);

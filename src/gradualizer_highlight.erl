@@ -200,7 +200,7 @@ blank("")          -> "".
       EndCol :: erl_anno:column(),
       Color :: boolean().
 color_and_mark_line(Line, C1, C2, Color) when C2 >= C1 ->
-    {Pre, Rest} = lists:split(C1 - 1, Line),
+    {Pre, Rest} = lists:split(?assert_type(C1 - 1, non_neg_integer()), Line),
     HighlightLen = ?assert_type(C2 - C1, non_neg_integer()),
     {Mid, Post} = lists:split(HighlightLen, Rest),
     {ColorText, ColorMarker, ColorEnd} =

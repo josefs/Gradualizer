@@ -979,7 +979,7 @@ normalize_rec({remote_type, _, [{atom, _, M}, {atom, _, N}, Args]}, Env) ->
             T2;
         opaque ->
             NormalizedArgs = lists:map(fun (Ty) -> normalize_rec(Ty, Env) end, Args),
-            Ty = {user_type, 0, N, NormalizedArgs},
+            Ty = {user_type, erl_anno:new(0), N, NormalizedArgs},
             typelib:annotate_user_type(M, ?assert_type(Ty, type()));
         not_exported ->
             throw(not_exported(remote_type, P, {M, N, arity(length(Args))}));
@@ -1635,6 +1635,9 @@ merge_intersection_fun_tys(FunTys, Env) ->
             {NewArgTys, NewResTy}
     end,
     {ArgTys, ResTy} = lists:foldl(MergeFunTy, InitAcc, RestFunTys),
+    %% type() | ... is currently not a subtype of type(),
+    %% see test/known_problems/should_pass/different_normalization_levels.erl
+    ResTy = ?assert_type(ResTy, type()),
     type_fun(ArgTys, ResTy).
 
 %% TODO: move tenv to back
@@ -4199,7 +4202,7 @@ refine_ty(?type(union, UnionTys), Ty, Trace, Env) ->
 refine_ty(Ty, ?type(union, UnionTys), Trace, Env) ->
     %% Union e.g. integer() | float() from an is_number(X) guard.
     %% Refine Ty with each type in the union.
-    lists:foldl(fun (UnionTy, AccTy) ->
+    RefTy = lists:foldl(fun (UnionTy, AccTy) ->
                         try refine(AccTy, UnionTy, Trace, Env) of
                             RefTy -> RefTy
                         catch
@@ -4207,7 +4210,10 @@ refine_ty(Ty, ?type(union, UnionTys), Trace, Env) ->
                         end
                 end,
                 Ty,
-                UnionTys);
+                UnionTys),
+    %% type() | ... is currently not a subtype of type(),
+    %% see test/known_problems/should_pass/different_normalization_levels.erl
+    ?assert_type(RefTy, type());
 refine_ty(?type(map, _Assocs), ?type(map, [?any_assoc]), _Trace, _Env) ->
     %% #{x => y} \ map() = none()
     type(none);
@@ -4366,7 +4372,7 @@ pair_assocs(Assocs1, Assocs2, MissingTy, Env) ->
                         (map_field_assoc, Value)
                             -> normalize(type(union, [Value, MissingTy]), Env)
     end,
-    lists:map(fun(?type(Tag2, [K2, V2Orig])) ->
+    Result = lists:map(fun(?type(Tag2, [K2, V2Orig])) ->
         V2 = AugmentValueTy(Tag2, V2Orig),
         case lists:search(fun(?type(_Tag1, [K1, _V1])) ->
             %% Most of the time, the keys will be equal, but the subtype
@@ -4383,7 +4389,10 @@ pair_assocs(Assocs1, Assocs2, MissingTy, Env) ->
                 %% from Assocs1, then the corresponding maps are disjoint.
                 throw(disjoint)
         end
-    end, Assocs2).
+    end, Assocs2),
+    %% type() | ... is currently not a subtype of type(),
+    %% see test/known_problems/should_pass/different_normalization_levels.erl
+    ?assert_type(Result, [{type(), type(), type()}]).
 
 %% Handles the MissingTy in assoc values and decides whether
 %% to keep the assoc and which tag to use for it.
@@ -5062,6 +5071,8 @@ add_type_pat_union(Pat, ?type(union, UnionTys) = UnionTy, Env) ->
                     end,
                     {[], [], []},
                     UnionTys),
+    %% typechecking of try .. of is broken, so we must assert
+    Envs = ?assert_type(Envs, [env()]),
     case PatTys of
         [] ->
             %% Pattern doesn't match any type in the union
@@ -5427,7 +5438,8 @@ type_of_bin_element({bin_element, _P, Expr, _Size, Specifiers}, OccursAs) ->
             %% As pattern: <<X>> or <<X/unsigned>>
             type(non_neg_integer);
         [T] ->
-            T
+            %% We can assert because in the listmap we always return either false or {true, type()}.
+            ?assert_type(T, type())
     end.
 
 
