@@ -208,9 +208,7 @@ subtype_with_constraints(Ty1, Ty2, Env) ->
                         false
                 end,
             gradualizer_cache:store(subtype, {Module, Ty1, Ty2}, R),
-            %% TODO: Gradualizer cannot tell that even if we get compat_acc() from compat/4,
-            %% we rewrite it to {true, constraints:t()} | false
-            ?assert_type(R, {true, constraints:t()} | false);
+            R;
         {some, R} ->
             %% these two types have already been seen and calculated
             R
@@ -2203,7 +2201,17 @@ do_type_check_expr(Env, {'try', _, Block, CaseCs, CatchCs, AfterBlock}) ->
         _ ->
             type_check_block(Env2, AfterBlock)
     end,
-    {normalize({type, erl_anno:new(0), union, [Ty, TyC, TyS]}, Env), VB};
+    ResTys = case CaseCs of
+        [] ->
+            %% no `of' part:
+            %% in case of no error, Block will be returned
+            [Ty, TyS];
+        _ ->
+            %% there is an `of' part:
+            %% in case of no error, result of the clauses will be returned
+            [TyC, TyS]
+    end,
+    {normalize({type, erl_anno:new(0), union, ResTys}, Env), VB};
 
 %% Maybe - value-based error handling expression
 %% See https://www.erlang.org/eeps/eep-0049
@@ -5071,8 +5079,6 @@ add_type_pat_union(Pat, ?type(union, UnionTys) = UnionTy, Env) ->
                     end,
                     {[], [], []},
                     UnionTys),
-    %% typechecking of try .. of is broken, so we must assert
-    Envs = ?assert_type(Envs, [env()]),
     case PatTys of
         [] ->
             %% Pattern doesn't match any type in the union
