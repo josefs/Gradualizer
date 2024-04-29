@@ -28,7 +28,13 @@
          pass_multi_clause_fun/1,
          minus/1,
          invalid_case/2,
-         invariant_tyvar/2
+         invariant_tyvar/2,
+         use_generic_hd/1,
+         use_generic_hd_var/1,
+         use_enum_map1/1,
+         use_enum_map1_var/1,
+         use_enum_map2/1,
+         use_enum_map3/1
         ]).
 
 -gradualizer([solve_constraints]).
@@ -198,3 +204,38 @@ id_fun_arg(Fun, Arg) -> {Fun, Arg}.
 invariant_tyvar(Int, Bool) ->
     {Fun, _Arg} = id_fun_arg(fun positive/1, Int),
     Fun(Bool).
+
+-spec generic_hd([A,...] | {A, any()}) -> A.
+generic_hd([H | _]) -> H;
+generic_hd({H, _}) -> H.
+
+-spec use_generic_hd({atom(), integer()}) -> float().
+use_generic_hd(Tuple) ->
+    generic_hd(Tuple).
+
+-spec use_generic_hd_var([atom(),...]) -> float().
+use_generic_hd_var(List) ->
+    X = generic_hd(List),
+    X.
+
+%% map/2 from Elixir's Enum module
+-spec enum_map([A] | map(), fun ((A) -> B)) -> [B].
+enum_map(List, Fun) when is_list(List) -> lists:map(Fun, List);
+enum_map(_Struct, _Fun) -> throw(cannot_do_in_erlang).
+
+-spec use_enum_map1([number()]) -> [float()].
+use_enum_map1(Numbers) ->
+    enum_map(Numbers, fun positive/1).
+
+-spec use_enum_map1_var([number()]) -> [float()].
+use_enum_map1_var(Numbers) ->
+    X = enum_map(Numbers, fun positive/1),
+    X.
+
+-spec use_enum_map2([atom()]) -> [boolean()].
+use_enum_map2(Atoms) ->
+    enum_map(Atoms, fun positive/1).
+
+-spec use_enum_map3(#{'__struct__' := some_struct}) -> [float()].
+use_enum_map3(SomeStruct) ->
+    enum_map(SomeStruct, fun positive/1).

@@ -573,19 +573,38 @@ compat_record_fields(_, _, _, _) ->
 ret(Seen) ->
     {Seen, constraints:empty()}.
 
+%% Checks whether Ty is a subtype of at least one type from Tys.
 -spec any_type(type(), [type()], map(), env()) -> compat_acc().
-any_type(_Ty, [], _Seen, _Env) ->
-    throw(nomatch);
-any_type(Ty, [Ty1|Tys], Seen, Env) ->
-    try
-        %% TODO: Don't drop the constraint here.
-        %% This requires a radically different representation of constraints
-        %% which allows to represent unions of constraints
-        {Ret, _Cs} = compat(Ty, Ty1, Seen, Env),
-        {Ret, constraints:empty()}
-    catch
-        nomatch ->
-            any_type(Ty, Tys, Seen, Env)
+any_type(Ty1, Tys, Seen0, Env) ->
+    F = fun (Ty2, {Seen1, Css}) ->
+        try
+            {Seen2, Cs} = compat(Ty1, Ty2, Seen1, Env),
+            {Seen2, [Cs | Css]}
+        catch
+            nomatch ->
+                {Seen1, Css}
+        end
+    end,
+    {Seen3, Css} = lists:foldl(F, {Seen0, []}, Tys),
+    case Css of
+        [] ->
+            %% No type from Tys is a supertype of Ty1.
+            throw(nomatch);
+        [Cs] ->
+            %% Exactly one type from Tys is a supertype of Ty1.
+            %% In this case we can return constraints, as no other type from Tys matches.
+            {Seen3, Cs};
+        _ ->
+            %% Multiple types from Tys are supertypes of Ty1.
+            %% TODO: Don't drop the constraint here.
+            %% In this case we don't know how to constrain involved type variables,
+            %% as for example in the call any_type(atom(), [A, B], ...) where
+            %% A and B are type variables, both constraints {atom() <: A} and
+            %% {atom() <: B} lead to a solution where atom() <: A | B.
+            %% To express this situation, we would need a radically different
+            %% representation of constraints, one which would allow to represent
+            %% unions of constraints.
+            {Seen3, constraints:empty()}
     end.
 
 %% @doc All types in `Tys' must be compatible with `Ty'.

@@ -23,7 +23,9 @@
          plus/1,
          match_on_nth_result/1,
          invariant_tyvar1/1,
-         invariant_tyvar2/1
+         invariant_tyvar2/1,
+         use_enum_map1/1,
+         use_enum_map2/1
         ]).
 
 -gradualizer([solve_constraints]).
@@ -201,3 +203,16 @@ invariant_tyvar2(Int) ->
     {Fun, Arg} = id_fun_arg(fun positive/1, Int),
     Fun(Int),
     {Fun, Arg}.
+
+%% map/2 from Elixir's Enum module
+-spec enum_map([A] | map(), fun ((A) -> B)) -> [B].
+enum_map(List, Fun) when is_list(List) -> lists:map(Fun, List);
+enum_map(_Struct, _Fun) -> throw(cannot_do_in_erlang).
+
+-spec use_enum_map1([number()]) -> [boolean()].
+use_enum_map1(Numbers) ->
+    enum_map(Numbers, fun positive/1).
+
+-spec use_enum_map2(#{'__struct__' := some_struct}) -> [boolean()].
+use_enum_map2(SomeStruct) ->
+    enum_map(SomeStruct, fun positive/1).
