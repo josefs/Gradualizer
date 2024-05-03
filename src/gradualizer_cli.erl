@@ -92,15 +92,15 @@ print_usage() ->
     io:format("                                   (\"LINE:COLUMN:\" before message text)~n"),
     io:format("                                 - 'verbose' (default): for human readers~n"),
     io:format("                                   (\"on line LINE at column COLUMN\" within the message text)~n"),
-    io:format("       --color [ COLOR ]         - Use colors when printing fancy messages. An optional~n"),
-    io:format("                                   argument is `always | never | auto'. However, auto-~n"),
-    io:format("                                   detection of a TTY doesn't work when running as an escript.~n"),
-    io:format("       --no_color                - Alias for `--color never'~n"),
-    io:format("       --fancy                   - Use fancy error messages when possible (on by default)~n"),
-    io:format("       --no_fancy                - Don't use fancy error messages.~n"),
-    io:format("       --union_size_limit        - Performance hack: Unions larger than this value~n"),
-    io:format("                                   are replaced by any() in normalization (default: 30)~n"),
-    io:format("       --solve_constraints       - Type check polymorphic calls (off by default)~n").
+    io:format("       --color [ COLOR ]         Use colors when printing fancy messages. An optional~n"),
+    io:format("                                 argument is `always | never | auto'. However, auto-~n"),
+    io:format("                                 detection of a TTY doesn't work when running as an escript.~n"),
+    io:format("       --no_color                Alias for `--color never'~n"),
+    io:format("       --fancy                   Use fancy error messages when possible (on by default)~n"),
+    io:format("       --no_fancy                Don't use fancy error messages.~n"),
+    io:format("       --union_size_limit        Performance hack: Unions larger than this value~n"),
+    io:format("                                 are replaced by any() in normalization (default: 30)~n"),
+    io:format("       --solve_constraints       Type check polymorphic calls (off by default)~n").
 
 -spec parse_opts([string()], gradualizer:options()) -> {[string()], gradualizer:options()}.
 parse_opts([], Opts) ->
