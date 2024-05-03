@@ -140,8 +140,6 @@ Gradualizer is close to a beta release. Most of the Erlang language constructs a
 data types are handled, although there are things that don't work yet.
 That being said, pull requests are most welcome!
 
-As of writing this, the single biggest missing feature is support for subtype polymorphism.
-
 A work-in-progress [Gradualizer manual](https://github.com/josefs/Gradualizer/wiki)
 is located on the wiki.
 
