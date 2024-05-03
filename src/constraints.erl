@@ -20,7 +20,7 @@
 -include("constraints.hrl").
 
 -type t() :: #constraints{}.
--type var() :: gradualizer_type:gr_type_var().
+-type var() :: atom().
 -type env() :: typechecker:env().
 
 -spec empty() -> t().

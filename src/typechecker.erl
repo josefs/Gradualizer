@@ -161,7 +161,7 @@
                | {illegal_pattern, pattern()}
                | {internal_error, missing_type_spec, atom(), arity()}
                | {call_undef, anno(), module(), atom(), arity()}
-               | {constraint_error, atom() | string(), type(), type(), expr(), type(), [type()]}.
+               | {constraint_error, atom(), type(), type(), expr(), type(), [type()]}.
 %% `typechecker' returns these errors as results of its analysis.
 
 %% Two types are compatible if one is a subtype of the other, or both.
@@ -1674,7 +1674,7 @@ unfold_bounded_type(_Env, Ty) -> Ty.
 
 %% TODO: move tenv to back
 -spec bounded_type_subst(env(), {type, erl_anno:anno(), bounded_fun, [_]}) ->
-        #{ atom() | string() := type() }.
+        #{ atom() := type() }.
 bounded_type_subst(Env, BTy = {type, P, bounded_fun, [_, Bounds]}) ->
     try
         solve_bounds(Env, Bounds)
@@ -1724,10 +1724,10 @@ solve_bounds(_, _, [{cyclic, Xs} | _], _) ->
     throw({cyclic_dependencies, Xs});
 solve_bounds(_, _, [], Acc) -> Acc.
 
--spec free_vars(type()) -> #{atom() | string() => true}.
+-spec free_vars(type()) -> #{atom() => true}.
 free_vars(Ty) -> free_vars(Ty, #{}).
 
--spec free_vars([type()] | type() | any(), #{atom() | string() => true}) -> #{atom() | string() => true}.
+-spec free_vars([type()] | type() | any(), #{atom() => true}) -> #{atom() => true}.
 free_vars({var, _, '_'}, Vars) ->
     Vars;
 free_vars({var, _, X}, Vars) ->
@@ -1738,8 +1738,8 @@ free_vars({type, _, _, Args}, Vars) ->
     free_vars(Args, Vars);
 free_vars(_, Vars) -> Vars.
 
--spec subst_ty(#{atom() | string() => type()}, [type()]) -> [type()];
-              (#{atom() | string() => type()}, type()) -> type().
+-spec subst_ty(#{atom() => type()}, [type()]) -> [type()];
+              (#{atom() => type()}, type()) -> type().
 subst_ty(Sub, Tys) when is_list(Tys) ->
     [ subst_ty(Sub, Ty) || Ty <- Tys ];
 subst_ty(Sub, Ty = {var, _, X}) ->
@@ -1757,7 +1757,7 @@ subst_ty(Sub, {ann_type, P, [AnnoVar, Type]}) ->
 subst_ty(_, Ty) -> Ty.
 
 -type variance() :: covariant | contravariant | invariant.
--type variance_map() :: #{atom() | string() => variance()}.
+-type variance_map() :: #{atom() => variance()}.
 
 %% Gathers all flexible type variables in a given type together with their variance
 %% with respect to the given type.
@@ -2552,7 +2552,7 @@ type_check_call_ty_intersect(Env, ClauseTys, Args, E = {Name, P, FunTy}) ->
     end.
 
 %% Computes a minimal substitution with respect to the `ResTy' that satisfies given constraints.
--spec minimal_substitution(constraints:t(), type()) -> #{atom() | string() => type()}.
+-spec minimal_substitution(constraints:t(), type()) -> #{atom() => type()}.
 minimal_substitution(Cs, ResTy) ->
     TyVarsVariances = type_vars_variances(ResTy),
     Fun = fun
@@ -2569,7 +2569,7 @@ minimal_substitution(Cs, ResTy) ->
     Subst = maps:map(Fun, TyVarsVariances),
     %% type() | ... is currently not a subtype of type(),
     %% see test/known_problems/should_pass/different_normalization_levels.erl
-    ?assert_type(Subst, #{atom() | string() => type()}).
+    ?assert_type(Subst, #{atom() => type()}).
 
 -spec infer_arg_types([expr()], env()) -> [type()].
 infer_arg_types(Args, Env) ->
@@ -5613,7 +5613,7 @@ add_var_binds(#env{venv = VB1}, #env{venv = VB2}, #env{} = Env) ->
     Env#env{venv = gradualizer_lib:merge_with(Glb, VB1, VB2)}.
 
 %% Set the type of a new variable.
--spec set_var_type(env(), {var, _, atom() | string()}, type()) -> env().
+-spec set_var_type(env(), {var, _, atom()}, type()) -> env().
 set_var_type(Env, {var, _, A} = V, Ty) ->
     ?verbose(Env, "~sSetting var type ~s :: ~s~n",
              [gradualizer_fmt:format_location(V, brief), A, typelib:pp_type(Ty)]),
@@ -5621,7 +5621,7 @@ set_var_type(Env, {var, _, A} = V, Ty) ->
     Env#env{venv = VEnv#{A => Ty}}.
 
 %% Update the type of an already seen variable.
--spec update_var_type(env(), {var, _, atom() | string()}, type()) -> env().
+-spec update_var_type(env(), {var, _, atom()}, type()) -> env().
 update_var_type(Env, {var, _, A} = V, Ty) ->
     ?verbose(Env, "~sUpdating var type ~s :: ~s~n",
              [gradualizer_fmt:format_location(V, brief), A, typelib:pp_type(Ty)]),
