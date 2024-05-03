@@ -481,19 +481,17 @@ compat_ty({type, _, map, Assocs1}, {type, _, map, Assocs2}, Seen, Env) ->
                                     %% if that's not the case, let's throw now.
                                     length(MandatoryAssocs1) == 0 andalso throw(nomatch),
                                     case lists:foldl(fun
-                                                         %% TODO: {no, match} is yet another case of
-                                                         %% the constraint solver "shape" limitation
-                                                         (Assoc1, {no, match}) ->
+                                                         (Assoc1, nomatch) ->
                                                              try
                                                                  compat(Assoc1, Assoc2, Seen2, Env)
                                                              catch
-                                                                 nomatch -> {no, match}
+                                                                 nomatch -> nomatch
                                                              end;
                                                          (_Assoc1, {Seen1, Cs1}) ->
                                                              {Seen1, Cs1}
-                                                     end, {no, match}, MandatoryAssocs1)
+                                                     end, nomatch, MandatoryAssocs1)
                                     of
-                                        {no, match} -> throw(nomatch);
+                                        nomatch -> throw(nomatch);
                                         {Seen1, Cs1} -> {Seen1, constraints:combine(Cs1, Cs2, Env)}
                                     end
                             end, ret(Seen), MandatoryAssocs2),
@@ -4199,17 +4197,12 @@ refine_ty(?type(record, [{atom, Anno, Name}]), Refined = ?type(record, [{atom, _
     refine_ty(expand_record(Name, Anno, Env), Refined, Trace, Env);
 refine_ty(?type(record, [Name | FieldTys1]), ?type(record, [Name | FieldTys2]), Trace, Env)
   when length(FieldTys1) > 0, length(FieldTys1) == length(FieldTys2) ->
-    %% TODO: without these assertions the constraint solver goes crazy with ?type_field_type()
-    FieldTys1 = ?assert_type(FieldTys1, [record_field_type()]),
-    FieldTys2 = ?assert_type(FieldTys2, [record_field_type()]),
     % Record without just the name
     Tys1 = [Ty || ?type_field_type(_, Ty) <- FieldTys1],
     Tys2 = [Ty || ?type_field_type(_, Ty) <- FieldTys2],
     RefTys = [refine(Ty1, Ty2, Trace, Env) || {Ty1, Ty2} <- lists:zip(Tys1, Tys2)],
     RecordsTys = pick_one_refinement_each(Tys1, RefTys),
     RecordsElems = [ lists:map(fun ({Field, RecordTy}) ->
-                                       %% TODO: same thing about the constraint solver
-                                       Field = ?assert_type(Field, record_field_type()),
                                        ?type_field_type(FieldName, _) = Field,
                                        type_field_type(FieldName, RecordTy)
                                end, lists:zip(FieldTys1, RecordTys))
