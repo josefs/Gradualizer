@@ -1,7 +1,7 @@
 %% @private
 -module(gradualizer_lib).
 
--export([merge_with/3, top_sort/1, get_type_definition/3,
+-export([merge_with/3, uniq/1, top_sort/1, get_type_definition/3,
          pick_values/2, fold_ast/3, get_ast_children/1,
          empty_tenv/0, create_tenv/3,
          remove_pos_typed_record_field/1,
@@ -43,6 +43,13 @@ merge_with(F, M1, M2) ->
                               maps:update_with(K, fun (V1) -> F(K, V1, V2) end, V2, M)
                       end, M1, M2)
     end.
+-endif.
+
+-spec uniq([A]) -> [A].
+-if(?OTP_RELEASE >= 25).
+uniq(List) -> lists:uniq(List).
+-else.
+uniq(List) -> lists:usort(List).
 -endif.
 
 %% -- Topological sort

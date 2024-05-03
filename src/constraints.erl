@@ -65,7 +65,7 @@ do_combine(Cs1, Cs2, Env) ->
 
 -spec variables(t()) -> [var()].
 variables(#constraints{ upper_bounds = UBounds, lower_bounds = LBounds }) ->
-    lists:uniq(maps:keys(UBounds) ++ maps:keys(LBounds)).
+    gradualizer_lib:uniq(maps:keys(UBounds) ++ maps:keys(LBounds)).
 
 
 %% Checks that all lower bounds are subtypes of respective upper bounds.
