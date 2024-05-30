@@ -74,14 +74,15 @@ A type checker for Erlang/Elixir
                                    ("LINE:COLUMN:" before message text)
                                  - 'verbose' (default): for human readers
                                    ("on line LINE at column COLUMN" within the message text)
-       --color [ COLOR ]         - Use colors when printing fancy messages. An optional
-                                   argument is `always | never | auto'. However, auto-
-                                   detection of a TTY doesn't work when running as an escript.
-       --no_color                - Alias for `--color never'
-       --fancy                   - Use fancy error messages when possible (on by default)
-       --no_fancy                - Don't use fancy error messages.
-       --union_size_limit        - Performance hack: Unions larger than this value
-                                   are replaced by any() in normalization (default: 30)
+       --color [ COLOR ]         Use colors when printing fancy messages. An optional
+                                 argument is `always | never | auto'. However, auto-
+                                 detection of a TTY doesn't work when running as an escript.
+       --no_color                Alias for `--color never'
+       --fancy                   Use fancy error messages when possible (on by default)
+       --no_fancy                Don't use fancy error messages.
+       --union_size_limit        Performance hack: Unions larger than this value
+                                 are replaced by any() in normalization (default: 30)
+       --solve_constraints       Type check polymorphic calls (off by default)
 ```
 
 
@@ -139,8 +140,6 @@ as well as Mix if used as a dependency.
 Gradualizer is close to a beta release. Most of the Erlang language constructs and
 data types are handled, although there are things that don't work yet.
 That being said, pull requests are most welcome!
-
-As of writing this, the single biggest missing feature is support for subtype polymorphism.
 
 A work-in-progress [Gradualizer manual](https://github.com/josefs/Gradualizer/wiki)
 is located on the wiki.

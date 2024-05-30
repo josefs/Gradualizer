@@ -3,7 +3,8 @@
 -module(absform).
 
 -export([normalize_record_field/1,
-         normalize_function_type_list/1]).
+         normalize_function_type_list/1,
+         extract_function_from_call/1]).
 
 -include("gradualizer.hrl").
 
@@ -51,3 +52,8 @@ normalize_function_type({type, L, 'fun', [{type, _, product, _ArgTypes}, _RetTyp
 normalize_function_type({type, _, 'fun', _}) ->
     %% TODO: same story as for bounded_fun above
     erlang:error(unreachable).
+
+extract_function_from_call({call, Anno, {remote, _, Mod, Fun}, Args}) ->
+    {function, Mod, Fun, {integer, Anno, length(Args)}};
+extract_function_from_call({call, _Anno, {atom, _, Fun}, Args}) ->
+    {function, Fun, length(Args)}.

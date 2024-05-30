@@ -36,7 +36,6 @@ start_link(Opts) ->
                         [ChildSpec :: supervisor:child_spec()]}} |
                   ignore.
 init([Opts]) ->
-    ok = gradualizer_tyvar:start(),
     SupFlags = #{strategy => one_for_one,
                  intensity => 1,
                  period => 5},

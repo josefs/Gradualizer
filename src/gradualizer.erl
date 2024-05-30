@@ -265,7 +265,10 @@ type_check_files(Files, Opts) ->
             lists:foldl(
               fun(File, Errors) when Errors =:= [];
                                      not StopOnFirstError ->
-                      type_check_file_or_dir(File, Opts) ++ Errors;
+                      NewErrors = type_check_file_or_dir(File, Opts),
+                      % we can assert because we pass in the return_errors option
+                      NewErrors = ?assert_type(NewErrors, [any()]),
+                      NewErrors ++ Errors;
                  (_, Errors) ->
                       Errors
               end, [], Files);
@@ -424,5 +427,5 @@ type_of(Expr) ->
 type_of(Expr, Env) ->
     AlwaysInfer = Env#env{infer = true},
     [Form] = gradualizer_lib:ensure_form_list(merl:quote(lists:flatten(Expr))),
-    {Ty, _Env, _Cs} = typechecker:type_check_expr(AlwaysInfer, Form),
+    {Ty, _Env} = typechecker:type_check_expr(AlwaysInfer, Form),
     Ty.

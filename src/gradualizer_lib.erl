@@ -1,7 +1,7 @@
 %% @private
 -module(gradualizer_lib).
 
--export([merge_with/3, top_sort/1, get_type_definition/3,
+-export([merge_with/3, uniq/1, top_sort/1, get_type_definition/3,
          pick_values/2, fold_ast/3, get_ast_children/1,
          empty_tenv/0, create_tenv/3,
          remove_pos_typed_record_field/1,
@@ -43,6 +43,13 @@ merge_with(F, M1, M2) ->
                               maps:update_with(K, fun (V1) -> F(K, V1, V2) end, V2, M)
                       end, M1, M2)
     end.
+-endif.
+
+-spec uniq([A]) -> [A].
+-if(?OTP_RELEASE >= 25).
+uniq(List) -> lists:uniq(List).
+-else.
+uniq(List) -> lists:usort(List).
 -endif.
 
 %% -- Topological sort
@@ -122,12 +129,11 @@ get_type_definition({user_type, Anno, Name, Args}, Env, Opts) ->
             gradualizer_db:get_type(Module, Name, Args);
         none ->
             %% Let's check if the type is defined in the context of this module.
-            case maps:get({Name, length(Args)}, maps:get(types, Env#env.tenv), {not_, found}) of
-                %% TODO: the constraint solver requires the "shape" of a Default to be the same as
-                %% of an actual Value
-                {not_, found} ->
+            case maps:get({Name, length(Args)}, maps:get(types, Env#env.tenv), not_found) of
+                not_found ->
                     not_found;
                 {Params, Type0} ->
+                    ?assert_type(Params, [atom()]),
                     VarMap = maps:from_list(lists:zip(Params, Args)),
                     Type2 = case proplists:is_defined(annotate_user_types, Opts) of
                                 true ->

@@ -177,10 +177,11 @@ start() ->
     %dbg:tpl(typechecker, do_type_check_expr_in, x),
     %dbg:tpl(typechecker, type_check_logic_op_in, x),
 
-    %dbg:tpl(typechecker, subtype, x),
-    %dbg:tpl(typechecker, compat, x),
-    %dbg:tpl(typechecker, compat_seen, x),
-    %dbg:tpl(typechecker, compat_ty, x),
+    dbg:tpl(typechecker, subtype, x),
+    dbg:tpl(typechecker, subtype_with_constraints, x),
+    dbg:tpl(typechecker, compat, x),
+    % dbg:tpl(typechecker, compat_seen, x),
+    dbg:tpl(typechecker, compat_ty, x),
 
     %dbg:tpl(typechecker, glb_ty, x),
     %dbg:tpl(typechecker, normalize, x),

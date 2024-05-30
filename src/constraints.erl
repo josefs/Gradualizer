@@ -1,148 +1,87 @@
 %% @private
 -module(constraints).
 
+%% The `constraint' module tracks lower and upper bounds (i.e., constraints) for type variables.
+%% Each bound is a single type. A type variable may have a lower bound, an upper bound, or both.
+%% Note that the bounds cannot contain any type variables, they are just plain monomorphic types.
+%% For more information on constraint solving and typechecking polymorphic calls, see
+%% `typechecker:type_check_poly_call/4'.
+
 -export([empty/0,
-         vars/1,
          upper/2,
          lower/2,
-         combine/1, combine/2,
-         combine_with/4,
-         add_var/2,
-         solve/3,
-         append_values/3,
-         has_upper_bound/2]).
+         combine/2, combine/3,
+         satisfiable/2]).
 
--export_type([t/0,
-              mapset/1,
-              var/0]).
-
--include_lib("stdlib/include/assert.hrl").
+-export_type([t/0, var/0]).
 
 -type type() :: gradualizer_type:abstract_type().
 
 -include("constraints.hrl").
 
 -type t() :: #constraints{}.
--type mapset(T) :: #{T => true}.
--type var() :: gradualizer_type:gr_type_var().
+-type var() :: atom().
+-type env() :: typechecker:env().
 
 -spec empty() -> t().
 empty() ->
     #constraints{}.
 
--spec vars(mapset(var())) -> #constraints{}.
-vars(Vars) ->
-    #constraints{ exist_vars = Vars }.
-
--spec add_var(var(), t()) -> t().
-add_var(Var, Cs) ->
-    Cs#constraints{ exist_vars = maps:put(Var, true, Cs#constraints.exist_vars) }.
-
 -spec upper(var(), type()) -> t().
 upper(Var, Ty) ->
-    #constraints{ upper_bounds = #{ Var => [Ty] } }.
+    #constraints{ upper_bounds = #{ Var => Ty } }.
 
 -spec lower(var(), type()) -> t().
 lower(Var, Ty) ->
-    #constraints{ lower_bounds = #{ Var => [Ty] } }.
+    #constraints{ lower_bounds = #{ Var => Ty } }.
 
--spec combine(t(), t()) -> t().
-combine(C1, C2) ->
-    combine([C1, C2]).
+-spec combine(t(), t(), env()) -> t().
+combine(Cs1, Cs2, Env) ->
+    combine([Cs1, Cs2], Env).
 
--spec combine([t()]) -> t().
-combine([]) ->
+-spec combine([t()], env()) -> t().
+combine([], _Env) ->
     empty();
-combine([Cs]) ->
+combine([Cs], _Env) ->
     Cs;
-combine([C1, C2 | Cs]) ->
-    C = combine_with(C1, C2, fun append_values/3, fun append_values/3),
-    combine([C | Cs]).
+combine([Cs1, Cs2 | Css], Env) ->
+    Cs = do_combine(Cs1, Cs2, Env),
+    combine([Cs | Css], Env).
 
--spec combine_with(t(), t(), BoundsMergeF, BoundsMergeF) -> t() when
-      BoundsMergeF :: fun((var(), [type()], [type()]) -> [type()]).
-combine_with(C1, C2, MergeLBounds, MergeUBounds) ->
+-spec do_combine(t(), t(), env()) -> t().
+do_combine(Cs1, Cs2, Env) ->
+    MergeLBounds = fun (_Var, T1, T2) -> typechecker:lub([T1, T2], Env) end,
+    MergeUBounds = fun (_Var, T1, T2) -> typechecker:glb(T1, T2, Env) end,
     LBounds = gradualizer_lib:merge_with(MergeLBounds,
-                                         C1#constraints.lower_bounds,
-                                         C2#constraints.lower_bounds),
+                                         Cs1#constraints.lower_bounds,
+                                         Cs2#constraints.lower_bounds),
     UBounds = gradualizer_lib:merge_with(MergeUBounds,
-                                         C1#constraints.upper_bounds,
-                                         C2#constraints.upper_bounds),
-    EVars = maps:merge(C1#constraints.exist_vars, C2#constraints.exist_vars),
-    #constraints{lower_bounds = LBounds,
-                 upper_bounds = UBounds,
-                 exist_vars = EVars}.
+                                         Cs1#constraints.upper_bounds,
+                                         Cs2#constraints.upper_bounds),
+    Combined = #constraints{lower_bounds = LBounds,
+                 upper_bounds = UBounds},
+    Combined.
 
--spec solve(t(), erl_anno:anno(), typechecker:env()) -> R when
-      R :: {t(), {#{var() => type()}, #{var() => type()}}}.
-solve(Constraints, Anno, Env) ->
-    ElimVars = Constraints#constraints.exist_vars,
-    WorkList = [ {E, LB, UB} || E <- lists:sort(maps:keys(ElimVars)),
-                                LB <- maps:get(E, Constraints#constraints.lower_bounds, []),
-                                UB <- maps:get(E, Constraints#constraints.upper_bounds, []) ],
-    Cs = solve_loop(WorkList, maps:new(), Constraints, ElimVars, Anno, Env),
-    GlbSubs = fun(_Var, Tys) ->
-                      {Ty, _C} = typechecker:glb(Tys, Env),
-                      % TODO: Don't throw away the constraints
-                      Ty
-              end,
-    LubSubs = fun(_Var, Tys) ->
-                      Ty = typechecker:lub(Tys, Env),
-                      Ty
-              end,
-    % TODO: What if the substition contains occurrences of the variables we're eliminating
-    % in the range of the substitution?
-    Subst = { maps:map(GlbSubs, maps:with(maps:keys(ElimVars), Cs#constraints.upper_bounds)),
-              maps:map(LubSubs, maps:with(maps:keys(ElimVars), Cs#constraints.lower_bounds)) },
-    UBounds = maps:without(maps:keys(ElimVars), Cs#constraints.upper_bounds),
-    LBounds = maps:without(maps:keys(ElimVars), Cs#constraints.lower_bounds),
-    C = #constraints{upper_bounds = UBounds,
-                     lower_bounds = LBounds,
-                     exist_vars = maps:new()},
-    {C, Subst}.
 
-solve_loop([], _, Constraints, _, _, _) ->
-    Constraints;
-solve_loop([I = {E, LB, UB} | WL], Seen, Constraints0, ElimVars, Anno, Env) ->
-    case maps:is_key(I, Seen) of
-        true ->
-            solve_loop(WL, Seen, Constraints0, ElimVars, Anno, Env);
-        false ->
-            Constraints1 = case typechecker:subtype(LB, UB, Env) of
-                    false ->
-                        throw({constraint_error, Anno, E, LB, UB});
-                    {true, Cs} ->
-                        Cs
-                end,
+-spec variables(t()) -> [var()].
+variables(#constraints{ upper_bounds = UBounds, lower_bounds = LBounds }) ->
+    gradualizer_lib:uniq(maps:keys(UBounds) ++ maps:keys(LBounds)).
 
-            % Subtyping should not create new existential variables
-            ?assert(Constraints1#constraints.exist_vars == #{}),
 
-            ELowerBounds = maps:with(maps:keys(ElimVars), Constraints1#constraints.lower_bounds),
-            EUpperBounds = maps:with(maps:keys(ElimVars), Constraints1#constraints.upper_bounds),
-
-            LBounds = gradualizer_lib:merge_with(fun append_values/3,
-                                                 Constraints0#constraints.lower_bounds,
-                                                 Constraints1#constraints.lower_bounds),
-            UBounds = gradualizer_lib:merge_with(fun append_values/3,
-                                                 Constraints0#constraints.upper_bounds,
-                                                 Constraints1#constraints.upper_bounds),
-            Constraints2 = #constraints{lower_bounds = LBounds,
-                                        upper_bounds = UBounds},
-            NewWL = ([ {EVar, Lower, Upper}
-                       || {EVar, Lowers} <- maps:to_list(ELowerBounds),
-                          Lower <- Lowers,
-                          Upper <- maps:get(EVar, Constraints2#constraints.upper_bounds, []) ] ++
-                     [ {EVar, Lower, Upper}
-                       || {EVar, Uppers} <- maps:to_list(EUpperBounds),
-                          Upper <- Uppers,
-                          Lower <- maps:get(EVar, Constraints2#constraints.lower_bounds, []) ] ++
-                     WL),
-            solve_loop(NewWL, maps:put(I, true, Seen), Constraints2, ElimVars, Anno, Env)
+%% Checks that all lower bounds are subtypes of respective upper bounds.
+-spec satisfiable(t(), env()) -> true | {false, var(), type(), type()}.
+satisfiable(Cs, Env) ->
+    Vars = variables(Cs),
+    try
+        lists:foreach(fun (Var) ->
+            LBound = maps:get(Var, Cs#constraints.lower_bounds, typechecker:type(none)),
+            UBound = maps:get(Var, Cs#constraints.upper_bounds, typechecker:type(top)),
+            case typechecker:subtype(LBound, UBound, Env) of
+                false -> throw({not_subtype, Var, LBound, UBound});
+                true -> ok
+            end
+        end, Vars),
+        true
+    catch
+        {not_subtype, Var, LBound, UBound} -> {false, Var, LBound, UBound}
     end.
-
-append_values(_, Xs, Ys) ->
-    Xs ++ Ys.
-
-has_upper_bound(Var, Cs) ->
-    maps:is_key(Var, Cs#constraints.upper_bounds).
