@@ -36,7 +36,7 @@
          use_enum_map1_var/1,
          use_enum_map2/1,
          use_enum_map3/1,
-         invariant_tyvar/2
+         invariant_tyvar2/2
         ]).
 
 -gradualizer([solve_constraints]).
@@ -250,13 +250,10 @@ use_enum_map3(SomeStruct) ->
 %% The type variable `A` in `id_fun_arg/2` is invariant in its result type.
 %% Thus, if there are multiple possible substitutions, none of them is minimal.
 %% In this case we choose `A = the_lower_bound_of_A | any()' which is a bit
-%% lenient in some cases, as shown in invariant_tyvar/2. Hopefully, invariant
+%% lenient in some cases, as shown in invariant_tyvar2/2. Hopefully, invariant
 %% type variables are very rare.
 
--spec id_fun_arg(fun ((A) -> B),  A) -> {fun ((A) -> B), A}.
-id_fun_arg(Fun, Arg) -> {Fun, Arg}.
-
--spec invariant_tyvar(integer(), boolean()) -> any().
-invariant_tyvar(Int, Bool) ->
+-spec invariant_tyvar2(integer(), boolean()) -> any().
+invariant_tyvar2(Int, Bool) ->
     {Fun, _Arg} = id_fun_arg(fun positive/1, Int),
     Fun(Bool).
