@@ -8,12 +8,10 @@
     id_id_atom_is_int/1,
     id_fun_id_atom_is_int/1,
     use_flatten/1,
-    use_maps_get/3,
     use_generic_hd/1,
     use_generic_hd_var/1,
     inference1/1,
-    inference2/1,
-    invariant_tyvar/2
+    inference2/1
 ]).
 
 -spec id(A) -> A.
@@ -56,11 +54,6 @@ pass_id_to_takes_int_to_bool_fun() ->
 use_flatten(ListOfListsOfAtoms) ->
     lists:flatten(ListOfListsOfAtoms).
 
-%% Type variables in maps usually result in any().
--spec use_maps_get(atom(), #{atom() => binary()}, not_found) -> float() | not_found.
-use_maps_get(Key, Map, NotFound) ->
-    maps:get(Key, Map, NotFound).
-
 %% We do not support polymorphic intersection functions yet.
 %% When calling intersection functions, type variables are replaced with any().
 
@@ -88,20 +81,3 @@ inference1(L) ->
 -spec inference2([integer()]) -> [atom()].
 inference2(L) ->
     lists:map(fun (I) -> I * 2 end, L).
-
-%% The type variable `A` in `id_fun_arg/2` is invariant in its result type.
-%% Thus, if there are multiple possible substitutions, none of them is minimal.
-%% In this case we choose `A = the_lower_bound_of_A | any()' which is a bit
-%% lenient in some cases, as shown in invariant_tyvar/2. Hopefully, invariant
-%% type variables are very rare.
-
--spec id_fun_arg(fun ((A) -> B),  A) -> {fun ((A) -> B), A}.
-id_fun_arg(Fun, Arg) -> {Fun, Arg}.
-
--spec positive(number()) -> boolean().
-positive(N) -> N > 0.
-
--spec invariant_tyvar(integer(), boolean()) -> any().
-invariant_tyvar(Int, Bool) ->
-    {Fun, _Arg} = id_fun_arg(fun positive/1, Int),
-    Fun(Bool).
