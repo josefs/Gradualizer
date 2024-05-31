@@ -364,7 +364,7 @@ compat_ty({type, _, 'fun', [{type, _, product, Args1}, Res1]},
 compat_ty({type, _, union, _} = U1, {type, _, union, _} = U2, Seen, Env) ->
     case type_diff(U1, U2, Env) of
         ?type(none) -> ret(Seen);
-        false -> throw(nomatch)
+        _ -> throw(nomatch)
     end;
 compat_ty(Ty1, {type, _, union, Tys2}, Seen, Env) ->
     any_type(Ty1, Tys2, Seen, Env);
