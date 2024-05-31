@@ -366,16 +366,10 @@ compat_ty({type, _, union, _} = U1, {type, _, union, _} = U2, Seen, Env) ->
         ?type(none) -> ret(Seen);
         false -> throw(nomatch)
     end;
-
-%compat_ty({type, _, union, Tys1}, {type, _, union, Tys2}, Seen, Env) ->
-%    lists:foldl(fun (Ty1, {Seen1, C1}) ->
-%                    {Seen2, C2} = any_type(Ty1, Tys2, Seen1, Env),
-%                    {Seen2, constraints:combine(C1, C2, Env)}
-%                end, {Seen, constraints:empty()}, Tys1);
-%compat_ty(Ty1, {type, _, union, Tys2}, Seen, Env) ->
-%    any_type(Ty1, Tys2, Seen, Env);
-%compat_ty({type, _, union, Tys1}, Ty2, Seen, Env) ->
-%    all_type(Tys1, Ty2, Seen, Env);
+compat_ty(Ty1, {type, _, union, Tys2}, Seen, Env) ->
+    any_type(Ty1, Tys2, Seen, Env);
+compat_ty({type, _, union, Tys1}, Ty2, Seen, Env) ->
+    all_type(Tys1, Ty2, Seen, Env);
 
 % Integer types
 compat_ty(Ty1, Ty2, Seen, _Env) when ?is_int_type(Ty1), ?is_int_type(Ty2) ->
@@ -614,16 +608,16 @@ any_type(Ty1, Tys, Seen0, Env) ->
 %% @doc All types in `Tys' must be compatible with `Ty'.
 %% Returns all the gather memoizations and constraints.
 %% Does not return (throws `nomatch') if any of the types is not compatible.
-%-spec all_type([type()], type(), map(), env()) -> compat_acc().
-%all_type(Tys, Ty, Seen, Env) ->
-%    all_type(Tys, Ty, Seen, [], Env).
+-spec all_type([type()], type(), map(), env()) -> compat_acc().
+all_type(Tys, Ty, Seen, Env) ->
+    all_type(Tys, Ty, Seen, [], Env).
 
-%-spec all_type([type()], type(), map(), [constraints:t()], env()) -> compat_acc().
-%all_type([], _Ty, Seen, Css, Env) ->
-%    {Seen, constraints:combine(Css, Env)};
-%all_type([Ty1|Tys], Ty, AIn, Css, Env) ->
-%    {AOut, Cs} = compat(Ty1, Ty, AIn, Env),
-%    all_type(Tys, Ty, AOut, [Cs|Css], Env).
+-spec all_type([type()], type(), map(), [constraints:t()], env()) -> compat_acc().
+all_type([], _Ty, Seen, Css, Env) ->
+    {Seen, constraints:combine(Css, Env)};
+all_type([Ty1|Tys], Ty, AIn, Css, Env) ->
+    {AOut, Cs} = compat(Ty1, Ty, AIn, Env),
+    all_type(Tys, Ty, AOut, [Cs|Css], Env).
 
 %% Looks up the fields of a record by name and, if present, by the module where
 %% it belongs if a filename is included in the Anno.
