@@ -361,10 +361,22 @@ compat_ty({type, _, 'fun', [{type, _, product, Args1}, Res1]},
     {Aps, constraints:combine(Cs, Css, Env)};
 
 %% Unions
-compat_ty({type, _, union, _} = U1, {type, _, union, _} = U2, Seen, Env) ->
-    case type_diff(U1, U2, Env) of
-        ?type(none) -> ret(Seen);
-        _ -> throw(nomatch)
+compat_ty({type, _, union, Tys1} = U1, {type, _, union, Tys2} = U2, Seen, Env) ->
+    IsAny = fun
+                (?type(any)) -> true;
+                (_) -> false
+            end,
+    case lists:any(IsAny, Tys1) of
+        true -> ret(Seen);
+        false ->
+            case lists:any(IsAny, Tys2) of
+                true -> ret(Seen);
+                false ->
+                    case type_diff(U1, U2, Env) of
+                        ?type(none) -> ret(Seen);
+                        _ -> throw(nomatch)
+                    end
+            end
     end;
 compat_ty(Ty1, {type, _, union, Tys2}, Seen, Env) ->
     any_type(Ty1, Tys2, Seen, Env);
