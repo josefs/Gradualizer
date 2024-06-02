@@ -51,25 +51,26 @@ suite() ->
 %%--------------------------------------------------------------------
 init_per_suite(Config) ->
     {ok, _} = application:ensure_all_started(gradualizer),
-    ok = load_prerequisites(),
-    {ok, TestNames} = dynamic_suite_reload(?MODULE),
+    AppBase = code:lib_dir(gradualizer),
+    ok = load_prerequisites(AppBase),
+    {ok, TestNames} = dynamic_suite_reload(?MODULE, AppBase),
     case all() of
         TestNames -> ok;
         _ -> ct:fail("Please update all/0 to list all should_fail tests")
     end,
     Config.
 
-load_prerequisites() ->
+load_prerequisites(AppBase) ->
     %% user_types.erl is referenced by opaque_fail.erl.
     %% It is not in the sourcemap of the DB so let's import it manually
-    %gradualizer_db:import_erl_files(["test/should_pass/user_types.erl"]),
+    gradualizer_db:import_erl_files([filename:join(AppBase, "test/should_pass/user_types.erl")]),
     %% exhaustive_user_type.erl is referenced by exhaustive_remote_user_type.erl
-    %gradualizer_db:import_erl_files(["test/should_fail/exhaustive_user_type.erl"]),
+    gradualizer_db:import_erl_files([filename:join(AppBase, "test/should_fail/exhaustive_user_type.erl")]),
     ok.
 
-dynamic_suite_reload(Module) ->
+dynamic_suite_reload(Module, AppBase) ->
     Forms = get_forms(Module),
-    Path = "/Users/erszcz/work/erszcz/gradualizer/test/should_fail",
+    Path = filename:join(AppBase, "test/should_fail"),
     FilesForms = map_erl_files(fun (File) ->
                                        make_test_form(Forms, File)
                                end, Path),
