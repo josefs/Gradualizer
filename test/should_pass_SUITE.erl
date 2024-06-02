@@ -100,9 +100,9 @@ all_tests() ->
      tuple_union_pass,tuple_union_pat,tuple_union_pattern_pass,type_decl,
      type_pattern,type_refinement_pass,type_variable,type_vars_term,
      typed_record_field_access,unary_negate_union_with_user_type_pass,unary_plus,
-     underscore,user_type_in_pattern_body,user_types,var,var_fun,varbind_in_block,
-     varbind_in_case,varbind_in_function_head,varbind_in_lc,variable_binding,
-     variable_binding_leaks].
+     underscore,union_with_any_pass,user_type_in_pattern_body,user_types,var,
+     var_fun,varbind_in_block,varbind_in_case,varbind_in_function_head,
+     varbind_in_lc,variable_binding,variable_binding_leaks].
 
 should_pass_template(_@File) ->
     ?assertEqual(ok, gradualizer:type_check_file(_@File, [{form_check_timeout_ms, 2000}])).

@@ -3,17 +3,15 @@
 %% T | any() means
 %% "at least values of type T are possible; maybe also other values"
 
--export([f1/1, f2/0, f3/1]).
+-export([f2/0, f3/1]).
 
-%% With spec
--spec f1(atom() | any()) -> any().
-f1(X) -> inc(X).
+-gradualizer([infer]).
 
 %% Without spec
 f2() ->
     AtomOrAny = receive
-                    1   -> get_atom();
-                    Any -> Any
+                    1 -> get_atom();
+                    an_atom  -> an_atom
                 end,
     inc(AtomOrAny). %% Fails because atom() is possible
 
