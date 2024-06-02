@@ -26,9 +26,9 @@ init_per_suite(Config0) ->
     {ok, _} = application:ensure_all_started(gradualizer),
     ok = load_prerequisites(AppBase),
     {ok, TestNames} = gradualizer_dynamic_suite:reload(Config),
-    case all() of
+    case all_tests() of
         TestNames -> ok;
-        _ -> ct:fail("Please update all/0 to list all tests")
+        _ -> ct:fail("Please update all_tests/0 to list all tests")
     end,
     Config.
 
@@ -53,10 +53,13 @@ init_per_testcase(_TestCase, Config) ->
 end_per_testcase(_TestCase, _Config) ->
     ok.
 
-groups() ->
-    [].
-
 all() ->
+    [{group, all_tests}].
+
+groups() ->
+    [{all_tests, [parallel], all_tests()}].
+
+all_tests() ->
     [arith_op,binary_comprehension,case_pattern_should_fail,
      exhaustive_argumentwise,exhaustive_expr,exhaustive_map_variants,
      exhaustive_remote_map_variants,guard_should_fail,infer_any_pattern,

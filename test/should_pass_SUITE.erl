@@ -26,9 +26,9 @@ init_per_suite(Config0) ->
     {ok, _} = application:ensure_all_started(gradualizer),
     ok = load_prerequisites(AppBase),
     {ok, TestNames} = gradualizer_dynamic_suite:reload(Config),
-    case all() of
+    case all_tests() of
         TestNames -> ok;
-        _ -> ct:fail("Please update all/0 to list all tests")
+        _ -> ct:fail("Please update all_tests/0 to list all tests")
     end,
     Config.
 
@@ -57,10 +57,13 @@ init_per_testcase(_TestCase, Config) ->
 end_per_testcase(_TestCase, _Config) ->
     ok.
 
-groups() ->
-    [].
-
 all() ->
+    [{group, all_tests}].
+
+groups() ->
+    [{all_tests, [parallel], all_tests()}].
+
+all_tests() ->
     [alias_in_pattern,andalso_any,ann_types,annotated_types,any,
      any_doesnt_have_type_none_pass,any_pattern,bc_pass,
      binary_exhaustiveness_checking,binary_in_union,binary_literal_pattern,
@@ -101,4 +104,4 @@ all() ->
      variable_binding_leaks].
 
 should_pass_template(_@File) ->
-    ?assertEqual(ok, gradualizer:type_check_file(_@File)).
+    ?assertEqual(ok, gradualizer:type_check_file(_@File, [{form_check_timeout_ms, 2000}])).
