@@ -52,7 +52,11 @@ suite() ->
 init_per_suite(Config) ->
     {ok, _} = application:ensure_all_started(gradualizer),
     ok = load_prerequisites(),
-    ok = dynamic_suite_reload(?MODULE),
+    {ok, TestNames} = dynamic_suite_reload(?MODULE),
+    case all() of
+        TestNames -> ok;
+        _ -> ct:fail("Please update all/0 to list all should_fail tests")
+    end,
     Config.
 
 load_prerequisites() ->
@@ -65,21 +69,16 @@ load_prerequisites() ->
 
 dynamic_suite_reload(Module) ->
     Forms = get_forms(Module),
+    Path = "/Users/erszcz/work/erszcz/gradualizer/test/should_fail",
     FilesForms = map_erl_files(fun (File) ->
                                        make_test_form(Forms, File)
-                               end, "/Users/erszcz/work/erszcz/gradualizer/test/should_fail"),
+                               end, Path),
     {TestFiles, TestForms} = lists:unzip(FilesForms),
     TestNames = [ list_to_atom(filename:basename(File, ".erl")) || File <- TestFiles ],
-    AllTestsTemplate = merl:quote("all() -> _@AllTests."),
-    AllTestsForm = merl:subst(AllTestsTemplate, [{'AllTests', merl:term(TestNames)}]),
-    DropAllFunction = fun
-                          ({function, _, all, _, _}) -> false;
-                              (_) -> true
-                      end,
-    Forms1 = lists:filter(DropAllFunction, Forms),
-    NewForms = Forms1 ++ [AllTestsForm] ++ TestForms ++ [{eof, 0}],
+    ct:pal("All tests found under ~s:\n~p\n", [Path, TestNames]),
+    NewForms = Forms ++ TestForms ++ [{eof, 0}],
     {ok, _} = merl:compile_and_load(NewForms),
-    ok.
+    {ok, TestNames}.
 
 map_erl_files(Fun, Dir) ->
     Files = filelib:wildcard(filename:join(Dir, "*.erl")),
@@ -234,8 +233,40 @@ groups() ->
 %%              are to be executed.
 %%--------------------------------------------------------------------
 all() ->
-    %% Body of this function is dynamically replaced in init_per_suite/1.
-    [].
+    [annotated_types_fail,arg,arith_op_fail,arity_mismatch,
+     bc_fail,bin_expression,bin_type_error,branch,branch2,call,
+     call_intersection_function_with_union_arg_fail,case_pattern,
+     case_pattern2,catch_expr_fail,cons,covariant_map_keys_fail,
+     cyclic_type_vars,depth,exhaustive,exhaustive_float,
+     exhaustive_list_variants,exhaustive_refinable_map_variants,
+     exhaustive_remote_user_type,exhaustive_string_variants,
+     exhaustive_type,exhaustive_user_type,
+     exhaustiveness_check_toggling,generator,guard_fail,
+     imported_undef,infer_enabled,intersection_check,
+     intersection_fail,intersection_infer,
+     intersection_with_any_fail,iodata_fail,lambda_not_fun,
+     lc_generator_not_none_fail,lc_not_list,list_infer_fail,
+     list_op,list_op_should_fail,list_union_fail,
+     lists_map_nonempty_fail,literal_char,literal_patterns,
+     logic_op,map_entry,map_fail,map_failing_expr,
+     map_failing_subtyping,map_field_invalid_update,map_literal,
+     map_pattern_fail,map_refinement_fail,map_type_error,match,
+     messaging_fail,module_info_fail,named_fun_fail,
+     named_fun_infer_fail,nil,no_idempotent_xor,
+     non_neg_plus_pos_is_pos_fail,
+     nonempty_list_match_in_head_nonexhaustive,
+     nonempty_string_fail,opaque_fail,operator_pattern_fail,
+     pattern,pattern_record_fail,poly_fail,poly_lists_map_fail,
+     poly_union_lower_bound_fail,pp_intersection,record,
+     record_exhaustive,record_field,record_index,
+     record_info_fail,record_refinement_fail,record_update,
+     record_wildcard_fail,recursive_type_fail,
+     recursive_types_failing,rel_op,return_fun_fail,
+     rigid_type_variables_fail,send_fail,shortcut_ops_fail,
+     spec_and_fun_clause_intersection_fail,string_literal,
+     tuple_union_arg_fail,tuple_union_fail,tuple_union_pattern,
+     tuple_union_refinement,type_refinement_fail,unary_op,
+     unary_plus_fail,union_with_any,unreachable_after_refinement].
 
 
 %%--------------------------------------------------------------------
