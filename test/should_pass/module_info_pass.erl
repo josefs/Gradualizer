@@ -1,4 +1,4 @@
--module(module_info).
+-module(module_info_pass).
 
 -compile([export_all, nowarn_export_all]).
 
