@@ -65,20 +65,29 @@ load_prerequisites() ->
 
 dynamic_suite_reload(Module) ->
     Forms = get_forms(Module),
+    FilesForms = map_erl_files(fun (File) ->
+                                       make_test_form(Forms, File)
+                               end, "/Users/erszcz/work/erszcz/gradualizer/test/should_fail"),
+    {_TestFiles, TestForms} = lists:unzip(FilesForms),
+    NewForms = Forms ++ TestForms ++ [{eof, 0}],
+    {ok, _} = merl:compile_and_load(NewForms),
+    ok.
+
+map_erl_files(Fun, Dir) ->
+    Files = filelib:wildcard(filename:join(Dir, "*.erl")),
+    [{filename:basename(File), Fun(File)} || File <- Files].
+
+make_test_form(Forms, File) ->
     TestTemplate = merl:quote("'@Name'(_) -> _@Body."),
     {function, _Anno, _Name, 1, Clauses} = lists:keyfind(should_fail_template, 3, Forms),
     [{clause, _, _Args, _Guards, ClauseBodyTemplate}] = Clauses,
-    TestName = "unary_op",
-    TestFile = "/Users/erszcz/work/erszcz/gradualizer/test/should_fail/unary_op.erl",
-    ClauseBody = merl:subst(ClauseBodyTemplate, [{'File', erl_syntax:string(TestFile)}]),
+    TestName = filename:basename(File, ".erl"),
+    ClauseBody = merl:subst(ClauseBodyTemplate, [{'File', erl_syntax:string(File)}]),
     TestEnv = [
                {'Name', erl_syntax:atom(TestName)},
                {'Body', ClauseBody}
               ],
-    TestForm = erl_syntax:revert(merl:subst(TestTemplate, TestEnv)),
-    NewForms = Forms ++ [TestForm, {eof, 0}],
-    {ok, _} = merl:compile_and_load(NewForms),
-    ok.
+    erl_syntax:revert(merl:subst(TestTemplate, TestEnv)).
 
 should_fail_template(_@File) ->
     Errors = gradualizer:type_check_file(_@File, [return_errors]),
