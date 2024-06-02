@@ -59,12 +59,12 @@ groups() ->
 
 all_tests() ->
     [arith_op_arg_types,binary_exhaustiveness_checking_should_pass,
-     call_intersection_function_with_union_arg_should_pass,
-     different_normalization_levels,elixir_list_first,error_in_guard,
-     fun_subtyping,generator_var_shadow,inner_union_subtype_of_root_union,
-     intersection_should_pass,intersection_with_any,list_concat_op_should_pass,
-     list_tail,map_pattern_duplicate_key,maybe_expr,poly_should_pass,
-     poly_type_vars,recursive_types,refine_bound_var_on_mismatch,
+     call_intersection_function_with_union_arg_should_pass,elixir_list_first,
+     error_in_guard,fun_subtyping,generator_var_shadow,
+     inner_union_subtype_of_root_union,intersection_should_pass,
+     intersection_with_any,list_concat_op_should_pass,list_tail,
+     map_pattern_duplicate_key,maybe_expr,poly_should_pass,poly_type_vars,
+     recursive_types,refine_bound_var_on_mismatch,
      refine_bound_var_with_guard_should_pass,refine_comparison_should_pass,
      refine_list_tail,union_fun].
 
