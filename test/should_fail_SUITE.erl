@@ -66,32 +66,31 @@ load_prerequisites() ->
 dynamic_suite_reload(Module) ->
     Forms = get_forms(Module),
     TestTemplate = merl:quote("'@Name'(_) -> _@Body."),
-    {'fun', _, {clauses, [{clause, _, _, _, Body}]}} = merl:quote("
-        fun (_) ->
-            1 / 0
-        end
-    "),
-    TestName = "test1",
+    {function, _Anno, _Name, 1, Clauses} = lists:keyfind(should_fail_template, 3, Forms),
+    [{clause, _, _Args, _Guards, ClauseBodyTemplate}] = Clauses,
+    TestName = "unary_op",
+    TestFile = "/Users/erszcz/work/erszcz/gradualizer/test/should_fail/unary_op.erl",
+    ClauseBody = merl:subst(ClauseBodyTemplate, [{'File', erl_syntax:string(TestFile)}]),
     TestEnv = [
                {'Name', erl_syntax:atom(TestName)},
-               {'Body', Body}
+               {'Body', ClauseBody}
               ],
     TestForm = erl_syntax:revert(merl:subst(TestTemplate, TestEnv)),
     NewForms = Forms ++ [TestForm, {eof, 0}],
-    merl:compile_and_load(NewForms),
+    {ok, _} = merl:compile_and_load(NewForms),
     ok.
 
-%should_fail_template() ->
-%    Errors = gradualizer:type_check_file(File, [return_errors]),
-%    Timeouts = [ E || {_File, {form_check_timeout, _}} = E <- Errors],
-%    0 = length(Timeouts),
-%    %% Test that error formatting doesn't crash
-%    Opts = [{fmt_location, brief},
-%            {fmt_expr_fun, fun erl_prettypr:format/1}],
-%    lists:foreach(fun({_, Error}) -> gradualizer_fmt:handle_type_error(Error, Opts) end, Errors),
-%    {ok, Forms} = gradualizer_file_utils:get_forms_from_erl(File, []),
-%    ExpectedErrors = typechecker:number_of_exported_functions(Forms),
-%    ExpectedErrors = length(Errors).
+should_fail_template(_@File) ->
+    Errors = gradualizer:type_check_file(_@File, [return_errors]),
+    Timeouts = [ E || {_File, {form_check_timeout, _}} = E <- Errors],
+    0 = length(Timeouts),
+    %% Test that error formatting doesn't crash
+    Opts = [{fmt_location, brief},
+            {fmt_expr_fun, fun erl_prettypr:format/1}],
+    lists:foreach(fun({_, Error}) -> gradualizer_fmt:handle_type_error(Error, Opts) end, Errors),
+    {ok, Forms} = gradualizer_file_utils:get_forms_from_erl(_@File, []),
+    ExpectedErrors = typechecker:number_of_exported_functions(Forms),
+    ExpectedErrors = length(Errors).
 
 get_forms(Module) ->
     ModPath = code:which(Module),
@@ -218,7 +217,7 @@ groups() ->
 %%              are to be executed.
 %%--------------------------------------------------------------------
 all() ->
-    [test1].
+    [unary_op].
 
 
 %%--------------------------------------------------------------------
