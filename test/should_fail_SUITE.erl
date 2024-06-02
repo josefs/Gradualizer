@@ -68,8 +68,16 @@ dynamic_suite_reload(Module) ->
     FilesForms = map_erl_files(fun (File) ->
                                        make_test_form(Forms, File)
                                end, "/Users/erszcz/work/erszcz/gradualizer/test/should_fail"),
-    {_TestFiles, TestForms} = lists:unzip(FilesForms),
-    NewForms = Forms ++ TestForms ++ [{eof, 0}],
+    {TestFiles, TestForms} = lists:unzip(FilesForms),
+    TestNames = [ list_to_atom(filename:basename(File, ".erl")) || File <- TestFiles ],
+    AllTestsTemplate = merl:quote("all() -> _@AllTests."),
+    AllTestsForm = merl:subst(AllTestsTemplate, [{'AllTests', merl:term(TestNames)}]),
+    DropAllFunction = fun
+                          ({function, _, all, _, _}) -> false;
+                              (_) -> true
+                      end,
+    Forms1 = lists:filter(DropAllFunction, Forms),
+    NewForms = Forms1 ++ [AllTestsForm] ++ TestForms ++ [{eof, 0}],
     {ok, _} = merl:compile_and_load(NewForms),
     ok.
 
@@ -226,7 +234,8 @@ groups() ->
 %%              are to be executed.
 %%--------------------------------------------------------------------
 all() ->
-    [unary_op].
+    %% Body of this function is dynamically replaced in init_per_suite/1.
+    [].
 
 
 %%--------------------------------------------------------------------
