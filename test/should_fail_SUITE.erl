@@ -16,20 +16,25 @@
          init_per_testcase/2, end_per_testcase/2]).
 
 suite() ->
-    [{timetrap,{minutes,10}}].
+    [{timetrap, {minutes, 10}}].
 
-init_per_suite(Config) ->
+init_per_suite(Config0) ->
+    Config = [
+              {app_base, code:lib_dir(gradualizer)},
+              {dynamic_suite_module, ?MODULE},
+              {dynamic_test_template, should_fail_template}
+             ] ++ Config0,
     {ok, _} = application:ensure_all_started(gradualizer),
-    AppBase = code:lib_dir(gradualizer),
-    ok = load_prerequisites(AppBase),
-    {ok, TestNames} = dynamic_suite_reload(?MODULE, AppBase),
+    ok = load_prerequisites(Config),
+    {ok, TestNames} = dynamic_suite_reload(Config),
     case all() of
         TestNames -> ok;
         _ -> ct:fail("Please update all/0 to list all should_fail tests")
     end,
     Config.
 
-load_prerequisites(AppBase) ->
+load_prerequisites(Config) ->
+    AppBase = ?config(app_base, Config),
     %% user_types.erl is referenced by opaque_fail.erl.
     %% It is not in the sourcemap of the DB so let's import it manually
     gradualizer_db:import_erl_files([filename:join(AppBase, "test/should_pass/user_types.erl")]),
@@ -37,11 +42,13 @@ load_prerequisites(AppBase) ->
     gradualizer_db:import_erl_files([filename:join(AppBase, "test/should_fail/exhaustive_user_type.erl")]),
     ok.
 
-dynamic_suite_reload(Module, AppBase) ->
+dynamic_suite_reload(Config) ->
+    Module = ?config(dynamic_suite_module, Config),
+    AppBase = ?config(app_base, Config),
     Forms = get_forms(Module),
     Path = filename:join(AppBase, "test/should_fail"),
     FilesForms = map_erl_files(fun (File) ->
-                                       make_test_form(Forms, File)
+                                       make_test_form(Forms, File, Config)
                                end, Path),
     {TestFiles, TestForms} = lists:unzip(FilesForms),
     TestNames = [ list_to_atom(filename:basename(File, ".erl")) || File <- TestFiles ],
@@ -54,9 +61,10 @@ map_erl_files(Fun, Dir) ->
     Files = filelib:wildcard(filename:join(Dir, "*.erl")),
     [{filename:basename(File), Fun(File)} || File <- Files].
 
-make_test_form(Forms, File) ->
+make_test_form(Forms, File, Config) ->
+    TestTemplateName = ?config(dynamic_test_template, Config),
     TestTemplate = merl:quote("'@Name'(_) -> _@Body."),
-    {function, _Anno, _Name, 1, Clauses} = lists:keyfind(should_fail_template, 3, Forms),
+    {function, _Anno, _Name, 1, Clauses} = lists:keyfind(TestTemplateName, 3, Forms),
     [{clause, _, _Args, _Guards, ClauseBodyTemplate}] = Clauses,
     TestName = filename:basename(File, ".erl"),
     ClauseBody = merl:subst(ClauseBodyTemplate, [{'File', erl_syntax:string(File)}]),
