@@ -361,11 +361,23 @@ compat_ty({type, _, 'fun', [{type, _, product, Args1}, Res1]},
     {Aps, constraints:combine(Cs, Css, Env)};
 
 %% Unions
-compat_ty({type, _, union, Tys1}, {type, _, union, Tys2}, Seen, Env) ->
-    lists:foldl(fun (Ty1, {Seen1, C1}) ->
-                    {Seen2, C2} = any_type(Ty1, Tys2, Seen1, Env),
-                    {Seen2, constraints:combine(C1, C2, Env)}
-                end, {Seen, constraints:empty()}, Tys1);
+compat_ty({type, _, union, Tys1} = U1, {type, _, union, Tys2} = U2, Seen, Env) ->
+    IsAny = fun
+                (?type(any)) -> true;
+                (_) -> false
+            end,
+    case lists:any(IsAny, Tys1) of
+        true -> ret(Seen);
+        false ->
+            case lists:any(IsAny, Tys2) of
+                true -> ret(Seen);
+                false ->
+                    case type_diff(U1, U2, Env) of
+                        ?type(none) -> ret(Seen);
+                        _ -> throw(nomatch)
+                    end
+            end
+    end;
 compat_ty(Ty1, {type, _, union, Tys2}, Seen, Env) ->
     any_type(Ty1, Tys2, Seen, Env);
 compat_ty({type, _, union, Tys1}, Ty2, Seen, Env) ->
@@ -5746,8 +5758,10 @@ type_check_forms(Forms, Opts) ->
 %% a Gradualizer (NOT the checked program!) error.
 -spec type_check_form_with_timeout(expr(), [any()], boolean(), env(), [any()]) -> [any()].
 type_check_form_with_timeout(Function, Errors, StopOnFirstError, Env, Opts) ->
-    %% TODO: make FormCheckTimeOut configurable
-    FormCheckTimeOut = ?form_check_timeout_ms,
+    FormCheckTimeOut = case lists:keyfind(form_check_timeout_ms, 1, Opts) of
+                           false -> ?form_check_timeout_ms;
+                           {form_check_timeout_ms, MS} -> MS
+                       end,
     ?verbose(Env, "Spawning async task...~n", []),
     Self = self(),
     Task = fun () ->

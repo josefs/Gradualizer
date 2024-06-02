@@ -13,6 +13,7 @@
          use_app_var/1,
          use_id/1,
          use_id_var/1,
+         use_maps_get/3,
          filter_positive_ints/1,
          filter_positive_concrete_numbers/1,
          append_floats_to_ints/2,
@@ -34,7 +35,8 @@
          use_enum_map1/1,
          use_enum_map1_var/1,
          use_enum_map2/1,
-         use_enum_map3/1
+         use_enum_map3/1,
+         invariant_tyvar2/2
         ]).
 
 -gradualizer([solve_constraints]).
@@ -109,6 +111,11 @@ use_id(Atom) ->
 use_id_var(Atom) ->
     X = id(Atom),
     X.
+
+%% Type variables in maps usually result in any().
+-spec use_maps_get(atom(), #{atom() => binary()}, not_found) -> float() | not_found.
+use_maps_get(Key, Map, NotFound) ->
+    maps:get(Key, Map, NotFound).
 
 -spec positive(number()) -> boolean().
 positive(N) -> N > 0.
@@ -239,3 +246,14 @@ use_enum_map2(Atoms) ->
 -spec use_enum_map3(#{'__struct__' := some_struct}) -> [float()].
 use_enum_map3(SomeStruct) ->
     enum_map(SomeStruct, fun positive/1).
+
+%% The type variable `A` in `id_fun_arg/2` is invariant in its result type.
+%% Thus, if there are multiple possible substitutions, none of them is minimal.
+%% In this case we choose `A = the_lower_bound_of_A | any()' which is a bit
+%% lenient in some cases, as shown in invariant_tyvar2/2. Hopefully, invariant
+%% type variables are very rare.
+
+-spec invariant_tyvar2(integer(), boolean()) -> any().
+invariant_tyvar2(Int, Bool) ->
+    {Fun, _Arg} = id_fun_arg(fun positive/1, Int),
+    Fun(Bool).

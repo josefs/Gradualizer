@@ -149,6 +149,9 @@ eunit: compile-tests
 	erl $(ERL_OPTS) -noinput -pa ebin -pa test -eval \
 	 '$(erl_run_eunit), halt().'
 
+ct:
+	@rebar3 ct --label "git: $$(git describe --tags --always) $$(git diff --no-ext-diff --quiet --exit-code || echo '(modified)')"
+
 cli-tests: bin/gradualizer test/arg.beam
 	# CLI test cases
 	# 1. When checking a dir with erl files, erl file names are printed

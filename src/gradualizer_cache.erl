@@ -9,6 +9,7 @@
 
 %% API
 -export([start_link/1,
+         clear/1,
          get/2,
          store/3]).
 
@@ -65,6 +66,13 @@ store_(Cache, Key, Value) ->
         %% cache not initialized
         ok
     end.
+
+clear(glb) -> clear_(?GLB_CACHE);
+clear(subtype) -> clear_(?SUB_CACHE).
+
+clear_(Cache) ->
+    ets:delete_all_objects(Cache),
+    ok.
 
 %%===================================================================
 %% gen_server callbacks
