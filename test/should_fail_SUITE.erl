@@ -2,8 +2,6 @@
 
 -compile([export_all, nowarn_export_all]).
 
--include_lib("common_test/include/ct.hrl").
-
 %% EUnit has some handy macros, so let's use it, too
 -include_lib("eunit/include/eunit.hrl").
 
@@ -19,22 +17,22 @@ suite() ->
     [{timetrap, {minutes, 10}}].
 
 init_per_suite(Config0) ->
+    AppBase = code:lib_dir(gradualizer),
     Config = [
-              {app_base, code:lib_dir(gradualizer)},
               {dynamic_suite_module, ?MODULE},
+              {dynamic_suite_test_path, filename:join(AppBase, "test/should_fail")},
               {dynamic_test_template, should_fail_template}
              ] ++ Config0,
     {ok, _} = application:ensure_all_started(gradualizer),
-    ok = load_prerequisites(Config),
-    {ok, TestNames} = dynamic_suite_reload(Config),
+    ok = load_prerequisites(AppBase),
+    {ok, TestNames} = gradualizer_dynamic_suite:reload(Config),
     case all() of
         TestNames -> ok;
-        _ -> ct:fail("Please update all/0 to list all should_fail tests")
+        _ -> ct:fail("Please update all/0 to list all tests")
     end,
     Config.
 
-load_prerequisites(Config) ->
-    AppBase = ?config(app_base, Config),
+load_prerequisites(AppBase) ->
     %% user_types.erl is referenced by opaque_fail.erl.
     %% It is not in the sourcemap of the DB so let's import it manually
     gradualizer_db:import_erl_files([filename:join(AppBase, "test/should_pass/user_types.erl")]),
@@ -42,61 +40,8 @@ load_prerequisites(Config) ->
     gradualizer_db:import_erl_files([filename:join(AppBase, "test/should_fail/exhaustive_user_type.erl")]),
     ok.
 
-dynamic_suite_reload(Config) ->
-    Module = ?config(dynamic_suite_module, Config),
-    AppBase = ?config(app_base, Config),
-    Forms = get_forms(Module),
-    Path = filename:join(AppBase, "test/should_fail"),
-    FilesForms = map_erl_files(fun (File) ->
-                                       make_test_form(Forms, File, Config)
-                               end, Path),
-    {TestFiles, TestForms} = lists:unzip(FilesForms),
-    TestNames = [ list_to_atom(filename:basename(File, ".erl")) || File <- TestFiles ],
-    ct:pal("All tests found under ~s:\n~p\n", [Path, TestNames]),
-    NewForms = Forms ++ TestForms ++ [{eof, 0}],
-    {ok, _} = merl:compile_and_load(NewForms),
-    {ok, TestNames}.
-
-map_erl_files(Fun, Dir) ->
-    Files = filelib:wildcard(filename:join(Dir, "*.erl")),
-    [{filename:basename(File), Fun(File)} || File <- Files].
-
-make_test_form(Forms, File, Config) ->
-    TestTemplateName = ?config(dynamic_test_template, Config),
-    TestTemplate = merl:quote("'@Name'(_) -> _@Body."),
-    {function, _Anno, _Name, 1, Clauses} = lists:keyfind(TestTemplateName, 3, Forms),
-    [{clause, _, _Args, _Guards, ClauseBodyTemplate}] = Clauses,
-    TestName = filename:basename(File, ".erl"),
-    ClauseBody = merl:subst(ClauseBodyTemplate, [{'File', erl_syntax:string(File)}]),
-    TestEnv = [
-               {'Name', erl_syntax:atom(TestName)},
-               {'Body', ClauseBody}
-              ],
-    erl_syntax:revert(merl:subst(TestTemplate, TestEnv)).
-
-should_fail_template(_@File) ->
-    Errors = gradualizer:type_check_file(_@File, [return_errors]),
-    Timeouts = [ E || {_File, {form_check_timeout, _}} = E <- Errors],
-    ?assertEqual(0, length(Timeouts)),
-    %% Test that error formatting doesn't crash
-    Opts = [{fmt_location, brief},
-            {fmt_expr_fun, fun erl_prettypr:format/1}],
-    lists:foreach(fun({_, Error}) -> gradualizer_fmt:handle_type_error(Error, Opts) end, Errors),
-    {ok, Forms} = gradualizer_file_utils:get_forms_from_erl(_@File, []),
-    ExpectedErrors = typechecker:number_of_exported_functions(Forms),
-    ?assertEqual(ExpectedErrors, length(Errors)).
-
-get_forms(Module) ->
-    ModPath = code:which(Module),
-    {ok, {Module, [Abst]}} = beam_lib:chunks(ModPath, [abstract_code]),
-    {abstract_code, {raw_abstract_v1, Forms}} = Abst,
-    StripEnd = fun
-                   ({eof, _}) -> false;
-                   (_) -> true
-               end,
-    lists:filter(StripEnd, Forms).
-
 end_per_suite(_Config) ->
+    ok = application:stop(gradualizer),
     ok.
 
 init_per_group(_GroupName, Config) ->
@@ -149,3 +94,15 @@ all() ->
      tuple_union_arg_fail,tuple_union_fail,tuple_union_pattern,
      tuple_union_refinement,type_refinement_fail,unary_op,
      unary_plus_fail,union_with_any,unreachable_after_refinement].
+
+should_fail_template(_@File) ->
+    Errors = gradualizer:type_check_file(_@File, [return_errors]),
+    Timeouts = [ E || {_File, {form_check_timeout, _}} = E <- Errors],
+    ?assertEqual(0, length(Timeouts)),
+    %% Test that error formatting doesn't crash
+    Opts = [{fmt_location, brief},
+            {fmt_expr_fun, fun erl_prettypr:format/1}],
+    lists:foreach(fun({_, Error}) -> gradualizer_fmt:handle_type_error(Error, Opts) end, Errors),
+    {ok, Forms} = gradualizer_file_utils:get_forms_from_erl(_@File, []),
+    ExpectedErrors = typechecker:number_of_exported_functions(Forms),
+    ?assertEqual(ExpectedErrors, length(Errors)).
