@@ -4,6 +4,9 @@
 
 -include_lib("common_test/include/ct.hrl").
 
+%% EUnit has some handy macros, so let's use it, too
+-include_lib("eunit/include/eunit.hrl").
+
 %% Test server callbacks
 -export([suite/0,
          all/0,
@@ -100,14 +103,14 @@ make_test_form(Forms, File) ->
 should_fail_template(_@File) ->
     Errors = gradualizer:type_check_file(_@File, [return_errors]),
     Timeouts = [ E || {_File, {form_check_timeout, _}} = E <- Errors],
-    0 = length(Timeouts),
+    ?assertEqual(0, length(Timeouts)),
     %% Test that error formatting doesn't crash
     Opts = [{fmt_location, brief},
             {fmt_expr_fun, fun erl_prettypr:format/1}],
     lists:foreach(fun({_, Error}) -> gradualizer_fmt:handle_type_error(Error, Opts) end, Errors),
     {ok, Forms} = gradualizer_file_utils:get_forms_from_erl(_@File, []),
     ExpectedErrors = typechecker:number_of_exported_functions(Forms),
-    ExpectedErrors = length(Errors).
+    ?assertEqual(ExpectedErrors, length(Errors)).
 
 get_forms(Module) ->
     ModPath = code:which(Module),
