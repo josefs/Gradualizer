@@ -7,19 +7,25 @@
 
 reload(Config) ->
     Module = ?config(dynamic_suite_module, Config),
-    Path = ?config(dynamic_suite_test_path, Config),
     ?assert(Module /= undefined),
-    ?assert(Path /= undefined),
-    Forms = get_forms(Module),
-    FilesForms = map_erl_files(fun (File) ->
-                                       make_test_form(Forms, File, Config)
-                               end, Path),
-    {TestFiles, TestForms} = lists:unzip(FilesForms),
-    TestNames = [ list_to_atom(filename:basename(File, ".erl")) || File <- TestFiles ],
-    ct:pal("All tests found under ~s:\n~p\n", [Path, TestNames]),
-    NewForms = Forms ++ TestForms ++ [{eof, 0}],
-    {ok, _} = merl:compile_and_load(NewForms),
-    {ok, TestNames}.
+    case erlang:function_exported(Module, generated_tests, 0) of
+        true ->
+            {ok, Module:generated_tests()};
+        false ->
+            Path = ?config(dynamic_suite_test_path, Config),
+            ?assert(Path /= undefined),
+            Forms = get_forms(Module),
+            FilesForms = map_erl_files(fun (File) ->
+                                               make_test_form(Forms, File, Config)
+                                       end, Path),
+            {TestFiles, TestForms} = lists:unzip(FilesForms),
+            TestNames = [ list_to_atom(filename:basename(File, ".erl")) || File <- TestFiles ],
+            ct:pal("All tests found under ~s:\n~p\n", [Path, TestNames]),
+            GeneratedTestsForm = make_generated_tests_form(TestNames),
+            NewForms = Forms ++ TestForms ++ [GeneratedTestsForm, {eof, 0}],
+            {ok, _} = merl:compile_and_load(NewForms),
+            {ok, TestNames}
+    end.
 
 map_erl_files(Fun, Dir) ->
     Files = filelib:wildcard(filename:join(Dir, "*.erl")),
@@ -38,6 +44,10 @@ make_test_form(Forms, File, Config) ->
                {'Body', ClauseBody}
               ],
     erl_syntax:revert(merl:subst(TestTemplate, TestEnv)).
+
+make_generated_tests_form(TestNames) ->
+    Template = merl:quote("generated_tests() -> _@Body."),
+    erl_syntax:revert(merl:subst(Template, [{'Body', merl:term(TestNames)}])).
 
 get_forms(Module) ->
     ModPath = code:which(Module),

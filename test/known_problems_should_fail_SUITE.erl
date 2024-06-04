@@ -16,20 +16,21 @@
 suite() ->
     [{timetrap, {minutes, 10}}].
 
-init_per_suite(Config0) ->
-    AppBase = code:lib_dir(gradualizer),
+all() ->
+    [{group, all_tests}].
+
+groups() ->
     Config = [
               {dynamic_suite_module, ?MODULE},
-              {dynamic_suite_test_path, filename:join(AppBase, "test/known_problems/should_fail")},
+              {dynamic_suite_test_path, filename:join(code:lib_dir(gradualizer), "test/known_problems/should_fail")},
               {dynamic_test_template, known_problems_should_fail_template}
-             ] ++ Config0,
+             ],
+    {ok, GeneratedTests} = gradualizer_dynamic_suite:reload(Config),
+    [{all_tests, [parallel], GeneratedTests}].
+
+init_per_suite(Config) ->
     {ok, _} = application:ensure_all_started(gradualizer),
-    ok = load_prerequisites(AppBase),
-    {ok, TestNames} = gradualizer_dynamic_suite:reload(Config),
-    case all_tests() of
-        TestNames -> ok;
-        _ -> ct:fail("Please update all_tests/0 to list all tests")
-    end,
+    ok = load_prerequisites(code:lib_dir(gradualizer)),
     Config.
 
 load_prerequisites(AppBase) ->
@@ -52,20 +53,6 @@ init_per_testcase(_TestCase, Config) ->
 
 end_per_testcase(_TestCase, _Config) ->
     ok.
-
-all() ->
-    [{group, all_tests}].
-
-groups() ->
-    [{all_tests, [parallel], all_tests()}].
-
-all_tests() ->
-    [arith_op,binary_comprehension,case_pattern_should_fail,
-     exhaustive_argumentwise,exhaustive_expr,exhaustive_map_variants,
-     exhaustive_remote_map_variants,guard_should_fail,infer_any_pattern,
-     intersection_with_any_should_fail,intersection_with_unreachable,
-     lambda_wrong_args,map_refinement_fancy,poly_lists_map_should_fail,
-     poly_should_fail,recursive_types_should_fail,refine_ty_vars,sample].
 
 known_problems_should_fail_template(_@File) ->
     Result = safe_type_check_file(_@File, [return_errors]),
