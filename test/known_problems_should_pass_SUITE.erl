@@ -9,9 +9,7 @@
 -export([suite/0,
          all/0,
          groups/0,
-         init_per_suite/1, end_per_suite/1,
-         init_per_group/2, end_per_group/2,
-         init_per_testcase/2, end_per_testcase/2]).
+         init_per_suite/1, end_per_suite/1]).
 
 suite() ->
     [{timetrap, {minutes, 10}}].
@@ -38,18 +36,6 @@ load_prerequisites(_AppBase) ->
 
 end_per_suite(_Config) ->
     ok = application:stop(gradualizer),
-    ok.
-
-init_per_group(_GroupName, Config) ->
-    Config.
-
-end_per_group(_GroupName, _Config) ->
-    ok.
-
-init_per_testcase(_TestCase, Config) ->
-    Config.
-
-end_per_testcase(_TestCase, _Config) ->
     ok.
 
 known_problems_should_pass_template(_@File) ->
