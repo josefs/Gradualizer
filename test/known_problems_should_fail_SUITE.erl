@@ -55,7 +55,7 @@ end_per_testcase(_TestCase, _Config) ->
     ok.
 
 known_problems_should_fail_template(_@File) ->
-    Result = safe_type_check_file(_@File, [return_errors]),
+    Result = safe_type_check_file(_@File, [return_errors, {form_check_timeout_ms, 2000}]),
     case Result of
         crash ->
             ok;

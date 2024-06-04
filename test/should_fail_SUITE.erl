@@ -58,7 +58,7 @@ end_per_testcase(_TestCase, _Config) ->
     ok.
 
 should_fail_template(_@File) ->
-    Errors = gradualizer:type_check_file(_@File, [return_errors]),
+    Errors = gradualizer:type_check_file(_@File, [return_errors, {form_check_timeout_ms, 2000}]),
     Timeouts = [ E || {_File, {form_check_timeout, _}} = E <- Errors],
     ?assertEqual(0, length(Timeouts)),
     %% Test that error formatting doesn't crash

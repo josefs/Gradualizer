@@ -55,7 +55,7 @@ end_per_testcase(_TestCase, _Config) ->
 known_problems_should_pass_template(_@File) ->
     {ok, Forms} = gradualizer_file_utils:get_forms_from_erl(_@File, []),
     ExpectedErrors = typechecker:number_of_exported_functions(Forms),
-    ReturnedErrors = length(safe_type_check_file(_@File, [return_errors])),
+    ReturnedErrors = length(safe_type_check_file(_@File, [return_errors, {form_check_timeout_ms, 2000}])),
     ?assertEqual(ExpectedErrors, ReturnedErrors).
 
 safe_type_check_file(File) ->
