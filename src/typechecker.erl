@@ -5746,8 +5746,10 @@ type_check_forms(Forms, Opts) ->
 %% a Gradualizer (NOT the checked program!) error.
 -spec type_check_form_with_timeout(expr(), [any()], boolean(), env(), [any()]) -> [any()].
 type_check_form_with_timeout(Function, Errors, StopOnFirstError, Env, Opts) ->
-    %% TODO: make FormCheckTimeOut configurable
-    FormCheckTimeOut = ?form_check_timeout_ms,
+    FormCheckTimeOut = case lists:keyfind(form_check_timeout_ms, 1, Opts) of
+                           false -> ?form_check_timeout_ms;
+                           {form_check_timeout_ms, MS} -> MS
+                       end,
     ?verbose(Env, "Spawning async task...~n", []),
     Self = self(),
     Task = fun () ->
