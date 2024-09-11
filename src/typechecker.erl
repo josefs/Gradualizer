@@ -4106,6 +4106,8 @@ refine_mismatch_using_guards(PatTys,
             do_refine_mismatch_using_guards(Guards, PatTys, Pats, VEnv, Env);
         [_|_] ->
             %% we don't know yet how to do this in guard sequences
+            Env#env.no_skip_complex_guards orelse throw({skip, too_complex_guards}),
+            %% TODO: Invalid lack of pattern refinement
             PatTys
     end.
 
@@ -4589,6 +4591,9 @@ no_guards({clause, _, _, Guards, _}) ->
 refine_vars_by_mismatching_clause({clause, _, Pats, Guards, _Block}, VEnv, Env) ->
     PatternCantFail = are_patterns_matching_all_input(Pats, VEnv),
     case Guards of
+        [] ->
+            %% No guards, so no refinement
+            VEnv;
         [[{call, _, {atom, _, Fun}, Args = [{var, _, Var}]}]] when PatternCantFail ->
             %% Simple case: A single guard on the form `when is_TYPE(Var)'.
             %% If Var was bound before the clause, which failed because of a
@@ -4602,7 +4607,8 @@ refine_vars_by_mismatching_clause({clause, _, Pats, Guards, _Block}, VEnv, Env) 
                     VEnv
             end;
         _OtherGuards ->
-            %% No refinement
+            Env#env.no_skip_complex_guards orelse throw({skip, too_complex_guards}),
+            %% TODO: Invalid lack of refinement
             VEnv
     end.
 
@@ -4746,17 +4752,23 @@ type_check_function(Env, {function, _Anno, Name, NArgs, Clauses}) ->
     ?verbose(Env, "Checking function ~p/~p~n", [Name, NArgs]),
     case maps:find({Name, NArgs}, Env#env.fenv) of
         {ok, FunTy} ->
-            NewEnv = Env#env{current_spec = FunTy},
-            FunTyNoPos = [ typelib:remove_pos(?assert_type(Ty, type())) || Ty <- FunTy ],
-            Arity = clause_arity(hd(Clauses)),
-            case expect_fun_type(NewEnv, FunTyNoPos, Arity) of
-                {type_error, NotFunTy} ->
-                    %% This can only happen if `create_fenv/2' creates garbage.
-                    erlang:error({invalid_function_type, NotFunTy});
-                FTy ->
-                    FTy1 = make_rigid_type_vars(FTy),
-                    _Vars = check_clauses_fun(NewEnv, FTy1, Clauses),
-                    NewEnv
+            try
+                NewEnv = Env#env{current_spec = FunTy},
+                FunTyNoPos = [ typelib:remove_pos(?assert_type(Ty, type())) || Ty <- FunTy ],
+                Arity = clause_arity(hd(Clauses)),
+                case expect_fun_type(NewEnv, FunTyNoPos, Arity) of
+                    {type_error, NotFunTy} ->
+                        %% This can only happen if `create_fenv/2' creates garbage.
+                        erlang:error({invalid_function_type, NotFunTy});
+                    FTy ->
+                        FTy1 = make_rigid_type_vars(FTy),
+                        _Vars = check_clauses_fun(NewEnv, FTy1, Clauses),
+                        NewEnv
+                end
+            catch
+                throw:{skip, Reason} ->
+                    ?verbose(Env, "Skipping function ~p/~p due to ~s~n", [Name, NArgs, Reason]),
+                    Env
             end;
         error ->
             throw(internal_error(missing_type_spec, Name, NArgs))
@@ -5835,7 +5847,8 @@ create_env(#parsedata{module    = Module
          verbose = proplists:get_bool(verbose, Opts),
          union_size_limit = proplists:get_value(union_size_limit, Opts,
                                                 default_union_size_limit()),
-         solve_constraints = proplists:get_bool(solve_constraints, Opts)}.
+         solve_constraints = proplists:get_bool(solve_constraints, Opts),
+         no_skip_complex_guards = proplists:get_bool(no_skip_complex_guards, Opts)}.
 
 -spec default_union_size_limit() -> non_neg_integer().
 default_union_size_limit() -> 30.
