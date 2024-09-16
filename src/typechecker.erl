@@ -4783,18 +4783,17 @@ arity(I) ->
     ?assert(I < 256, arity_overflow),
     ?assert_type(I, arity()).
 
--spec position_info_from_spec(form() | forms() | none) -> erl_anno:anno().
+-spec position_info_from_spec(none | form() | forms()) -> erl_anno:anno().
 position_info_from_spec(none) ->
     %% This simplifies testing internal functions.
     %% In these cases we don't go through type_check_function,
     %% but call deeper into the typechecker directly.
     erl_anno:new(0);
+position_info_from_spec(Form) when is_tuple(Form) ->
+    element(2, Form);
 position_info_from_spec([_|_] = Forms) ->
     %% TODO: https://github.com/josefs/Gradualizer/issues/388
-    position_info_from_spec(hd(Forms));
-position_info_from_spec(Form) ->
-    Form = ?assert_type(Form, form()),
-    element(2, Form).
+    position_info_from_spec(hd(Forms)).
 
 %% Type check patterns against types (P1 :: T1, P2 :: T2, ...)
 %% and add variable bindings for the patterns.
