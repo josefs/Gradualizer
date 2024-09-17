@@ -2215,8 +2215,10 @@ do_type_check_expr(Env, {'try', _, Block, CaseCs, CatchCs, AfterBlock}) ->
 
 %% Maybe - value-based error handling expression
 %% See https://www.erlang.org/eeps/eep-0049
-do_type_check_expr(_Env, {'maybe', Anno, [{maybe_match, _, _LHS, _RHS}]} = MaybeExpr) ->
-    erlang:throw({unsupported_expression, Anno, MaybeExpr}).
+do_type_check_expr(_Env, {'maybe', _, _}) ->
+    erlang:throw({skip, maybe_expr_not_supported});
+do_type_check_expr(_Env, {'maybe', _, _, {'else', _, _}}) ->
+    erlang:throw({skip, maybe_expr_not_supported}).
 
 %% Helper for type_check_expr for funs
 -spec type_check_fun(env(), _) -> {type(), env()}.
