@@ -1,6 +1,9 @@
 -module(refine_bound_var_with_guard_should_pass).
 
--export([f/1]).
+-export([f/1,
+         too_complex_guards/1]).
+
+-gradualizer([no_skip_complex_guards]).
 
 %% This type is simpler than gradualizer_type:abstract_type() by having less variants
 %% and by using tuples to contain deeper nodes. The latter frees us from having to deal
@@ -35,3 +38,12 @@ g({type, nonempty_list, {InnerNode}}) ->
     InnerNode;
 g({type, atom, {_InnerNode}}) ->
     a.
+
+%% See too_complex_guards thrown in src/typechecker.erl.
+-spec too_complex_guards(integer() | [integer()] | none) -> number().
+too_complex_guards([_|_] = Ints) ->
+    lists:sum(Ints);
+too_complex_guards(EmptyOrNone) when EmptyOrNone =:= none orelse is_list(EmptyOrNone) ->
+    0;
+too_complex_guards(Int) ->
+    Int.
