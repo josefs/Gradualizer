@@ -417,10 +417,6 @@ compat_ty({type, Anno1, record, [{atom, _, Name} | Fields1]},
           {type, Anno2, record, [{atom, _, Name} | Fields2]}, Seen, Env) ->
     AllFields1 = case Fields1 of [] -> get_record_fields_types(Name, Anno1, Env); _ -> Fields1 end,
     AllFields2 = case Fields2 of [] -> get_record_fields_types(Name, Anno2, Env); _ -> Fields2 end,
-    %% We can assert because we explicitly match {atom, _, Name}
-    %% out of the field list in both cases above.
-    AllFields1 = ?assert_type(AllFields1, [record_field_type()]),
-    AllFields2 = ?assert_type(AllFields2, [record_field_type()]),
     compat_record_tys(AllFields1, AllFields2, Seen, Env);
 compat_ty({type, _, record, _}, {type, _, tuple, any}, Seen, _Env) ->
     ret(Seen);
@@ -440,20 +436,15 @@ compat_ty(Ty1, Ty2, Seen, Env) when ?is_list_type(Ty1), ?is_list_type(Ty2) ->
 compat_ty({type, _, tuple, any}, {type, _, tuple, any}, Seen, _Env) ->
     ret(Seen);
 compat_ty({type, _, tuple, any}, {type, _, tuple, Args2}, Seen, Env) ->
-    %% We can assert because we match out `any' in previous clauses.
-    %% TODO: it would be perfect if Gradualizer could refine this type automatically in such a case
-    Args2 = ?assert_type(Args2, [type()]),
     Args1 = lists:duplicate(length(Args2), type(any)),
     % We check the argument types because Args2 may contain type variables
     % and in that case, we want to constrain them
     compat_tys(Args1, Args2, Seen, Env);
 compat_ty({type, _, tuple, Args1}, {type, _, tuple, any}, Seen, Env) ->
-    Args1 = ?assert_type(Args1, [type()]),
     Args2 = lists:duplicate(length(Args1), type(any)),
     compat_tys(Args1, Args2, Seen, Env);
 compat_ty({type, _, tuple, Args1}, {type, _, tuple, Args2}, Seen, Env) ->
-    compat_tys(?assert_type(Args1, [type()]),
-               ?assert_type(Args2, [type()]), Seen, Env);
+    compat_tys(Args1, Args2, Seen, Env);
 
 %% Maps
 compat_ty({type, _, map, [?any_assoc]}, {type, _, map, _Assocs}, Seen, _Env) ->
@@ -469,10 +460,6 @@ compat_ty({type, _, map, Assocs1}, {type, _, map, Assocs2}, Seen, Env) ->
                       ({type, _, map_field_exact, _}) -> true;
                       (_) -> false
                   end,
-    %% We can assert because {type, _, map, any} is normalized away by normalize/2,
-    %% whereas ?any_assoc associations are matched out explicitly in the previous clauses.
-    Assocs1 = ?assert_type(Assocs1, [gradualizer_type:af_assoc_type()]),
-    Assocs2 = ?assert_type(Assocs2, [gradualizer_type:af_assoc_type()]),
     MandatoryAssocs1 = lists:filter(IsMandatory, Assocs1),
     MandatoryAssocs2 = lists:filter(IsMandatory, Assocs2),
     {Seen3, Cs3} = lists:foldl(fun ({type, _, map_field_exact, _} = Assoc2, {Seen2, Cs2}) ->
@@ -507,10 +494,6 @@ compat_ty({type, _, AssocTag1, [Key1, Val1]},
              AssocTag1 == map_field_exact, AssocTag2 == map_field_exact;
              AssocTag1 == map_field_exact, AssocTag2 == map_field_assoc ->
     %% For M1 <: M2, mandatory fields in M2 must be mandatory fields in M1
-    Key1 = ?assert_type(Key1, type()),
-    Key2 = ?assert_type(Key2, type()),
-    Val1 = ?assert_type(Val1, type()),
-    Val2 = ?assert_type(Val2, type()),
     {Seen1, Cs1} = compat(Key1, Key2, Seen, Env),
     {Seen2, Cs2} = compat(Val1, Val2, Seen1, Env),
     {Seen2, constraints:combine(Cs1, Cs2, Env)};
