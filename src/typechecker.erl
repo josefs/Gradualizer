@@ -3998,7 +3998,6 @@ disable_exhaustiveness_check(#env{} = Env) ->
 check_arg_exhaustiveness(Env, ArgTys, Clauses, RefinedArgTys) ->
     case exhaustiveness_checking(Env) andalso
          all_refinable(ArgTys, Env) andalso
-         no_clause_has_guards(Clauses) andalso
          some_type_not_none(RefinedArgTys)
     of
         true ->
@@ -4018,10 +4017,6 @@ exhaustiveness_checking(#env{} = Env) ->
 -spec all_refinable(_, env()) -> boolean().
 all_refinable(any, _Env) -> false;
 all_refinable(Types, Env) -> lists:all(fun (Ty) -> refinable(Ty, Env) end, Types).
-
--spec no_clause_has_guards(_) -> boolean().
-no_clause_has_guards(Clauses) ->
-    lists:all(fun no_guards/1, Clauses).
 
 -spec some_type_not_none([type()]) -> boolean().
 some_type_not_none(Types) when is_list(Types) ->
@@ -4563,10 +4558,6 @@ mta({user_type, Anno, Name, Args}, Env) ->
     {Module, Name, length(Args)};
 mta(Type, _Env) ->
     Type.
-
--spec no_guards(_) -> boolean().
-no_guards({clause, _, _, Guards, _}) ->
-    Guards == [].
 
 %% Refines the types of bound variables using the assumption that a clause has
 %% mismatched.
