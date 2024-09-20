@@ -232,11 +232,15 @@ annotate_user_type_(_Filename, Type) ->
 -spec get_module_from_annotation(erl_anno:anno()) -> {ok, module()} | none.
 get_module_from_annotation(Anno) ->
     case erl_anno:file(Anno) of
-        File when is_list(File) ->
-            Basename = filename:basename(File, ".erl"),
-            {ok, list_to_existing_atom(?assert_type(Basename, string()))};
         undefined ->
-            none
+            none;
+        File ->
+            case unicode:characters_to_binary(filename:basename(File, ".erl")) of
+                Basename when is_binary(Basename) ->
+                    {ok, binary_to_existing_atom(Basename)};
+                _ ->
+                    erlang:error({malformed_anno, Anno})
+            end
     end.
 
 -spec substitute_type_vars(type(),
