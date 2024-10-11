@@ -11,7 +11,11 @@
          beside_match_all/2,
          beside_singleton/2,
          refine_bound_var_by_guard_bifs/1,
-         refine_literals_by_guards/1]).
+         refine_literals_by_guards/1,
+         too_complex_guards/1,
+         no_guards/1,
+         no_complex_guards1/1,
+         no_complex_guards2/1]).
 
 %% Test that Value is not considered to be string() | false.
 -spec basic_type_refinement(string()) -> string().
@@ -99,3 +103,44 @@ refine_literals_by_guards(X) when is_integer(X) -> self();
 refine_literals_by_guards(X) when is_tuple(X)   -> self();
 refine_literals_by_guards(X) when is_list(X)    -> self();
 refine_literals_by_guards(X)                    -> X.
+
+%% See also refine_bound_var_with_guard_should_pass known problem.
+-spec too_complex_guards(integer() | [integer()] | none) -> number().
+too_complex_guards([_|_] = Ints) ->
+    lists:sum(Ints);
+%% Passes thanks to the whole function being skipped, but these guards are not handled yet.
+%% See too_complex_guards thrown in src/typechecker.erl.
+too_complex_guards(EmptyOrNone) when EmptyOrNone =:= none orelse is_list(EmptyOrNone) ->
+    0;
+too_complex_guards(Int) ->
+    Int.
+
+%% This is based on dog-fooding typechecker:position_info_from_spec/1 @ 3bdca60,
+%% where we know that the list will never be empty.
+%% This is one way to refactor `too_complex_guards' to get typechecked with a little bit of
+%% programmer input.
+-spec no_guards(integer() | [integer()] | none) -> number().
+no_guards(none) ->
+    0;
+no_guards([] = Ints) ->
+    0;
+no_guards([_|_] = Ints) ->
+    lists:sum(Ints);
+no_guards(Int) ->
+    Int.
+
+-spec no_complex_guards1(integer() | [integer()] | none) -> number().
+no_complex_guards1(none) ->
+    0;
+no_complex_guards1(Ints) when is_list(Ints) ->
+    lists:sum(Ints);
+no_complex_guards1(Num) ->
+    Num.
+
+-spec no_complex_guards2(integer() | [integer()] | none) -> number().
+no_complex_guards2(none) ->
+    0;
+no_complex_guards2(Num) when is_integer(Num) ->
+    Num;
+no_complex_guards2(List) ->
+    lists:sum(List).

@@ -417,10 +417,6 @@ compat_ty({type, Anno1, record, [{atom, _, Name} | Fields1]},
           {type, Anno2, record, [{atom, _, Name} | Fields2]}, Seen, Env) ->
     AllFields1 = case Fields1 of [] -> get_record_fields_types(Name, Anno1, Env); _ -> Fields1 end,
     AllFields2 = case Fields2 of [] -> get_record_fields_types(Name, Anno2, Env); _ -> Fields2 end,
-    %% We can assert because we explicitly match {atom, _, Name}
-    %% out of the field list in both cases above.
-    AllFields1 = ?assert_type(AllFields1, [record_field_type()]),
-    AllFields2 = ?assert_type(AllFields2, [record_field_type()]),
     compat_record_tys(AllFields1, AllFields2, Seen, Env);
 compat_ty({type, _, record, _}, {type, _, tuple, any}, Seen, _Env) ->
     ret(Seen);
@@ -440,20 +436,15 @@ compat_ty(Ty1, Ty2, Seen, Env) when ?is_list_type(Ty1), ?is_list_type(Ty2) ->
 compat_ty({type, _, tuple, any}, {type, _, tuple, any}, Seen, _Env) ->
     ret(Seen);
 compat_ty({type, _, tuple, any}, {type, _, tuple, Args2}, Seen, Env) ->
-    %% We can assert because we match out `any' in previous clauses.
-    %% TODO: it would be perfect if Gradualizer could refine this type automatically in such a case
-    Args2 = ?assert_type(Args2, [type()]),
     Args1 = lists:duplicate(length(Args2), type(any)),
     % We check the argument types because Args2 may contain type variables
     % and in that case, we want to constrain them
     compat_tys(Args1, Args2, Seen, Env);
 compat_ty({type, _, tuple, Args1}, {type, _, tuple, any}, Seen, Env) ->
-    Args1 = ?assert_type(Args1, [type()]),
     Args2 = lists:duplicate(length(Args1), type(any)),
     compat_tys(Args1, Args2, Seen, Env);
 compat_ty({type, _, tuple, Args1}, {type, _, tuple, Args2}, Seen, Env) ->
-    compat_tys(?assert_type(Args1, [type()]),
-               ?assert_type(Args2, [type()]), Seen, Env);
+    compat_tys(Args1, Args2, Seen, Env);
 
 %% Maps
 compat_ty({type, _, map, [?any_assoc]}, {type, _, map, _Assocs}, Seen, _Env) ->
@@ -469,10 +460,6 @@ compat_ty({type, _, map, Assocs1}, {type, _, map, Assocs2}, Seen, Env) ->
                       ({type, _, map_field_exact, _}) -> true;
                       (_) -> false
                   end,
-    %% We can assert because {type, _, map, any} is normalized away by normalize/2,
-    %% whereas ?any_assoc associations are matched out explicitly in the previous clauses.
-    Assocs1 = ?assert_type(Assocs1, [gradualizer_type:af_assoc_type()]),
-    Assocs2 = ?assert_type(Assocs2, [gradualizer_type:af_assoc_type()]),
     MandatoryAssocs1 = lists:filter(IsMandatory, Assocs1),
     MandatoryAssocs2 = lists:filter(IsMandatory, Assocs2),
     {Seen3, Cs3} = lists:foldl(fun ({type, _, map_field_exact, _} = Assoc2, {Seen2, Cs2}) ->
@@ -507,10 +494,6 @@ compat_ty({type, _, AssocTag1, [Key1, Val1]},
              AssocTag1 == map_field_exact, AssocTag2 == map_field_exact;
              AssocTag1 == map_field_exact, AssocTag2 == map_field_assoc ->
     %% For M1 <: M2, mandatory fields in M2 must be mandatory fields in M1
-    Key1 = ?assert_type(Key1, type()),
-    Key2 = ?assert_type(Key2, type()),
-    Val1 = ?assert_type(Val1, type()),
-    Val2 = ?assert_type(Val2, type()),
     {Seen1, Cs1} = compat(Key1, Key2, Seen, Env),
     {Seen2, Cs2} = compat(Val1, Val2, Seen1, Env),
     {Seen2, constraints:combine(Cs1, Cs2, Env)};
@@ -4015,7 +3998,6 @@ disable_exhaustiveness_check(#env{} = Env) ->
 check_arg_exhaustiveness(Env, ArgTys, Clauses, RefinedArgTys) ->
     case exhaustiveness_checking(Env) andalso
          all_refinable(ArgTys, Env) andalso
-         no_clause_has_guards(Clauses) andalso
          some_type_not_none(RefinedArgTys)
     of
         true ->
@@ -4035,10 +4017,6 @@ exhaustiveness_checking(#env{} = Env) ->
 -spec all_refinable(_, env()) -> boolean().
 all_refinable(any, _Env) -> false;
 all_refinable(Types, Env) -> lists:all(fun (Ty) -> refinable(Ty, Env) end, Types).
-
--spec no_clause_has_guards(_) -> boolean().
-no_clause_has_guards(Clauses) ->
-    lists:all(fun no_guards/1, Clauses).
 
 -spec some_type_not_none([type()]) -> boolean().
 some_type_not_none(Types) when is_list(Types) ->
@@ -4106,6 +4084,8 @@ refine_mismatch_using_guards(PatTys,
             do_refine_mismatch_using_guards(Guards, PatTys, Pats, VEnv, Env);
         [_|_] ->
             %% we don't know yet how to do this in guard sequences
+            Env#env.no_skip_complex_guards orelse throw({skip, too_complex_guards}),
+            %% TODO: Invalid lack of pattern refinement
             PatTys
     end.
 
@@ -4579,16 +4559,15 @@ mta({user_type, Anno, Name, Args}, Env) ->
 mta(Type, _Env) ->
     Type.
 
--spec no_guards(_) -> boolean().
-no_guards({clause, _, _, Guards, _}) ->
-    Guards == [].
-
 %% Refines the types of bound variables using the assumption that a clause has
 %% mismatched.
 -spec refine_vars_by_mismatching_clause(gradualizer_type:af_clause(), venv(), env()) -> venv().
 refine_vars_by_mismatching_clause({clause, _, Pats, Guards, _Block}, VEnv, Env) ->
     PatternCantFail = are_patterns_matching_all_input(Pats, VEnv),
     case Guards of
+        [] ->
+            %% No guards, so no refinement
+            VEnv;
         [[{call, _, {atom, _, Fun}, Args = [{var, _, Var}]}]] when PatternCantFail ->
             %% Simple case: A single guard on the form `when is_TYPE(Var)'.
             %% If Var was bound before the clause, which failed because of a
@@ -4602,7 +4581,8 @@ refine_vars_by_mismatching_clause({clause, _, Pats, Guards, _Block}, VEnv, Env) 
                     VEnv
             end;
         _OtherGuards ->
-            %% No refinement
+            Env#env.no_skip_complex_guards orelse throw({skip, too_complex_guards}),
+            %% TODO: Invalid lack of refinement
             VEnv
     end.
 
@@ -4746,17 +4726,23 @@ type_check_function(Env, {function, _Anno, Name, NArgs, Clauses}) ->
     ?verbose(Env, "Checking function ~p/~p~n", [Name, NArgs]),
     case maps:find({Name, NArgs}, Env#env.fenv) of
         {ok, FunTy} ->
-            NewEnv = Env#env{current_spec = FunTy},
-            FunTyNoPos = [ typelib:remove_pos(?assert_type(Ty, type())) || Ty <- FunTy ],
-            Arity = clause_arity(hd(Clauses)),
-            case expect_fun_type(NewEnv, FunTyNoPos, Arity) of
-                {type_error, NotFunTy} ->
-                    %% This can only happen if `create_fenv/2' creates garbage.
-                    erlang:error({invalid_function_type, NotFunTy});
-                FTy ->
-                    FTy1 = make_rigid_type_vars(FTy),
-                    _Vars = check_clauses_fun(NewEnv, FTy1, Clauses),
-                    NewEnv
+            try
+                NewEnv = Env#env{current_spec = FunTy},
+                FunTyNoPos = [ typelib:remove_pos(?assert_type(Ty, type())) || Ty <- FunTy ],
+                Arity = clause_arity(hd(Clauses)),
+                case expect_fun_type(NewEnv, FunTyNoPos, Arity) of
+                    {type_error, NotFunTy} ->
+                        %% This can only happen if `create_fenv/2' creates garbage.
+                        erlang:error({invalid_function_type, NotFunTy});
+                    FTy ->
+                        FTy1 = make_rigid_type_vars(FTy),
+                        _Vars = check_clauses_fun(NewEnv, FTy1, Clauses),
+                        NewEnv
+                end
+            catch
+                throw:{skip, Reason} ->
+                    ?verbose(Env, "Skipping function ~p/~p due to ~s~n", [Name, NArgs, Reason]),
+                    Env
             end;
         error ->
             throw(internal_error(missing_type_spec, Name, NArgs))
@@ -4771,18 +4757,17 @@ arity(I) ->
     ?assert(I < 256, arity_overflow),
     ?assert_type(I, arity()).
 
--spec position_info_from_spec(form() | forms() | none) -> erl_anno:anno().
+-spec position_info_from_spec(none | form() | forms()) -> erl_anno:anno().
 position_info_from_spec(none) ->
     %% This simplifies testing internal functions.
     %% In these cases we don't go through type_check_function,
     %% but call deeper into the typechecker directly.
     erl_anno:new(0);
+position_info_from_spec(Form) when is_tuple(Form) ->
+    element(2, Form);
 position_info_from_spec([_|_] = Forms) ->
     %% TODO: https://github.com/josefs/Gradualizer/issues/388
-    position_info_from_spec(hd(Forms));
-position_info_from_spec(Form) ->
-    Form = ?assert_type(Form, form()),
-    element(2, Form).
+    position_info_from_spec(hd(Forms)).
 
 %% Type check patterns against types (P1 :: T1, P2 :: T2, ...)
 %% and add variable bindings for the patterns.
@@ -5835,7 +5820,8 @@ create_env(#parsedata{module    = Module
          verbose = proplists:get_bool(verbose, Opts),
          union_size_limit = proplists:get_value(union_size_limit, Opts,
                                                 default_union_size_limit()),
-         solve_constraints = proplists:get_bool(solve_constraints, Opts)}.
+         solve_constraints = proplists:get_bool(solve_constraints, Opts),
+         no_skip_complex_guards = proplists:get_bool(no_skip_complex_guards, Opts)}.
 
 -spec default_union_size_limit() -> non_neg_integer().
 default_union_size_limit() -> 30.
