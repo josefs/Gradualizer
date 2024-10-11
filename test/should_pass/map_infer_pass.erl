@@ -4,8 +4,6 @@
          kaboom1/0,
          kaboom2/0]).
 
--gradualizer([infer]).
-
 -spec not_good(#{good | bad := integer()}) -> integer().
 not_good(#{good := _}) -> 0;
 not_good(#{bad := _}) -> 1.

@@ -2,8 +2,6 @@
 
 -export([pat_any/1]).
 
--gradualizer([infer]).
-
 %% We would expect (at least when infer mode is enabled) that type of
 %% I, S and L is integer(), string() and list() respectively but
 %% currently they all become any()

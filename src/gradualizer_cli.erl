@@ -70,10 +70,7 @@ print_usage() ->
     io:format("                                 arguments are treated as filenames, even if~n"),
     io:format("                                 they start with hyphens.~n"),
     io:format("  -h,  --help                    display this help and exit~n"),
-    io:format("       --infer                   Infer type information from literals and other~n"),
     io:format("                                 language constructs~n"),
-    io:format("       --no_infer                Only use type information from function specs~n"),
-    io:format("                                  - the default behaviour~n"),
     io:format("       --verbose                 Show what Gradualizer is doing~n"),
     io:format("  -pa, --path_add                Add the specified directory to the beginning of~n"),
     io:format("                                 the code path; see erl -pa             [string]~n"),
@@ -109,8 +106,6 @@ parse_opts([A | Args], Opts) ->
     case A of
         "-h"                       -> {[], [help]};
         "--help"                   -> {[], [help]};
-        "--infer"                  -> parse_opts(Args, [infer | Opts]);
-        "--no_infer"               -> parse_opts(Args, [{infer, false} | Opts]);
         "--verbose"                -> parse_opts(Args, [verbose | Opts]);
         "-pa"                      -> handle_path_add(A, Args, Opts);
         "--path_add"               -> handle_path_add(A, Args, Opts);

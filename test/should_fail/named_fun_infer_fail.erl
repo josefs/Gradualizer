@@ -1,6 +1,5 @@
 -module(named_fun_infer_fail).
 
--gradualizer(infer).
 -export([bar/0, sum/1]).
 
 -spec foo(integer()) -> integer().

@@ -365,20 +365,18 @@ normalize_e2e_test_() ->
     ].
 
 propagate_types_test_() ->
-    %% Checking type_check_expr, which propagates type information but doesn't
-    %% infer types of literals and language constructs.
-    [%% the inferred type of a literal tuple should be any()
-     ?_assertEqual("any()",
+    %% Checking type_check_expr, which propagates type information
+    %% and infers types of literals and language constructs.
+    [%% the inferred type of a literal tuple
+     ?_assertEqual("{1, 2}",
                    type_check_expr(_Env = "",
                                    _Expr = "{1, 2}")),
      %% the inferred type of a tuple with a untyped function call
-     %% should also be any()
-     ?_assertMatch("any()",
+     ?_assertMatch("{1, any()}",
                    type_check_expr(_Env = "h() -> 2.",
                                    _Expr = "{1, h()}")),
      %% the inferred type of a tuple with a typed function call
-     %% should be {any(), restype()}
-     ?_assertMatch("{any(), integer()}",
+     ?_assertMatch("{1, integer()}",
                    type_check_expr(_Env = "-spec h() -> integer().",
                                    _Expr = "{1, h()}")),
 
@@ -389,7 +387,7 @@ propagate_types_test_() ->
                                           "-spec c() -> 3.",
                                    _Expr = "[a(), b(), c()]")),
      %% Fun.
-     ?_assertMatch("any()",
+     ?_assertMatch("fun((any(), any()) -> any())",
                    type_check_expr(_Env = "",
                                    _Expr = "fun (_A, _B) ->\n"
                                            "    receive C -> C end\n"
@@ -437,12 +435,7 @@ propagate_types_test_() ->
                                    _Expr = "- f()")),
      ?_assertMatch("-2..-1 | non_neg_integer()",
                    type_check_expr(_Env = "-spec f() -> neg_integer() | 0..2.",
-                                   _Expr = "- f()")),
-
-     %% inferred type of record index
-     ?_assertMatch("any()",
-                   type_check_expr(_Env = "",
-                                   _Expr = "#r.f"))
+                                   _Expr = "- f()"))
     ].
 
 type_check_in_test_() ->
@@ -456,52 +449,43 @@ type_check_in_test_() ->
      %% Although there is no spec for f/1 - inferred type is `fun((any()) -> any())'
      ?_assert(type_check_forms(["f(_) -> 42.",
                                 "-spec g() -> fun((integer()) -> integer()).",
-                                "g() -> fun f/1."],
-                               [infer])),
+                                "g() -> fun f/1."])),
      %% Although there is no spec for f/1 - inferred arity does not match
      ?_assertNot(type_check_forms(["-spec g() -> fun(() -> integer()).",
                                    "g() -> fun f/1.",
-                                   "f(_) -> ok."],
-                                  [infer]))
+                                   "f(_) -> ok."]))
     ].
 
 infer_types_test_() ->
-    %% Checking type_check_expr with inference enabled
+    %% Checking type_check_expr with inference
     [?_assertEqual("{1, [101 | 104 | 108 | 111, ...], [], banana, float(), $c}",
                    type_check_expr(_Env = "",
-                                   _Expr = "{1, \"hello\", \"\", banana, 3.14, $c}",
-                                   [infer])),
+                                   _Expr = "{1, \"hello\", \"\", banana, 3.14, $c}")),
      %% the inferred type of a tuple with a untyped function call
      %% should be any()
      ?_assertMatch("{1, any()}",
                    type_check_expr(_Env = "h() -> 2.",
-                                   _Expr = "{1, h()}",
-                                   [infer])),
+                                   _Expr = "{1, h()}")),
      %% the inferred type of a tuple with a typed function call
      ?_assertMatch("{1, integer()}",
                    type_check_expr(_Env = "-spec h() -> integer().",
-                                   _Expr = "{1, h()}",
-                                   [infer])),
+                                   _Expr = "{1, h()}")),
      %% catch a type error that isn't caught without this inference.
      ?_assertNot(type_check_forms(["f() -> V = [1, 2], g(V).",
                                    "-spec g(integer()) -> any().",
-                                   "g(Int) -> Int + 1."],
-                                  [infer])),
+                                   "g(Int) -> Int + 1."])),
      %% infer exact type of bitstrings
      ?_assertMatch("<<_:7, _:_*16>>",
                    type_check_expr(_Env = "f() -> receive X -> X end.",
-                                   _Expr = "<<(f())/utf16, 7:7>>",
-                                   [infer])),
+                                   _Expr = "<<(f())/utf16, 7:7>>")),
      %% infer exact type of strings
      ?_assertMatch("[$0..$c, ...]",
                    type_check_expr(_Env = "",
-                                   _Expr = "\"0123456789abc\"",
-                                   [infer])),
+                                   _Expr = "\"0123456789abc\"")),
      %% infer exact type of record index
      ?_assertMatch("2",
                    type_check_expr(_Env = "-record(r, {f}).",
-                                   _Expr = "#r.f",
-                                   [infer]))
+                                   _Expr = "#r.f"))
     ].
 
 type_check_call_test_() ->

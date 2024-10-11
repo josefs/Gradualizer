@@ -10,7 +10,6 @@
               imported          = #{}           :: #{{atom(), arity()} => module()},
               venv              = #{}           :: typechecker:venv(),
               tenv                              :: gradualizer_lib:tenv(),
-              infer             = false         :: boolean(),
               verbose           = false         :: boolean(),
               exhaust           = true          :: boolean(),
               %% Controls driving the type checking algorithm

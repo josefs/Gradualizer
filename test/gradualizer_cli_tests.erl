@@ -7,7 +7,7 @@
 help_test() ->
     ?assertEqual(help, gradualizer_cli:handle_args([])),
     ?assertEqual(help, gradualizer_cli:handle_args(["--help"])),
-    ?assertEqual(help, gradualizer_cli:handle_args(["--infer", "-h", "other.junk"])).
+    ?assertEqual(help, gradualizer_cli:handle_args(["-h", "other.junk"])).
 
 help_output_no_halt_test() ->
     %% This gives code coverage to the printing of the help text.
@@ -18,18 +18,11 @@ version_test() ->
 
 no_file_test() ->
     ?assertMatch({error, "No files"++_},
-                 gradualizer_cli:handle_args(["--infer"])).
+                 gradualizer_cli:handle_args(["--solve_constraints"])).
 
 invalid_arg_test() ->
     ?assertMatch({error, "Unknown"++_},
                  gradualizer_cli:handle_args(["--invalid-arg", "file.erl"])).
-
-infer_test() ->
-    {ok, _Files, Opts} = gradualizer_cli:handle_args(["--infer", "--", "file.erl"]),
-    ?assert(proplists:get_bool(infer, Opts)).
-no_infer_test() ->
-    {ok, _Files, Opts} = gradualizer_cli:handle_args(["--no_infer", "file.erl"]),
-    ?assertNot(proplists:get_bool(infer, Opts)).
 
 verbose_test() ->
     {ok, _Files, Opts} = gradualizer_cli:handle_args(["--verbose", "file.erl"]),

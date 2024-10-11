@@ -4,7 +4,7 @@
     all_positive/1
 ]).
 
--gradualizer([solve_constraints, infer]).
+-gradualizer([solve_constraints]).
 
 -spec all_positive([integer()]) -> {true, [integer()]} | false.
 all_positive(List) ->
