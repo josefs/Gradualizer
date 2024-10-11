@@ -2215,8 +2215,12 @@ do_type_check_expr(Env, {'try', _, Block, CaseCs, CatchCs, AfterBlock}) ->
 
 %% Maybe - value-based error handling expression
 %% See https://www.erlang.org/eeps/eep-0049
-do_type_check_expr(_Env, {'maybe', Anno, [{maybe_match, _, _LHS, _RHS}]} = MaybeExpr) ->
-    erlang:throw({unsupported_expression, Anno, MaybeExpr}).
+do_type_check_expr(Env, {'maybe', _, _}) ->
+    %% TODO: handle maybe expr properly
+    {type(any), Env};
+do_type_check_expr(Env, {'maybe', _, _, {'else', _, _}}) ->
+    %% TODO: handle maybe expr properly
+    {type(any), Env}.
 
 %% Helper for type_check_expr for funs
 -spec type_check_fun(env(), _) -> {type(), env()}.
@@ -3073,7 +3077,16 @@ do_type_check_expr_in(Env, ResTy, {'try', _, Block, CaseCs, CatchCs, AfterBlock}
     end,
     %% no variable bindings are propagated from a try expression
     %% as that would be "unsafe"
-    Env.
+    Env;
+
+%% Maybe - value-based error handling expression
+%% See https://www.erlang.org/eeps/eep-0049
+do_type_check_expr_in(_Env, _ResTy, {'maybe', _, _}) ->
+    %% TODO: handle maybe expr properly
+    erlang:throw({skip, maybe_expr_not_supported});
+do_type_check_expr_in(_Env, _ResTy, {'maybe', _, _, {'else', _, _}}) ->
+    %% TODO: handle maybe expr properly
+    erlang:throw({skip, maybe_expr_not_supported}).
 
 -spec type_check_arith_op_in(env(), type(), _, _, _, _) -> env().
 type_check_arith_op_in(Env, ResTy, Op, P, Arg1, Arg2) ->
