@@ -25,7 +25,8 @@
          invariant_tyvar1/1,
          invariant_tyvar2/1,
          use_enum_map1/1,
-         use_enum_map2/1
+         use_enum_map2/1,
+         find1/0
         ]).
 
 -gradualizer([solve_constraints]).
@@ -216,3 +217,15 @@ use_enum_map1(Numbers) ->
 -spec use_enum_map2(#{'__struct__' := some_struct}) -> [boolean()].
 use_enum_map2(SomeStruct) ->
     enum_map(SomeStruct, fun positive/1).
+
+-spec lookup(T1, [{T1, T2}]) -> (none | T2).
+lookup(_, []) -> none;
+lookup(K, [{K, V}|_]) -> V;
+lookup(K, [_|KVs]) -> lookup(K, KVs).
+
+-spec find1() -> string().
+find1() ->
+    case lookup(0, [{0, "s"}]) of
+        none -> "default";
+        V -> V
+    end.
