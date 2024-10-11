@@ -1,6 +1,5 @@
 -module(list_infer_fail).
 
--gradualizer(infer).
 -export([f/0]).
 
 f() ->

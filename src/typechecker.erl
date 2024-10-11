@@ -1869,26 +1869,13 @@ do_type_check_expr(Env, {'case', _, Expr, Clauses}) ->
     {Ty, union_var_binds(Env1, VB, Env)};
 do_type_check_expr(Env, {tuple, _, TS}) ->
     {Tys, VarBindsList} = lists:unzip([ type_check_expr(Env, Expr) || Expr <- TS ]),
-    InferredTy =
-        case not Env#env.infer andalso
-             lists:all(fun({type, _, any, []}) -> true;
-                          (_) -> false
-                       end, Tys) of
-            true ->
-                type(any);
-            false ->
-                %% at least one element in the tuple has a type inferred from a spec
-                type(tuple, Tys)
-        end,
+    InferredTy = type(tuple, Tys),
     {InferredTy, union_var_binds(VarBindsList, Env)};
 do_type_check_expr(Env, {cons, _, Head, Tail}) ->
     {Ty1, VB1} = type_check_expr(Env, Head),
     {Ty2, VB2} = type_check_expr(Env, Tail),
     VB = union_var_binds(VB1, VB2, Env),
     case {Ty1, Ty2} of
-        {?type(any), ?type(any)} when not Env#env.infer ->
-            %% No type information to propagate
-            {type(any), VB};
         {_, ?type(any)} ->
             %% Propagate type information from head
             {type(nonempty_list, [Ty1]), VB};
@@ -1922,14 +1909,8 @@ do_type_check_expr(Env, {bin, _, BinElements} = BinExpr) ->
                           type_check_expr_in(Env, Ty, Expr)
                   end,
                   BinElements),
-    RetTy = if
-                Env#env.infer ->
-                    %% Infer the size parameters of the bitstring
-                    gradualizer_bin:compute_type(BinExpr);
-                not Env#env.infer ->
-                    type(any)
-            end,
-    RetTy = ?assert_type(RetTy, type()),
+    %% Infer the size parameters of the bitstring
+    RetTy = gradualizer_bin:compute_type(BinExpr),
     {RetTy, union_var_binds(VarBinds, Env)};
 do_type_check_expr(Env, {call, _, {atom, _, TypeOp}, [Expr, {string, _, TypeStr} = TypeLit]})
   when TypeOp == '::'; TypeOp == ':::' ->
@@ -1975,46 +1956,24 @@ do_type_check_expr(Env, {bc, _, Expr, Qualifiers}) ->
 do_type_check_expr(Env, {block, _, Block}) ->
     type_check_block(Env, Block);
 
-% Don't return the type of anything other than something
-% which ultimately comes from a function type spec.
-do_type_check_expr(#env{infer = false} = Env, {string, _, _}) ->
-    {type(any), Env};
-do_type_check_expr(#env{infer = false} = Env, {nil, _}) ->
-    {type(any), Env};
-do_type_check_expr(#env{infer = false} = Env, {atom, _, _Atom}) ->
-    {type(any), Env};
-do_type_check_expr(#env{infer = false} = Env, {integer, _, _N}) ->
-    {type(any), Env};
-do_type_check_expr(#env{infer = false} = Env, {float, _, _F}) ->
-    {type(any), Env};
-do_type_check_expr(#env{infer = false} = Env, {char, _, _C}) ->
-    {type(any), Env};
-
-%% When infer = true, we do propagate the types of literals,
-%% list cons, tuples, etc.
-do_type_check_expr(#env{infer = true} = Env, {string, _, Chars}) ->
+do_type_check_expr(Env, {string, _, Chars}) ->
     ActualTy = infer_literal_string(Chars, Env),
     {ActualTy, Env};
-do_type_check_expr(#env{infer = true} = Env, {nil, _}) ->
+do_type_check_expr(Env, {nil, _}) ->
     {type(nil), Env};
-do_type_check_expr(#env{infer = true} = Env, {Tag, _, Value})
+do_type_check_expr(Env, {Tag, _, Value})
   when Tag =:= atom;
        Tag =:= integer;
        Tag =:= char ->
     {singleton(Tag, Value), Env};
-do_type_check_expr(#env{infer = true} = Env, {float, _, _F}) ->
+do_type_check_expr(Env, {float, _, _F}) ->
     {type(float), Env};
 
 %% Maps
 do_type_check_expr(Env, {map, _, Assocs}) ->
     {AssocTys, VB} = type_check_assocs(Env, Assocs),
-    case Env#env.infer of
-        true ->
-            MapTy = update_map_type(type(map, []), AssocTys),
-            {MapTy, VB};
-        false ->
-            {type(any), VB}
-    end;
+    MapTy = update_map_type(type(map, []), AssocTys),
+    {MapTy, VB};
 do_type_check_expr(Env, {map, _, UpdateExpr, Assocs}) ->
     {Ty, VBExpr} = type_check_expr(Env, UpdateExpr),
     {AssocTys, VBAssocs} = type_check_assocs(Env, Assocs),
@@ -2058,14 +2017,9 @@ do_type_check_expr(Env, {record, Anno, Record, Fields}) ->
     VB = type_check_fields(Env, Rec, Fields),
     {RecTy, VB};
 do_type_check_expr(Env, {record_index, Anno, Name, FieldWithAnno}) ->
-    case Env#env.infer of
-        true ->
-            RecFields = get_record_fields(Name, Anno, Env),
-            Index = get_rec_field_index(FieldWithAnno, RecFields),
-            {{integer, erl_anno:new(0), Index}, Env};
-        false ->
-            {type(any), Env}
-    end;
+    RecFields = get_record_fields(Name, Anno, Env),
+    Index = get_rec_field_index(FieldWithAnno, RecFields),
+    {{integer, erl_anno:new(0), Index}, Env};
 
 %% Functions
 do_type_check_expr(Env, {'fun', _, {clauses, Clauses}}) ->
@@ -2097,16 +2051,11 @@ do_type_check_expr(Env, {'fun', P, {function, M, F, A}}) ->
 do_type_check_expr(Env, {named_fun, _, FunName, Clauses}) ->
     %% Pick a type for the fun itself, to be used when checking references to
     %% itself inside the fun, e.g. recursive calls.
-    FunTy = if
-                Env#env.infer ->
-                    %% Create a fun type of the correct arity
-                    %% on the form fun((_,_,_) -> any()).
-                    [{clause, _, Params, _Guards, _Block} | _] = Clauses,
-                    Arity = arity(length(Params)),
-                    create_fun_type(Arity, type(any));
-                not Env#env.infer ->
-                    type(any)
-            end,
+    %% Create a fun type of the correct arity
+    %% on the form fun((_,_,_) -> any()).
+    [{clause, _, Params, _Guards, _Block} | _] = Clauses,
+    Arity = arity(length(Params)),
+    FunTy = create_fun_type(Arity, type(any)),
     NewEnv = add_var_binds(Env#env{venv = #{FunName => FunTy}}, Env, Env),
     type_check_fun(NewEnv, Clauses);
 
@@ -2235,16 +2184,11 @@ type_check_fun(Env, Clauses) ->
     %% accurate type to the whole expression.
     %% TODO: Modify OTP's type syntax to allow returning an intersection type.
     {RetTy, _VB} = infer_clauses(Env, Clauses),
-    FunTy = case RetTy of
-                {type, _, any, []} when not Env#env.infer ->
-                    type(any);
-                _SomeTypeToPropagate ->
-                    %% Create a fun type with the correct arity on the form
-                    %% fun((any(), any(), ...) -> RetTy).
-                    [{clause, _, Params, _Guards, _Body} | _] = Clauses,
-                    Arity = arity(length(Params)),
-                    create_fun_type(Arity, RetTy)
-            end,
+    %% Create a fun type with the correct arity on the form
+    %% fun((any(), any(), ...) -> RetTy).
+    [{clause, _, Params, _Guards, _Body} | _] = Clauses,
+    Arity = arity(length(Params)),
+    FunTy = create_fun_type(Arity, RetTy),
     %% Variable bindings inside the fun clauses are local inside the fun.
     {FunTy, Env}.
 
@@ -2559,7 +2503,7 @@ minimal_substitution(Cs, ResTy) ->
 -spec infer_arg_types([expr()], env()) -> [type()].
 infer_arg_types(Args, Env) ->
     lists:map(fun (Arg) ->
-                      {ArgTy, _VB} = type_check_expr(Env#env{infer = true}, Arg),
+                      {ArgTy, _VB} = type_check_expr(Env, Arg),
                       ArgTy
               end, Args).
 
@@ -2612,17 +2556,7 @@ compat_arith_type(Ty1, Ty2, Env) ->
 -spec type_check_comprehension(env(), _, expr(), _) -> {type(), env()}.
 type_check_comprehension(Env, lc, Expr, []) ->
     {Ty, _VB} = type_check_expr(Env, Expr),
-    RetTy = case Ty of
-                {type, _, any, []} when not Env#env.infer ->
-                    %% No type information to propagate. We don't infer a
-                    %% list type of the list comprehension when inference
-                    %% is disabled.
-                    type(any);
-                _ ->
-                    %% Propagate the type information
-                    {type, erl_anno:new(0), list, [Ty]}
-            end,
-    RetTy = ?assert_type(RetTy, type()),
+    RetTy = {type, erl_anno:new(0), list, [Ty]},
     {RetTy, Env};
 type_check_comprehension(Env, bc, Expr, []) ->
     {Ty, _VB} = type_check_expr(Env, Expr),
@@ -2795,7 +2729,7 @@ do_type_check_expr_in(Env, ResTy, {tuple, _, TS} = Tup) ->
         {elem_tys, Tyss} ->
             case type_check_tuple_union_in(Env, Tyss, TS) of
                 none ->
-                    {Ty, _VB} = type_check_expr(Env#env{infer = true}, Tup),
+                    {Ty, _VB} = type_check_expr(Env, Tup),
                     throw(type_error(Tup, Ty, ResTy));
                 VBs ->
                     union_var_binds(VBs, Env)
@@ -2804,7 +2738,7 @@ do_type_check_expr_in(Env, ResTy, {tuple, _, TS} = Tup) ->
             {_Tys, VBs} = lists:unzip([type_check_expr(Env, Expr) || Expr <- TS ]),
             union_var_binds(VBs, Env);
         {type_error, _} ->
-            {Ty, _VB} = type_check_expr(Env#env{infer = true}, Tup),
+            {Ty, _VB} = type_check_expr(Env, Tup),
             throw(type_error(Tup, Ty, ResTy))
     end;
 
@@ -2958,8 +2892,6 @@ do_type_check_expr_in(Env, Ty, {'fun', _, {clauses, Clauses}} = Fun) ->
     end;
 do_type_check_expr_in(Env, ResTy, Expr = {'fun', P, {function, Name, Arity}}) ->
     case get_bounded_fun_type_list(Name, Arity, Env, P) of
-        [?type(any)] when not Env#env.infer ->
-            Env;
         [?type(any)] ->
             FunType = create_fun_type(Arity, type(any)),
             case subtype(FunType, ResTy, Env) of
@@ -3259,7 +3191,7 @@ type_check_logic_op_in(Env, ResTy, {op, _, Op, Arg1, Arg2} = OrigExpr) when Op =
             VarBinds2 = type_check_expr_in(EnvArg2, ResTy, Arg2),
             union_var_binds(VarBinds1, VarBinds2, Env);
         false ->
-            {Arg2Ty, _VB} = type_check_expr(Env#env{infer = true}, Arg2),
+            {Arg2Ty, _VB} = type_check_expr(Env, Arg2),
             Ty = type(union, [Arg2Ty, Target]),
             throw(type_error(OrigExpr, Ty, ResTy))
     end;
@@ -3500,8 +3432,8 @@ type_check_comprehension_in(Env, ResTy, OrigExpr, Compr, Expr, P, [Pred | Quals]
 -spec type_check_assocs(env(), _) -> {[type()], env()}.
 type_check_assocs(Env, [{Assoc, _P, Key, Val}| Assocs])
   when Assoc == map_field_assoc orelse Assoc == map_field_exact ->
-    {KeyTy, _KeyVB} = type_check_expr(Env#env{infer = true}, Key),
-    {ValTy, _ValVB} = type_check_expr(Env#env{infer = true}, Val),
+    {KeyTy, _KeyVB} = type_check_expr(Env, Key),
+    {ValTy, _ValVB} = type_check_expr(Env, Val),
     {AssocTys, VB}   = type_check_assocs(Env, Assocs),
     {[type(Assoc, [KeyTy, ValTy]) | AssocTys], VB};
 type_check_assocs(Env, []) ->
@@ -5829,7 +5761,6 @@ create_env(#parsedata{module    = Module
          tenv = TEnv,
          imported = Imported,
          %% Store some type checking options in the environment
-         infer = proplists:get_bool(infer, Opts),
          verbose = proplists:get_bool(verbose, Opts),
          union_size_limit = proplists:get_value(union_size_limit, Opts,
                                                 default_union_size_limit()),

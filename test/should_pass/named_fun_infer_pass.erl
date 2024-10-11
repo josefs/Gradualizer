@@ -1,6 +1,5 @@
 -module(named_fun_infer_pass).
 
--gradualizer(infer).
 -export([atom_sum/1]).
 
 %% Documents expected behaviour that the type of parameters are not inferred

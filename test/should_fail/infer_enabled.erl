@@ -1,6 +1,5 @@
 -module(infer_enabled).
 
--gradualizer(infer).
 -export([f/0]).
 
 f() ->
