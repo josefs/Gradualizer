@@ -26,9 +26,6 @@ forbidden_addition(X) ->
 -spec bad_compose(fun((A) -> B), fun((B) -> C), A) -> C.
 bad_compose(F, G, X) -> F(G(X)).
 
--spec bad_curry(fun(({A, B}) -> C)) -> fun((A, B) -> C).
-bad_curry(F) -> fun (X, _Y) -> F({X, X}) end.
-
 -spec bad_head([X, ...]) -> X.
 bad_head([_ | T]) -> T.
 
