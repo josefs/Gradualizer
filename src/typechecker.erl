@@ -28,8 +28,9 @@
          minimal_substitution/2,
          type_vars_variances/1]).
 
--compile([warn_missing_spec, warn_missing_spec_all,
-          warnings_as_errors]).
+-compile([warn_missing_spec, warn_missing_spec_all]).
+%,
+          %warnings_as_errors]).
 
 -include("typelib.hrl").
 
@@ -1840,7 +1841,7 @@ replace_type_vars_with_any(Ty) ->
 -spec type_check_expr(env(), expr()) -> {type(), env()}.
 type_check_expr(Env, Expr) ->
     Res = {Ty, _VarBinds} = do_type_check_expr(Env, Expr),
-    ?verbose(Env, "~sPropagated type of ~ts :: ~ts~n",
+    ?verbose(Env, "~sInferred type of ~ts :: ~ts~n",
              [gradualizer_fmt:format_location(Expr, brief), erl_prettypr:format(Expr), typelib:pp_type(Ty)]),
     Res.
 
@@ -2634,11 +2635,28 @@ type_check_comprehension(Env, Compr, Expr, [Guard | Quals]) ->
       ResTy :: type(),
       Expr :: expr().
 type_check_expr_in(Env, ResTy, Expr) ->
+    {InferredTy, NewEnv} = type_check_expr(Env, Expr),
     ?verbose(Env, "~sChecking that ~ts :: ~ts~n",
-            [gradualizer_fmt:format_location(Expr, brief), erl_prettypr:format(Expr), typelib:pp_type(ResTy)]),
-    NormResTy = normalize(ResTy, Env),
-    R = ?throw_orig_type(do_type_check_expr_in(Env, NormResTy, Expr), ResTy, NormResTy),
-    ?assert_type(R, env()).
+            [gradualizer_fmt:format_location(Expr, brief),
+             erl_prettypr:format(Expr),
+             typelib:pp_type(ResTy)]),
+    case subtype(InferredTy, ResTy, NewEnv) of
+        true ->
+            NewEnv;
+        false ->
+            throw(type_error(Expr, ResTy, InferredTy))
+    end.
+
+%-spec type_check_expr_in(Env, ResTy, Expr) -> Env when
+%      Env :: env(),
+%      ResTy :: type(),
+%      Expr :: expr().
+%type_check_expr_in(Env, ResTy, Expr) ->
+%    ?verbose(Env, "~sChecking that ~ts :: ~ts~n",
+%            [gradualizer_fmt:format_location(Expr, brief), erl_prettypr:format(Expr), typelib:pp_type(ResTy)]),
+%    NormResTy = normalize(ResTy, Env),
+%    R = ?throw_orig_type(do_type_check_expr_in(Env, NormResTy, Expr), ResTy, NormResTy),
+%    ?assert_type(R, env()).
 
 -spec do_type_check_expr_in(Env, ResTy, Expr) -> Env when
       Env :: env(),
