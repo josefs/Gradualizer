@@ -3,9 +3,9 @@
 -export([f/1]).
 
 -type t1() :: binary().
--type maybe(T) :: undefined | T.
+-type option(T) :: undefined | T.
 
--spec f(maybe(t1())) -> ok | error | other.
+-spec f(option(t1())) -> ok | error | other.
 f(T) ->
     case T of
         undefined -> error;
