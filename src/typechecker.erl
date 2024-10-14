@@ -1841,7 +1841,7 @@ replace_type_vars_with_any(Ty) ->
 -spec type_check_expr(env(), expr()) -> {type(), env()}.
 type_check_expr(Env, Expr) ->
     Res = {Ty, _VarBinds} = do_type_check_expr(Env, Expr),
-    ?verbose(Env, "~sInferred type of ~ts :: ~ts~n",
+    ?verbose(Env, "~sPropagated type of ~ts :: ~ts~n",
              [gradualizer_fmt:format_location(Expr, brief), erl_prettypr:format(Expr), typelib:pp_type(Ty)]),
     Res.
 
