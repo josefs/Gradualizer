@@ -1,4 +1,4 @@
--module(refine_bound_var_pass).
+-module(refine_bound_var_should_pass).
 
 %% Note: Here we're refining an already bound variable
 
