@@ -1862,7 +1862,9 @@ do_type_check_expr(Env, {match, _, Pat, Expr}) ->
                                 _Other -> UBoundNorm end,
     {UBound, Env2};
 do_type_check_expr(Env, {'if', _, Clauses}) ->
-    infer_clauses(Env, Clauses);
+    {Ty, Env1} = infer_clauses(Env, Clauses),
+    _Env2 = check_clauses(Env, [], Ty, Clauses, capture_vars),
+    {Ty, Env1};
 do_type_check_expr(Env, {'case', _, Expr, Clauses}) ->
     {ExprTy, Env1} = type_check_expr(Env, Expr),
     Env2 = add_var_binds(Env, Env1, Env),
