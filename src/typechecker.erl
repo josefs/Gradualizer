@@ -1867,8 +1867,8 @@ do_type_check_expr(Env, {'case', _, Expr, Clauses}) ->
     {ExprTy, Env1} = type_check_expr(Env, Expr),
     Env2 = add_var_binds(Env, Env1, Env),
     {Ty, Env3} = infer_clauses(Env2, Clauses),
-    Env4 = check_clauses(Env3, [ExprTy], Ty, Clauses, capture_vars),
-    {Ty, union_var_binds(Env1, Env4, Env)};
+    _Env4 = check_clauses(Env2, [ExprTy], Ty, Clauses, capture_vars),
+    {Ty, union_var_binds(Env1, Env3, Env)};
 do_type_check_expr(Env, {tuple, _, TS}) ->
     {Tys, VarBindsList} = lists:unzip([ type_check_expr(Env, Expr) || Expr <- TS ]),
     InferredTy = type(tuple, Tys),
