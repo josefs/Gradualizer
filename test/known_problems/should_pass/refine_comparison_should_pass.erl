@@ -1,5 +1,7 @@
 -module(refine_comparison_should_pass).
 
+-gradualizer([no_skip_complex_guards]).
+
 -export([comp_map_value3/1]).
 
 -type my_map() :: #{value := integer() | nil}.
