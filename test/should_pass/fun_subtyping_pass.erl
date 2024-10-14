@@ -1,4 +1,4 @@
--module(fun_subtyping).
+-module(fun_subtyping_pass).
 
 -export([return_fun_intersection/0]).
 
