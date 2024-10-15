@@ -2647,7 +2647,7 @@ type_check_expr_in(Env, ResTy, Expr) ->
         true ->
             NewEnv;
         false ->
-            throw(type_error(Expr, ResTy, InferredTy))
+            throw(type_error(Expr, InferredTy, ResTy))
     end.
 
 %-spec type_check_expr_in(Env, ResTy, Expr) -> Env when
