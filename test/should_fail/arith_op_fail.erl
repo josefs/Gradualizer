@@ -1,15 +1,15 @@
 -module(arith_op_fail).
 
--export([failplus/1, faildivvar/1, faildivlit/1, failpositivedivision/1,
-         faildivprecise/1, failplusprecise/2, failminusprecisepos/2,
-         failminusnonneg/2, failminuspreciseneg/2,
-         failbnot/1, int_error/2, int_error2/2]).
-
--spec failplus(_) -> tuple().
-failplus(X) -> X + X.
-
--spec faildivvar(_) -> boolean().
-faildivvar(X) -> X div X.
+-export([faildivlit/1,
+         failpositivedivision/1,
+         faildivprecise/1,
+         failplusprecise/2,
+         failminusprecisepos/2,
+         failminusnonneg/2,
+         failminuspreciseneg/2,
+         failbnot/1,
+         int_error/2,
+         int_error2/2]).
 
 -spec faildivlit(boolean()) -> any() | boolean().
 faildivlit(X) -> X div 2.

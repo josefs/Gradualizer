@@ -1,4 +1,4 @@
--module(binary_comprehension).
+-module(binary_comprehension_fail).
 -compile([debug_info]).
 -export([
          bitstring_match/0

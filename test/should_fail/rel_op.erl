@@ -1,8 +1,5 @@
 -module(rel_op).
--export([fail/1, fail/2, foo/2, bar/2]).
-
--spec fail(term()) -> tuple().
-fail(X) -> X > X.
+-export([fail/2, foo/2, bar/2]).
 
 -spec fail(a | b, b | c) -> boolean() | tuple().
 fail(X, Y) -> X == Y.

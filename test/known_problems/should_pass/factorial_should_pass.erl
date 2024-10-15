@@ -1,9 +1,9 @@
--module(factorial).
+-module(factorial_should_pass).
 
 -export([factorial/1]).
 
 %% This tests multiple things:
-%%   * Type refinement of the argument. After the first clase,
+%%   * Type refinement of the argument. After the first clause,
 %%     we have N :: pos_integer().
 %%   * Multiplication is closed under pos_integer()
 %%   * pos_integer() - 1 :: non_neg_integer()

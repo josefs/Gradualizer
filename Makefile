@@ -133,8 +133,8 @@ test/arg.beam: test/should_fail/arg.erl
 .PHONY: build_test_data
 test_data_erls = $(wildcard test/known_problems/**/*.erl test/should_fail/*.erl test/should_pass/*.erl)
 build_test_data:
-	mkdir -p "test_data"
-	erlc $(TEST_ERLC_OPTS) -o test_data $(test_data_erls)
+	@mkdir -p "test_data"
+	@erlc $(TEST_ERLC_OPTS) -o test_data $(test_data_erls)
 
 EUNIT_OPTS =
 
@@ -150,24 +150,24 @@ eunit: compile-tests
 	 '$(erl_run_eunit), halt().'
 
 cli-tests: bin/gradualizer test/arg.beam
-	# CLI test cases
-	# 1. When checking a dir with erl files, erl file names are printed
-	bin/gradualizer test/dir \
+	@# CLI test cases
+	@# 1. When checking a dir with erl files, erl file names are printed
+	@bin/gradualizer test/dir \
 	2>&1|perl -0777 -ne 'm%^test/dir/test_in_dir.erl:% or die "CLI 1 ($$_)"'
-	# 2. When checking a beam file; beam file name is printed
-	bin/gradualizer test/arg.beam \
+	@# 2. When checking a beam file; beam file name is printed
+	@bin/gradualizer test/arg.beam \
 	2>&1|perl -0777 -ne 'm%^test/arg.beam:% or die "CLI 1 ($$_)"'
-	# 3. Brief formatting
-	bin/gradualizer --fmt_location brief test/dir \
+	@# 3. Brief formatting
+	@bin/gradualizer --fmt_location brief test/dir \
 	2>&1|perl -0777 -ne '/^test\/dir\/test_in_dir.erl:6:12: The variable/ or die "CLI 6 ($$_)"'
-	# 4. Verbose formatting
-	bin/gradualizer --fmt_location verbose --no_fancy test/dir \
+	@# 4. Verbose formatting
+	@bin/gradualizer --fmt_location verbose --no_fancy test/dir \
 	2>&1|perl -ne '/^test\/dir\/test_in_dir.erl: The variable N on line 6 at column 12/ or die "CLI 7 ($$_)"'
-	# 5. Possible to exclude prelude (-0777 from https://stackoverflow.com/a/30594643/497116)
-	bin/gradualizer --no_prelude test/should_pass/cyclic_otp_specs.erl \
+	@# 5. Possible to exclude prelude (-0777 from https://stackoverflow.com/a/30594643/497116)
+	@bin/gradualizer --no_prelude test/should_pass/cyclic_otp_specs.erl \
 	2>&1|perl -0777 -ne '/^test\/should_pass\/cyclic_otp_specs.erl: The type spec/g or die "CLI 9 ($$_)"'
 	# 6. Excluding prelude and then including it is a no-op
-	bin/gradualizer --no_prelude --specs_override_dir priv/prelude \
+	@bin/gradualizer --no_prelude --specs_override_dir priv/prelude \
 	  test/should_pass/cyclic_otp_specs.erl || (echo "CLI 10"; exit 1)
 
 # Cover compile, run eunit, export and generate reports
@@ -223,7 +223,7 @@ dialyze-tests: app $(DIALYZER_PLT)
 
 .PHONY: check_name_clashes
 check_name_clashes:
-	test/check_name_clashes.sh
+	@test/check_name_clashes.sh
 
 # DIALYZER_PLT is a variable understood directly by Dialyzer.
 # Exit status 2 = warnings were emitted

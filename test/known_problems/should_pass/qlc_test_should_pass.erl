@@ -1,4 +1,4 @@
--module(qlc_test).
+-module(qlc_test_should_pass).
 
 -export([test/0]).
 
