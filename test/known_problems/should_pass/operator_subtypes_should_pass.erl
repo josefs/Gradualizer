@@ -1,6 +1,8 @@
 -module(operator_subtypes_should_pass).
 
--export([float_op2/2,
+-export([arith_op3/1,
+         arith_op4/1,
+         float_op2/2,
          pos_op1/2,
          nonneg_op1/2,
          neg_op1/2,
@@ -13,6 +15,17 @@
          unary_op3/1]).
 
 %% Arithmetic operations
+
+-spec arith_op3(non_neg_integer()) -> pos_integer().
+arith_op3(N) ->
+    id(N + 1).
+
+-spec arith_op4(non_neg_integer()) -> pos_integer().
+arith_op4(N) ->
+    id(1 + N).
+
+-spec id(pos_integer()) -> pos_integer().
+id(P) -> P.
 
 -spec float_op2(integer(), float()) -> float().
 float_op2(X, Y) -> X / Y.
