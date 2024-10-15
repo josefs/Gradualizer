@@ -1,4 +1,4 @@
--module(binary_exhaustiveness_checking_pass).
+-module(binary_exhaustiveness_checking_should_pass).
 
 -export([f/0]).
 
