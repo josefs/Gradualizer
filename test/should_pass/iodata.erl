@@ -1,10 +1,6 @@
 -module(iodata).
 
--export([f/0, g/0]).
-
--spec f() -> iolist().
-f() ->
-    [$a|list_to_binary("b")].
+-export([g/0]).
 
 -spec g() -> term().
 g() ->

@@ -12,6 +12,7 @@
          list_op4/2,
          list_op6/2,
          list_op7/2,
+         list_op9/0,
          unary_op3/1]).
 
 %% Arithmetic operations
@@ -60,6 +61,10 @@ list_op6(Xs, Ys) -> Xs ++ Ys.
 
 -spec list_op7([integer(), ...], nonempty_improper_list(integer(), tl)) -> nonempty_improper_list(integer(), tl).
 list_op7(Xs, Ys) -> Xs ++ Ys.
+
+-spec list_op9() -> iolist().
+list_op9() ->
+    [$a | list_to_binary("b")].
 
 %% Unary operators
 
