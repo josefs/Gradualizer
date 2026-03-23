@@ -2595,21 +2595,23 @@ type_check_comprehension(Env, bc, Expr, []) ->
     {RetTy, Env};
 type_check_comprehension(Env, Compr, Expr, [{generate, _, Pat, Gen} | Quals]) ->
     {Ty,  _} = type_check_expr(Env, Gen),
+    %% Generator patterns create fresh variable bindings (shadow outer vars)
+    GenEnv = remove_pat_vars(Pat, Env),
     case expect_list_type(Ty, allow_nil_type, Env) of
         {elem_ty, ElemTy} ->
             {_PatTys, _UBounds, NewEnv} =
-                add_types_pats([Pat], [ElemTy], Env, capture_vars),
+                add_types_pats([Pat], [ElemTy], GenEnv, capture_vars),
             {TyL, VB} = type_check_comprehension(NewEnv, Compr, Expr, Quals),
             {TyL, VB};
         any ->
-            NewEnv = add_any_types_pat(Pat, Env),
+            NewEnv = add_any_types_pat(Pat, GenEnv),
             {TyL, VB} = type_check_comprehension(NewEnv, Compr, Expr, Quals),
             {TyL, VB};
         {elem_tys, _ElemTys} ->
             %% As a hack, we treat a union type as any, just to
             %% allow the program to type check.
             %% TODO: Rewrite the union outside of the comprehension
-            NewEnv = add_any_types_pat(Pat, Env),
+            NewEnv = add_any_types_pat(Pat, GenEnv),
             {TyL, VB} = type_check_comprehension(NewEnv, Compr, Expr, Quals),
             {TyL, VB};
         {type_error, BadTy} ->
@@ -2620,8 +2622,10 @@ type_check_comprehension(Env, Compr, Expr, [{b_generate, _P, Pat, Gen} | Quals])
                                 {integer, erl_anno:new(0), 1}]),
     VarBinds1 =
         type_check_expr_in(Env, BitStringTy, Gen),
+    %% Generator patterns create fresh variable bindings (shadow outer vars)
+    GenEnv = remove_pat_vars(Pat, Env),
     {_PatTys, _UBounds, NewEnv} =
-        add_types_pats([Pat], [BitStringTy], Env, capture_vars),
+        add_types_pats([Pat], [BitStringTy], GenEnv, capture_vars),
     {TyL, VarBinds2} =
         type_check_comprehension(NewEnv, Compr, Expr, Quals),
     {TyL, union_var_binds(VarBinds1, VarBinds2, Env)};
@@ -3397,20 +3401,22 @@ type_check_comprehension_in(Env, ResTy, OrigExpr, bc, Expr, _P, []) ->
 type_check_comprehension_in(Env, ResTy, OrigExpr, Compr, Expr, P,
                             [{generate, _, Pat, Gen} | Quals]) ->
     {Ty, _VB1} = type_check_expr(Env, Gen),
+    %% Generator patterns create fresh variable bindings (shadow outer vars)
+    GenEnv = remove_pat_vars(Pat, Env),
     case expect_list_type(Ty, allow_nil_type, Env) of
         any ->
-            NewEnv = add_any_types_pat(Pat, Env),
+            NewEnv = add_any_types_pat(Pat, GenEnv),
             _VB2 = type_check_comprehension_in(NewEnv, ResTy, OrigExpr, Compr, Expr, P, Quals),
             Env;
         {elem_ty, ElemTy} ->
             {_PatTys, _UBounds, NewEnv} =
-                add_types_pats([Pat], [ElemTy], Env, capture_vars),
+                add_types_pats([Pat], [ElemTy], GenEnv, capture_vars),
             _VB2 = type_check_comprehension_in(NewEnv, ResTy, OrigExpr, Compr, Expr, P, Quals),
             Env;
         {elem_tys, _ElemTys} ->
             %% TODO: As a hack, we treat a union type as any, just to
             %% allow the program to type check.
-            NewEnv = add_any_types_pat(Pat, Env),
+            NewEnv = add_any_types_pat(Pat, GenEnv),
             _VB2 = type_check_comprehension_in(NewEnv, ResTy, OrigExpr, Compr, Expr, P, Quals),
             Env;
         {type_error, BadTy} ->
@@ -3424,8 +3430,10 @@ type_check_comprehension_in(Env, ResTy, OrigExpr, Compr, Expr, P,
                    [{integer, erl_anno:new(0), 0},
                     {integer, erl_anno:new(0), 1}]},
     _VarBindsGen = type_check_expr_in(Env, BitTy, Gen),
+    %% Generator patterns create fresh variable bindings (shadow outer vars)
+    GenEnv = remove_pat_vars(Pat, Env),
     {_PatTys, _UBounds, NewEnv} =
-        add_types_pats([Pat], [BitTy], Env, capture_vars),
+        add_types_pats([Pat], [BitTy], GenEnv, capture_vars),
     type_check_comprehension_in(NewEnv, ResTy, OrigExpr, Compr, Expr, P, Quals);
 type_check_comprehension_in(Env, ResTy, OrigExpr, Compr, Expr, P, [Pred | Quals]) ->
     %% We choose to check the type of the predicate here. Arguments can be
@@ -5335,6 +5343,14 @@ count_var_occurrences(Exprs) ->
                              end,
                              #{},
                              Exprs).
+
+%% Remove variables occurring in Pat from the environment so that a generator
+%% pattern creates fresh bindings (shadowing outer variables).
+-spec remove_pat_vars(gradualizer_type:abstract_pattern(), env()) -> env().
+remove_pat_vars(Pat, Env) ->
+    PatVars = maps:keys(count_var_occurrences([Pat])),
+    VEnv = maps:without(PatVars, Env#env.venv),
+    Env#env{venv = VEnv}.
 
 %% Get type from specifiers in a bit syntax, e.g. <<Foo/float-little>>
 -spec type_of_bin_element({bin_element,
