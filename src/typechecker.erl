@@ -361,9 +361,17 @@ compat_ty({type, _, 'fun', [{type, _, product, Args1}, Res1]},
     {Aps, constraints:combine(Cs, Css, Env)};
 
 %% Unions
-compat_ty({type, _, union, Tys1}, {type, _, union, Tys2}, Seen, Env) ->
+compat_ty({type, _, union, Tys1}, {type, _, union, Tys2} = Ty2, Seen, Env) ->
     lists:foldl(fun (Ty1, {Seen1, C1}) ->
-                    {Seen2, C2} = any_type(Ty1, Tys2, Seen1, Env),
+                    {Seen2, C2} = try
+                                      any_type(Ty1, Tys2, Seen1, Env)
+                                  catch
+                                      nomatch ->
+                                          %% Ty1 might be a user_type that normalizes to a union.
+                                          %% Checking against individual members fails, but checking
+                                          %% against the full union might succeed.
+                                          compat(Ty1, Ty2, Seen1, Env)
+                                  end,
                     {Seen2, constraints:combine(C1, C2, Env)}
                 end, {Seen, constraints:empty()}, Tys1);
 compat_ty(Ty1, {type, _, union, Tys2}, Seen, Env) ->
