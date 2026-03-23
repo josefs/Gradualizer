@@ -1499,6 +1499,11 @@ expect_fun_type1(_Env, {type, _, 'fun', [{type, _, any}, ResTy]}, Arity) ->
     %% as we know Res2 is not {type, _, any}, which is explicitely matched on above.
     ResTy = ?assert_type(ResTy, type()),
     {fun_ty, ArgsTy, ResTy};
+expect_fun_type1(Env, [Ty], Arity) when not is_list(Ty) ->
+    %% Single-element list: unwrap and process directly.
+    %% This handles cases like a variable with a union of function types
+    %% that gets wrapped in a list by type_check_fun/3.
+    expect_fun_type1(Env, Ty, Arity);
 expect_fun_type1(Env, Tys, Arity) when is_list(Tys) ->
     %% This is a spec, not really a type().
     case expect_intersection_type(Env, Tys, Arity) of
