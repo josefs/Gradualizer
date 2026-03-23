@@ -1926,6 +1926,8 @@ do_type_check_expr(Env, {lc, _, Expr, Qualifiers}) ->
     type_check_comprehension(Env, lc, Expr, Qualifiers);
 do_type_check_expr(Env, {bc, _, Expr, Qualifiers}) ->
     type_check_comprehension(Env, bc, Expr, Qualifiers);
+do_type_check_expr(Env, {mc, _, Assoc, Qualifiers}) ->
+    type_check_comprehension(Env, mc, Assoc, Qualifiers);
 do_type_check_expr(Env, {block, _, Block}) ->
     type_check_block(Env, Block);
 
@@ -2505,6 +2507,11 @@ type_check_comprehension(Env, lc, Expr, []) ->
     {Ty, _VB} = type_check_expr(Env, Expr),
     RetTy = {type, erl_anno:new(0), list, [Ty]},
     {RetTy, Env};
+type_check_comprehension(Env, mc, {map_field_assoc, _, KeyExpr, ValExpr}, []) ->
+    {KeyTy, _VB1} = type_check_expr(Env, KeyExpr),
+    {ValTy, _VB2} = type_check_expr(Env, ValExpr),
+    RetTy = type(map, [type_assoc(map_field_assoc, [KeyTy, ValTy])]),
+    {RetTy, Env};
 type_check_comprehension(Env, bc, Expr, []) ->
     {Ty, _VB} = type_check_expr(Env, Expr),
     RetTy = case normalize(Ty, Env) of
@@ -2566,6 +2573,30 @@ type_check_comprehension(Env, Compr, Expr, [{BGenerateTag, _P, Pat, Gen} | Quals
     {TyL, VarBinds2} =
         type_check_comprehension(NewEnv, Compr, Expr, Quals),
     {TyL, union_var_binds(VarBinds1, VarBinds2, Env)};
+type_check_comprehension(Env, Compr, Expr, [{MGenerateTag, _, {map_field_exact, _, KeyPat, ValPat}, Gen} | Quals])
+  when MGenerateTag =:= m_generate; MGenerateTag =:= m_generate_strict ->
+    {Ty, _VB1} = type_check_expr(Env, Gen),
+    %% Generator patterns create fresh variable bindings (shadow outer vars)
+    GenEnv = remove_pat_vars(KeyPat, remove_pat_vars(ValPat, Env)),
+    case expect_map_type(normalize(Ty, Env), Env) of
+        {assoc_tys, AssocTys} when is_list(AssocTys) ->
+            {KeyTys, ValTys} = lists:foldl(
+                fun({type, _, _AssocTag, [KT, VT]}, {KAcc, VAcc}) ->
+                    {[KT | KAcc], [VT | VAcc]}
+                end, {[], []}, AssocTys),
+            KeyTy = normalize(type(union, KeyTys), Env),
+            ValTy = normalize(type(union, ValTys), Env),
+            {_PatTys1, _UBounds1, Env1} =
+                add_types_pats([KeyPat], [KeyTy], GenEnv, capture_vars),
+            {_PatTys2, _UBounds2, NewEnv} =
+                add_types_pats([ValPat], [ValTy], Env1, capture_vars),
+            type_check_comprehension(NewEnv, Compr, Expr, Quals);
+        any ->
+            NewEnv = add_any_types_pat(ValPat, add_any_types_pat(KeyPat, GenEnv)),
+            type_check_comprehension(NewEnv, Compr, Expr, Quals);
+        {type_error, BadTy} ->
+            throw(type_error(Gen, BadTy, type(map)))
+    end;
 type_check_comprehension(Env, Compr, Expr, [Guard | Quals]) ->
     %% We don't require guards to return a boolean.
     %% This decision is up for debate.
@@ -2825,6 +2856,8 @@ do_type_check_expr_in(Env, ResTy, {lc, P, Expr, Qualifiers} = OrigExpr) ->
     type_check_comprehension_in(Env, ResTy, OrigExpr, lc, Expr, P, Qualifiers);
 do_type_check_expr_in(Env, ResTy, {bc, P, Expr, Qualifiers} = OrigExpr) ->
     type_check_comprehension_in(Env, ResTy, OrigExpr, bc, Expr, P, Qualifiers);
+do_type_check_expr_in(Env, ResTy, {mc, P, Assoc, Qualifiers} = OrigExpr) ->
+    type_check_comprehension_in(Env, ResTy, OrigExpr, mc, Assoc, P, Qualifiers);
 
 %% Functions
 do_type_check_expr_in(Env, Ty, {'fun', _, {clauses, Clauses}} = Fun) ->
@@ -3279,14 +3312,15 @@ unary_op_arg_type('-', Ty = {type, _, float, []}) ->
 -spec type_check_comprehension_in(Env        :: env(),
                                   ResTy      :: type(),
                                   OrigExpr   :: gradualizer_type:abstract_expr(),
-                                  Compr      :: lc | bc,
+                                  Compr      :: lc | bc | mc,
                                   Expr       :: gradualizer_type:abstract_expr(),
                                   Position   :: erl_anno:anno(),
-                                  Qualifiers :: [ListGen | BinGen | Filter]) ->
+                                  Qualifiers :: [ListGen | BinGen | MapGen | Filter]) ->
         env()
        when
         ListGen :: {generate | generate_strict, erl_anno:anno(), gradualizer_type:abstract_expr(), gradualizer_type:abstract_expr()},
         BinGen  :: {b_generate | b_generate_strict, erl_anno:anno(), gradualizer_type:abstract_expr(), gradualizer_type:abstract_expr()},
+        MapGen  :: {m_generate | m_generate_strict, erl_anno:anno(), gradualizer_type:abstract_expr(), gradualizer_type:abstract_expr()},
         Filter  :: gradualizer_type:abstract_expr().
 type_check_comprehension_in(Env, ResTy, OrigExpr, lc, Expr, _P, []) ->
     case expect_list_type(ResTy, allow_nil_type, Env) of
@@ -3334,6 +3368,52 @@ type_check_comprehension_in(Env, ResTy, OrigExpr, bc, Expr, _P, []) ->
             type_check_union_in(Env, ElemTys, Expr);
         {type_error, Ty} ->
             throw({type_error, OrigExpr, Ty, ResTy})
+    end;
+type_check_comprehension_in(Env, ResTy, OrigExpr, mc,
+                            {map_field_assoc, _, KeyExpr, ValExpr}, _P, []) ->
+    case expect_map_type(normalize(ResTy, Env), Env) of
+        any ->
+            {_KeyTy, _VB1} = type_check_expr(Env, KeyExpr),
+            {_ValTy, _VB2} = type_check_expr(Env, ValExpr),
+            Env;
+        {assoc_tys, AssocTys} when is_list(AssocTys) ->
+            {KeyTys, ValTys} = lists:foldl(
+                fun({type, _, _AssocTag, [KT, VT]}, {KAcc, VAcc}) ->
+                    {[KT | KAcc], [VT | VAcc]}
+                end, {[], []}, AssocTys),
+            KeyTy = normalize(type(union, KeyTys), Env),
+            ValTy = normalize(type(union, ValTys), Env),
+            _VB1 = type_check_expr_in(Env, KeyTy, KeyExpr),
+            _VB2 = type_check_expr_in(Env, ValTy, ValExpr),
+            Env;
+        {type_error, _} ->
+            throw(type_error(OrigExpr, type(map), ResTy))
+    end;
+type_check_comprehension_in(Env, ResTy, OrigExpr, Compr, Expr, P,
+                            [{MGenerateTag, _, {map_field_exact, _, KeyPat, ValPat}, Gen} | Quals])
+  when MGenerateTag =:= m_generate; MGenerateTag =:= m_generate_strict ->
+    {Ty, _VB1} = type_check_expr(Env, Gen),
+    GenEnv = remove_pat_vars(KeyPat, remove_pat_vars(ValPat, Env)),
+    case expect_map_type(normalize(Ty, Env), Env) of
+        any ->
+            NewEnv = add_any_types_pat(ValPat, add_any_types_pat(KeyPat, GenEnv)),
+            _VB2 = type_check_comprehension_in(NewEnv, ResTy, OrigExpr, Compr, Expr, P, Quals),
+            Env;
+        {assoc_tys, AssocTys} when is_list(AssocTys) ->
+            {KeyTys, ValTys} = lists:foldl(
+                fun({type, _, _AssocTag, [KT, VT]}, {KAcc, VAcc}) ->
+                    {[KT | KAcc], [VT | VAcc]}
+                end, {[], []}, AssocTys),
+            KeyTy = normalize(type(union, KeyTys), Env),
+            ValTy = normalize(type(union, ValTys), Env),
+            {_PatTys1, _UBounds1, Env1} =
+                add_types_pats([KeyPat], [KeyTy], GenEnv, capture_vars),
+            {_PatTys2, _UBounds2, NewEnv} =
+                add_types_pats([ValPat], [ValTy], Env1, capture_vars),
+            _VB2 = type_check_comprehension_in(NewEnv, ResTy, OrigExpr, Compr, Expr, P, Quals),
+            Env;
+        {type_error, BadTy} ->
+            throw(type_error(Gen, BadTy, type(map)))
     end;
 type_check_comprehension_in(Env, ResTy, OrigExpr, Compr, Expr, P,
                             [{GenerateTag, _, Pat, Gen} | Quals])
