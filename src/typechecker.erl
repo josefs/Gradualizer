@@ -2573,6 +2573,11 @@ type_check_comprehension(Env, Compr, Expr, [{BGenerateTag, _P, Pat, Gen} | Quals
     {TyL, VarBinds2} =
         type_check_comprehension(NewEnv, Compr, Expr, Quals),
     {TyL, union_var_binds(VarBinds1, VarBinds2, Env)};
+type_check_comprehension(Env, Compr, Expr, [{zip, _, Generators} | Quals]) ->
+    %% Zip generators iterate in lockstep. Each generator's expression is
+    %% evaluated in the original Env (variables don't leak between arms).
+    NewEnv = type_check_zip_generators(Env, Generators),
+    type_check_comprehension(NewEnv, Compr, Expr, Quals);
 type_check_comprehension(Env, Compr, Expr, [{MGenerateTag, _, {map_field_exact, _, KeyPat, ValPat}, Gen} | Quals])
   when MGenerateTag =:= m_generate; MGenerateTag =:= m_generate_strict ->
     {Ty, _VB1} = type_check_expr(Env, Gen),
@@ -2604,6 +2609,78 @@ type_check_comprehension(Env, Compr, Expr, [Guard | Quals]) ->
     NewEnv = add_var_binds(Env, VarBinds1, Env),
     {TyL, VarBinds2} = type_check_comprehension(NewEnv, Compr, Expr, Quals),
     {TyL, union_var_binds(VarBinds1, VarBinds2, Env)}.
+
+%% Type check generators in a zip group.
+%% All generator expressions are type-checked in the original Env
+%% (generators are independent - variables don't leak between zip arms).
+%% Pattern variables from all generators are bound in the returned env.
+-spec type_check_zip_generators(env(), [_]) -> env().
+type_check_zip_generators(Env, Generators) ->
+    %% Remove all pattern variables from all generators
+    GenEnv = lists:foldl(fun zip_remove_pat_vars/2, Env, Generators),
+    %% Type-check each generator's expression in the ORIGINAL Env
+    %% and bind pattern variables in the accumulated env
+    lists:foldl(
+        fun(Gen, AccEnv) ->
+            type_check_single_zip_generator(Env, AccEnv, Gen)
+        end, GenEnv, Generators).
+
+-spec zip_remove_pat_vars(_, env()) -> env().
+zip_remove_pat_vars({Tag, _, Pat, _Gen}, Env)
+  when Tag =:= generate; Tag =:= generate_strict ->
+    remove_pat_vars(Pat, Env);
+zip_remove_pat_vars({Tag, _, Pat, _Gen}, Env)
+  when Tag =:= b_generate; Tag =:= b_generate_strict ->
+    remove_pat_vars(Pat, Env);
+zip_remove_pat_vars({Tag, _, {map_field_exact, _, KeyPat, ValPat}, _Gen}, Env)
+  when Tag =:= m_generate; Tag =:= m_generate_strict ->
+    remove_pat_vars(KeyPat, remove_pat_vars(ValPat, Env)).
+
+-spec type_check_single_zip_generator(env(), env(), _) -> env().
+type_check_single_zip_generator(OrigEnv, AccEnv, {Tag, _, Pat, Gen})
+  when Tag =:= generate; Tag =:= generate_strict ->
+    {Ty, _} = type_check_expr(OrigEnv, Gen),
+    case expect_list_type(Ty, allow_nil_type, OrigEnv) of
+        {elem_ty, ElemTy} ->
+            {_PatTys, _UBounds, NewEnv} =
+                add_types_pats([Pat], [ElemTy], AccEnv, capture_vars),
+            NewEnv;
+        any ->
+            add_any_types_pat(Pat, AccEnv);
+        {elem_tys, _ElemTys} ->
+            add_any_types_pat(Pat, AccEnv);
+        {type_error, BadTy} ->
+            throw(type_error(Gen, BadTy, type(list)))
+    end;
+type_check_single_zip_generator(OrigEnv, AccEnv, {Tag, _, Pat, Gen})
+  when Tag =:= b_generate; Tag =:= b_generate_strict ->
+    BitStringTy = type(binary, [{integer, erl_anno:new(0), 0},
+                                {integer, erl_anno:new(0), 1}]),
+    _VarBinds = type_check_expr_in(OrigEnv, BitStringTy, Gen),
+    {_PatTys, _UBounds, NewEnv} =
+        add_types_pats([Pat], [BitStringTy], AccEnv, capture_vars),
+    NewEnv;
+type_check_single_zip_generator(OrigEnv, AccEnv, {Tag, _, {map_field_exact, _, KeyPat, ValPat}, Gen})
+  when Tag =:= m_generate; Tag =:= m_generate_strict ->
+    {Ty, _} = type_check_expr(OrigEnv, Gen),
+    case expect_map_type(normalize(Ty, OrigEnv), OrigEnv) of
+        {assoc_tys, AssocTys} when is_list(AssocTys) ->
+            {KeyTys, ValTys} = lists:foldl(
+                fun({type, _, _AssocTag, [KT, VT]}, {KAcc, VAcc}) ->
+                    {[KT | KAcc], [VT | VAcc]}
+                end, {[], []}, AssocTys),
+            KeyTy = normalize(type(union, KeyTys), OrigEnv),
+            ValTy = normalize(type(union, ValTys), OrigEnv),
+            {_PatTys1, _UBounds1, Env1} =
+                add_types_pats([KeyPat], [KeyTy], AccEnv, capture_vars),
+            {_PatTys2, _UBounds2, NewEnv} =
+                add_types_pats([ValPat], [ValTy], Env1, capture_vars),
+            NewEnv;
+        any ->
+            add_any_types_pat(ValPat, add_any_types_pat(KeyPat, AccEnv));
+        {type_error, BadTy} ->
+            throw(type_error(Gen, BadTy, type(map)))
+    end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Checking the type of an expression
@@ -3315,12 +3392,13 @@ unary_op_arg_type('-', Ty = {type, _, float, []}) ->
                                   Compr      :: lc | bc | mc,
                                   Expr       :: gradualizer_type:abstract_expr(),
                                   Position   :: erl_anno:anno(),
-                                  Qualifiers :: [ListGen | BinGen | MapGen | Filter]) ->
+                                  Qualifiers :: [ListGen | BinGen | MapGen | ZipGen | Filter]) ->
         env()
        when
         ListGen :: {generate | generate_strict, erl_anno:anno(), gradualizer_type:abstract_expr(), gradualizer_type:abstract_expr()},
         BinGen  :: {b_generate | b_generate_strict, erl_anno:anno(), gradualizer_type:abstract_expr(), gradualizer_type:abstract_expr()},
         MapGen  :: {m_generate | m_generate_strict, erl_anno:anno(), gradualizer_type:abstract_expr(), gradualizer_type:abstract_expr()},
+        ZipGen  :: {zip, erl_anno:anno(), [ListGen | BinGen | MapGen]},
         Filter  :: gradualizer_type:abstract_expr().
 type_check_comprehension_in(Env, ResTy, OrigExpr, lc, Expr, _P, []) ->
     case expect_list_type(ResTy, allow_nil_type, Env) of
@@ -3389,6 +3467,12 @@ type_check_comprehension_in(Env, ResTy, OrigExpr, mc,
         {type_error, _} ->
             throw(type_error(OrigExpr, type(map), ResTy))
     end;
+type_check_comprehension_in(Env, ResTy, OrigExpr, Compr, Expr, P,
+                            [{zip, _, Generators} | Quals]) ->
+    %% Zip generators iterate in lockstep. Each generator's expression is
+    %% evaluated in the original Env (variables don't leak between arms).
+    NewEnv = type_check_zip_generators(Env, Generators),
+    type_check_comprehension_in(NewEnv, ResTy, OrigExpr, Compr, Expr, P, Quals);
 type_check_comprehension_in(Env, ResTy, OrigExpr, Compr, Expr, P,
                             [{MGenerateTag, _, {map_field_exact, _, KeyPat, ValPat}, Gen} | Quals])
   when MGenerateTag =:= m_generate; MGenerateTag =:= m_generate_strict ->
