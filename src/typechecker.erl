@@ -167,14 +167,7 @@
 %% Two types are compatible if one is a subtype of the other, or both.
 -spec compatible(type(), type(), env()) -> boolean().
 compatible(Ty1, Ty2, Env) ->
-    case {subtype(Ty1, Ty2, Env), subtype(Ty2, Ty1, Env)} of
-        {true, _} ->
-            true;
-        {_, true} ->
-            true;
-        {false, false} ->
-            false
-    end.
+    subtype(Ty1, Ty2, Env) orelse subtype(Ty2, Ty1, Env).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Subtyping compatibility
@@ -221,20 +214,7 @@ subtype_with_constraints(Ty1, Ty2, Env) ->
 %% from multiple clauses into a single union type constraint.
 -spec any_subtype([type()], type(), env()) -> boolean().
 any_subtype(Tys, Ty, Env) ->
-    any_subtype(Tys, Ty, Env, false).
-
--spec any_subtype([type()], type(), env(), boolean()) -> boolean().
-any_subtype([], _Ty, _Env, true) ->
-    true;
-any_subtype([], _Ty, _Env, false) ->
-    false;
-any_subtype([Ty1|Tys], Ty, Env, AnySubtype) ->
-    case subtype(Ty1, Ty, Env) of
-        true ->
-            any_subtype(Tys, Ty, Env, true);
-        false ->
-            any_subtype(Tys, Ty, Env, AnySubtype)
-    end.
+    lists:any(fun (Ty1) -> subtype(Ty1, Ty, Env) end, Tys).
 
 -type compat_acc() :: {Seen :: map(), constraints:t()}.
 
@@ -747,17 +727,14 @@ glb_ty({type, _, tuple, _} = Ty1, {type, _, tuple, any}, _A, _Env) ->
 glb_ty({type, _, tuple, Tys1}, {type, _, tuple, Tys2}, A, Env) ->
     Tys1 = ?assert_type(Tys1, [type()]),
     Tys2 = ?assert_type(Tys2, [type()]),
-    EqualSizes = length(Tys1) =:= length(Tys2),
-    if
-        not EqualSizes ->
+    case length(Tys1) =:= length(Tys2) of
+        false ->
             type(none);
-        EqualSizes ->
+        true ->
             Tys = lists:zipwith(fun(T1, T2) -> glb(T1, T2, A, Env) end, Tys1, Tys2),
             case lists:any(fun(?type(none)) -> true; (_) -> false end, Tys) of
-                true ->
-                    type(none);
-                false ->
-                    type(tuple, Tys)
+                true  -> type(none);
+                false -> type(tuple, Tys)
             end
     end;
 
@@ -806,11 +783,10 @@ glb_ty(?type(AssocTag1, [Key1, Val1]), ?type(AssocTag2, [Key2, Val2]), A, Env)
     Key2 = ?assert_type(Key2, type()),
     Val2 = ?assert_type(Val2, type()),
 
+    %% If either tag is exact, the result is exact
     AssocTag = case {AssocTag1, AssocTag2} of
-                   {map_field_exact, map_field_exact} -> map_field_exact;
-                   {map_field_exact, map_field_assoc} -> map_field_exact;
-                   {map_field_assoc, map_field_exact} -> map_field_exact;
-                   {map_field_assoc, map_field_assoc} -> map_field_assoc
+                   {map_field_assoc, map_field_assoc} -> map_field_assoc;
+                   _ -> map_field_exact
                end,
 
     Key = case {Key1, AssocTag, Key2} of
@@ -891,12 +867,11 @@ glb_ty({type, _, 'fun', [{type, _, product, _} = TArgs1, _]} = T1,
 glb_ty({type, _, Name, Args1}, {type, _, Name, Args2}, A, Env) ->
     Args1 = ?assert_type(Args1, [type()]),
     Args2 = ?assert_type(Args2, [type()]),
-    if
-        length(Args1) == length(Args2) ->
+    case length(Args1) == length(Args2) of
+        true ->
             Args = [ glb(Arg1, Arg2, A, Env) || {Arg1, Arg2} <- lists:zip(Args1, Args2) ],
             type(Name, Args);
-        length(Args1) /= length(Args2) ->
-            %% Incompatible
+        false ->
             type(none)
     end;
 
@@ -906,16 +881,12 @@ glb_ty(_Ty1, _Ty2, _A, _Env) ->
 
 -spec has_overlapping_keys(type(), env()) -> boolean().
 has_overlapping_keys({type, _, map, Assocs}, Env) ->
-    Cart = [ case {subtype(As1, As2, Env), subtype(As2, As1, Env)} of
-                 {false, false} ->
-                     false;
-                 {_R1, _R2} ->
-                     true
-             end
-             || As1 <- ?assert_type(Assocs, list()),
-                As2 <- ?assert_type(Assocs, list()),
-                As1 /= As2 ],
-    lists:any(fun(X) -> X end, Cart).
+    lists:any(fun ({As1, As2}) ->
+                      subtype(As1, As2, Env) orelse subtype(As2, As1, Env)
+              end,
+              [{As1, As2} || As1 <- ?assert_type(Assocs, list()),
+                             As2 <- ?assert_type(Assocs, list()),
+                             As1 /= As2]).
 
 %% Non-singleton required (alias exact) keys are hard to work with
 %% because they express that at least one value of that type should
@@ -962,9 +933,7 @@ normalize_rec({type, _, union, Tys}, Env) ->
 normalize_rec({user_type, _, Name, Args} = Type, Env) ->
     case gradualizer_lib:get_type_definition(Type, Env, []) of
         {ok, T} ->
-            T1 = replace_type_vars_with_any(T),
-            T2 = normalize_rec(T1, Env),
-            T2;
+            normalize_rec(replace_type_vars_with_any(T), Env);
         opaque ->
             Type;
         not_found ->
@@ -980,9 +949,7 @@ normalize_rec({remote_type, _, [{atom, _, M}, {atom, _, N}, Args]}, Env) ->
     P = position_info_from_spec(Env#env.current_spec),
     case gradualizer_db:get_exported_type(M, N, Args) of
         {ok, T} ->
-            T1 = replace_type_vars_with_any(T),
-            T2 = normalize_rec(T1, Env),
-            T2;
+            normalize_rec(replace_type_vars_with_any(T), Env);
         opaque ->
             NormalizedArgs = lists:map(fun (Ty) -> normalize_rec(Ty, Env) end, Args),
             Ty = {user_type, erl_anno:new(0), N, NormalizedArgs},
@@ -1149,19 +1116,12 @@ is_singleton_type(?type(nil)) -> true;
 is_singleton_type(?type(binary, [{integer, _, 0},{integer, _, 0}])) -> true; % empty binary
 is_singleton_type(_) -> false. % TODO: add more cases
 
-%% Remove all atom listerals if atom() is among the types.
+%% Remove all atom literals if atom() is among the types.
 -spec merge_atom_types([type()]) -> [type()].
 merge_atom_types(Types) ->
-    IsAnyAtom = lists:any(fun ({type, _, atom, []}) -> true;
-                              (_)                   -> false
-                          end,
-                          Types),
-    if
-        IsAnyAtom -> lists:filter(fun ({atom, _, _}) -> false;
-                                      (_)            -> true
-                                  end,
-                                  Types);
-        true      -> Types
+    case lists:any(fun ({type, _, atom, []}) -> true; (_) -> false end, Types) of
+        true  -> lists:filter(fun ({atom, _, _}) -> false; (_) -> true end, Types);
+        false -> Types
     end.
 
 
@@ -1998,20 +1958,15 @@ do_type_check_expr(Env, {map, _, UpdateExpr, Assocs}) ->
 do_type_check_expr(Env, {record_field, Anno, Expr, Record, FieldWithAnno}) ->
     {Ty, VB1} = type_check_expr(Env, Expr),
     case Ty of
-        {type, _, record, [{atom, _, Record}]} ->
-            % Unrefined
-            VB2 = type_check_expr_in(Env, {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Record}]}, Expr),
-            Rec = get_record_fields(Record, Anno, Env),
-            FieldTy = get_rec_field_type(FieldWithAnno, Rec),
-            VB = union_var_binds(VB1, VB2, Env),
-            {FieldTy, VB};
-        {type, _, record, [{atom, _, Record} | Fields]} ->
+        {type, _, record, [{atom, _, Record} | Fields]} when Fields =/= [] ->
+            %% Refined record type: use refined field types with fallback to declared types
             Rec = get_record_fields(Record, Anno, Env),
             FieldTypes1 = record_field_types(Fields),
             FieldTypes2 = record_field_types(Rec),
             FieldTy = get_rec_field_type(FieldWithAnno, FieldTypes1, FieldTypes2),
             {FieldTy, VB1};
         _ ->
+            %% Unrefined record type or unknown type: check against declared record type
             VB2 = type_check_expr_in(Env, {type, erl_anno:new(0), record, [{atom, erl_anno:new(0), Record}]}, Expr),
             Rec = get_record_fields(Record, Anno, Env),
             FieldTy = get_rec_field_type(FieldWithAnno, Rec),
@@ -2272,25 +2227,26 @@ get_unassigned_fields(Fields, All) ->
 
 -spec type_check_logic_op(env(), _, _, _) -> {type(), env()}.
 type_check_logic_op(Env, Op, Arg1, Arg2) ->
-    % Bindings from the first argument are only passed along for
-    % 'andalso' and 'orelse', not 'and', 'or' or 'xor'.
-    UnionVarBindsSecondArg =
-        fun (VB1, VB2) ->
-                if (Op == 'and') or (Op == 'or') or (Op == 'xor') ->
-                        VB1;
-                   (Op == 'andalso') or (Op == 'orelse') ->
-                        union_var_binds(VB1, VB2, Env)
-                end
-        end,
     {Ty1, VB1} = type_check_expr(Env, Arg1),
     case subtype(Ty1, type(boolean), Env) of
         false ->
             throw(type_error(Arg1, Ty1, type(boolean)));
         true ->
-            {Ty2, VB2} = type_check_expr(UnionVarBindsSecondArg(Env, VB1), Arg2),
-            % Allow any() in second argument for shortcut operators
-            SndArgTy = if Op == 'andalso'; Op == 'orelse' -> type(any);
-                          true                            -> type(bool) end,
+            %% Bindings from the first argument are only passed along for
+            %% 'andalso' and 'orelse', not 'and', 'or' or 'xor'.
+            Env2 = case Op of
+                       _ when Op =:= 'andalso'; Op =:= 'orelse' ->
+                           union_var_binds(Env, VB1, Env);
+                       _ ->
+                           Env
+                   end,
+            {Ty2, VB2} = type_check_expr(Env2, Arg2),
+            %% Allow any() in second argument for shortcut operators
+            SndArgTy = case Op of
+                           'andalso' -> type(any);
+                           'orelse'  -> type(any);
+                           _         -> type(bool)
+                       end,
             case subtype(Ty2, SndArgTy, Env) of
                 false ->
                     throw(type_error(Arg2, Ty2, type(boolean)));
@@ -2301,34 +2257,25 @@ type_check_logic_op(Env, Op, Arg1, Arg2) ->
                             'orelse'  -> type(union, [Ty2, {atom, erl_anno:new(0), true}]);
                             _         -> type(boolean)
                         end,
-                    {normalize(Inferred, Env)
-                    ,union_var_binds(VB1, VB2, Env)}
+                    {normalize(Inferred, Env), union_var_binds(VB1, VB2, Env)}
             end
     end.
 
 -spec type_check_rel_op(env(), _, _, _, _) -> {type(), env()}.
 type_check_rel_op(Env, Op, P, Arg1, Arg2) ->
-    case {type_check_expr(Env, Arg1)
-         ,type_check_expr(Env, Arg2)} of
-        {{Ty1, VB1}, {Ty2, VB2}} ->
-            case compatible(Ty1, Ty2, Env) of
-                true ->
-                    RetType =
-                        case {Ty1, Ty2} of
-                            {{type, _, any, []},_} ->
-                                type(any);
-                            {_,{type, _, any, []}} ->
-                                type(any);
-                            {_,_} ->
-                                % Return boolean() when both argument types
-                                % are known, i.e. not any().
-                                type(boolean)
-                        end,
-                    {RetType
-                    ,union_var_binds(VB1, VB2, Env)};
-                _ ->
-                    throw(type_error(relop, Op, P, Ty1, Ty2))
-            end
+    {Ty1, VB1} = type_check_expr(Env, Arg1),
+    {Ty2, VB2} = type_check_expr(Env, Arg2),
+    case compatible(Ty1, Ty2, Env) of
+        true ->
+            RetType =
+                case {Ty1, Ty2} of
+                    {{type, _, any, []}, _} -> type(any);
+                    {_, {type, _, any, []}} -> type(any);
+                    {_, _}                 -> type(boolean)
+                end,
+            {RetType, union_var_binds(VB1, VB2, Env)};
+        false ->
+            throw(type_error(relop, Op, P, Ty1, Ty2))
     end.
 
 -spec type_check_arith_op(env(), _, _, _, _) -> {type(), env()}.
@@ -2393,11 +2340,9 @@ type_check_call_ty(Env, {fun_ty, ArgsTy, ResTy} = Ty, Args, {_, P, _} = E) ->
             throw(argument_length_mismatch(P, arity(LenTy), arity(LenArgs)))
     end;
 type_check_call_ty(Env, {fun_ty_intersection, ClauseTys}, Args, E) ->
-    {ResTy, VarBinds} = type_check_call_ty_intersect(Env, ClauseTys, Args, E),
-    {ResTy, VarBinds};
+    type_check_call_ty_intersect(Env, ClauseTys, Args, E);
 type_check_call_ty(Env, {fun_ty_union, Tyss}, Args, E) ->
-    {ResTy, VarBinds} = type_check_call_ty_union(Env, Tyss, Args, E),
-    {ResTy, VarBinds};
+    type_check_call_ty_union(Env, Tyss, Args, E);
 type_check_call_ty(_Env, {type_error, _}, _Args, {Name, _P, FunTy}) ->
     throw(type_error(Name, FunTy, type('fun'))).
 
@@ -2533,37 +2478,26 @@ compat_arith_type(Any = {type, _, any, []}, {type, _, any, []}, _Env) ->
     Any;
 compat_arith_type(Any = {type, _, any, []}, Ty, Env) ->
     case subtype(Ty, type(number), Env) of
-        false ->
-            false;
-        _ ->
-            Any
+        true  -> Any;
+        false -> false
     end;
 compat_arith_type(Ty, Any = {type, _, any, []}, Env) ->
     case subtype(Ty, type(number), Env) of
-        false ->
-            false;
-        _ ->
-            Any
+        true  -> Any;
+        false -> false
     end;
 compat_arith_type(Ty1, Ty2, Env) ->
-    TInteger = type(integer),
-    case {subtype(Ty1, TInteger, Env), subtype(Ty2, TInteger, Env)} of
-        {true, true} ->
-            TInteger;
-        _ ->
-            TFloat = type(float),
-            case {subtype(Ty1, TFloat, Env), subtype(Ty2, TFloat, Env)} of
-                {true, true} ->
-                    TFloat;
-                _ ->
-                    TNumber = type(number),
-                    case {subtype(Ty1, TNumber, Env), subtype(Ty2, TNumber, Env)} of
-                        {true, true} ->
-                            TNumber;
-                        _ ->
-                            false
-                    end
-            end
+    %% Find the most specific numeric type that both arguments are subtypes of.
+    %% Check from most specific to least: integer < float < number.
+    compat_arith_type(Ty1, Ty2, Env, [type(integer), type(float), type(number)]).
+
+-spec compat_arith_type(type(), type(), env(), [type()]) -> type() | false.
+compat_arith_type(_Ty1, _Ty2, _Env, []) ->
+    false;
+compat_arith_type(Ty1, Ty2, Env, [NumTy | Rest]) ->
+    case subtype(Ty1, NumTy, Env) andalso subtype(Ty2, NumTy, Env) of
+        true  -> NumTy;
+        false -> compat_arith_type(Ty1, Ty2, Env, Rest)
     end.
 
 -spec type_check_comprehension(env(), _, expr(), _) -> {type(), env()}.
@@ -2606,19 +2540,15 @@ type_check_comprehension(Env, Compr, Expr, [{generate, _, Pat, Gen} | Quals]) ->
         {elem_ty, ElemTy} ->
             {_PatTys, _UBounds, NewEnv} =
                 add_types_pats([Pat], [ElemTy], GenEnv, capture_vars),
-            {TyL, VB} = type_check_comprehension(NewEnv, Compr, Expr, Quals),
-            {TyL, VB};
+            type_check_comprehension(NewEnv, Compr, Expr, Quals);
         any ->
-            NewEnv = add_any_types_pat(Pat, GenEnv),
-            {TyL, VB} = type_check_comprehension(NewEnv, Compr, Expr, Quals),
-            {TyL, VB};
-        {elem_tys, _ElemTys} ->
-            %% As a hack, we treat a union type as any, just to
-            %% allow the program to type check.
+            %% For any() or union element types, treat pattern as any()
             %% TODO: Rewrite the union outside of the comprehension
             NewEnv = add_any_types_pat(Pat, GenEnv),
-            {TyL, VB} = type_check_comprehension(NewEnv, Compr, Expr, Quals),
-            {TyL, VB};
+            type_check_comprehension(NewEnv, Compr, Expr, Quals);
+        {elem_tys, _ElemTys} ->
+            NewEnv = add_any_types_pat(Pat, GenEnv),
+            type_check_comprehension(NewEnv, Compr, Expr, Quals);
         {type_error, BadTy} ->
             throw(type_error(Gen, BadTy, type(list)))
     end;
@@ -2881,13 +2811,13 @@ do_type_check_expr_in(Env, ResTy, {call, P, {remote, _, _Mod, {atom, _, module_i
     Arity = arity(length(Args)),
     FunTy = get_module_info_type(Arity),
     type_check_call(Env, ResTy, Call, expect_fun_type(Env, FunTy, Arity),
-                    Args, {P, Name, FunTy});
+                    Args, {Name, P, FunTy});
 do_type_check_expr_in(Env, ResTy, {call, P, Name, Args} = OrigExpr) ->
     Name = ?assert_type(Name, expr()),
     Arity = arity(length(Args)),
     {FunTy, VarBinds} = type_check_fun(Env, Name, Arity),
     VarBinds2 = type_check_call(Env, ResTy, OrigExpr, expect_fun_type(Env, FunTy, Arity),
-                                Args, {P, Name, FunTy}),
+                                Args, {Name, P, FunTy}),
     union_var_binds(VarBinds, VarBinds2, Env);
 do_type_check_expr_in(Env, ResTy, {lc, P, Expr, Qualifiers} = OrigExpr) ->
     type_check_comprehension_in(Env, ResTy, OrigExpr, lc, Expr, P, Qualifiers);
@@ -3536,7 +3466,7 @@ type_check_fun(Env, Expr, _Arity) ->
     end.
 
 -spec type_check_call_intersection(env(), type(), _, _, _, _) -> env().
-type_check_call_intersection(Env, ResTy, OrigExpr, ClauseTys, Args, {P, Name, FunTy}) ->
+type_check_call_intersection(Env, ResTy, OrigExpr, ClauseTys, Args, {Name, P, FunTy}) ->
     {FunResTy, Env1} = type_check_call_ty_intersect(Env, ClauseTys, Args, {Name, P, FunTy}),
     case subtype(FunResTy, ResTy, Env) of
         true ->
@@ -3546,7 +3476,7 @@ type_check_call_intersection(Env, ResTy, OrigExpr, ClauseTys, Args, {P, Name, Fu
     end.
 
 -spec check_call_arity(_, _, _) -> ok.
-check_call_arity({fun_ty, ArgsTy, _FunResTy}, Args, {P, Name, _}) ->
+check_call_arity({fun_ty, ArgsTy, _FunResTy}, Args, {Name, P, _}) ->
     case length(ArgsTy) =:= length(Args) of
         true -> ok;
         false ->
@@ -3556,12 +3486,12 @@ check_call_arity({fun_ty, ArgsTy, _FunResTy}, Args, {P, Name, _}) ->
     end.
 
 -spec type_check_call(env(), type(), _, _, _, _) -> env().
-type_check_call(_Env, _ResTy, _, {fun_ty, ArgsTy, _FunResTy}, Args, {P, Name, _})
+type_check_call(_Env, _ResTy, _, {fun_ty, ArgsTy, _FunResTy}, Args, {Name, P, _})
         when length(ArgsTy) /= length(Args) ->
     LenTys = arity(length(ArgsTy)),
     LenArgs = arity(length(Args)),
     throw(type_error(call_arity, P, Name, LenTys, LenArgs));
-type_check_call(Env, ResTy, OrigExpr, {fun_ty, ArgsTy, FunResTy} = FunTy, Args, {P, Name, OrigFunTy}) ->
+type_check_call(Env, ResTy, OrigExpr, {fun_ty, ArgsTy, FunResTy} = FunTy, Args, {Name, P, OrigFunTy}) ->
     {CallResTy, VarBinds} =
         case lists:any(fun contains_type_variables/1, [ResTy | ArgsTy]) of
             false ->
@@ -3583,7 +3513,7 @@ type_check_call(Env, ResTy, OrigExpr, {fun_ty_intersection, Tys}, Args, E) ->
     type_check_call_intersection(Env, ResTy, OrigExpr, Tys, Args, E);
 type_check_call(Env, ResTy, OrigExpr, {fun_ty_union, Tys}, Args, E) ->
     type_check_call_union(Env, ResTy, OrigExpr, Tys, Args, E);
-type_check_call(_Env, _ResTy, _, {type_error, _}, _Args, {_, Name, FunTy}) ->
+type_check_call(_Env, _ResTy, _, {type_error, _}, _Args, {Name, _, FunTy}) ->
     throw(type_error(Name, FunTy, type('fun'))).
 
 
