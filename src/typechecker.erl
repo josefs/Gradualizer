@@ -4958,8 +4958,20 @@ add_type_pat({map, P, AssocPats} = MapPat, MapTy, Env) ->
                                           [ExhaustedAssoc | ExhaustedAssocsAcc],
                                           RemainingAssocsOut};
                                      error ->
-                                         %% TODO: allow patterns like #{x := a, x := a}
-                                         throw(type_error(badkey, Key, MapTy))
+                                         %% Duplicate key: the key was already consumed.
+                                         %% Look it up in the original associations.
+                                         case add_type_pat_map_key(Key, AssocTys, EnvIn, []) of
+                                             {ok, KeyPatTy, ValueTy, _} ->
+                                                 {ValPatTy, _ValUBound, EnvOut} =
+                                                     add_type_pat(ValuePat, normalize(ValueTy, EnvIn), EnvIn),
+                                                 ExhaustedAssoc = type_assoc(map_field_exact,
+                                                                       [KeyPatTy, ValPatTy]),
+                                                 {EnvOut,
+                                                  [ExhaustedAssoc | ExhaustedAssocsAcc],
+                                                  RemainingAssocsIn};
+                                             error ->
+                                                 throw(type_error(badkey, Key, MapTy))
+                                         end
                                  end
                          end,
             {NewEnv, ExhaustedAssocsRev, RemainingAssocs} =
