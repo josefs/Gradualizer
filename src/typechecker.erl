@@ -4899,7 +4899,10 @@ add_type_pat(String = {string, P, _}, Ty, Env) ->
 add_type_pat({bin, _P, BinElements} = Bin, Ty, Env) ->
     %% Check the size parameters of the bit pattern
     BinTy = gradualizer_bin:compute_type(Bin),
-    case subtype(BinTy, Ty, Env) of
+    %% The pattern can match if either:
+    %% - BinTy <: Ty (pattern type fits within value type), or
+    %% - Ty <: BinTy (value type fits within pattern type, i.e., pattern is more general)
+    case subtype(BinTy, Ty, Env) orelse subtype(Ty, BinTy, Env) of
         true ->
             ok;
         false ->
