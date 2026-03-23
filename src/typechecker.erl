@@ -2532,7 +2532,8 @@ type_check_comprehension(Env, bc, Expr, []) ->
             end,
     RetTy = ?assert_type(RetTy, type()),
     {RetTy, Env};
-type_check_comprehension(Env, Compr, Expr, [{generate, _, Pat, Gen} | Quals]) ->
+type_check_comprehension(Env, Compr, Expr, [{GenerateTag, _, Pat, Gen} | Quals])
+  when GenerateTag =:= generate; GenerateTag =:= generate_strict ->
     {Ty,  _} = type_check_expr(Env, Gen),
     %% Generator patterns create fresh variable bindings (shadow outer vars)
     GenEnv = remove_pat_vars(Pat, Env),
@@ -2552,7 +2553,8 @@ type_check_comprehension(Env, Compr, Expr, [{generate, _, Pat, Gen} | Quals]) ->
         {type_error, BadTy} ->
             throw(type_error(Gen, BadTy, type(list)))
     end;
-type_check_comprehension(Env, Compr, Expr, [{b_generate, _P, Pat, Gen} | Quals]) ->
+type_check_comprehension(Env, Compr, Expr, [{BGenerateTag, _P, Pat, Gen} | Quals])
+  when BGenerateTag =:= b_generate; BGenerateTag =:= b_generate_strict ->
     BitStringTy = type(binary, [{integer, erl_anno:new(0), 0},
                                 {integer, erl_anno:new(0), 1}]),
     VarBinds1 =
@@ -3283,8 +3285,8 @@ unary_op_arg_type('-', Ty = {type, _, float, []}) ->
                                   Qualifiers :: [ListGen | BinGen | Filter]) ->
         env()
        when
-        ListGen :: {generate, erl_anno:anno(), gradualizer_type:abstract_expr(), gradualizer_type:abstract_expr()},
-        BinGen  :: {b_generate, erl_anno:anno(), gradualizer_type:abstract_expr(), gradualizer_type:abstract_expr()},
+        ListGen :: {generate | generate_strict, erl_anno:anno(), gradualizer_type:abstract_expr(), gradualizer_type:abstract_expr()},
+        BinGen  :: {b_generate | b_generate_strict, erl_anno:anno(), gradualizer_type:abstract_expr(), gradualizer_type:abstract_expr()},
         Filter  :: gradualizer_type:abstract_expr().
 type_check_comprehension_in(Env, ResTy, OrigExpr, lc, Expr, _P, []) ->
     case expect_list_type(ResTy, allow_nil_type, Env) of
@@ -3334,7 +3336,8 @@ type_check_comprehension_in(Env, ResTy, OrigExpr, bc, Expr, _P, []) ->
             throw({type_error, OrigExpr, Ty, ResTy})
     end;
 type_check_comprehension_in(Env, ResTy, OrigExpr, Compr, Expr, P,
-                            [{generate, _, Pat, Gen} | Quals]) ->
+                            [{GenerateTag, _, Pat, Gen} | Quals])
+  when GenerateTag =:= generate; GenerateTag =:= generate_strict ->
     {Ty, _VB1} = type_check_expr(Env, Gen),
     %% Generator patterns create fresh variable bindings (shadow outer vars)
     GenEnv = remove_pat_vars(Pat, Env),
@@ -3358,7 +3361,8 @@ type_check_comprehension_in(Env, ResTy, OrigExpr, Compr, Expr, P,
             throw(type_error(Gen, BadTy, type(list)))
     end;
 type_check_comprehension_in(Env, ResTy, OrigExpr, Compr, Expr, P,
-                            [{b_generate, _P_Gen, Pat, Gen} | Quals]) ->
+                            [{BGenerateTag, _P_Gen, Pat, Gen} | Quals])
+  when BGenerateTag =:= b_generate; BGenerateTag =:= b_generate_strict ->
     %% Binary generator: Pat <= Gen
     %% Gen and Pat should be bitstrings (of any size).
     BitTy = {type, erl_anno:new(0), binary,
