@@ -7,9 +7,4 @@ ebin/rebar_prv_gradualizer.beam: Call to undefined function rebar_dir:src_dirs/2
 ebin/rebar_prv_gradualizer.beam: Call to undefined function rebar_dir:src_dirs/2 on line 119 at column 24
 ebin/rebar_prv_gradualizer.beam: Call to undefined function rebar_state:get/3 on line 133 at column 25
 ebin/rebar_prv_gradualizer.beam: Call to undefined function rebar_state:project_apps/1 on line 148 at column 34
-Undefined type location/0
-Undefined remote type erl_anno:location/0
-Undefined remote type erl_anno:line/0
-Undefined type line/0
-Undefined type time/0
 
