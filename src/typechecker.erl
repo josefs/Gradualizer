@@ -354,8 +354,18 @@ compat_ty({type, _, union, Tys1}, {type, _, union, Tys2} = Ty2, Seen, Env) ->
                                   end,
                     {Seen2, constraints:combine(C1, C2, Env)}
                 end, {Seen, constraints:empty()}, Tys1);
-compat_ty(Ty1, {type, _, union, Tys2}, Seen, Env) ->
-    any_type(Ty1, Tys2, Seen, Env);
+compat_ty(Ty1, {type, _, union, Tys2} = Ty2, Seen, Env) ->
+    try
+        any_type(Ty1, Tys2, Seen, Env)
+    catch
+        nomatch ->
+            case distribute_inner_unions(Ty1) of
+                false ->
+                    throw(nomatch);
+                {true, DistributedTy1} ->
+                    compat(DistributedTy1, Ty2, Seen, Env)
+            end
+    end;
 compat_ty({type, _, union, Tys1}, Ty2, Seen, Env) ->
     all_type(Tys1, Ty2, Seen, Env);
 
@@ -589,6 +599,81 @@ all_type([], _Ty, Seen, Css, Env) ->
 all_type([Ty1|Tys], Ty, AIn, Css, Env) ->
     {AOut, Cs} = compat(Ty1, Ty, AIn, Env),
     all_type(Tys, Ty, AOut, [Cs|Css], Env).
+
+%% Distribute unions inside compound types (tuples, maps) to create a union of
+%% compound types. For example:
+%%   {t, a | b}       -> {t, a} | {t, b}
+%%   #{a => b | c}    -> #{a => b} | #{a => c}
+%% Returns `false' if Ty contains no inner unions to distribute, or
+%% `{true, DistributedUnion}' after distribution.
+%% A size limit prevents exponential blowup for types with many union elements.
+-spec distribute_inner_unions(type()) -> false | {true, type()}.
+distribute_inner_unions({type, Ann, tuple, Args}) when is_list(Args) ->
+    case has_inner_union(Args) of
+        false -> false;
+        true ->
+            Distributed = distribute_tuple_args(Ann, Args),
+            case length(Distributed) of
+                N when N > 100 -> false;
+                _ -> {true, type(union, Distributed)}
+            end
+    end;
+distribute_inner_unions({type, Ann, map, Assocs}) when is_list(Assocs) ->
+    case has_inner_union_in_assocs(Assocs) of
+        false -> false;
+        true ->
+            Distributed = distribute_map_assocs(Ann, Assocs),
+            case length(Distributed) of
+                N when N > 100 -> false;
+                _ -> {true, type(union, Distributed)}
+            end
+    end;
+distribute_inner_unions(_) ->
+    false.
+
+-spec has_inner_union([type()]) -> boolean().
+has_inner_union([]) -> false;
+has_inner_union([{type, _, union, _} | _]) -> true;
+has_inner_union([_ | Rest]) -> has_inner_union(Rest).
+
+-spec has_inner_union_in_assocs([type()]) -> boolean().
+has_inner_union_in_assocs([]) -> false;
+has_inner_union_in_assocs([{type, _, _, [_K, {type, _, union, _}]} | _]) -> true;
+has_inner_union_in_assocs([_ | Rest]) -> has_inner_union_in_assocs(Rest).
+
+%% Distribute unions in tuple element positions.
+%% {A, B|C, D} -> [{A, B, D}, {A, C, D}]
+-spec distribute_tuple_args(erl_anno:anno(), [type()]) -> [type()].
+distribute_tuple_args(Ann, Args) ->
+    [{type, Ann, tuple, Combo} || Combo <- cartesian_product(Args)].
+
+%% Distribute unions in map association value positions.
+%% #{K1 => V1|V2, K2 => V3} -> [#{K1 => V1, K2 => V3}, #{K1 => V2, K2 => V3}]
+-spec distribute_map_assocs(erl_anno:anno(), [type()]) -> [type()].
+distribute_map_assocs(Ann, Assocs) ->
+    ExpandedAssocLists = cartesian_product_assocs(Assocs),
+    [{type, Ann, map, AssocList} || AssocList <- ExpandedAssocLists].
+
+%% Cartesian product of type lists, expanding union elements.
+%% [a, b|c] -> [[a, b], [a, c]]
+-spec cartesian_product([type()]) -> [[type()]].
+cartesian_product([]) -> [[]];
+cartesian_product([{type, _, union, Tys} | Rest]) ->
+    RestProduct = cartesian_product(Rest),
+    [[Ty | R] || Ty <- Tys, R <- RestProduct];
+cartesian_product([Arg | Rest]) ->
+    RestProduct = cartesian_product(Rest),
+    [[Arg | R] || R <- RestProduct].
+
+%% Cartesian product of map associations, expanding unions in value positions.
+-spec cartesian_product_assocs([type()]) -> [[type()]].
+cartesian_product_assocs([]) -> [[]];
+cartesian_product_assocs([{type, Ann, AssocType, [K, {type, _, union, Tys}]} | Rest]) ->
+    RestProduct = cartesian_product_assocs(Rest),
+    [[{type, Ann, AssocType, [K, Ty]} | R] || Ty <- Tys, R <- RestProduct];
+cartesian_product_assocs([Assoc | Rest]) ->
+    RestProduct = cartesian_product_assocs(Rest),
+    [[Assoc | R] || R <- RestProduct].
 
 %% Looks up the fields of a record by name and, if present, by the module where
 %% it belongs if a filename is included in the Anno.
@@ -2892,8 +2977,13 @@ do_type_check_expr_in(Env, ResTy, {tuple, _, TS} = Tup) ->
         {elem_tys, Tyss} ->
             case type_check_tuple_union_in(Env, Tyss, TS) of
                 none ->
-                    {Ty, _VB} = type_check_expr(Env, Tup),
-                    throw(type_error(Tup, Ty, ResTy));
+                    {Ty, VB} = type_check_expr(Env, Tup),
+                    case subtype(Ty, ResTy, Env) of
+                        true ->
+                            VB;
+                        false ->
+                            throw(type_error(Tup, Ty, ResTy))
+                    end;
                 VBs ->
                     union_var_binds(VBs, Env)
             end;
