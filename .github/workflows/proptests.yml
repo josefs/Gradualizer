@@ -19,5 +19,6 @@ jobs:
       - uses: erlef/setup-beam@v1
         with:
           otp-version: ${{matrix.otp}}
+          rebar3-version: '3.24'
       - name: "Run property-based tests"
         run: "PROP_NUMTESTS=5000 rebar3 ct --suite test/gradualizer_prop_SUITE.erl"
