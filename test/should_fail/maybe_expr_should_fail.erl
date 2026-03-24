@@ -8,6 +8,7 @@
 
 -export([check1/0, check2/0]).
 -export([infer1/0, infer2/1]).
+-export([wrong_body_type/0, wrong_else_type/1]).
 
 -spec check1() -> integer().
 check1() ->
@@ -40,6 +41,24 @@ infer2(Val) ->
         _ -> ok
     end,
     R.
+
+%% Body expression has wrong type (string instead of integer)
+-spec wrong_body_type() -> integer().
+wrong_body_type() ->
+    maybe
+        ok ?= ok,
+        "hello"
+    end.
+
+%% Else clause returns wrong type
+-spec wrong_else_type({ok, integer()} | error) -> integer().
+wrong_else_type(Input) ->
+    maybe
+        {ok, Val} ?= Input,
+        Val
+    else
+        error -> "not a number"
+    end.
 
 -endif. %% FEATURE_AVAILABLE
 -endif. %% OTP >= 25
