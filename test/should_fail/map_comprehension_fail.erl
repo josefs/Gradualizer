@@ -1,5 +1,8 @@
 -module(map_comprehension_fail).
 
+-ifdef(OTP_RELEASE).
+-if(?OTP_RELEASE >= 27).
+
 %% Each exported function should produce exactly one type error.
 
 -export([mc_wrong_return_type/0, map_gen_not_map/1]).
@@ -13,3 +16,6 @@ mc_wrong_return_type() ->
 -spec map_gen_not_map(integer()) -> [integer()].
 map_gen_not_map(N) ->
     [V || _K := V <- N].
+
+-endif. %% OTP >= 27
+-endif. %% OTP_RELEASE

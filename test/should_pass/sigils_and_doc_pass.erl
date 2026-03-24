@@ -1,5 +1,8 @@
 -module(sigils_and_doc_pass).
 
+-ifdef(OTP_RELEASE).
+-if(?OTP_RELEASE >= 27).
+
 -compile([export_all, nowarn_export_all]).
 
 %% -doc attribute (OTP 27+)
@@ -33,3 +36,6 @@ sigil_concat() ->
 -spec sigil_arg() -> non_neg_integer().
 sigil_arg() ->
     byte_size(~"hello").
+
+-endif. %% OTP >= 27
+-endif. %% OTP_RELEASE

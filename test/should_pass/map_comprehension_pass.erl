@@ -1,5 +1,8 @@
 -module(map_comprehension_pass).
 
+-ifdef(OTP_RELEASE).
+-if(?OTP_RELEASE >= 27).
+
 -compile([export_all, nowarn_export_all]).
 
 %% Basic map comprehension with list generator
@@ -61,3 +64,6 @@ mc_any_map() ->
 -spec mixed_generators(#{atom() => integer()}) -> [{integer(), atom()}].
 mixed_generators(M) ->
     [{V, K} || K := V <- M].
+
+-endif. %% OTP >= 27
+-endif. %% OTP_RELEASE
