@@ -5,7 +5,7 @@ on:
     branches:
       - main
       - master
-  pull_request: []
+  pull_request:
 
 jobs:
   test:
@@ -26,7 +26,7 @@ jobs:
       - name: "Assess self check result"
         run: |
           ERROR_LINES=$(wc -l gradualize.log | awk '{print $1}')
-          if [ $ERROR_LINES -eq 0 ]; then
+          if [ "$ERROR_LINES" -eq 0 ]; then
             echo "ok, there are no self-check errors: $ERROR_LINES == 0"
             exit 0
           else
