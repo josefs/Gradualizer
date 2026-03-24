@@ -1,7 +1,7 @@
 -module(strict_generators_pass).
 
 -ifdef(OTP_RELEASE).
--if(?OTP_RELEASE >= 27).
+-if(?OTP_RELEASE >= 28).
 
 -compile([export_all, nowarn_export_all]).
 
@@ -50,5 +50,5 @@ strict_any_list() ->
 strict_union_list() ->
     [X || X <:- [apa, bepa]].
 
--endif. %% OTP >= 27
+-endif. %% OTP >= 28
 -endif. %% OTP_RELEASE

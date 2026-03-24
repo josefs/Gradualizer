@@ -1,5 +1,8 @@
 -module(zip_generators_pass).
 
+-ifdef(OTP_RELEASE).
+-if(?OTP_RELEASE >= 28).
+
 -compile([export_all, nowarn_export_all]).
 
 %% Basic zip generator - two list generators in lockstep
@@ -63,3 +66,6 @@ zip_outer_scope_in_arms(N) ->
 -spec zip_body_sees_rebound(atom()) -> [integer()].
 zip_body_sees_rebound(X) ->
     [X || X <- [1, 2, 3] && _Y <- [a, b, c]].
+
+-endif. %% OTP >= 28
+-endif. %% OTP_RELEASE

@@ -1,7 +1,7 @@
 -module(strict_generators_fail).
 
 -ifdef(OTP_RELEASE).
--if(?OTP_RELEASE >= 27).
+-if(?OTP_RELEASE >= 28).
 
 %% Each exported function should produce exactly one type error.
 
@@ -17,5 +17,5 @@ strict_gen_not_list(N) ->
 strict_gen_wrong_type() ->
     [X || X <:- [1, 2, 3]].
 
--endif. %% OTP >= 27
+-endif. %% OTP >= 28
 -endif. %% OTP_RELEASE

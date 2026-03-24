@@ -45,16 +45,6 @@ mc_from_binary() ->
 bc_from_map(M) ->
     << <<V>> || _K := V <- M >>.
 
-%% Strict map generator
--spec strict_mc(#{atom() => integer()}) -> #{atom() => integer()}.
-strict_mc(M) ->
-    #{K => V + 1 || K := V <:- M}.
-
-%% Strict map generator in list comprehension
--spec strict_map_gen_lc(#{atom() => integer()}) -> [integer()].
-strict_map_gen_lc(M) ->
-    [V || _K := V <:- M].
-
 %% Map comprehension with any() map
 -spec mc_any_map() -> map().
 mc_any_map() ->

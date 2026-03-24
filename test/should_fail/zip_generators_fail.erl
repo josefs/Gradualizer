@@ -1,5 +1,8 @@
 -module(zip_generators_fail).
 
+-ifdef(OTP_RELEASE).
+-if(?OTP_RELEASE >= 28).
+
 %% Each exported function should produce exactly one type error.
 
 -export([zip_not_list/1, zip_wrong_return/0]).
@@ -13,3 +16,6 @@ zip_not_list(N) ->
 -spec zip_wrong_return() -> integer().
 zip_wrong_return() ->
     [{X, Y} || X <- [1, 2] && Y <- [a, b]].
+
+-endif. %% OTP >= 28
+-endif. %% OTP_RELEASE
