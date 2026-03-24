@@ -3232,17 +3232,56 @@ type_check_arith_op_in(Env, Kind, ResTy, Op, P, Arg1, Arg2) ->
                             try
                                 arith_op_do_check(ArgTy21, ArgTy22, Arg1, Arg2, Env)
                             catch
-                                throw:_ -> throw(E)
+                                throw:_ ->
+                                    arith_op_infer_fallback(Env, Op, P, Arg1, Arg2, ResTy1, E)
                             end
                     end;
                 {ArgTy1, ArgTy2} ->
-                    VarBinds1 = type_check_expr_in(Env, ArgTy1, Arg1),
-                    VarBinds2 = type_check_expr_in(Env, ArgTy2, Arg2),
-                    union_var_binds(VarBinds1, VarBinds2, Env);
+                    try
+                        VarBinds1 = type_check_expr_in(Env, ArgTy1, Arg1),
+                        VarBinds2 = type_check_expr_in(Env, ArgTy2, Arg2),
+                        union_var_binds(VarBinds1, VarBinds2, Env)
+                    catch
+                        throw:E when element(1, E) == type_error ->
+                            arith_op_infer_fallback(Env, Op, P, Arg1, Arg2, ResTy1, E)
+                    end;
                 false ->
-                    throw(type_error(op_type_too_precise, Op, P, ResTy1))
+                    arith_op_infer_fallback(Env, Op, P, Arg1, Arg2, ResTy1,
+                                            type_error(op_type_too_precise, Op, P, ResTy1))
             end
     end.
+
+%% Fall back to inference mode for arithmetic operations. Infers the result
+%% type and checks if it's compatible with the expected type. This handles
+%% cases where arith_op_arg_types is too conservative (e.g. 0 - 0 :: non_neg_integer()).
+-spec arith_op_infer_fallback(env(), atom(), _, expr(), expr(), type(), _) -> env().
+arith_op_infer_fallback(Env, Op, P, Arg1, Arg2, ResTy1, OrigError) ->
+    try
+        {InferredTy, VB} = type_check_arith_op(Env, Op, P, Arg1, Arg2),
+        %% For constant expressions, try to evaluate to get a precise result type
+        InferredTy2 = try_const_eval_arith(Op, Arg1, Arg2, InferredTy),
+        case subtype(InferredTy2, ResTy1, Env) of
+            true -> VB;
+            false -> throw(OrigError)
+        end
+    catch
+        throw:E when element(1, E) == type_error ->
+            throw(OrigError)
+    end.
+
+%% Try to evaluate a constant arithmetic expression for a more precise type.
+%% If both arguments are integer literals, compute the result and return a
+%% singleton integer type. Otherwise, return the inferred type as-is.
+-spec try_const_eval_arith(atom(), expr(), expr(), type()) -> type().
+try_const_eval_arith(Op, {integer, _, V1}, {integer, _, V2}, _InferredTy) ->
+    try
+        Result = erlang:Op(V1, V2),
+        {integer, erl_anno:new(0), Result}
+    catch
+        _:_ -> _InferredTy
+    end;
+try_const_eval_arith(_Op, _Arg1, _Arg2, InferredTy) ->
+    InferredTy.
 
 -spec arith_op_do_check(type(), type(), expr(), expr(), env()) -> env().
 arith_op_do_check(ArgTy1, ArgTy2, Arg1, Arg2, Env) ->
