@@ -1,5 +1,8 @@
 -module(strict_generators_pass).
 
+-ifdef(OTP_RELEASE).
+-if(?OTP_RELEASE >= 27).
+
 -compile([export_all, nowarn_export_all]).
 
 %% Strict list generator in list comprehension
@@ -46,3 +49,6 @@ strict_any_list() ->
 -spec strict_union_list() -> [integer()] | [atom()].
 strict_union_list() ->
     [X || X <:- [apa, bepa]].
+
+-endif. %% OTP >= 27
+-endif. %% OTP_RELEASE
