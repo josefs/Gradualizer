@@ -1499,10 +1499,12 @@ allow_empty_list(Ty) ->
     end.
 
 -type fun_ty() :: fun_ty_simple()
+                | fun_ty_bounded()
                 | fun_ty_intersection()
                 | fun_ty_union().
 
 -type fun_ty_simple()       :: {fun_ty, [type()], type()}.
+-type fun_ty_bounded()      :: {fun_ty_bounded, [type()], type(), #{atom() => type()}}.
 -type fun_ty_intersection() :: {fun_ty_intersection, [fun_ty_simple()]}.
 -type fun_ty_union()        :: {fun_ty_union, [fun_ty()]}.
 
@@ -1527,11 +1529,51 @@ expect_fun_type(Env, Type, Arity) ->
 -spec expect_fun_type1(env(), type() | [type()], arity()) -> fun_ty() | type_error.
 expect_fun_type1(Env, BTy = {type, _, bounded_fun, [Ft, _Fc]}, Arity) ->
     Sub = bounded_type_subst(Env, BTy),
-    Ft = ?assert_type(Ft, type()),
-    {fun_ty, ArgsTy, ResTy} = expect_fun_type1(Env, Ft, Arity),
-    ArgsTy1 = subst_ty(Sub, ArgsTy),
-    ResTy1 = subst_ty(Sub, ResTy),
-    {fun_ty, ArgsTy1, ResTy1};
+    Ft1 = ?assert_type(Ft, type()),
+    {fun_ty, ArgsTy, ResTy} = expect_fun_type1(Env, Ft1, Arity),
+    case Env#env.solve_constraints of
+        true ->
+            %% When constraint solving is enabled, check if we can treat bounded
+            %% type variables polymorphically. This is only useful when type variables
+            %% in the spec have concrete (variable-free) bounds, like:
+            %%   -spec f([A]) -> [A] when A :: {top(), top()}.
+            %% For specs where bounds reference other type variables (like lists:map),
+            %% we fall through to the standard substitution.
+            BoundedVars = maps:filter(fun (_Var, {var, _, _}) -> false;
+                                          (_Var, Bound) ->
+                                              %% Only keep if bound is variable-free
+                                              maps:size(free_vars(Bound)) == 0
+                                      end, Sub),
+            case maps:size(BoundedVars) > 0 of
+                true ->
+                    %% Keep bounded type variables, substitute only
+                    %% unconstrained ones and those with variable-containing bounds
+                    PartialSub = maps:without(maps:keys(BoundedVars), Sub),
+                    ArgsTy1 = subst_ty(PartialSub, ArgsTy),
+                    ResTy1 = subst_ty(PartialSub, ResTy),
+                    HasRemainingVars = lists:any(fun contains_type_variables/1, [ResTy1 | ArgsTy1]),
+                    case HasRemainingVars of
+                        true ->
+                            UBounds = maps:map(fun (_Var, _) ->
+                                %% Get the bound from the constraint list
+                                maps:get(_Var, BoundedVars)
+                            end, BoundedVars),
+                            {fun_ty_bounded, ArgsTy1, ResTy1, UBounds};
+                        false ->
+                            %% All vars were substituted away, no poly needed
+                            {fun_ty, ArgsTy1, ResTy1}
+                    end;
+                false ->
+                    %% No concrete-bounded vars, use standard substitution
+                    ArgsTy1 = subst_ty(Sub, ArgsTy),
+                    ResTy1 = subst_ty(Sub, ResTy),
+                    {fun_ty, ArgsTy1, ResTy1}
+            end;
+        false ->
+            ArgsTy1 = subst_ty(Sub, ArgsTy),
+            ResTy1 = subst_ty(Sub, ResTy),
+            {fun_ty, ArgsTy1, ResTy1}
+    end;
 expect_fun_type1(_Env, {type, _, 'fun', [{type, _, product, ArgsTy}, ResTy]}, _Arity) ->
     {fun_ty, ArgsTy, ?assert_type(ResTy, type())};
 expect_fun_type1(_Env, {type, _, 'fun', []}, Arity) ->
@@ -1591,6 +1633,14 @@ expect_intersection_type(Env, [FunTy|Tys], Arity) ->
         {fun_ty_union, _} ->
             %% We can't have a union of functions as a spec clause
             type_error;
+        {fun_ty_bounded, ArgsTy, ResTy, _} ->
+            %% Bounded poly within intersection: fall back to substituted form
+            Ty = {fun_ty, replace_type_vars_with_any(ArgsTy),
+                          replace_type_vars_with_any(ResTy)},
+            case expect_intersection_type(Env, Tys, Arity) of
+                type_error -> type_error;
+                Tyss -> [Ty | Tyss]
+            end;
         Ty ->
             Ty = ?assert_type(Ty, fun_ty_simple()),
             case expect_intersection_type(Env, Tys, Arity) of
@@ -2532,6 +2582,14 @@ type_check_call_ty(Env, {fun_ty, ArgsTy, ResTy} = Ty, Args, {_, P, _} = E) ->
         {LenTy, LenArgs} ->
             throw(argument_length_mismatch(P, arity(LenTy), arity(LenArgs)))
     end;
+type_check_call_ty(Env, {fun_ty_bounded, ArgsTy, ResTy, UBounds}, Args, {_, P, _} = E) ->
+    case {length(ArgsTy), length(Args)} of
+        {L, L} ->
+            FunTy = {fun_ty, ArgsTy, ResTy},
+            type_check_poly_call_bounded(Env, FunTy, Args, E, UBounds);
+        {LenTy, LenArgs} ->
+            throw(argument_length_mismatch(P, arity(LenTy), arity(LenArgs)))
+    end;
 type_check_call_ty(Env, {fun_ty_intersection, ClauseTys}, Args, E) ->
     type_check_call_ty_intersect(Env, ClauseTys, Args, E);
 type_check_call_ty(Env, {fun_ty_union, Tyss}, Args, E) ->
@@ -2593,6 +2651,36 @@ type_check_poly_call(Env, {fun_ty, ParamTys, ResTy}, Args, {Name, P, FunTy}) ->
     ?verbose(Env, "~sSubstitution: ~p~n", [gradualizer_fmt:format_location(CallExpr, brief), Subst]),
     NewResTy = subst_ty(Subst, ?assert_type(ResTy, type())),
 
+    NewEnv = union_var_binds(VarBindsList, Env),
+    {NewResTy, NewEnv}.
+
+%% Like type_check_poly_call but seeds the constraint system with upper bounds
+%% from bounded type variable declarations (e.g. `when A :: {top(), top()}`).
+-spec type_check_poly_call_bounded(env(), fun_ty_simple(), [type()], {_, anno(), type()},
+                                   #{atom() => type()}) -> {type(), env()}.
+type_check_poly_call_bounded(Env, {fun_ty, ParamTys, ResTy}, Args, {Name, P, FunTy}, UBounds) ->
+    {ArgTys, VarBindsList} = lists:unzip([ type_check_expr(Env, Arg) || Arg <- Args ]),
+    Css = lists:map(fun ({ParamTy, Arg, ArgTy}) ->
+            case subtype_with_constraints(ArgTy, ParamTy, Env) of
+                {true, Cs} -> Cs;
+                false -> throw(type_error(Arg, ArgTy, ParamTy))
+            end
+        end, lists:zip3(ParamTys, Args, ArgTys)),
+    %% Seed upper bounds from the `when` clause
+    InitialUBoundCs = maps:fold(fun (Var, Bound, Acc) ->
+            constraints:combine(Acc, constraints:upper(Var, Bound), Env)
+        end, constraints:empty(), UBounds),
+    CombinedCs = constraints:combine([InitialUBoundCs | Css], Env),
+    CallExpr = {call, P, Name, Args},
+    ?verbose(Env, "~sBounded constraints: ~p~n", [gradualizer_fmt:format_location(CallExpr, brief), CombinedCs]),
+    case constraints:satisfiable(CombinedCs, Env) of
+        true -> ok;
+        {false, Var, LBound, UBound} ->
+            throw({constraint_error, Var, LBound, UBound, CallExpr, FunTy, ArgTys})
+    end,
+    Subst = minimal_substitution(CombinedCs, ResTy),
+    ?verbose(Env, "~sBounded substitution: ~p~n", [gradualizer_fmt:format_location(CallExpr, brief), Subst]),
+    NewResTy = subst_ty(Subst, ?assert_type(ResTy, type())),
     NewEnv = union_var_binds(VarBindsList, Env),
     {NewResTy, NewEnv}.
 
@@ -3137,6 +3225,10 @@ do_type_check_expr_in(Env, Ty, {'fun', _, {clauses, Clauses}} = Fun) ->
     case expect_fun_type(Env, Ty, clause_arity(hd(Clauses))) of
         {fun_ty, ArgsTys, ResTy} ->
             check_clauses(Env, ArgsTys, ResTy, Clauses, bind_vars);
+        {fun_ty_bounded, ArgsTys, ResTy, _UBounds} ->
+            ArgsTys1 = replace_type_vars_with_any(ArgsTys),
+            ResTy1 = replace_type_vars_with_any(ResTy),
+            check_clauses(Env, ArgsTys1, ResTy1, Clauses, bind_vars);
         %% TODO: Can this case actually happen?
         {fun_ty_intersection, Tyss} ->
             check_clauses_intersect(Env, Tyss, Clauses);
@@ -3186,6 +3278,10 @@ do_type_check_expr_in(Env, Ty, {named_fun, _, FunName, Clauses} = Fun) ->
     case expect_fun_type(Env, Ty, clause_arity(hd(Clauses))) of
         {fun_ty, ArgsTy, ResTy} ->
             check_clauses(Env1, ArgsTy, ResTy, Clauses, bind_vars);
+        {fun_ty_bounded, ArgsTy, ResTy, _UBounds} ->
+            ArgsTy1 = replace_type_vars_with_any(ArgsTy),
+            ResTy1 = replace_type_vars_with_any(ResTy),
+            check_clauses(Env1, ArgsTy1, ResTy1, Clauses, bind_vars);
         %% TODO: Can this case actually happen?
         {fun_ty_intersection, Tyss} ->
             check_clauses_intersect(Env1, Tyss, Clauses);
@@ -3893,14 +3989,15 @@ type_check_call_intersection(Env, ResTy, OrigExpr, ClauseTys, Args, {Name, P, Fu
     end.
 
 -spec check_call_arity(_, _, _) -> ok.
-check_call_arity({fun_ty, ArgsTy, _FunResTy}, Args, {Name, P, _}) ->
-    case length(ArgsTy) =:= length(Args) of
-        true -> ok;
-        false ->
-            LenTys = arity(length(ArgsTy)),
-            LenArgs = arity(length(Args)),
-            throw(type_error(call_arity, P, Name, LenTys, LenArgs))
-    end.
+check_call_arity({fun_ty, ArgsTy, _FunResTy}, Args, E) ->
+    check_call_arity_len(length(ArgsTy), Args, E);
+check_call_arity({fun_ty_bounded, ArgsTy, _FunResTy, _UBounds}, Args, E) ->
+    check_call_arity_len(length(ArgsTy), Args, E).
+
+-spec check_call_arity_len(non_neg_integer(), list(), {_, _, _}) -> ok.
+check_call_arity_len(LenTys, Args, _) when LenTys =:= length(Args) -> ok;
+check_call_arity_len(LenTys, Args, {Name, P, _}) ->
+    throw(type_error(call_arity, P, Name, arity(LenTys), arity(length(Args)))).
 
 -spec type_check_call(env(), type(), _, _, _, _) -> env().
 type_check_call(_Env, _ResTy, _, {fun_ty, ArgsTy, _FunResTy}, Args, {Name, P, _})
@@ -3920,6 +4017,18 @@ type_check_call(Env, ResTy, OrigExpr, {fun_ty, ArgsTy, FunResTy} = FunTy, Args, 
             true ->
                 type_check_poly_call(Env, FunTy, Args, {Name, P, OrigFunTy})
         end,
+    case subtype(CallResTy, ResTy, Env) of
+        true ->
+            VarBinds;
+        false ->
+            throw(type_error(OrigExpr, CallResTy, ResTy))
+    end;
+type_check_call(Env, ResTy, OrigExpr, {fun_ty_bounded, ArgsTy, FunResTy, UBounds}, Args, {Name, P, OrigFunTy}) ->
+    %% Bounded polymorphic call: type variables have upper bounds from `when` clauses.
+    %% We seed the constraint system with these upper bounds before solving.
+    FunTy = {fun_ty, ArgsTy, FunResTy},
+    {CallResTy, VarBinds} =
+        type_check_poly_call_bounded(Env, FunTy, Args, {Name, P, OrigFunTy}, UBounds),
     case subtype(CallResTy, ResTy, Env) of
         true ->
             VarBinds;
@@ -4070,6 +4179,8 @@ make_rigid_type_vars({ann_type, P, [AnnoVar, Type]}) ->
     {ann_type, P, [AnnoVar, make_rigid_type_vars(Type)]};
 make_rigid_type_vars({fun_ty, ArgTys, ResTy}) ->
     {fun_ty, make_rigid_type_vars(ArgTys), make_rigid_type_vars(ResTy)};
+make_rigid_type_vars({fun_ty_bounded, ArgTys, ResTy, UBounds}) ->
+    {fun_ty_bounded, make_rigid_type_vars(ArgTys), make_rigid_type_vars(ResTy), UBounds};
 make_rigid_type_vars({fun_ty_intersection, FunTys}) ->
     {fun_ty_intersection, make_rigid_type_vars(FunTys)};
 make_rigid_type_vars({fun_ty_union, FunTys}) ->
@@ -4109,6 +4220,13 @@ infer_clause(Env, {clause, _, Args, Guards, Block}) ->
       R :: env().
 check_clauses_fun(Env, {fun_ty, ArgsTy, FunResTy}, Clauses) ->
     check_clauses(Env, ArgsTy, FunResTy, Clauses, bind_vars);
+check_clauses_fun(Env, {fun_ty_bounded, ArgsTy, FunResTy, _UBounds}, Clauses) ->
+    %% When checking the function definition, treat bounded type variables
+    %% the same as their bounds (substitute back). The bounded poly behavior
+    %% is only relevant at call sites.
+    ArgsTy1 = replace_type_vars_with_any(ArgsTy),
+    FunResTy1 = replace_type_vars_with_any(FunResTy),
+    check_clauses(Env, ArgsTy1, FunResTy1, Clauses, bind_vars);
 check_clauses_fun(Env, {fun_ty_intersection, Tys}, Clauses) ->
     check_clauses_intersect(Env, Tys, Clauses);
 check_clauses_fun(Env, {fun_ty_union, Tys}, Clauses) ->
