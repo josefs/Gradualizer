@@ -28,9 +28,7 @@
 
 -spec start_link(Opts) -> R when
       Opts :: list(),
-      R :: {ok, Pid :: pid()}
-         | {error, Error :: {already_started, pid()}}
-         | {error, Error :: any()}.
+      R :: gen_server:start_ret().
 start_link(Opts) ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [Opts], []).
 
